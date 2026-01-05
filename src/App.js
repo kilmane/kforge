@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./index.css";
 
+import { invoke } from "@tauri-apps/api/core";
+
 import { openProjectFolder, readFolderTree, openFile, saveFile } from "./lib/fs";
 import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
@@ -31,6 +33,16 @@ export default function App() {
   const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
     if (!folder) return;
+
+    // ✅ IMPORTANT: allow the selected folder in the runtime FS scope
+    // This prevents first-click failures caused by scope/path edge cases.
+    try {
+      await invoke("fs_allow_directory", { path: folder });
+      console.log("[kforge] FS scope allowed folder:", folder);
+    } catch (err) {
+      console.error("[kforge] Failed to allow folder in FS scope:", err);
+      // We continue anyway so you can still see the tree; file reads might fail if scope isn't allowed.
+    }
 
     setProjectPath(folder);
     setTabs([]);
