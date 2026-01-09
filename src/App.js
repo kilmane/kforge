@@ -8,6 +8,8 @@ import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
 import Tabs from "./components/Tabs.jsx"; // ✅ use existing tabs.jsx
 
+import { aiGenerate } from "./ai/client";
+
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -24,6 +26,9 @@ export default function App() {
   const [activeFilePath, setActiveFilePath] = useState(null);
 
   const [saveStatus, setSaveStatus] = useState("");
+
+  // Phase 3.1.0: temporary AI Core test output (mock provider)
+  const [aiTestOutput, setAiTestOutput] = useState("");
 
   const activeTab = useMemo(() => {
     if (!activeFilePath) return null;
@@ -48,6 +53,7 @@ export default function App() {
     setTabs([]);
     setActiveFilePath(null);
     setSaveStatus("");
+    setAiTestOutput("");
 
     const nextTree = await readFolderTree(folder);
     setTree(nextTree || []);
@@ -140,6 +146,23 @@ export default function App() {
     }
   }, [activeTab]);
 
+  const handleAiCoreTest = useCallback(async () => {
+    setAiTestOutput("Running AI Core test...");
+    try {
+      const res = await aiGenerate({
+        provider_id: "mock",
+        model: "mock-1",
+        input: "Hello KForge AI Core"
+      });
+
+      console.log("[kforge][ai-test] response:", res);
+      setAiTestOutput(res.output_text);
+    } catch (err) {
+      console.error("[kforge][ai-test] failed:", err);
+      setAiTestOutput("AI Core test failed (see console)");
+    }
+  }, []);
+
   // Ctrl+S / Cmd+S
   useEffect(() => {
     const handler = (e) => {
@@ -167,11 +190,25 @@ export default function App() {
           Open Folder
         </button>
 
+        <button
+          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
+          onClick={handleAiCoreTest}
+          title="Phase 3.1.0: quick end-to-end test (mock provider)"
+        >
+          AI Core Test
+        </button>
+
         <div className="text-sm opacity-80 truncate">
           {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
         </div>
 
         {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
+
+        {aiTestOutput && (
+          <div className="text-xs opacity-70 truncate max-w-[35%]">
+            {aiTestOutput}
+          </div>
+        )}
 
         {activeFilePath && (
           <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">

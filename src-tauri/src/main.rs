@@ -2,6 +2,8 @@
 
 use tauri_plugin_fs::FsExt;
 
+mod ai;
+
 /// Allow a user-selected directory to be used by the FS plugin.
 /// This updates the runtime FS scope (safer than broad wildcards).
 #[tauri::command]
@@ -17,7 +19,16 @@ fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
-    .invoke_handler(tauri::generate_handler![fs_allow_directory])
+    .invoke_handler(tauri::generate_handler![
+      // Phase 2 command (keep)
+      fs_allow_directory,
+
+      // Phase 3.1.0 AI Core commands
+      ai::commands::ai_set_api_key,
+      ai::commands::ai_clear_api_key,
+      ai::commands::ai_has_api_key,
+      ai::commands::ai_generate
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
