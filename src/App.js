@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./index.css";
 
@@ -17,6 +18,39 @@ function basename(p) {
   return parts[parts.length - 1] || p;
 }
 
+// Try hard to get a useful message out of Tauri invoke errors / Rust payloads
+function formatTauriError(err) {
+  if (!err) return "Unknown error";
+
+  if (typeof err === "string") return err;
+
+  if (err instanceof Error && err.message) return err.message;
+
+  if (typeof err.message === "string" && err.message.trim()) return err.message;
+
+  if (typeof err.kind === "string" && typeof err.message === "string") {
+    return `${err.kind}: ${err.message}`;
+  }
+
+  if (err.error && typeof err.error.message === "string") {
+    return err.error.message;
+  }
+
+  if (
+    err.error &&
+    typeof err.error.kind === "string" &&
+    typeof err.error.message === "string"
+  ) {
+    return `${err.error.kind}: ${err.error.message}`;
+  }
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Unknown error (unserializable)";
+  }
+}
+
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -27,7 +61,7 @@ export default function App() {
 
   const [saveStatus, setSaveStatus] = useState("");
 
-  // Phase 3.1.0: temporary AI Core test output (mock provider)
+  // AI test output (top bar)
   const [aiTestOutput, setAiTestOutput] = useState("");
 
   const activeTab = useMemo(() => {
@@ -39,14 +73,11 @@ export default function App() {
     const folder = await openProjectFolder();
     if (!folder) return;
 
-    // ✅ IMPORTANT: allow the selected folder in the runtime FS scope
-    // This prevents first-click failures caused by scope/path edge cases.
     try {
       await invoke("fs_allow_directory", { path: folder });
       console.log("[kforge] FS scope allowed folder:", folder);
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
-      // We continue anyway so you can still see the tree; file reads might fail if scope isn't allowed.
     }
 
     setProjectPath(folder);
@@ -147,7 +178,7 @@ export default function App() {
   }, [activeTab]);
 
   const handleAiCoreTest = useCallback(async () => {
-    setAiTestOutput("Running AI Core test...");
+    setAiTestOutput("Running AI Core test (mock)...");
     try {
       const res = await aiGenerate({
         provider_id: "mock",
@@ -155,15 +186,91 @@ export default function App() {
         input: "Hello KForge AI Core"
       });
 
-      console.log("[kforge][ai-test] response:", res);
+      console.log("[kforge][ai-test][mock] response:", res);
       setAiTestOutput(res.output_text);
     } catch (err) {
-      console.error("[kforge][ai-test] failed:", err);
-      setAiTestOutput("AI Core test failed (see console)");
+      console.error("[kforge][ai-test][mock] failed:", err);
+      setAiTestOutput(`AI Core failed: ${formatTauriError(err)}`);
     }
   }, []);
 
-  // Ctrl+S / Cmd+S
+  const handleAiOpenAITest = useCallback(async () => {
+    setAiTestOutput("Running pipeline test (openai)...");
+    try {
+      const res = await aiGenerate({
+        provider_id: "openai",
+        model: "gpt-4o-mini",
+        input: "Reply with exactly: PIPELINE_OK",
+        system: "You are a concise test bot. Output only the requested token.",
+        temperature: 0,
+        max_output_tokens: 32
+      });
+
+      console.log("[kforge][ai-test][openai] response:", res);
+      setAiTestOutput(res.output_text);
+    } catch (err) {
+      console.error("[kforge][ai-test][openai] failed:", err);
+      setAiTestOutput(`OpenAI failed: ${formatTauriError(err)}`);
+    }
+  }, []);
+
+  const handleAiDeepSeekTest = useCallback(async () => {
+    setAiTestOutput("Running pipeline test (deepseek)...");
+    try {
+      const res = await aiGenerate({
+        provider_id: "deepseek",
+        model: "deepseek-chat",
+        input: "Reply with exactly: PIPELINE_OK",
+        system: "You are a concise test bot. Output only the requested token.",
+        temperature: 0,
+        max_output_tokens: 32
+      });
+
+      console.log("[kforge][ai-test][deepseek] response:", res);
+      setAiTestOutput(res.output_text);
+    } catch (err) {
+      console.error("[kforge][ai-test][deepseek] failed:", err);
+      setAiTestOutput(`DeepSeek failed: ${formatTauriError(err)}`);
+    }
+  }, []);
+
+  const handleAiOllamaTest = useCallback(async () => {
+    setAiTestOutput("Running pipeline test (ollama)...");
+    try {
+      const res = await aiGenerate({
+        provider_id: "ollama",
+        model: "llama3.1",
+        input: "Reply with exactly: PIPELINE_OK",
+        system: "You are a concise test bot. Output only the requested token.",
+        temperature: 0,
+        max_output_tokens: 32
+      });
+
+      console.log("[kforge][ai-test][ollama] response:", res);
+      setAiTestOutput(res.output_text);
+    } catch (err) {
+      console.error("[kforge][ai-test][ollama] failed:", err);
+      setAiTestOutput(`Ollama test failed: ${formatTauriError(err)}`);
+    }
+  }, []);
+
+  const handleAiOllamaListModels = useCallback(async () => {
+    setAiTestOutput("Listing Ollama models...");
+    try {
+      const models = await invoke("ai_ollama_list_models", {});
+      console.log("[kforge][ai-test][ollama] models:", models);
+
+      if (Array.isArray(models) && models.length > 0) {
+        setAiTestOutput(`Ollama models: ${models.join(", ")}`);
+      } else {
+        setAiTestOutput("Ollama models: (none found)");
+      }
+    } catch (err) {
+      console.error("[kforge][ai-test][ollama] list models failed:", err);
+      setAiTestOutput(`Ollama list models failed: ${formatTauriError(err)}`);
+    }
+  }, []);
+
   useEffect(() => {
     const handler = (e) => {
       const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -198,6 +305,38 @@ export default function App() {
           AI Core Test
         </button>
 
+        <button
+          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
+          onClick={handleAiOpenAITest}
+          title="Sanity check: OpenAI provider end-to-end"
+        >
+          Test OpenAI
+        </button>
+
+        <button
+          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
+          onClick={handleAiDeepSeekTest}
+          title="Sanity check: DeepSeek provider end-to-end"
+        >
+          Test DeepSeek
+        </button>
+
+        <button
+          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
+          onClick={handleAiOllamaTest}
+          title="Sanity check: Ollama provider end-to-end (local)"
+        >
+          Test Ollama
+        </button>
+
+        <button
+          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
+          onClick={handleAiOllamaListModels}
+          title="Ollama helper: list locally available models"
+        >
+          List Ollama Models
+        </button>
+
         <div className="text-sm opacity-80 truncate">
           {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
         </div>
@@ -205,7 +344,10 @@ export default function App() {
         {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
 
         {aiTestOutput && (
-          <div className="text-xs opacity-70 truncate max-w-[35%]">
+          <div
+            className="text-xs opacity-70 truncate max-w-[35%]"
+            title={aiTestOutput}
+          >
             {aiTestOutput}
           </div>
         )}

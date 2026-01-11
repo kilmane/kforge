@@ -27,7 +27,10 @@ fn main() {
       ai::commands::ai_set_api_key,
       ai::commands::ai_clear_api_key,
       ai::commands::ai_has_api_key,
-      ai::commands::ai_generate
+      ai::commands::ai_generate,
+
+      // Phase 3.2 Ollama helper
+      ai::commands::ai_ollama_list_models
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

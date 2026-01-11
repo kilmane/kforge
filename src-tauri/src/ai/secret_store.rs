@@ -18,6 +18,16 @@ pub fn set_api_key(provider_id: &str, api_key: &str) -> Result<(), AiError> {
   Ok(())
 }
 
+fn is_missing_entry_error(err_string_lower: &str) -> bool {
+  // Different platforms / keyring backends use different wording.
+  // We treat these as "no key stored" rather than a hard error.
+  err_string_lower.contains("not found")
+    || err_string_lower.contains("no entry")
+    || err_string_lower.contains("no matching entry")
+    || err_string_lower.contains("no matching entry found")
+    || err_string_lower.contains("entry not found")
+}
+
 pub fn get_api_key(provider_id: &str) -> Result<Option<String>, AiError> {
   let entry = entry_for(provider_id)?;
 
@@ -25,7 +35,7 @@ pub fn get_api_key(provider_id: &str) -> Result<Option<String>, AiError> {
     Ok(v) => Ok(Some(v)),
     Err(e) => {
       let msg = e.to_string().to_lowercase();
-      if msg.contains("not found") || msg.contains("no entry") {
+      if is_missing_entry_error(&msg) {
         Ok(None)
       } else {
         Err(AiError::unknown(format!("keyring get failed: {e}")))
@@ -40,7 +50,7 @@ pub fn clear_api_key(provider_id: &str) -> Result<(), AiError> {
     Ok(_) => Ok(()),
     Err(e) => {
       let msg = e.to_string().to_lowercase();
-      if msg.contains("not found") || msg.contains("no entry") {
+      if is_missing_entry_error(&msg) {
         Ok(())
       } else {
         Err(AiError::unknown(format!("keyring delete failed: {e}")))
