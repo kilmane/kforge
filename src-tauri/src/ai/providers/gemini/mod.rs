@@ -21,6 +21,7 @@ pub struct GeminiProvider {
 impl GeminiProvider {
   pub fn new() -> Self {
     Self {
+      // Keep the version in the default base URL to match existing usage.
       base_url: "https://generativelanguage.googleapis.com/v1beta".to_string(),
     }
   }
@@ -62,7 +63,7 @@ impl GeminiProvider {
 
   fn extract_output_text(resp: &GeminiGenerateResponse) -> String {
     // Concatenate all text parts from the first candidate (typical behavior),
-    // but we’ll be resilient if multiple parts exist.
+    // but be resilient if multiple parts exist.
     let mut out = String::new();
 
     if let Some(cands) = &resp.candidates {
@@ -104,10 +105,9 @@ impl super::AiProvider for GeminiProvider {
 
     let base_url = self.resolve_base_url(req);
     let url = format!(
-      "{}/models/{}:generateContent?key={}",
+      "{}/models/{}:generateContent",
       base_url.trim_end_matches('/'),
-      model,
-      api_key
+      model
     );
 
     let body = GeminiGenerateRequest::from_ai_request(req);
@@ -119,6 +119,8 @@ impl super::AiProvider for GeminiProvider {
 
     let resp = client
       .post(url)
+      // Prefer header-based auth (keeps keys out of URLs/logs).
+      .header("x-goog-api-key", api_key)
       .json(&body)
       .send()
       .map_err(|e| AiError::unknown(format!("Network error: {e}")))?;
@@ -160,7 +162,7 @@ impl super::AiProvider for GeminiProvider {
         return Err(AiError::invalid(msg));
       }
 
-      // We keep this conservative (no assumptions about extra constructors).
+      // Keep conservative (no assumptions about extra constructors).
       return Err(AiError::provider(format!(
         "Gemini HTTP {}: {}",
         status.as_u16(),
@@ -202,10 +204,14 @@ impl super::AiProvider for GeminiProvider {
 struct GeminiGenerateRequest {
   contents: Vec<GeminiContent>,
 
+  // API expects camelCase: systemInstruction
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(rename = "systemInstruction")]
   system_instruction: Option<GeminiSystemInstruction>,
 
+  // API expects camelCase: generationConfig
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(rename = "generationConfig")]
   generation_config: Option<GeminiGenerationConfig>,
 }
 
