@@ -7,7 +7,6 @@ use crate::ai::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Anthropic Claude provider using the Messages API.
 ///
@@ -46,13 +45,13 @@ impl ClaudeProvider {
     }
   }
 
-  fn extract_output_text(v: &Value) -> String {
-    // Messages API typically returns: content: [{ "type": "text", "text": "..." }, ...]
+  fn extract_output_text(resp: &ClaudeMessagesResponse) -> String {
+    // Messages API returns: content: [{ "type": "text", "text": "..." }, ...]
     let mut out = String::new();
 
-    if let Some(content) = v.get("content").and_then(|x| x.as_array()) {
-      for block in content {
-        if let Some(t) = block.get("text").and_then(|x| x.as_str()) {
+    for block in &resp.content {
+      if block.r#type == "text" {
+        if let Some(t) = block.text.as_deref() {
           if !out.is_empty() {
             out.push('\n');
           }
@@ -79,8 +78,8 @@ impl super::AiProvider for ClaudeProvider {
     // If caller doesn't provide, use a safe default to avoid API errors.
     let max_tokens = req.max_output_tokens.unwrap_or(1024);
 
-    // Build request body for Anthropic Messages API
-    // We keep it simple: a single user message containing the full input text.
+    // Build request body for Anthropic Messages API.
+    // Keep it simple: a single user message containing the full input text.
     let body = ClaudeMessagesRequest {
       model: req.model.clone(),
       max_tokens,
@@ -135,42 +134,30 @@ impl super::AiProvider for ClaudeProvider {
       )));
     }
 
-    let v: Value = serde_json::from_slice(&bytes)
+    let parsed: ClaudeMessagesResponse = serde_json::from_slice(&bytes)
       .map_err(|e| AiError::provider(format!("Failed to parse Claude JSON: {e}")))?;
 
-    let id = v
-      .get("id")
-      .and_then(|x| x.as_str())
-      .unwrap_or("unknown")
-      .to_string();
+    let output_text = Self::extract_output_text(&parsed);
 
-    let model = v
-      .get("model")
-      .and_then(|x| x.as_str())
-      .unwrap_or(&req.model)
-      .to_string();
-
-    let output_text = Self::extract_output_text(&v);
-
-    let usage = v.get("usage").and_then(|u| {
-      let input = u.get("input_tokens").and_then(|x| x.as_u64()).map(|n| n as u32);
-      let output = u.get("output_tokens").and_then(|x| x.as_u64()).map(|n| n as u32);
+    let usage = parsed.usage.map(|u| {
+      let input = u.input_tokens;
+      let output = u.output_tokens;
       let total = match (input, output) {
         (Some(i), Some(o)) => Some(i.saturating_add(o)),
         _ => None,
       };
 
-      Some(AiUsage {
+      AiUsage {
         input_tokens: input,
         output_tokens: output,
         total_tokens: total,
-      })
+      }
     });
 
     Ok(AiResponse {
-      id,
+      id: parsed.id.unwrap_or_else(|| "unknown".to_string()),
       provider_id: self.provider_id().to_string(),
-      model,
+      model: parsed.model.unwrap_or_else(|| req.model.clone()),
       output_text,
       usage,
     })
@@ -210,11 +197,47 @@ struct ClaudeContentBlock {
 }
 
 #[derive(Debug, Deserialize)]
+struct ClaudeMessagesResponse {
+  #[serde(default)]
+  id: Option<String>,
+
+  #[serde(default)]
+  model: Option<String>,
+
+  #[serde(default)]
+  content: Vec<ClaudeContentBlockResponse>,
+
+  #[serde(default)]
+  usage: Option<ClaudeUsage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeContentBlockResponse {
+  #[serde(rename = "type")]
+  r#type: String,
+
+  #[serde(default)]
+  text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeUsage {
+  #[serde(default)]
+  input_tokens: Option<u32>,
+
+  #[serde(default)]
+  output_tokens: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
 struct ClaudeErrorEnvelope {
   error: ClaudeErrorBody,
 }
 
 #[derive(Debug, Deserialize)]
 struct ClaudeErrorBody {
+  #[serde(default)]
+  r#type: Option<String>,
+
   message: String,
 }
