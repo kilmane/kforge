@@ -1,37 +1,39 @@
 // src-tauri/src/ai/providers/openrouter/mod.rs
 
 use crate::ai::{
-  error::AiError,
+  error::{AiError, AiErrorKind},
+  providers::openai_compat::{OpenAICompatClient, OpenAICompatConfig, ProviderError},
   secret_store,
   types::{AiRequest, AiResponse, AiUsage},
 };
 
-use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 /// OpenRouter provider (OpenAI-compatible Chat Completions).
 ///
-/// Notes:
-/// - Sync provider to match the current AiProvider trait.
-/// - Uses `reqwest::blocking`.
-/// - Default base_url (OpenAI-compatible): https://openrouter.ai/api/v1
-/// - OpenRouter recommends sending `HTTP-Referer` + `X-Title` headers. We include safe defaults.
+/// Phase 3.2.x notes:
+/// - Uses shared `openai_compat` client (sync, reqwest::blocking).
+/// - `OpenAICompatClient` always appends `/v1/...`, so the provider base_url must NOT include `/v1`.
+/// - If the user supplies an endpoint containing `/v1`, we strip it to keep things working.
+///
+/// Note: OpenRouter recommends sending `HTTP-Referer` + `X-Title` headers. The shared compat client
+/// currently only supports bearer auth + JSON; no per-request custom headers are added here.
 pub struct OpenRouterProvider {
   base_url: String,
 }
 
 impl OpenRouterProvider {
   pub fn new() -> Self {
+    // OpenRouter OpenAI-compatible base is commonly shown as:
+    // https://openrouter.ai/api/v1
+    // Our shared client appends `/v1`, so we store it WITHOUT `/v1`.
     Self {
-      base_url: "https://openrouter.ai/api/v1".to_string(),
+      base_url: "https://openrouter.ai/api".to_string(),
     }
   }
 
   fn provider_id(&self) -> &'static str {
     "openrouter"
-  }
-
-  fn resolve_base_url(&self, req: &AiRequest) -> String {
-    req.endpoint.clone().unwrap_or_else(|| self.base_url.clone())
   }
 
   fn load_api_key(&self) -> Result<String, AiError> {
@@ -43,13 +45,80 @@ impl OpenRouterProvider {
     }
   }
 
-  fn extract_output_text(resp: &OpenRouterChatCompletionResponse) -> String {
-    resp
-      .choices
-      .get(0)
-      .and_then(|c| c.message.as_ref())
-      .and_then(|m| m.content.clone())
+  fn normalize_base_url(&self, raw: &str) -> String {
+    let mut s = raw.trim().trim_end_matches('/').to_string();
+
+    // Strip a trailing `/v1` (optionally with a trailing slash already removed above).
+    if s.ends_with("/v1") {
+      s.truncate(s.len().saturating_sub(3));
+      s = s.trim_end_matches('/').to_string();
+    }
+
+    s
+  }
+
+  fn resolve_base_url(&self, req: &AiRequest) -> String {
+    let raw = req
+      .endpoint
+      .as_ref()
+      .map(|s| s.as_str())
+      .unwrap_or(self.base_url.as_str());
+
+    self.normalize_base_url(raw)
+  }
+
+  fn map_provider_error(&self, err: ProviderError) -> AiError {
+    let provider = self.provider_id();
+
+    match err {
+      ProviderError::Upstream { status, body } => {
+        // Preserve raw upstream body in the message (as provided by ProviderError).
+        let msg = body;
+
+        if status == 401 || status == 403 {
+          AiError::with_http(provider, AiErrorKind::Auth, status, msg)
+        } else if status == 400 {
+          AiError::with_http(provider, AiErrorKind::InvalidRequest, status, msg)
+        } else {
+          AiError::with_http(provider, AiErrorKind::Upstream, status, msg)
+        }
+      }
+      other => AiError::new(provider, AiErrorKind::Unknown, other.to_string()),
+    }
+  }
+
+  fn extract_output_text(v: &Value) -> String {
+    v.pointer("/choices/0/message/content")
+      .and_then(|x| x.as_str())
       .unwrap_or_default()
+      .to_string()
+  }
+
+  fn extract_usage(v: &Value) -> Option<AiUsage> {
+    let prompt = v
+      .pointer("/usage/prompt_tokens")
+      .and_then(|x| x.as_u64())
+      .map(|n| n as u32);
+
+    let completion = v
+      .pointer("/usage/completion_tokens")
+      .and_then(|x| x.as_u64())
+      .map(|n| n as u32);
+
+    let total = v
+      .pointer("/usage/total_tokens")
+      .and_then(|x| x.as_u64())
+      .map(|n| n as u32);
+
+    if prompt.is_none() && completion.is_none() && total.is_none() {
+      None
+    } else {
+      Some(AiUsage {
+        input_tokens: prompt,
+        output_tokens: completion,
+        total_tokens: total,
+      })
+    }
   }
 }
 
@@ -62,86 +131,49 @@ impl super::AiProvider for OpenRouterProvider {
     let api_key = self.load_api_key()?;
     let base_url = self.resolve_base_url(req);
 
-    // OpenAI-compatible: POST /chat/completions
-    let url = format!(
-      "{}/chat/completions",
-      base_url.trim_end_matches('/')
-    );
+    let mut messages: Vec<Value> = Vec::new();
 
-    let mut messages: Vec<OpenRouterMessage> = Vec::new();
     if let Some(sys) = req.system.as_ref().filter(|s| !s.trim().is_empty()) {
-      messages.push(OpenRouterMessage {
-        role: "system".to_string(),
-        content: sys.to_string(),
-      });
-    }
-    messages.push(OpenRouterMessage {
-      role: "user".to_string(),
-      content: req.input.clone(),
-    });
-
-    let body = OpenRouterChatCompletionRequest {
-      model: req.model.clone(),
-      messages,
-      temperature: req.temperature,
-      max_tokens: req.max_output_tokens,
-      stream: Some(false),
-    };
-
-    let client = reqwest::blocking::Client::builder()
-      .timeout(std::time::Duration::from_secs(60))
-      .build()
-      .map_err(|e| AiError::unknown(format!("HTTP client build failed: {e}")))?;
-
-    // OpenRouter recommends these headers; safe defaults.
-    // If you later want these configurable, we can add optional fields to AiRequest.
-    let resp = client
-      .post(url)
-      .bearer_auth(api_key)
-      .header("HTTP-Referer", "https://kforge.local")
-      .header("X-Title", "KForge")
-      .json(&body)
-      .send()
-      .map_err(|e| AiError::unknown(format!("Network error: {e}")))?;
-
-    let status = resp.status();
-    let bytes = resp
-      .bytes()
-      .map_err(|e| AiError::unknown(format!("Failed reading response: {e}")))?;
-
-    if !status.is_success() {
-      // Try parse OpenAI-style error envelope (OpenRouter is OpenAI-compatible)
-      let msg = match serde_json::from_slice::<OpenAICompatErrorEnvelope>(&bytes) {
-        Ok(env) => env.error.message,
-        Err(_) => String::from_utf8_lossy(&bytes).to_string(),
-      };
-
-      if status.as_u16() == 401 || status.as_u16() == 403 {
-        return Err(AiError::auth(msg));
-      }
-      if status.as_u16() == 400 {
-        return Err(AiError::invalid(msg));
-      }
-
-      return Err(AiError::provider(format!(
-        "OpenRouter HTTP {}: {}",
-        status.as_u16(),
-        msg
-      )));
+      messages.push(json!({ "role": "system", "content": sys }));
     }
 
-    let parsed: OpenRouterChatCompletionResponse = serde_json::from_slice(&bytes)
-      .map_err(|e| AiError::provider(format!("Failed to parse OpenRouter JSON: {e}")))?;
+    messages.push(json!({ "role": "user", "content": req.input }));
 
-    let id = parsed.id.clone().unwrap_or_else(|| "unknown".to_string());
-    let model = parsed.model.clone().unwrap_or_else(|| req.model.clone());
-    let output_text = Self::extract_output_text(&parsed);
-
-    let usage = parsed.usage.as_ref().map(|u| AiUsage {
-      input_tokens: u.prompt_tokens,
-      output_tokens: u.completion_tokens,
-      total_tokens: u.total_tokens,
+    let mut body = json!({
+      "model": req.model,
+      "messages": messages,
+      "stream": false
     });
+
+    if let Some(t) = req.temperature {
+      body["temperature"] = json!(t);
+    }
+
+    if let Some(m) = req.max_output_tokens {
+      body["max_tokens"] = json!(m);
+    }
+
+    let cfg = OpenAICompatConfig { base_url };
+    let client = OpenAICompatClient::new(cfg).map_err(|e| self.map_provider_error(e))?;
+
+    let v = client
+      .post_chat_completions(&api_key, &body)
+      .map_err(|e| self.map_provider_error(e))?;
+
+    let id = v
+      .get("id")
+      .and_then(|x| x.as_str())
+      .unwrap_or("unknown")
+      .to_string();
+
+    let model = v
+      .get("model")
+      .and_then(|x| x.as_str())
+      .unwrap_or_else(|| req.model.as_str())
+      .to_string();
+
+    let output_text = Self::extract_output_text(&v);
+    let usage = Self::extract_usage(&v);
 
     Ok(AiResponse {
       id,
@@ -151,68 +183,4 @@ impl super::AiProvider for OpenRouterProvider {
       usage,
     })
   }
-}
-
-// -------------------- OpenRouter JSON shapes (minimal) --------------------
-
-#[derive(Debug, Serialize)]
-struct OpenRouterChatCompletionRequest {
-  model: String,
-  messages: Vec<OpenRouterMessage>,
-
-  #[serde(skip_serializing_if = "Option::is_none")]
-  temperature: Option<f32>,
-
-  /// OpenAI-compatible chat completions uses `max_tokens`
-  #[serde(skip_serializing_if = "Option::is_none")]
-  max_tokens: Option<u32>,
-
-  #[serde(skip_serializing_if = "Option::is_none")]
-  stream: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenRouterMessage {
-  role: String,
-  content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenRouterChatCompletionResponse {
-  id: Option<String>,
-  model: Option<String>,
-  choices: Vec<OpenRouterChoice>,
-  usage: Option<OpenRouterUsage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenRouterChoice {
-  message: Option<OpenRouterAssistantMessage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenRouterAssistantMessage {
-  content: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenRouterUsage {
-  #[serde(default)]
-  prompt_tokens: Option<u32>,
-  #[serde(default)]
-  completion_tokens: Option<u32>,
-  #[serde(default)]
-  total_tokens: Option<u32>,
-}
-
-// -------------------- OpenAI-compatible error envelope --------------------
-
-#[derive(Debug, Deserialize)]
-struct OpenAICompatErrorEnvelope {
-  error: OpenAICompatErrorBody,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAICompatErrorBody {
-  message: String,
 }

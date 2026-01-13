@@ -1,4 +1,4 @@
-// src-tauri/src/ai/providers/groq/mod.rs
+// src-tauri/src/ai/providers/custom/mod.rs
 
 use crate::ai::{
   error::{AiError, AiErrorKind},
@@ -9,41 +9,43 @@ use crate::ai::{
 
 use serde_json::{json, Value};
 
-/// Groq provider (OpenAI-compatible Chat Completions).
+/// Generic OpenAI-compatible provider for arbitrary endpoints (RunPod / DataCrunch / custom gateways).
 ///
-/// Phase 3.2.x notes:
-/// - Uses shared `openai_compat` client (sync, reqwest::blocking).
-/// - `OpenAICompatClient` always appends `/v1/...`, so the provider base_url must NOT include `/v1`.
-/// - If the user supplies an endpoint containing `/v1`, we strip it to keep things working.
-pub struct GroqProvider {
+/// Behavior:
+/// - Uses `OpenAICompatClient::post_chat_completions`
+/// - `OpenAICompatClient` always appends `/v1/...`, so we must store/pass a base URL WITHOUT `/v1`.
+/// - If the user supplies an endpoint ending in `/v1`, we strip it.
+/// - Uses API key stored under provider id `custom` (Bearer auth handled by shared client).
+pub struct CustomEndpointProvider {
   base_url: String,
 }
 
-impl GroqProvider {
+impl CustomEndpointProvider {
   pub fn new() -> Self {
-    // Groq OpenAI-compatible base is commonly documented as:
-    // https://api.groq.com/openai/v1
-    // Our shared client appends `/v1`, so we store it WITHOUT `/v1`.
+    // Sensible default for an OpenAI-compatible endpoint.
+    // Users can override via `req.endpoint`.
     Self {
-      base_url: "https://api.groq.com/openai".to_string(),
+      base_url: "https://api.openai.com".to_string(),
     }
   }
 
   fn provider_id(&self) -> &'static str {
-    "groq"
+    "custom"
   }
 
   fn load_api_key(&self) -> Result<String, AiError> {
     match secret_store::get_api_key(self.provider_id())? {
       Some(k) if !k.trim().is_empty() => Ok(k),
-      _ => Err(AiError::auth("No Groq API key set. Use ai_set_api_key first.")),
+      _ => Err(AiError::auth(
+        "No Custom Endpoint API key set. Use ai_set_api_key with provider 'custom' first.",
+      )),
     }
   }
 
   fn normalize_base_url(&self, raw: &str) -> String {
     let mut s = raw.trim().trim_end_matches('/').to_string();
 
-    // Strip a trailing `/v1` (optionally with a trailing slash already removed above).
+    // Strip trailing `/v1` if present (shared client appends it).
     if s.ends_with("/v1") {
       s.truncate(s.len().saturating_sub(3));
       s = s.trim_end_matches('/').to_string();
@@ -67,7 +69,7 @@ impl GroqProvider {
 
     match err {
       ProviderError::Upstream { status, body } => {
-        // Preserve raw upstream body in the message (as provided by ProviderError).
+        // Preserve raw upstream body in the message.
         let msg = body;
 
         if status == 401 || status == 403 {
@@ -78,9 +80,6 @@ impl GroqProvider {
           AiError::with_http(provider, AiErrorKind::Upstream, status, msg)
         }
       }
-
-      // Any non-upstream error (network, config, parse inside compat layer, etc.)
-      // is mapped to a provider-scoped unknown.
       other => AiError::new(provider, AiErrorKind::Unknown, other.to_string()),
     }
   }
@@ -120,15 +119,16 @@ impl GroqProvider {
   }
 }
 
-impl super::AiProvider for GroqProvider {
+impl super::AiProvider for CustomEndpointProvider {
   fn id(&self) -> &'static str {
-    "groq"
+    "custom"
   }
 
   fn generate(&self, req: &AiRequest) -> Result<AiResponse, AiError> {
     let api_key = self.load_api_key()?;
     let base_url = self.resolve_base_url(req);
 
+    // Build OpenAI-compatible chat completion payload from AiRequest.
     let mut messages: Vec<Value> = Vec::new();
 
     if let Some(sys) = req.system.as_ref().filter(|s| !s.trim().is_empty()) {
@@ -137,8 +137,6 @@ impl super::AiProvider for GroqProvider {
 
     messages.push(json!({ "role": "user", "content": req.input }));
 
-    // OpenAI-compatible Chat Completions payload.
-    // Note: `max_tokens` is the Chat Completions name (not Responses API).
     let mut body = json!({
       "model": req.model,
       "messages": messages,
