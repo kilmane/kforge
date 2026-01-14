@@ -21,6 +21,9 @@ pub enum AiErrorKind {
   // Provider returned 5xx or similar
   Server,
 
+  // Provider returned an error response (HTTP or upstream gateway style)
+  Upstream,
+
   // Failed to parse provider response JSON
   Parse,
 

@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 
 use super::{OpenAICompatConfig, ProviderError};
 
@@ -25,10 +25,12 @@ impl OpenAICompatClient {
     );
 
     for (k, v) in &cfg.extra_headers {
-      headers.insert(
-        k.parse().map_err(ProviderError::HeaderName)?,
-        HeaderValue::from_str(v).map_err(ProviderError::HeaderValue)?,
-      );
+      let name =
+        HeaderName::from_bytes(k.as_bytes()).map_err(ProviderError::HeaderName)?;
+      let value =
+        HeaderValue::from_str(v).map_err(ProviderError::HeaderValue)?;
+
+      headers.insert(name, value);
     }
 
     let http = Client::builder()
@@ -80,7 +82,11 @@ impl OpenAICompatClient {
     Ok(serde_json::from_str(&text)?)
   }
 
-  fn post_json(&self, url: &str, body: &serde_json::Value) -> Result<serde_json::Value, ProviderError> {
+  fn post_json(
+    &self,
+    url: &str,
+    body: &serde_json::Value,
+  ) -> Result<serde_json::Value, ProviderError> {
     let resp = self.http.post(url).json(body).send()?;
     let status = resp.status();
     let text = resp.text()?; // read body even on error so we can preserve it

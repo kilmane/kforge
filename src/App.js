@@ -7,9 +7,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { openProjectFolder, readFolderTree, openFile, saveFile } from "./lib/fs";
 import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
-import Tabs from "./components/Tabs.jsx"; // ✅ use existing tabs.jsx
+import Tabs from "./components/Tabs.jsx";
 
-import { aiGenerate } from "./ai/client";
+import { aiGenerate, aiSetApiKey, aiHasApiKey, aiClearApiKey } from "./ai/client";
+import SettingsModal from "./components/settings/SettingsModal.jsx";
 
 function basename(p) {
   if (!p) return "";
@@ -51,6 +52,82 @@ function formatTauriError(err) {
   }
 }
 
+function GearIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 15.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M19.4 15a8.4 8.4 0 0 0 .05-1l1.55-1.2-1.6-2.8-1.86.6c-.52-.42-1.1-.77-1.72-1.03L15.5 6h-3l-.32 1.57c-.64.26-1.22.61-1.75 1.05L8.6 8.02 7 10.82 8.55 12c-.04.33-.05.67-.05 1 0 .34.01.68.05 1L7 16.2l1.6 2.8 1.83-.6c.53.44 1.12.8 1.77 1.06L12.5 22h3l.31-1.56c.64-.26 1.23-.62 1.75-1.06l1.84.62 1.6-2.8L19.4 15Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Provider registry (UI-facing)
+const ALL_PROVIDERS = [
+  { id: "openai", label: "OpenAI", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "gemini", label: "Gemini", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "claude", label: "Claude", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+
+  { id: "deepseek", label: "DeepSeek", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "groq", label: "Groq", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "openrouter", label: "OpenRouter", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "huggingface", label: "Hugging Face", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
+  { id: "custom", label: "Custom Endpoint (OpenAI-compatible)", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
+
+  // Phase 3.3 UI prep
+  { id: "ollama", label: "Ollama (local/remote)", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true },
+  { id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true },
+  { id: "mock", label: "Mock", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true }
+];
+
+// Minimal presets
+const MODEL_PRESETS = {
+  openai: ["gpt-4o-mini", "gpt-4o"],
+  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  claude: ["claude-3-5-sonnet", "claude-3-5-haiku"],
+
+  deepseek: ["deepseek-chat"],
+  groq: ["llama3-8b-8192", "llama3-70b-8192"],
+  openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+
+  huggingface: [],
+  custom: [],
+
+  ollama: ["llama3.1", "llama3", "mistral", "qwen2.5"],
+  lmstudio: [],
+  mock: ["mock-1"]
+};
+
+function inputClass(disabled = false) {
+  return [
+    "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
+    disabled ? "opacity-60 cursor-not-allowed" : ""
+  ].join(" ");
+}
+
+function buttonClass(variant = "primary", disabled = false) {
+  const base =
+    variant === "ghost"
+      ? "px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+      : variant === "danger"
+        ? "px-3 py-1.5 rounded bg-red-900/40 border border-red-900/70 hover:bg-red-900/55 text-sm"
+        : "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm";
+
+  return [base, disabled ? "opacity-60 cursor-not-allowed" : ""].join(" ");
+}
+
+function endpointStorageKey(providerId) {
+  return `kforge.endpoint.${providerId}`;
+}
+
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -61,13 +138,123 @@ export default function App() {
 
   const [saveStatus, setSaveStatus] = useState("");
 
-  // AI test output (top bar)
+  // AI panel open/close
+  const [aiPanelOpen, setAiPanelOpen] = useState(true);
+
+  // AI state
+  const [aiProvider, setAiProvider] = useState("openai");
+  const [aiModel, setAiModel] = useState("gpt-4o-mini");
+
+  const [endpoints, setEndpoints] = useState({}); // providerId -> string
+
+  const [aiSystem, setAiSystem] = useState("");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiTemperature, setAiTemperature] = useState(0.2);
+  const [aiMaxTokens, setAiMaxTokens] = useState(512);
+
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiOutput, setAiOutput] = useState("");
+
+  // Key status map
+  const [hasKey, setHasKey] = useState({}); // providerId -> boolean
+
+  // Settings modal state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocusProviderId, setSettingsFocusProviderId] = useState(null);
+  const [settingsMessage, setSettingsMessage] = useState("");
+
+  // Debug line
   const [aiTestOutput, setAiTestOutput] = useState("");
 
   const activeTab = useMemo(() => {
     if (!activeFilePath) return null;
     return tabs.find((t) => t.path === activeFilePath) || null;
   }, [tabs, activeFilePath]);
+
+  const providerMeta = useMemo(() => {
+    return ALL_PROVIDERS.find((p) => p.id === aiProvider) || {
+      id: aiProvider,
+      label: aiProvider,
+      needsKey: true,
+      needsEndpoint: false,
+      alwaysEnabled: false,
+      group: "compatible"
+    };
+  }, [aiProvider]);
+
+  const modelSuggestions = useMemo(() => MODEL_PRESETS[aiProvider] || [], [aiProvider]);
+
+  // Load endpoints from localStorage (boot)
+  useEffect(() => {
+    const next = {};
+    for (const p of ALL_PROVIDERS) {
+      const v = window.localStorage.getItem(endpointStorageKey(p.id));
+      if (typeof v === "string" && v.length > 0) next[p.id] = v;
+    }
+    setEndpoints(next);
+  }, []);
+
+  const setEndpointForProvider = useCallback((providerId, value) => {
+    setEndpoints((prev) => ({ ...prev, [providerId]: value }));
+    window.localStorage.setItem(endpointStorageKey(providerId), value || "");
+  }, []);
+
+  const isProviderEnabled = useCallback(
+    (providerId) => {
+      const p = ALL_PROVIDERS.find((x) => x.id === providerId);
+      if (!p) return false;
+
+      if (p.alwaysEnabled) return true;
+
+      const keyOk = !p.needsKey || hasKey[providerId] === true;
+      if (!keyOk) return false;
+
+      if (p.needsEndpoint) {
+        const ep = (endpoints[providerId] || "").trim();
+        if (!ep) return false;
+      }
+
+      return true;
+    },
+    [hasKey, endpoints]
+  );
+
+  const providerReady = useMemo(() => isProviderEnabled(aiProvider), [aiProvider, isProviderEnabled]);
+
+  const openSettings = useCallback((focusProviderId = null, msg = "") => {
+    setSettingsFocusProviderId(focusProviderId);
+    setSettingsMessage(msg || "");
+    setSettingsOpen(true);
+  }, []);
+
+  // Refresh keys status
+  const refreshHasKeys = useCallback(async () => {
+    const next = {};
+    for (const p of ALL_PROVIDERS) {
+      if (!p.needsKey || p.alwaysEnabled) {
+        next[p.id] = false;
+        continue;
+      }
+      try {
+        const ok = await aiHasApiKey(p.id);
+        next[p.id] = !!ok;
+      } catch {
+        next[p.id] = false;
+      }
+    }
+    setHasKey(next);
+  }, []);
+
+  useEffect(() => {
+    refreshHasKeys();
+  }, [refreshHasKeys]);
+
+  // Auto-fill model if empty
+  useEffect(() => {
+    if (aiModel && aiModel.trim()) return;
+    const presets = MODEL_PRESETS[aiProvider] || [];
+    if (presets.length > 0) setAiModel(presets[0]);
+  }, [aiProvider, aiModel]);
 
   const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
@@ -177,100 +364,7 @@ export default function App() {
     }
   }, [activeTab]);
 
-  const handleAiCoreTest = useCallback(async () => {
-    setAiTestOutput("Running AI Core test (mock)...");
-    try {
-      const res = await aiGenerate({
-        provider_id: "mock",
-        model: "mock-1",
-        input: "Hello KForge AI Core"
-      });
-
-      console.log("[kforge][ai-test][mock] response:", res);
-      setAiTestOutput(res.output_text);
-    } catch (err) {
-      console.error("[kforge][ai-test][mock] failed:", err);
-      setAiTestOutput(`AI Core failed: ${formatTauriError(err)}`);
-    }
-  }, []);
-
-  const handleAiOpenAITest = useCallback(async () => {
-    setAiTestOutput("Running pipeline test (openai)...");
-    try {
-      const res = await aiGenerate({
-        provider_id: "openai",
-        model: "gpt-4o-mini",
-        input: "Reply with exactly: PIPELINE_OK",
-        system: "You are a concise test bot. Output only the requested token.",
-        temperature: 0,
-        max_output_tokens: 32
-      });
-
-      console.log("[kforge][ai-test][openai] response:", res);
-      setAiTestOutput(res.output_text);
-    } catch (err) {
-      console.error("[kforge][ai-test][openai] failed:", err);
-      setAiTestOutput(`OpenAI failed: ${formatTauriError(err)}`);
-    }
-  }, []);
-
-  const handleAiDeepSeekTest = useCallback(async () => {
-    setAiTestOutput("Running pipeline test (deepseek)...");
-    try {
-      const res = await aiGenerate({
-        provider_id: "deepseek",
-        model: "deepseek-chat",
-        input: "Reply with exactly: PIPELINE_OK",
-        system: "You are a concise test bot. Output only the requested token.",
-        temperature: 0,
-        max_output_tokens: 32
-      });
-
-      console.log("[kforge][ai-test][deepseek] response:", res);
-      setAiTestOutput(res.output_text);
-    } catch (err) {
-      console.error("[kforge][ai-test][deepseek] failed:", err);
-      setAiTestOutput(`DeepSeek failed: ${formatTauriError(err)}`);
-    }
-  }, []);
-
-  const handleAiOllamaTest = useCallback(async () => {
-    setAiTestOutput("Running pipeline test (ollama)...");
-    try {
-      const res = await aiGenerate({
-        provider_id: "ollama",
-        model: "llama3.1",
-        input: "Reply with exactly: PIPELINE_OK",
-        system: "You are a concise test bot. Output only the requested token.",
-        temperature: 0,
-        max_output_tokens: 32
-      });
-
-      console.log("[kforge][ai-test][ollama] response:", res);
-      setAiTestOutput(res.output_text);
-    } catch (err) {
-      console.error("[kforge][ai-test][ollama] failed:", err);
-      setAiTestOutput(`Ollama test failed: ${formatTauriError(err)}`);
-    }
-  }, []);
-
-  const handleAiOllamaListModels = useCallback(async () => {
-    setAiTestOutput("Listing Ollama models...");
-    try {
-      const models = await invoke("ai_ollama_list_models", {});
-      console.log("[kforge][ai-test][ollama] models:", models);
-
-      if (Array.isArray(models) && models.length > 0) {
-        setAiTestOutput(`Ollama models: ${models.join(", ")}`);
-      } else {
-        setAiTestOutput("Ollama models: (none found)");
-      }
-    } catch (err) {
-      console.error("[kforge][ai-test][ollama] list models failed:", err);
-      setAiTestOutput(`Ollama list models failed: ${formatTauriError(err)}`);
-    }
-  }, []);
-
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
       const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -280,61 +374,200 @@ export default function App() {
         e.preventDefault();
         handleSaveActive();
       }
+
+      if (mod && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        setAiPanelOpen((v) => !v);
+      }
+
+      if (mod && e.key === ",") {
+        e.preventDefault();
+        openSettings(null, "Opened via keyboard shortcut");
+      }
+
+      if (e.key === "Escape") {
+        setSettingsOpen(false);
+      }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSaveActive]);
+  }, [handleSaveActive, openSettings]);
+
+  const handleSaveKey = useCallback(
+    async (providerId, rawKey) => {
+      const draft = (rawKey || "").trim();
+      if (!draft) {
+        setAiTestOutput(`No API key entered for ${providerId}`);
+        return;
+      }
+      try {
+        await aiSetApiKey(providerId, draft);
+        await refreshHasKeys();
+        setAiTestOutput(`Saved API key for ${providerId}`);
+      } catch (err) {
+        setAiTestOutput(`Save key failed: ${formatTauriError(err)}`);
+      }
+    },
+    [refreshHasKeys]
+  );
+
+  const handleClearKey = useCallback(
+    async (providerId) => {
+      try {
+        await aiClearApiKey(providerId);
+        await refreshHasKeys();
+        setAiTestOutput(`Cleared API key for ${providerId}`);
+      } catch (err) {
+        setAiTestOutput(`Clear key failed: ${formatTauriError(err)}`);
+      }
+    },
+    [refreshHasKeys]
+  );
+
+  // AI request builder
+  const buildAiRequest = useCallback(
+    (override = {}) => {
+      const req = {
+        provider_id: aiProvider,
+        model: aiModel,
+        input: aiPrompt,
+        system: aiSystem?.trim() ? aiSystem : undefined,
+        temperature: typeof aiTemperature === "number" ? aiTemperature : undefined,
+        max_output_tokens:
+          typeof aiMaxTokens === "number" ? Math.max(1, aiMaxTokens) : undefined
+      };
+
+      const ep = (endpoints[aiProvider] || "").trim();
+      if (ep) req.endpoint = ep;
+
+      return { ...req, ...override };
+    },
+    [aiProvider, aiModel, aiPrompt, aiSystem, aiTemperature, aiMaxTokens, endpoints]
+  );
+
+  const runAi = useCallback(
+    async (overrideReq = {}) => {
+      const req = buildAiRequest(overrideReq);
+
+      if (!req.model || !String(req.model).trim()) {
+        setAiOutput("Model is required.");
+        return;
+      }
+      if (!req.input || !String(req.input).trim()) {
+        setAiOutput("Prompt is required.");
+        return;
+      }
+
+      const meta = ALL_PROVIDERS.find((p) => p.id === req.provider_id);
+      if (!meta) {
+        setAiOutput(`Unknown provider: ${req.provider_id}`);
+        return;
+      }
+
+      if (!isProviderEnabled(req.provider_id)) {
+        const needsEndpoint = !!meta.needsEndpoint;
+        setAiOutput(
+          `Provider ${req.provider_id} is not configured. Open Settings to add ${
+            meta.needsKey ? "an API key" : ""
+          }${meta.needsKey && needsEndpoint ? " and " : ""}${needsEndpoint ? "an endpoint" : ""}.`
+        );
+        openSettings(req.provider_id, "Configure this provider to enable it.");
+        return;
+      }
+
+      setAiRunning(true);
+      setAiOutput("");
+      try {
+        const res = await aiGenerate(req);
+        setAiOutput(res?.output_text ?? "");
+      } catch (err) {
+        setAiOutput(formatTauriError(err));
+      } finally {
+        setAiRunning(false);
+      }
+    },
+    [buildAiRequest, isProviderEnabled, openSettings]
+  );
+
+  const handleAiTest = useCallback(async () => {
+    setAiTestOutput(`Testing ${aiProvider}...`);
+    await runAi({
+      input: "Reply with exactly: PIPELINE_OK",
+      system: "You are a concise test bot. Output only the requested token.",
+      temperature: 0,
+      max_output_tokens: 32
+    });
+  }, [aiProvider, runAi]);
+
+  const handleUseActiveFileAsPrompt = useCallback(() => {
+    if (!activeTab) return;
+    const text = activeTab.content ?? "";
+    if (!text.trim()) return;
+    setAiPrompt(text);
+  }, [activeTab]);
+
+  const handleProviderChange = useCallback(
+    (nextProviderId) => {
+      if (nextProviderId === aiProvider) return;
+
+      if (!isProviderEnabled(nextProviderId)) {
+        openSettings(nextProviderId, "This provider is disabled until configured.");
+        return;
+      }
+
+      setAiProvider(nextProviderId);
+
+      const presets = MODEL_PRESETS[nextProviderId] || [];
+      if (presets.length > 0) setAiModel(presets[0]);
+    },
+    [aiProvider, isProviderEnabled, openSettings]
+  );
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        providers={ALL_PROVIDERS}
+        hasKeyMap={hasKey}
+        endpointsMap={endpoints}
+        onSetEndpoint={setEndpointForProvider}
+        onSaveKey={handleSaveKey}
+        onClearKey={handleClearKey}
+        focusProviderId={settingsFocusProviderId}
+        message={settingsMessage}
+      />
+
       {/* Top bar */}
       <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800">
-        <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleOpenFolder}
-        >
+        <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>
 
         <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleAiCoreTest}
-          title="Phase 3.1.0: quick end-to-end test (mock provider)"
+          className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
+          onClick={handleSaveActive}
+          disabled={!activeTab || !activeTab.isDirty}
+          title="Save (Ctrl/Cmd+S)"
         >
-          AI Core Test
+          Save
         </button>
 
         <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleAiOpenAITest}
-          title="Sanity check: OpenAI provider end-to-end"
+          className={buttonClass("ghost")}
+          onClick={() => openSettings(null, "Opened from top bar")}
+          title="Settings (Ctrl/Cmd+,)"
         >
-          Test OpenAI
+          Settings
         </button>
 
         <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleAiDeepSeekTest}
-          title="Sanity check: DeepSeek provider end-to-end"
+          className={buttonClass("ghost")}
+          onClick={() => setAiPanelOpen((v) => !v)}
+          title="Toggle AI panel (Ctrl/Cmd+J)"
         >
-          Test DeepSeek
-        </button>
-
-        <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleAiOllamaTest}
-          title="Sanity check: Ollama provider end-to-end (local)"
-        >
-          Test Ollama
-        </button>
-
-        <button
-          className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-          onClick={handleAiOllamaListModels}
-          title="Ollama helper: list locally available models"
-        >
-          List Ollama Models
+          {aiPanelOpen ? "Hide AI" : "Show AI"}
         </button>
 
         <div className="text-sm opacity-80 truncate">
@@ -344,10 +577,7 @@ export default function App() {
         {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
 
         {aiTestOutput && (
-          <div
-            className="text-xs opacity-70 truncate max-w-[35%]"
-            title={aiTestOutput}
-          >
+          <div className="text-xs opacity-70 truncate max-w-[35%]" title={aiTestOutput}>
             {aiTestOutput}
           </div>
         )}
@@ -370,11 +600,7 @@ export default function App() {
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
         <div className="w-72 border-r border-zinc-800 min-h-0">
-          <Explorer
-            tree={tree}
-            onOpenFile={handleOpenFile}
-            activeFilePath={activeFilePath}
-          />
+          <Explorer tree={tree} onOpenFile={handleOpenFile} activeFilePath={activeFilePath} />
         </div>
 
         <div className="flex-1 min-h-0">
@@ -385,9 +611,246 @@ export default function App() {
           />
         </div>
 
-        <div className="w-96 border-l border-zinc-800 min-h-0">
-          <div className="h-full p-3 text-sm opacity-70">Chat Panel</div>
-        </div>
+        {/* Right sidebar: AI panel (collapsible) */}
+        {aiPanelOpen ? (
+          <div className="w-96 border-l border-zinc-800 min-h-0 flex flex-col">
+            <div className="p-3 border-b border-zinc-800">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">AI Panel</div>
+                <div className="text-xs opacity-70">
+                  {providerMeta.label}
+                  {providerReady ? " (ready)" : " (configure in Settings)"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-3 space-y-4">
+              {/* Provider + model */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide opacity-60">Provider</div>
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={() => openSettings(aiProvider, "Edit provider settings")}
+                    type="button"
+                    title="Configure provider"
+                  >
+                    Configure
+                  </button>
+                </div>
+
+                <select
+                  className={inputClass(false)}
+                  value={aiProvider}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                >
+                  {ALL_PROVIDERS.map((p) => {
+                    const enabled = isProviderEnabled(p.id);
+                    return (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        disabled={!enabled && p.id !== aiProvider}
+                      >
+                        {p.label}
+                        {enabled ? "" : " (configure)"}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {/* Helper text under provider dropdown */}
+                <div className="text-xs opacity-60">
+                  If a provider is disabled, open Settings to add its API key (and endpoint where required).
+                </div>
+
+                <div className="text-xs uppercase tracking-wide opacity-60 mt-3">Model</div>
+                <input
+                  className={inputClass(!providerReady)}
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder={
+                    aiProvider === "openrouter"
+                      ? "e.g. openai/gpt-4o-mini"
+                      : aiProvider === "custom"
+                        ? "model name required by your endpoint"
+                        : "model"
+                  }
+                  list={`model-suggestions-${aiProvider}`}
+                  disabled={!providerReady}
+                />
+                <datalist id={`model-suggestions-${aiProvider}`}>
+                  {modelSuggestions.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+
+                {!providerReady && (
+                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
+                    This provider is disabled until configured in Settings.
+                  </div>
+                )}
+              </div>
+
+              {/* Prompt */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide opacity-60">Prompt</div>
+                  <button
+                    className={buttonClass("ghost", !activeTab || !providerReady)}
+                    onClick={handleUseActiveFileAsPrompt}
+                    disabled={!activeTab || !providerReady}
+                    title="Copy active editor content into the prompt box"
+                  >
+                    Use Active File
+                  </button>
+                </div>
+                <textarea
+                  className={`${inputClass(!providerReady)} min-h-[120px]`}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Type your prompt here..."
+                  disabled={!providerReady}
+                />
+              </div>
+
+              {/* System (optional) */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">System (optional)</div>
+                <textarea
+                  className={`${inputClass(!providerReady)} min-h-[70px]`}
+                  value={aiSystem}
+                  onChange={(e) => setAiSystem(e.target.value)}
+                  placeholder="Optional system instruction..."
+                  disabled={!providerReady}
+                />
+              </div>
+
+              {/* Params */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">Parameters</div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-60 mb-1">Temperature</div>
+                    <input
+                      className={inputClass(!providerReady)}
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={aiTemperature}
+                      onChange={(e) => setAiTemperature(Number(e.target.value))}
+                      disabled={!providerReady}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-60 mb-1">Max tokens</div>
+                    <input
+                      className={inputClass(!providerReady)}
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={aiMaxTokens}
+                      onChange={(e) => setAiMaxTokens(Number(e.target.value))}
+                      disabled={!providerReady}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    className={buttonClass("primary", !providerReady || aiRunning)}
+                    onClick={() => runAi()}
+                    disabled={!providerReady || aiRunning}
+                  >
+                    {aiRunning ? "Running..." : "Send"}
+                  </button>
+
+                  <button
+                    className={buttonClass("ghost", !providerReady || aiRunning)}
+                    onClick={handleAiTest}
+                    disabled={!providerReady || aiRunning}
+                  >
+                    Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Output */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">Output</div>
+                <textarea
+                  className={`${inputClass(false)} min-h-[160px]`}
+                  value={aiOutput}
+                  readOnly
+                  placeholder="AI output will appear here..."
+                />
+              </div>
+
+              {/* Ollama helper */}
+              {aiProvider === "ollama" && (
+                <div className="border border-zinc-800 rounded p-3 space-y-2">
+                  <div className="text-sm font-semibold">Ollama Helper</div>
+                  <div className="text-xs opacity-60">List local models using the Rust command.</div>
+                  <button
+                    className={buttonClass("ghost", aiRunning)}
+                    onClick={async () => {
+                      setAiTestOutput("Listing Ollama models...");
+                      try {
+                        const ep = (endpoints.ollama || "").trim();
+                        const models = await invoke("ai_ollama_list_models", {
+                          endpoint: ep ? ep : undefined
+                        });
+                        if (Array.isArray(models) && models.length > 0) {
+                          setAiTestOutput(`Ollama models: ${models.join(", ")}`);
+                        } else {
+                          setAiTestOutput("Ollama models: (none found)");
+                        }
+                      } catch (err) {
+                        setAiTestOutput(`Ollama list models failed: ${formatTauriError(err)}`);
+                      }
+                    }}
+                    disabled={aiRunning}
+                    type="button"
+                  >
+                    List Models
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
+              Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
+              <span className="opacity-90">{aiModel || "(none)"}</span>
+            </div>
+          </div>
+        ) : (
+          // Collapsed rail (icon appears ONLY when panel is collapsed)
+          <div className="w-10 border-l border-zinc-800 min-h-0 flex flex-col items-center justify-start py-2">
+            <button
+              className="w-8 h-8 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs"
+              onClick={() => setAiPanelOpen(true)}
+              title="Show AI panel (Ctrl/Cmd+J)"
+              type="button"
+            >
+              AI
+            </button>
+
+            <button
+              className="mt-2 w-8 h-8 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 flex items-center justify-center"
+              onClick={() => openSettings(null, "Opened from collapsed rail")}
+              title="Settings"
+              type="button"
+            >
+              <GearIcon className="w-4 h-4 text-zinc-200" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

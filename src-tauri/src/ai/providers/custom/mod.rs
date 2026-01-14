@@ -151,11 +151,18 @@ impl super::AiProvider for CustomEndpointProvider {
       body["max_tokens"] = json!(m);
     }
 
-    let cfg = OpenAICompatConfig { base_url };
-    let client = OpenAICompatClient::new(cfg).map_err(|e| self.map_provider_error(e))?;
+    let cfg = OpenAICompatConfig {
+      base_url,
+      api_key,
+      default_model: None,
+      extra_headers: Vec::new(),
+      timeout_secs: 60,
+    };
+
+    let client = OpenAICompatClient::new(&cfg).map_err(|e| self.map_provider_error(e))?;
 
     let v = client
-      .post_chat_completions(&api_key, &body)
+      .post_chat_completions(&body)
       .map_err(|e| self.map_provider_error(e))?;
 
     let id = v
