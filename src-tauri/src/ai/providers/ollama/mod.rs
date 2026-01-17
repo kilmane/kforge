@@ -7,6 +7,26 @@ use crate::ai::{
 
 use serde::{Deserialize, Serialize};
 
+/// Canonical default base URL for Ollama (local).
+pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
+
+/// Normalize Ollama base URLs so "local default" and "remote override" behave consistently.
+///
+/// Rules:
+/// - trim whitespace
+/// - trim trailing slash
+/// - if user pasted `/v1` out of habit, strip it
+pub fn normalize_ollama_base_url(raw: &str) -> String {
+  let mut s = raw.trim().trim_end_matches('/').to_string();
+
+  if s.ends_with("/v1") {
+    s.truncate(s.len().saturating_sub(3));
+    s = s.trim_end_matches('/').to_string();
+  }
+
+  s
+}
+
 /// Ollama provider (local).
 ///
 /// Notes:
@@ -25,7 +45,7 @@ pub struct OllamaProvider {
 impl OllamaProvider {
   pub fn new() -> Self {
     Self {
-      base_url: "http://localhost:11434".to_string(),
+      base_url: OLLAMA_DEFAULT_BASE_URL.to_string(),
     }
   }
 
@@ -34,10 +54,12 @@ impl OllamaProvider {
   }
 
   fn resolve_base_url(&self, req: &AiRequest) -> String {
-    req
+    let raw = req
       .endpoint
       .clone()
-      .unwrap_or_else(|| self.base_url.clone())
+      .unwrap_or_else(|| self.base_url.clone());
+
+    normalize_ollama_base_url(&raw)
   }
 
   fn friendly_network_error(&self, base_url: &str, e: &reqwest::Error) -> AiError {
