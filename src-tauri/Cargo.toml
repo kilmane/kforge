@@ -16,6 +16,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Secure credential storage (OS keyring)
+# NOTE: keyring has NO default features; without a platform feature it falls back to the mock store.
+# We add platform features in target-specific dependency sections below.
 keyring = "3"
 
 # Error handling
@@ -31,6 +33,13 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
+
+# --- Platform-specific keyring backends ---
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
 
 [features]
 # this is used for production builds or when a dev server is not specified, DO NOT REMOVE

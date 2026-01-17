@@ -30,26 +30,40 @@ pub fn ai_has_api_key(providerId: String) -> Result<bool, AiErrorPayload> {
   Ok(has)
 }
 
+/// Returns true if the key exists in the OS keyring (persisted),
+/// false if it is missing from keyring.
+#[tauri::command]
+pub fn ai_is_key_persisted(providerId: String) -> Result<bool, AiErrorPayload> {
+  secret_store::is_persisted_in_keyring(&providerId).map_err(AiErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn ai_generate(request: AiRequest) -> Result<AiResponse, AiErrorPayload> {
   let provider = providers::get_provider(&request.provider_id)
-    .ok_or_else(|| AiErrorPayload::from(AiError::invalid(format!(
-      "Unknown provider_id: {}",
-      request.provider_id
-    ))))?;
+    .ok_or_else(|| {
+      AiErrorPayload::from(AiError::invalid(format!(
+        "Unknown provider_id: {}",
+        request.provider_id
+      )))
+    })?;
 
   provider.generate(&request).map_err(AiErrorPayload::from)
 }
 
-/// List available Ollama models (local).
+/// List available Ollama models (local or remote).
 ///
 /// - `endpoint` is optional and overrides the base URL (e.g. "http://localhost:11434").
 /// - Uses Ollama endpoint: GET {base}/api/tags
 /// - Returns a simple Vec of model names.
 #[tauri::command]
 pub fn ai_ollama_list_models(endpoint: Option<String>) -> Result<Vec<String>, AiErrorPayload> {
-  let base_url = endpoint.unwrap_or_else(|| "http://localhost:11434".to_string());
-  let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+  // Canonical Ollama URL + normalization lives in the provider module,
+  // so list-models and generate follow the same rules.
+  use crate::ai::providers::ollama::{normalize_ollama_base_url, OLLAMA_DEFAULT_BASE_URL};
+
+  let raw = endpoint.unwrap_or_else(|| OLLAMA_DEFAULT_BASE_URL.to_string());
+  let base_url = normalize_ollama_base_url(&raw);
+  let url = format!("{}/api/tags", base_url);
 
   let client = reqwest::blocking::Client::builder()
     .timeout(std::time::Duration::from_secs(30))
@@ -88,16 +102,11 @@ pub fn ai_ollama_list_models(endpoint: Option<String>) -> Result<Vec<String>, Ai
     return Err(AiErrorPayload::from(err));
   }
 
-  let parsed: OllamaTagsResponse = serde_json::from_slice(&bytes)
-    .map_err(|e| AiErrorPayload::from(AiError::provider(format!("Failed to parse Ollama JSON: {e}"))))?;
+  let parsed: OllamaTagsResponse = serde_json::from_slice(&bytes).map_err(|e| {
+    AiErrorPayload::from(AiError::provider(format!("Failed to parse Ollama JSON: {e}")))
+  })?;
 
-  let mut names: Vec<String> = parsed
-    .models
-    .into_iter()
-    .filter_map(|m| m.name)
-    .collect();
-
-  // Nice to keep stable ordering for UI/debug
+  let mut names: Vec<String> = parsed.models.into_iter().filter_map(|m| m.name).collect();
   names.sort();
   names.dedup();
 
