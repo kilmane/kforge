@@ -200,6 +200,35 @@ function disabledProviderMessage(status) {
   return "Disabled — Not configured. Configure in Settings to enable this provider.";
 }
 
+function providerGroupLabel(group) {
+  if (group === "local") return "Local";
+  if (group === "cloud") return "Cloud";
+  if (group === "compatible") return "OpenAI-compatible";
+  return "Provider";
+}
+
+function providerGroupHint(group) {
+  if (group === "local") return "Local runtime — may fail if the server is not running.";
+  if (group === "cloud") return "Cloud provider — requires an API key.";
+  if (group === "compatible") return "OpenAI-compatible provider — requires an API key (and sometimes an endpoint).";
+  return "";
+}
+
+function seemsConnectionError(msg) {
+  const m = String(msg || "").toLowerCase();
+  return (
+    m.includes("connection refused") ||
+    m.includes("failed to connect") ||
+    m.includes("connection error") ||
+    m.includes("connection timed out") ||
+    m.includes("timed out") ||
+    m.includes("network") ||
+    m.includes("unreachable") ||
+    m.includes("econnrefused") ||
+    m.includes("enotfound")
+  );
+}
+
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -230,6 +259,12 @@ export default function App() {
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
 
+  // Runtime reachability (UI-only hint; does not gate providers)
+  const [runtimeReachable, setRuntimeReachable] = useState({
+    ollama: null, // true/false/null (unknown)
+    lmstudio: null
+  });
+
   // Settings modal state
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsFocusProviderId, setSettingsFocusProviderId] = useState(null);
@@ -237,6 +272,9 @@ export default function App() {
 
   // Debug line
   const [aiTestOutput, setAiTestOutput] = useState("");
+
+  // Provider switch feedback (UI-only, ephemeral)
+  const [providerSwitchNote, setProviderSwitchNote] = useState("");
 
   const activeTab = useMemo(() => {
     if (!activeFilePath) return null;
@@ -550,8 +588,19 @@ export default function App() {
       try {
         const res = await aiGenerate(req);
         setAiOutput(res?.output_text ?? "");
+
+        // If a local provider succeeds, mark runtime reachable
+        if (req.provider_id === "ollama" || req.provider_id === "lmstudio") {
+          setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: true }));
+        }
       } catch (err) {
-        setAiOutput(formatTauriError(err));
+        const msg = formatTauriError(err);
+        setAiOutput(msg);
+
+        // UI-only hint: if a local provider looks unreachable, surface it in header
+        if ((req.provider_id === "ollama" || req.provider_id === "lmstudio") && seemsConnectionError(msg)) {
+          setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: false }));
+        }
       } finally {
         setAiRunning(false);
       }
@@ -592,11 +641,19 @@ export default function App() {
       // Preset-driven providers get an auto model; manual providers show placeholder + helper.
       if (manualModelProviders(nextProviderId)) {
         setAiModel("");
+        setProviderSwitchNote(`Switched to ${ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId} — model cleared (manual entry).`);
         return;
       }
 
       const presets = MODEL_PRESETS[nextProviderId] || [];
       if (presets.length > 0) setAiModel(presets[0]);
+
+      const nextLabel = ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId;
+      if (presets.length > 0) {
+        setProviderSwitchNote(`Switched to ${nextLabel} — model reset to default (${presets[0]}).`);
+      } else {
+        setProviderSwitchNote(`Switched to ${nextLabel} — select or enter a model.`);
+      }
     },
     [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
   );
@@ -604,6 +661,36 @@ export default function App() {
   const providerStatus = useMemo(() => {
     return statusForProviderUI(providerMeta, hasKey, endpoints);
   }, [providerMeta, hasKey, endpoints]);
+
+  // Active provider: UI-only runtime hint (does not gate)
+  const activeRuntimeHint = useMemo(() => {
+    if (providerMeta.group !== "local") return null;
+
+    const reachable = runtimeReachable[providerMeta.id];
+    if (reachable === false) {
+      return {
+        label: "Unreachable",
+        tone: "warn",
+        message: "Runtime not reachable. Make sure the server is running (and endpoint is correct, if set)."
+      };
+    }
+    if (reachable === true) {
+      return {
+        label: "Reachable",
+        tone: "ok",
+        message: "Runtime reachable."
+      };
+    }
+    return null;
+  }, [providerMeta, runtimeReachable]);
+
+  const headerStatus = useMemo(() => {
+    // Prefer config status; if configured and local runtime is known-unreachable, show unreachable label.
+    if (providerStatus?.tone === "ok" && activeRuntimeHint?.label === "Unreachable") {
+      return { label: "Unreachable", tone: "warn" };
+    }
+    return providerStatus;
+  }, [providerStatus, activeRuntimeHint]);
 
   const disabledExplainer = useMemo(() => {
     if (providerReady) return null;
@@ -624,6 +711,14 @@ export default function App() {
   const showModelHelper = useMemo(() => {
     return manualModelProviders(aiProvider) || modelSuggestions.length === 0;
   }, [aiProvider, modelSuggestions.length]);
+
+  const showProviderSurfaceHint = useMemo(() => {
+    if (!providerReady) return disabledProviderMessage(providerStatus);
+    if (providerMeta.group === "local" && activeRuntimeHint?.label === "Unreachable") return activeRuntimeHint.message;
+    return providerGroupHint(providerMeta.group);
+  }, [providerReady, providerStatus, providerMeta.group, activeRuntimeHint]);
+
+  const handleDismissSwitchNote = useCallback(() => setProviderSwitchNote(""), []);
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -715,26 +810,65 @@ export default function App() {
         {/* Right sidebar: AI panel (collapsible) */}
         {aiPanelOpen ? (
           <div className="w-96 border-l border-zinc-800 min-h-0 flex flex-col">
-            <div className="p-3 border-b border-zinc-800">
+            {/* AI header: status surface */}
+            <div className="p-3 border-b border-zinc-800 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold">AI Panel</div>
 
                 <div className="flex items-center gap-2">
+                  <div
+                    className="text-[11px] px-2 py-0.5 rounded border whitespace-nowrap bg-zinc-900/40 border-zinc-800 text-zinc-200"
+                    title="Provider category"
+                  >
+                    {providerGroupLabel(providerMeta.group)}
+                  </div>
+
                   <div className="text-xs opacity-70">
                     {providerMeta.label}
                     {providerReady ? "" : ` (${disabledExplainer})`}
                   </div>
+
                   <div
                     className={[
                       "text-[11px] px-2 py-0.5 rounded border whitespace-nowrap",
-                      statusChipClass(providerStatus.tone)
+                      statusChipClass(headerStatus.tone)
                     ].join(" ")}
                     title={providerMeta.id}
                   >
-                    {providerStatus.label}
+                    {headerStatus.label}
                   </div>
                 </div>
               </div>
+
+              {/* Always-visible, non-blocking hint + route */}
+              <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
+                <div className="leading-snug">
+                  {showProviderSurfaceHint}
+                </div>
+                <button
+                  className={buttonClass("ghost")}
+                  onClick={() => openSettings(aiProvider, "Configure in Settings")}
+                  type="button"
+                  title="Configure this provider in Settings"
+                >
+                  Configure
+                </button>
+              </div>
+
+              {/* Provider switch note (ephemeral) */}
+              {providerSwitchNote && (
+                <div className="text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
+                  <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={handleDismissSwitchNote}
+                    type="button"
+                    title="Dismiss"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-auto p-3 space-y-4">
@@ -772,7 +906,8 @@ export default function App() {
                 </select>
 
                 <div className="text-xs opacity-60">
-                  Providers are disabled until configured. Use <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
+                  Providers are disabled until configured. Use{" "}
+                  <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
                 </div>
 
                 {!providerReady && (
@@ -886,7 +1021,11 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <button
                     className={buttonClass("primary", !providerReady || aiRunning)}
-                    onClick={() => runAi()}
+                    onClick={() => {
+                      // Clear switch note once the user sends, so it doesn't linger.
+                      if (providerSwitchNote) setProviderSwitchNote("");
+                      runAi();
+                    }}
                     disabled={!providerReady || aiRunning}
                   >
                     {aiRunning ? "Running..." : "Send"}
@@ -932,8 +1071,12 @@ export default function App() {
                         } else {
                           setAiTestOutput("Ollama models: (none found)");
                         }
+                        // UI-only: successful call implies runtime reachable
+                        setRuntimeReachable((prev) => ({ ...prev, ollama: true }));
                       } catch (err) {
-                        setAiTestOutput(`Ollama list models failed: ${formatTauriError(err)}`);
+                        const msg = formatTauriError(err);
+                        setAiTestOutput(`Ollama list models failed: ${msg}`);
+                        setRuntimeReachable((prev) => ({ ...prev, ollama: false }));
                       }
                     }}
                     disabled={aiRunning}

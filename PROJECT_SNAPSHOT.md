@@ -264,3 +264,13 @@ Update this file whenever:
 - Development workflow is finalized
 
 This snapshot complements git history by capturing intent, rules, and structure.
+
+---
+
+### Current Status
+
+- Phase 3.4 (Chat Panel UI) complete
+- Phase 3.4.1 (UX polish + clarity) complete
+- Provider gating, Settings routing, and local runtimes (Ollama, LM Studio) are stable
+- Dev command standardized: `pnpm run dev`
+
