@@ -57,15 +57,25 @@ function statusForProvider(p, hasKeyMap, endpointsMap) {
   return { label: "Not configured", tone: "warn" };
 }
 
-function disabledProviderExplainer(p, hasKeyMap, endpointsMap) {
+function settingsGuidanceForStatus(p, hasKeyMap, endpointsMap) {
   const st = statusForProvider(p, hasKeyMap, endpointsMap);
+
+  if (st.tone === "ok") {
+    return "This provider is ready.";
+  }
+
   if (st.missing === "key") {
-    return "Disabled — Missing API key. Add it in Settings to enable this provider.";
+    return "Paste an API key to enable this provider.";
   }
+
   if (st.missing === "endpoint") {
-    return "Disabled — Missing endpoint. Add it in Settings to enable this provider.";
+    if (OPTIONAL_ENDPOINT_PROVIDER_IDS.has(p.id)) {
+      return "You can optionally set an endpoint URL for this runtime.";
+    }
+    return "Set an endpoint URL to enable this provider.";
   }
-  return "Disabled — Not configured. Configure in Settings to enable this provider.";
+
+  return "Complete the required fields to enable this provider.";
 }
 
 function ProviderButton({ p, active, onClick, hasKeyMap, endpointsMap, registerRef }) {
@@ -133,6 +143,11 @@ export default function SettingsModal({
     return activeProvider
       ? statusForProvider(activeProvider, hasKeyMap || {}, endpointsMap || {})
       : { label: "", tone: "warn" };
+  }, [activeProvider, hasKeyMap, endpointsMap]);
+
+  const settingsGuidance = useMemo(() => {
+    if (!activeProvider) return "";
+    return settingsGuidanceForStatus(activeProvider, hasKeyMap || {}, endpointsMap || {});
   }, [activeProvider, hasKeyMap, endpointsMap]);
 
   const showEndpoint = useMemo(() => {
@@ -209,8 +224,7 @@ export default function SettingsModal({
           <div className="border-r border-zinc-800 min-h-0 overflow-hidden">
             <div ref={leftListRef} className="h-full overflow-auto p-3">
               <div className="text-[11px] opacity-60 px-2 mb-3 leading-snug">
-                Tip: disabled providers route you here with{" "}
-                <span className="opacity-90">“Configure in Settings”</span>.
+                Tip: select a provider on the left to configure its API key (and endpoint where required).
               </div>
 
               <div className="mb-4">
@@ -290,11 +304,9 @@ export default function SettingsModal({
                     Status: <span className="opacity-90">{status.label}</span>
                   </div>
 
-                  {status.tone !== "ok" && (
-                    <div className="mt-2 text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
-                      {disabledProviderExplainer(activeProvider, hasKeyMap || {}, endpointsMap || {})}
-                    </div>
-                  )}
+                  <div className="mt-2 text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
+                    {settingsGuidance}
+                  </div>
                 </div>
 
                 {/* API Key */}
@@ -379,10 +391,6 @@ export default function SettingsModal({
                     <div className="text-xs opacity-60">{endpointSpec.help}</div>
                   </div>
                 ) : null}
-
-                <div className="text-xs opacity-60">
-                  Use <span className="opacity-90">Configure in Settings</span> to enable providers.
-                </div>
               </div>
             )}
           </div>

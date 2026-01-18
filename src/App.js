@@ -641,7 +641,11 @@ export default function App() {
       // Preset-driven providers get an auto model; manual providers show placeholder + helper.
       if (manualModelProviders(nextProviderId)) {
         setAiModel("");
-        setProviderSwitchNote(`Switched to ${ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId} — model cleared (manual entry).`);
+        setProviderSwitchNote(
+          `Switched to ${
+            ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId
+          } — model cleared (manual entry).`
+        );
         return;
       }
 
@@ -842,9 +846,7 @@ export default function App() {
 
               {/* Always-visible, non-blocking hint + route */}
               <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
-                <div className="leading-snug">
-                  {showProviderSurfaceHint}
-                </div>
+                <div className="leading-snug">{showProviderSurfaceHint}</div>
                 <button
                   className={buttonClass("ghost")}
                   onClick={() => openSettings(aiProvider, "Configure in Settings")}
@@ -905,16 +907,17 @@ export default function App() {
                   })}
                 </select>
 
-                <div className="text-xs opacity-60">
-                  Providers are disabled until configured. Use{" "}
-                  <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
-                </div>
+                {/* Commit 2: reduce noise — show onboarding text only when not ready */}
+                {!providerReady && (
+                  <div className="text-xs opacity-60">
+                    Providers are disabled until configured. Use{" "}
+                    <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
+                  </div>
+                )}
 
                 {!providerReady && (
                   <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex items-center justify-between gap-2">
-                    <div className="leading-snug">
-                      {disabledProviderMessage(providerStatus)}
-                    </div>
+                    <div className="leading-snug">{disabledProviderMessage(providerStatus)}</div>
                     <button
                       className={buttonClass("ghost")}
                       onClick={() => openSettings(aiProvider, "Configure in Settings")}
