@@ -722,6 +722,13 @@ export default function App() {
     return providerGroupHint(providerMeta.group);
   }, [providerReady, providerStatus, providerMeta.group, activeRuntimeHint]);
 
+  const guardrailText = useMemo(() => {
+    if (providerReady) return null;
+    if (providerStatus.missing === "key") return "Add an API key to enable Send.";
+    if (providerStatus.missing === "endpoint") return "Add an endpoint to enable Send.";
+    return "Configure this provider to enable Send.";
+  }, [providerReady, providerStatus]);
+
   const handleDismissSwitchNote = useCallback(() => setProviderSwitchNote(""), []);
 
   return (
@@ -1042,6 +1049,20 @@ export default function App() {
                     Test
                   </button>
                 </div>
+
+                {/* Commit 3: inline guardrail near Send (no modals, no new chat stream) */}
+                {!providerReady && (
+                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
+                    <div className="leading-snug">{guardrailText}</div>
+                    <button
+                      className={buttonClass("ghost")}
+                      onClick={() => openSettings(aiProvider, "Configure this provider to enable Send.")}
+                      type="button"
+                    >
+                      Configure
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Output */}
