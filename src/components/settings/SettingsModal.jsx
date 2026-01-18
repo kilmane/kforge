@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 function inputClass(disabled = false) {
   return [
@@ -18,6 +18,32 @@ function buttonClass(variant = "primary", disabled = false) {
   return [base, disabled ? "opacity-60 cursor-not-allowed" : ""].join(" ");
 }
 
+const OPTIONAL_ENDPOINT_PROVIDER_IDS = new Set(["ollama", "lmstudio"]);
+
+function endpointFieldSpec(providerId) {
+  if (providerId === "ollama") {
+    return {
+      title: "Endpoint URL (optional)",
+      placeholder: "http://localhost:11434",
+      help:
+        "Optional for Ollama. Leave blank to use the default local endpoint. Use this to point at a remote Ollama host."
+    };
+  }
+  if (providerId === "lmstudio") {
+    return {
+      title: "Endpoint URL (optional)",
+      placeholder: "http://localhost:1234",
+      help:
+        "Optional for LM Studio. Leave blank to use the default local endpoint, or set it to your LM Studio server URL."
+    };
+  }
+  return {
+    title: "Endpoint URL (required)",
+    placeholder: "https://your-openai-compatible-host (no /v1 needed)",
+    help: "Required for this provider. The main panel must not contain endpoints."
+  };
+}
+
 function statusForProvider(p, hasKeyMap, endpointsMap) {
   const hasKey = !!hasKeyMap[p.id];
   const endpoint = (endpointsMap[p.id] || "").trim();
@@ -26,9 +52,51 @@ function statusForProvider(p, hasKeyMap, endpointsMap) {
   const endpointOk = !p.needsEndpoint || endpoint.length > 0;
 
   if (keyOk && endpointOk) return { label: "Configured", tone: "ok" };
-  if (!keyOk) return { label: "Missing API key", tone: "warn" };
-  if (!endpointOk) return { label: "Missing endpoint", tone: "warn" };
+  if (!keyOk) return { label: "Missing API key", tone: "warn", missing: "key" };
+  if (!endpointOk) return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
   return { label: "Not configured", tone: "warn" };
+}
+
+function disabledProviderExplainer(p, hasKeyMap, endpointsMap) {
+  const st = statusForProvider(p, hasKeyMap, endpointsMap);
+  if (st.missing === "key") {
+    return "Disabled — Missing API key. Add it in Settings to enable this provider.";
+  }
+  if (st.missing === "endpoint") {
+    return "Disabled — Missing endpoint. Add it in Settings to enable this provider.";
+  }
+  return "Disabled — Not configured. Configure in Settings to enable this provider.";
+}
+
+function ProviderButton({ p, active, onClick, hasKeyMap, endpointsMap, registerRef }) {
+  const st = statusForProvider(p, hasKeyMap, endpointsMap);
+  const chipClass =
+    st.tone === "ok"
+      ? "bg-emerald-900/30 border-emerald-900/60 text-emerald-200"
+      : "bg-amber-900/25 border-amber-900/60 text-amber-200";
+
+  return (
+    <button
+      ref={(node) => {
+        if (node) registerRef(p.id, node);
+      }}
+      className={[
+        "w-full text-left px-2 py-2 rounded border outline-none",
+        active
+          ? "bg-zinc-900 border-zinc-700"
+          : "bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800"
+      ].join(" ")}
+      onClick={onClick}
+      type="button"
+      data-provider-id={p.id}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold">{p.label}</div>
+        <div className={`text-[11px] px-2 py-0.5 rounded border ${chipClass}`}>{st.label}</div>
+      </div>
+      <div className="text-xs opacity-60 mt-0.5">{p.id}</div>
+    </button>
+  );
 }
 
 export default function SettingsModal({
@@ -46,6 +114,34 @@ export default function SettingsModal({
   const [activeId, setActiveId] = useState(providers?.[0]?.id || "openai");
   const [keyDrafts, setKeyDrafts] = useState({}); // providerId -> string
 
+  const providerButtonRefs = useRef({}); // providerId -> element
+  const leftListRef = useRef(null);
+
+  const cloudItems = useMemo(() => (providers || []).filter((p) => p.group === "cloud"), [providers]);
+  const compatItems = useMemo(
+    () => (providers || []).filter((p) => p.group === "compatible"),
+    [providers]
+  );
+  const localItems = useMemo(() => (providers || []).filter((p) => p.group === "local"), [providers]);
+
+  const activeProvider = useMemo(() => {
+    const list = providers || [];
+    return list.find((p) => p.id === activeId) || list[0] || null;
+  }, [providers, activeId]);
+
+  const status = useMemo(() => {
+    return activeProvider
+      ? statusForProvider(activeProvider, hasKeyMap || {}, endpointsMap || {})
+      : { label: "", tone: "warn" };
+  }, [activeProvider, hasKeyMap, endpointsMap]);
+
+  const showEndpoint = useMemo(() => {
+    const id = activeProvider?.id;
+    return !!activeProvider?.needsEndpoint || OPTIONAL_ENDPOINT_PROVIDER_IDS.has(id);
+  }, [activeProvider]);
+
+  const endpointSpec = useMemo(() => endpointFieldSpec(activeProvider?.id), [activeProvider]);
+
   useEffect(() => {
     if (!open) return;
     if (focusProviderId) setActiveId(focusProviderId);
@@ -56,86 +152,134 @@ export default function SettingsModal({
     setKeyDrafts({});
   }, [open]);
 
-  const activeProvider = useMemo(() => {
-    return providers.find((p) => p.id === activeId) || providers[0];
-  }, [providers, activeId]);
+  useEffect(() => {
+    if (!open) return;
+    if (!focusProviderId) return;
+
+    const el = providerButtonRefs.current[focusProviderId];
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ block: "nearest" });
+      try {
+        el.focus();
+      } catch {
+        // ignore
+      }
+    } else if (leftListRef.current) {
+      try {
+        leftListRef.current.scrollTop = 0;
+      } catch {
+        // ignore
+      }
+    }
+  }, [open, focusProviderId]);
+
+  const registerRef = useMemo(() => {
+    return (id, node) => {
+      providerButtonRefs.current[id] = node;
+    };
+  }, []);
 
   if (!open) return null;
 
-  const grouped = {
-    "Cloud (Native)": providers.filter((p) => p.group === "cloud"),
-    "OpenAI-Compatible": providers.filter((p) => p.group === "compatible"),
-    "Local Runtimes": providers.filter((p) => p.group === "local")
-  };
-
-  const status = activeProvider
-    ? statusForProvider(activeProvider, hasKeyMap, endpointsMap)
-    : { label: "", tone: "warn" };
-
-  const showEndpoint = !!activeProvider?.needsEndpoint;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-20">
-      <div className="bg-zinc-950 w-[980px] max-w-[95vw] rounded-xl shadow-2xl border border-zinc-800 overflow-hidden">
-        <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-16">
+      {/* Constrain height so left can scroll */}
+      <div className="bg-zinc-950 w-[980px] max-w-[95vw] h-[85vh] rounded-xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
           <div className="font-semibold">Settings</div>
           <button className={buttonClass("ghost")} onClick={onClose} type="button">
             Close
           </button>
         </div>
 
-        <div className="p-4 border-b border-zinc-800 text-xs opacity-70">
-          Providers and credentials live here. The main panel must not show API keys or endpoints.
+        {/* Subheader */}
+        <div className="p-4 border-b border-zinc-800 text-xs opacity-70 shrink-0">
+          Configure providers here. The main panel must not show API keys or endpoints.
           {message ? <span className="ml-2 opacity-90">• {message}</span> : null}
+          <div className="mt-1 text-[11px] opacity-60">
+            Providers loaded: {providers?.length ?? 0} • Cloud: {cloudItems.length} • Compatible:{" "}
+            {compatItems.length} • Local: {localItems.length}
+          </div>
         </div>
 
-        <div className="grid grid-cols-[320px_1fr] min-h-[520px]">
-          {/* Left: provider list */}
-          <div className="border-r border-zinc-800 p-3 overflow-auto">
-            {Object.entries(grouped).map(([title, items]) => (
-              <div key={title} className="mb-4">
+        {/* Body (must be overflow-hidden so inner columns can scroll) */}
+        <div className="flex-1 min-h-0 grid grid-cols-[320px_1fr] overflow-hidden">
+          {/* Left list (scrollable) */}
+          <div className="border-r border-zinc-800 min-h-0 overflow-hidden">
+            <div ref={leftListRef} className="h-full overflow-auto p-3">
+              <div className="text-[11px] opacity-60 px-2 mb-3 leading-snug">
+                Tip: disabled providers route you here with{" "}
+                <span className="opacity-90">“Configure in Settings”</span>.
+              </div>
+
+              <div className="mb-4">
                 <div className="text-xs uppercase tracking-wide opacity-60 px-2 mb-2">
-                  {title}
+                  Cloud (Native)
                 </div>
-
                 <div className="space-y-1">
-                  {items.map((p) => {
-                    const st = statusForProvider(p, hasKeyMap, endpointsMap);
-                    const active = p.id === activeId;
-                    const chipClass =
-                      st.tone === "ok"
-                        ? "bg-emerald-900/30 border-emerald-900/60 text-emerald-200"
-                        : "bg-amber-900/25 border-amber-900/60 text-amber-200";
-
-                    return (
-                      <button
-                        key={p.id}
-                        className={[
-                          "w-full text-left px-2 py-2 rounded border",
-                          active
-                            ? "bg-zinc-900 border-zinc-700"
-                            : "bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800"
-                        ].join(" ")}
-                        onClick={() => setActiveId(p.id)}
-                        type="button"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold">{p.label}</div>
-                          <div className={`text-[11px] px-2 py-0.5 rounded border ${chipClass}`}>
-                            {st.label}
-                          </div>
-                        </div>
-                        <div className="text-xs opacity-60 mt-0.5">{p.id}</div>
-                      </button>
-                    );
-                  })}
+                  {cloudItems.map((p) => (
+                    <ProviderButton
+                      key={p.id}
+                      p={p}
+                      active={p.id === activeId}
+                      onClick={() => setActiveId(p.id)}
+                      hasKeyMap={hasKeyMap || {}}
+                      endpointsMap={endpointsMap || {}}
+                      registerRef={registerRef}
+                    />
+                  ))}
                 </div>
               </div>
-            ))}
+
+              <div className="mb-4">
+                <div className="text-xs uppercase tracking-wide opacity-60 px-2 mb-2">
+                  OpenAI-Compatible
+                </div>
+                <div className="space-y-1">
+                  {compatItems.map((p) => (
+                    <ProviderButton
+                      key={p.id}
+                      p={p}
+                      active={p.id === activeId}
+                      onClick={() => setActiveId(p.id)}
+                      hasKeyMap={hasKeyMap || {}}
+                      endpointsMap={endpointsMap || {}}
+                      registerRef={registerRef}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-2">
+                <div className="text-xs uppercase tracking-wide opacity-60 px-2 mb-2">
+                  Local Runtimes
+                </div>
+                <div className="space-y-1">
+                  {localItems.map((p) => (
+                    <ProviderButton
+                      key={p.id}
+                      p={p}
+                      active={p.id === activeId}
+                      onClick={() => setActiveId(p.id)}
+                      hasKeyMap={hasKeyMap || {}}
+                      endpointsMap={endpointsMap || {}}
+                      registerRef={registerRef}
+                    />
+                  ))}
+                  {localItems.length === 0 ? (
+                    <div className="text-xs opacity-60 px-2 leading-snug">
+                      No local runtime providers found. (This means Settings did not receive providers
+                      with <span className="opacity-90">group: "local"</span>.)
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Right: active provider config */}
-          <div className="p-4">
+          {/* Right panel (scrollable) */}
+          <div className="min-h-0 overflow-auto p-4">
             {!activeProvider ? (
               <div className="text-sm opacity-70">No provider selected.</div>
             ) : (
@@ -145,6 +289,12 @@ export default function SettingsModal({
                   <div className="text-xs opacity-70 mt-1">
                     Status: <span className="opacity-90">{status.label}</span>
                   </div>
+
+                  {status.tone !== "ok" && (
+                    <div className="mt-2 text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
+                      {disabledProviderExplainer(activeProvider, hasKeyMap || {}, endpointsMap || {})}
+                    </div>
+                  )}
                 </div>
 
                 {/* API Key */}
@@ -153,7 +303,7 @@ export default function SettingsModal({
                     <div className="text-sm font-semibold">API Key</div>
                     <div className="text-xs opacity-70">
                       {activeProvider.needsKey
-                        ? hasKeyMap[activeProvider.id]
+                        ? (hasKeyMap || {})[activeProvider.id]
                           ? "key set"
                           : "no key"
                         : "not required"}
@@ -209,41 +359,38 @@ export default function SettingsModal({
                   )}
                 </div>
 
-                {/* Endpoint (only when required) */}
+                {/* Endpoint */}
                 {showEndpoint ? (
                   <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">Endpoint URL (required)</div>
+                      <div className="text-sm font-semibold">{endpointSpec.title}</div>
                       <div className="text-xs opacity-70">
-                        {(endpointsMap[activeProvider.id] || "").trim() ? "set" : "not set"}
+                        {((endpointsMap || {})[activeProvider.id] || "").trim() ? "set" : "not set"}
                       </div>
                     </div>
 
                     <input
                       className={inputClass(false)}
-                      value={endpointsMap[activeProvider.id] || ""}
+                      value={(endpointsMap || {})[activeProvider.id] || ""}
                       onChange={(e) => onSetEndpoint(activeProvider.id, e.target.value)}
-                      placeholder="https://your-openai-compatible-host (no /v1 needed)"
+                      placeholder={endpointSpec.placeholder}
                     />
 
-                    <div className="text-xs opacity-60">
-                      Required for this provider. The main panel must not contain endpoints.
-                    </div>
+                    <div className="text-xs opacity-60">{endpointSpec.help}</div>
                   </div>
                 ) : null}
 
                 <div className="text-xs opacity-60">
-                  Tip: disabled providers in the dropdown route you here with “Configure in Settings”.
+                  Use <span className="opacity-90">Configure in Settings</span> to enable providers.
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="h-12 px-4 border-t border-zinc-800 flex items-center justify-between">
-          <div className="text-xs opacity-60">
-            Backend Phase 3.2.4 is complete; we are now refining UI only.
-          </div>
+        {/* Footer */}
+        <div className="h-12 px-4 border-t border-zinc-800 flex items-center justify-between shrink-0">
+          <div className="text-xs opacity-60">Phase 3.4: provider ergonomics + Settings UX (UI-only).</div>
           <button className={buttonClass("primary")} onClick={onClose} type="button">
             Done
           </button>

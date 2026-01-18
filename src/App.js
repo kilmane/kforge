@@ -95,7 +95,8 @@ const MODEL_PRESETS = {
   claude: ["claude-3-5-sonnet", "claude-3-5-haiku"],
 
   deepseek: ["deepseek-chat"],
-  groq: ["llama3-8b-8192", "llama3-70b-8192"],
+  groq: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"],
+  // Kept as suggestions only; UX treats OpenRouter as manual entry.
   openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
 
   huggingface: [],
@@ -126,6 +127,77 @@ function buttonClass(variant = "primary", disabled = false) {
 
 function endpointStorageKey(providerId) {
   return `kforge.endpoint.${providerId}`;
+}
+
+function statusForProviderUI(providerMeta, hasKeyMap, endpointsMap) {
+  if (!providerMeta) return { label: "Unknown", tone: "warn" };
+
+  const hasKey = !!hasKeyMap[providerMeta.id];
+  const endpoint = (endpointsMap[providerMeta.id] || "").trim();
+
+  const keyOk = !providerMeta.needsKey || providerMeta.alwaysEnabled || hasKey;
+  const endpointOk = !providerMeta.needsEndpoint || endpoint.length > 0;
+
+  if (keyOk && endpointOk) return { label: "Configured", tone: "ok" };
+  if (!keyOk) return { label: "Missing API key", tone: "warn", missing: "key" };
+  if (!endpointOk) return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
+  return { label: "Not configured", tone: "warn" };
+}
+
+function statusChipClass(tone) {
+  return tone === "ok"
+    ? "bg-emerald-900/30 border-emerald-900/60 text-emerald-200"
+    : "bg-amber-900/25 border-amber-900/60 text-amber-200";
+}
+
+function shortSuffixForDisabled(status) {
+  if (!status) return "";
+  if (status.missing === "key") return "(API key)";
+  if (status.missing === "endpoint") return "(Endpoint)";
+  if (typeof status.label === "string" && status.label.trim()) return `(${status.label})`;
+  return "(Not configured)";
+}
+
+// Providers where the user should enter model IDs manually (no preset-driven UX)
+function manualModelProviders(providerId) {
+  return (
+    providerId === "openrouter" ||
+    providerId === "custom" ||
+    providerId === "huggingface" ||
+    providerId === "lmstudio"
+  );
+}
+
+function modelPlaceholder(providerId) {
+  return manualModelProviders(providerId) ? "Enter a model ID" : "model";
+}
+
+function modelHelperText(providerId) {
+  if (!manualModelProviders(providerId)) return null;
+
+  if (providerId === "openrouter") {
+    return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini).";
+  }
+  if (providerId === "huggingface") {
+    return "No presets for Hugging Face. Enter the model ID required by your endpoint.";
+  }
+  if (providerId === "custom") {
+    return "No presets for custom endpoints. Enter the model name required by your endpoint.";
+  }
+  if (providerId === "lmstudio") {
+    return "No presets for LM Studio. Enter the model ID your server expects.";
+  }
+  return "This provider has no presets. Enter a model ID.";
+}
+
+function disabledProviderMessage(status) {
+  if (status?.missing === "key") {
+    return "Disabled — Missing API key. Add it in Settings to enable this provider.";
+  }
+  if (status?.missing === "endpoint") {
+    return "Disabled — Missing endpoint. Add it in Settings to enable this provider.";
+  }
+  return "Disabled — Not configured. Configure in Settings to enable this provider.";
 }
 
 export default function App() {
@@ -249,8 +321,9 @@ export default function App() {
     refreshHasKeys();
   }, [refreshHasKeys]);
 
-  // Auto-fill model if empty
+  // Auto-fill model if empty (only for preset-driven providers)
   useEffect(() => {
+    if (manualModelProviders(aiProvider)) return;
     if (aiModel && aiModel.trim()) return;
     const presets = MODEL_PRESETS[aiProvider] || [];
     if (presets.length > 0) setAiModel(presets[0]);
@@ -466,13 +539,9 @@ export default function App() {
       }
 
       if (!isProviderEnabled(req.provider_id)) {
-        const needsEndpoint = !!meta.needsEndpoint;
-        setAiOutput(
-          `Provider ${req.provider_id} is not configured. Open Settings to add ${
-            meta.needsKey ? "an API key" : ""
-          }${meta.needsKey && needsEndpoint ? " and " : ""}${needsEndpoint ? "an endpoint" : ""}.`
-        );
-        openSettings(req.provider_id, "Configure this provider to enable it.");
+        const st = statusForProviderUI(meta, hasKey, endpoints);
+        setAiOutput(disabledProviderMessage(st));
+        openSettings(req.provider_id, "Configure in Settings to enable this provider.");
         return;
       }
 
@@ -487,7 +556,7 @@ export default function App() {
         setAiRunning(false);
       }
     },
-    [buildAiRequest, isProviderEnabled, openSettings]
+    [buildAiRequest, isProviderEnabled, openSettings, hasKey, endpoints]
   );
 
   const handleAiTest = useCallback(async () => {
@@ -512,17 +581,49 @@ export default function App() {
       if (nextProviderId === aiProvider) return;
 
       if (!isProviderEnabled(nextProviderId)) {
-        openSettings(nextProviderId, "This provider is disabled until configured.");
+        const meta = ALL_PROVIDERS.find((p) => p.id === nextProviderId);
+        const st = statusForProviderUI(meta, hasKey, endpoints);
+        openSettings(nextProviderId, disabledProviderMessage(st));
         return;
       }
 
       setAiProvider(nextProviderId);
 
+      // Preset-driven providers get an auto model; manual providers show placeholder + helper.
+      if (manualModelProviders(nextProviderId)) {
+        setAiModel("");
+        return;
+      }
+
       const presets = MODEL_PRESETS[nextProviderId] || [];
       if (presets.length > 0) setAiModel(presets[0]);
     },
-    [aiProvider, isProviderEnabled, openSettings]
+    [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
   );
+
+  const providerStatus = useMemo(() => {
+    return statusForProviderUI(providerMeta, hasKey, endpoints);
+  }, [providerMeta, hasKey, endpoints]);
+
+  const disabledExplainer = useMemo(() => {
+    if (providerReady) return null;
+    if (providerStatus.missing === "key") return "API key";
+    if (providerStatus.missing === "endpoint") return "Endpoint";
+    return "Not configured";
+  }, [providerReady, providerStatus]);
+
+  const providerOptions = useMemo(() => {
+    return ALL_PROVIDERS.map((p) => {
+      const enabled = isProviderEnabled(p.id);
+      const st = statusForProviderUI(p, hasKey, endpoints);
+      const suffix = enabled ? "" : ` ${shortSuffixForDisabled(st)}`;
+      return { ...p, enabled, status: st, suffix };
+    });
+  }, [hasKey, endpoints, isProviderEnabled]);
+
+  const showModelHelper = useMemo(() => {
+    return manualModelProviders(aiProvider) || modelSuggestions.length === 0;
+  }, [aiProvider, modelSuggestions.length]);
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -615,11 +716,23 @@ export default function App() {
         {aiPanelOpen ? (
           <div className="w-96 border-l border-zinc-800 min-h-0 flex flex-col">
             <div className="p-3 border-b border-zinc-800">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold">AI Panel</div>
-                <div className="text-xs opacity-70">
-                  {providerMeta.label}
-                  {providerReady ? " (ready)" : " (configure in Settings)"}
+
+                <div className="flex items-center gap-2">
+                  <div className="text-xs opacity-70">
+                    {providerMeta.label}
+                    {providerReady ? "" : ` (${disabledExplainer})`}
+                  </div>
+                  <div
+                    className={[
+                      "text-[11px] px-2 py-0.5 rounded border whitespace-nowrap",
+                      statusChipClass(providerStatus.tone)
+                    ].join(" ")}
+                    title={providerMeta.id}
+                  >
+                    {providerStatus.label}
+                  </div>
                 </div>
               </div>
             </div>
@@ -631,11 +744,11 @@ export default function App() {
                   <div className="text-xs uppercase tracking-wide opacity-60">Provider</div>
                   <button
                     className={buttonClass("ghost")}
-                    onClick={() => openSettings(aiProvider, "Edit provider settings")}
+                    onClick={() => openSettings(aiProvider, "Configure in Settings")}
                     type="button"
-                    title="Configure provider"
+                    title="Configure in Settings"
                   >
-                    Configure
+                    Configure in Settings
                   </button>
                 </div>
 
@@ -644,38 +757,45 @@ export default function App() {
                   value={aiProvider}
                   onChange={(e) => handleProviderChange(e.target.value)}
                 >
-                  {ALL_PROVIDERS.map((p) => {
-                    const enabled = isProviderEnabled(p.id);
+                  {providerOptions.map((p) => {
                     return (
                       <option
                         key={p.id}
                         value={p.id}
-                        disabled={!enabled && p.id !== aiProvider}
+                        disabled={!p.enabled && p.id !== aiProvider}
                       >
                         {p.label}
-                        {enabled ? "" : " (configure)"}
+                        {p.suffix}
                       </option>
                     );
                   })}
                 </select>
 
-                {/* Helper text under provider dropdown */}
                 <div className="text-xs opacity-60">
-                  If a provider is disabled, open Settings to add its API key (and endpoint where required).
+                  Providers are disabled until configured. Use <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
                 </div>
+
+                {!providerReady && (
+                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex items-center justify-between gap-2">
+                    <div className="leading-snug">
+                      {disabledProviderMessage(providerStatus)}
+                    </div>
+                    <button
+                      className={buttonClass("ghost")}
+                      onClick={() => openSettings(aiProvider, "Configure in Settings")}
+                      type="button"
+                    >
+                      Configure in Settings
+                    </button>
+                  </div>
+                )}
 
                 <div className="text-xs uppercase tracking-wide opacity-60 mt-3">Model</div>
                 <input
                   className={inputClass(!providerReady)}
                   value={aiModel}
                   onChange={(e) => setAiModel(e.target.value)}
-                  placeholder={
-                    aiProvider === "openrouter"
-                      ? "e.g. openai/gpt-4o-mini"
-                      : aiProvider === "custom"
-                        ? "model name required by your endpoint"
-                        : "model"
-                  }
+                  placeholder={modelPlaceholder(aiProvider)}
                   list={`model-suggestions-${aiProvider}`}
                   disabled={!providerReady}
                 />
@@ -685,9 +805,10 @@ export default function App() {
                   ))}
                 </datalist>
 
-                {!providerReady && (
-                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
-                    This provider is disabled until configured in Settings.
+                {showModelHelper && (
+                  <div className="text-xs opacity-60">
+                    {modelHelperText(aiProvider) ||
+                      "Select a preset or enter a model ID. Some providers require manual model IDs."}
                   </div>
                 )}
               </div>
@@ -709,7 +830,7 @@ export default function App() {
                   className={`${inputClass(!providerReady)} min-h-[120px]`}
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="Type your prompt here..."
+                  placeholder="Type your prompt…"
                   disabled={!providerReady}
                 />
               </div>
@@ -721,7 +842,7 @@ export default function App() {
                   className={`${inputClass(!providerReady)} min-h-[70px]`}
                   value={aiSystem}
                   onChange={(e) => setAiSystem(e.target.value)}
-                  placeholder="Optional system instruction..."
+                  placeholder="Optional system instruction…"
                   disabled={!providerReady}
                 />
               </div>
@@ -788,7 +909,7 @@ export default function App() {
                   className={`${inputClass(false)} min-h-[160px]`}
                   value={aiOutput}
                   readOnly
-                  placeholder="AI output will appear here..."
+                  placeholder="Output will appear here…"
                 />
               </div>
 

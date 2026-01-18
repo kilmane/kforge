@@ -4,8 +4,8 @@
   "productName": "kforge",
   "version": "0.1.0",
   "build": {
-    "beforeDevCommand": "pnpm dev:web",
-    "beforeBuildCommand": "pnpm build:web",
+    "beforeDevCommand": "pnpm run start",
+    "beforeBuildCommand": "pnpm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../build"
   },
