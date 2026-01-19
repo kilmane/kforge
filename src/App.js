@@ -142,10 +142,10 @@ function endpointStorageKey(providerId) {
 function statusForProviderUI(providerMeta, hasKeyMap, endpointsMap) {
   if (!providerMeta) return { label: "Unknown", tone: "warn" };
 
-  const hasKey = !!hasKeyMap[providerMeta.id];
+  const hasKeyOk = !!hasKeyMap[providerMeta.id];
   const endpoint = (endpointsMap[providerMeta.id] || "").trim();
 
-  const keyOk = !providerMeta.needsKey || providerMeta.alwaysEnabled || hasKey;
+  const keyOk = !providerMeta.needsKey || providerMeta.alwaysEnabled || hasKeyOk;
   const endpointOk = !providerMeta.needsEndpoint || endpoint.length > 0;
 
   if (keyOk && endpointOk) return { label: "Configured", tone: "ok" };
@@ -284,6 +284,40 @@ function buildActiveFileContextBlock(filePath, fileContent) {
   );
 }
 
+/**
+ * Phase 3.4.6 — Patch Preview (read-only)
+ * - Detect ```diff fenced blocks OR unified diff markers.
+ * - UI-only (no apply), no persistence.
+ */
+function extractPatchFromText(text) {
+  if (!text || typeof text !== "string") return null;
+
+  // 1) explicit fenced diff block
+  const fenced = text.match(/```diff\s*([\s\S]*?)```/i);
+  if (fenced && fenced[1] && fenced[1].trim()) return fenced[1].trim();
+
+  // 2) unified diff heuristic
+  const hasDiffGit = /^\s*diff --git\s+/m.test(text);
+  const hasFileMarkers = /^\s*(---|\+\+\+)\s+/m.test(text);
+  const hasHunks = /^\s*@@\s+/m.test(text);
+
+  const score = (hasDiffGit ? 2 : 0) + (hasFileMarkers ? 2 : 0) + (hasHunks ? 2 : 0);
+
+  if (score >= 4) {
+    const candidates = [
+      text.search(/^\s*diff --git\s+/m),
+      text.search(/^\s*---\s+/m),
+      text.search(/^\s*\+\+\+\s+/m),
+      text.search(/^\s*@@\s+/m)
+    ].filter((i) => i >= 0);
+
+    const start = candidates.length ? Math.min(...candidates) : 0;
+    return text.slice(start).trim();
+  }
+
+  return null;
+}
+
 function TranscriptBubble({ role, content, ts, actionLabel, onAction }) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
@@ -389,6 +423,11 @@ export default function App() {
 
   // Phase 3.4.5 — Include active file toggle (UI-only)
   const [includeActiveFile, setIncludeActiveFile] = useState(false);
+
+  // Phase 3.4.6 — Patch Preview (read-only)
+  const [askForPatch, setAskForPatch] = useState(false);
+  const [patchPreview, setPatchPreview] = useState(null); // string | null
+  const [patchPreviewVisible, setPatchPreviewVisible] = useState(true);
 
   const activeTab = useMemo(() => {
     if (!activeFilePath) return null;
@@ -680,6 +719,24 @@ export default function App() {
     }
   }, [includeActiveFile, activeTab, appendMessage]);
 
+  const copyPatchToClipboard = useCallback(async () => {
+    if (!patchPreview) return;
+    try {
+      await navigator.clipboard.writeText(patchPreview);
+      appendMessage("system", "Patch copied to clipboard.");
+    } catch (err) {
+      appendMessage("system", `Copy failed: ${formatTauriError(err)}`);
+    }
+  }, [patchPreview, appendMessage]);
+
+  const maybeCapturePatchPreview = useCallback((assistantText) => {
+    const extracted = extractPatchFromText(assistantText);
+    if (extracted) {
+      setPatchPreview(extracted);
+      setPatchPreviewVisible(true);
+    }
+  }, []);
+
   // AI request builder
   const buildAiRequest = useCallback(
     (override = {}) => {
@@ -760,7 +817,7 @@ export default function App() {
           m.includes("forbidden") ||
           m.includes("invalid api key") ||
           m.includes("missing endpoint") ||
-          (m.includes("endpoint") && m.includes("missing")); // ESLint: clarify &&/|| order
+          (m.includes("endpoint") && m.includes("missing"));
 
         return { ok: false, error: msg, kind: looksConfig ? "config" : "runtime" };
       } finally {
@@ -903,6 +960,8 @@ export default function App() {
   const clearConversation = useCallback(() => {
     setMessages([]);
     setLastSend(null);
+    setPatchPreview(null);
+    setPatchPreviewVisible(true);
     appendMessage("system", "Conversation cleared.");
   }, [appendMessage]);
 
@@ -954,7 +1013,8 @@ export default function App() {
         endpoint: ep || null,
         contextLimit: CHAT_CONTEXT_TURNS,
         includeActiveFile: !!fileSnapshot,
-        fileSnapshot: fileSnapshot ? { ...fileSnapshot } : null
+        fileSnapshot: fileSnapshot ? { ...fileSnapshot } : null,
+        askForPatch: !!askForPatch
       });
 
       // Append user message to transcript (what user typed)
@@ -962,14 +1022,22 @@ export default function App() {
         appendMessage("user", draft);
       }
 
-      const inputWithContext = buildInputWithContext(draft, fileSnapshot);
+      // Phase 3.4.6: add patch instruction (prompt helper) — UI-only; no apply.
+      const patchInstruction = askForPatch
+        ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
+          "Read-only preview only: do not apply changes, do not write files.\n"
+        : "";
+
+      const inputWithContext = buildInputWithContext(`${draft}${patchInstruction}`, fileSnapshot);
 
       const r = await runAi({
         input: inputWithContext
       });
 
       if (r.ok) {
-        appendMessage("assistant", r.output ?? "");
+        const out = r.output ?? "";
+        appendMessage("assistant", out);
+        maybeCapturePatchPreview(out);
       } else {
         appendMessage("system", r.error || "Unknown error", {
           actionLabel: r.kind === "config" ? "→ Open Settings" : null,
@@ -991,7 +1059,9 @@ export default function App() {
       buildInputWithContext,
       openSettings,
       includeActiveFile,
-      activeTab
+      activeTab,
+      askForPatch,
+      maybeCapturePatchPreview
     ]
   );
 
@@ -1027,6 +1097,11 @@ export default function App() {
         ? buildActiveFileContextBlock(lastSend.fileSnapshot.path, lastSend.fileSnapshot.content)
         : "";
 
+    const patchInstruction = lastSend.askForPatch
+      ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
+        "Read-only preview only: do not apply changes, do not write files.\n"
+      : "";
+
     // Run using last snapshot values
     const r = await runAi({
       provider_id: retryProvider,
@@ -1035,18 +1110,20 @@ export default function App() {
       temperature: typeof lastSend.temperature === "number" ? lastSend.temperature : undefined,
       max_output_tokens: typeof lastSend.maxTokens === "number" ? Math.max(1, lastSend.maxTokens) : undefined,
       endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
-      input: `${prefix}${fileBlock}${lastSend.prompt}`
+      input: `${prefix}${fileBlock}${lastSend.prompt}${patchInstruction}`
     });
 
     if (r.ok) {
-      appendMessage("assistant", r.output ?? "");
+      const out = r.output ?? "";
+      appendMessage("assistant", out);
+      maybeCapturePatchPreview(out);
     } else {
       appendMessage("system", r.error || "Unknown error", {
         actionLabel: r.kind === "config" ? "→ Open Settings" : null,
         action: r.kind === "config" ? () => openSettings(retryProvider, "Configure provider") : null
       });
     }
-  }, [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages]);
+  }, [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages, maybeCapturePatchPreview]);
 
   const handlePromptKeyDown = useCallback(
     (e) => {
@@ -1059,7 +1136,8 @@ export default function App() {
   );
 
   const aiPanelWidthClass = useMemo(() => {
-    return aiPanelWide ? "w-[520px]" : "w-96";
+    // Wider "Wide" panel per your request (was w-[520px])
+    return aiPanelWide ? "w-[580px]" : "w-96";
   }, [aiPanelWide]);
 
   const activeFileChip = useMemo(() => {
@@ -1078,6 +1156,65 @@ export default function App() {
       </div>
     );
   }, [includeActiveFile, activeTab]);
+
+  const patchPreviewPanel = useMemo(() => {
+    if (!patchPreview) return null;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs uppercase tracking-wide opacity-60">Patch Preview (read-only)</div>
+          <div className="flex items-center gap-2">
+            <button
+              className={buttonClass("ghost")}
+              onClick={() => setPatchPreviewVisible((v) => !v)}
+              type="button"
+              title={patchPreviewVisible ? "Hide preview" : "Show preview"}
+            >
+              {patchPreviewVisible ? "Hide" : "Show"}
+            </button>
+            <button
+              className={buttonClass("ghost")}
+              onClick={copyPatchToClipboard}
+              type="button"
+              title="Copy patch to clipboard"
+            >
+              Copy patch
+            </button>
+            <button
+              className={buttonClass("danger")}
+              onClick={() => {
+                setPatchPreview(null);
+                setPatchPreviewVisible(true);
+                appendMessage("system", "Patch preview discarded.");
+              }}
+              type="button"
+              title="Discard preview"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+
+        {patchPreviewVisible ? (
+          <div className="border border-zinc-800 rounded bg-zinc-950/30">
+            <div className="max-h-[220px] overflow-auto p-2">
+              <pre className="text-[11px] leading-snug whitespace-pre text-zinc-100">
+                {patchPreview}
+              </pre>
+            </div>
+            <div className="px-2 pb-2 text-[11px] opacity-60">
+              Preview only — nothing is applied automatically.
+            </div>
+          </div>
+        ) : (
+          <div className="text-[11px] opacity-60 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+            Preview hidden.
+          </div>
+        )}
+      </div>
+    );
+  }, [patchPreview, patchPreviewVisible, copyPatchToClipboard, appendMessage]);
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -1325,6 +1462,9 @@ export default function App() {
                 )}
               </div>
 
+              {/* Phase 3.4.6 — Patch Preview (read-only) */}
+              {patchPreviewPanel}
+
               {/* Transcript */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1440,9 +1580,66 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* (2) Helper line: clarifies what “include” means, without changing behavior */}
+                {/* Phase 3.4.6 — Ask for patch toggle (prompt helper) */}
+                <div className="flex items-center justify-between gap-2 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+                  <label
+                    className={[
+                      "flex items-center gap-2 text-xs",
+                      !providerReady ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                    ].join(" ")}
+                    title="Ask the assistant to respond with a unified diff (read-only preview)"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-zinc-200"
+                      checked={askForPatch}
+                      disabled={!providerReady}
+                      onChange={(e) => setAskForPatch(e.target.checked)}
+                    />
+                    <span className="opacity-80">Ask for patch (read-only preview)</span>
+                  </label>
+
+                  {patchPreview ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={buttonClass("ghost")}
+                        onClick={copyPatchToClipboard}
+                        type="button"
+                        title="Copy current patch"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        className={buttonClass("ghost")}
+                        onClick={() => setPatchPreviewVisible((v) => !v)}
+                        type="button"
+                        title={patchPreviewVisible ? "Hide preview" : "Show preview"}
+                      >
+                        {patchPreviewVisible ? "Hide" : "Show"}
+                      </button>
+                      <button
+                        className={buttonClass("danger")}
+                        onClick={() => {
+                          setPatchPreview(null);
+                          setPatchPreviewVisible(true);
+                          appendMessage("system", "Patch preview discarded.");
+                        }}
+                        type="button"
+                        title="Discard preview"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] opacity-60">
+                      (Preview appears when the assistant returns a diff.)
+                    </div>
+                  )}
+                </div>
+
+                {/* Helper line */}
                 <div className="text-[11px] opacity-60 leading-snug">
-                  When enabled, the active file’s path + contents are appended as read-only context on Send.
+                  When enabled, the assistant is prompted to return a unified diff inside a <span className="opacity-90">```diff```</span> block. The preview is read-only (no apply).
                 </div>
 
                 {!activeTab && (
