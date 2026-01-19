@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./index.css";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -125,6 +125,13 @@ function buttonClass(variant = "primary", disabled = false) {
   return [base, disabled ? "opacity-60 cursor-not-allowed" : ""].join(" ");
 }
 
+function iconButtonClass(disabled = false) {
+  return [
+    "w-8 h-8 rounded border border-zinc-800 bg-transparent hover:bg-zinc-900 flex items-center justify-center",
+    disabled ? "opacity-60 cursor-not-allowed" : ""
+  ].join(" ");
+}
+
 function endpointStorageKey(providerId) {
   return `kforge.endpoint.${providerId}`;
 }
@@ -229,6 +236,54 @@ function seemsConnectionError(msg) {
   );
 }
 
+function uid() {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatTranscriptTime(ts) {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function TranscriptBubble({ role, content, ts }) {
+  const isUser = role === "user";
+  const isAssistant = role === "assistant";
+  const isSystem = role === "system";
+
+  const wrap = isUser ? "justify-end" : "justify-start";
+
+  const bubbleTone = isUser
+    ? "bg-zinc-700/60 border-zinc-600/70"
+    : isAssistant
+      ? "bg-zinc-950/40 border-zinc-800"
+      : "bg-amber-900/15 border-amber-900/40";
+
+  const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
+  const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
+
+  return (
+    <div className={`w-full flex ${wrap}`}>
+      <div className={`max-w-[90%] border rounded px-3 py-2 ${bubbleTone}`}>
+        <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>
+          {content}
+        </div>
+        {ts ? (
+          <div className="mt-1 text-[10px] opacity-60 flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">
+              {roleLabel}
+            </span>
+            <span className="opacity-70">{formatTranscriptTime(ts)}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -241,6 +296,9 @@ export default function App() {
 
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+
+  // NEW: right panel width toggle (UI only)
+  const [aiPanelWide, setAiPanelWide] = useState(false);
 
   // AI state
   const [aiProvider, setAiProvider] = useState("openai");
@@ -255,6 +313,10 @@ export default function App() {
 
   const [aiRunning, setAiRunning] = useState(false);
   const [aiOutput, setAiOutput] = useState("");
+
+  // Transcript (in-memory only)
+  const [messages, setMessages] = useState([]); // {id, role, content, ts}
+  const transcriptBottomRef = useRef(null);
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
@@ -536,6 +598,18 @@ export default function App() {
     [refreshHasKeys]
   );
 
+  const appendMessage = useCallback((role, content) => {
+    const text = String(content ?? "");
+    const msg = { id: uid(), role, content: text, ts: Date.now() };
+    setMessages((prev) => [...prev, msg]);
+    return msg;
+  }, []);
+
+  useEffect(() => {
+    if (!transcriptBottomRef.current) return;
+    transcriptBottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length]);
+
   // AI request builder
   const buildAiRequest = useCallback(
     (override = {}) => {
@@ -562,45 +636,52 @@ export default function App() {
       const req = buildAiRequest(overrideReq);
 
       if (!req.model || !String(req.model).trim()) {
-        setAiOutput("Model is required.");
-        return;
+        const msg = "Model is required.";
+        setAiOutput(msg);
+        return { ok: false, error: msg };
       }
       if (!req.input || !String(req.input).trim()) {
-        setAiOutput("Prompt is required.");
-        return;
+        const msg = "Prompt is required.";
+        setAiOutput(msg);
+        return { ok: false, error: msg };
       }
 
       const meta = ALL_PROVIDERS.find((p) => p.id === req.provider_id);
       if (!meta) {
-        setAiOutput(`Unknown provider: ${req.provider_id}`);
-        return;
+        const msg = `Unknown provider: ${req.provider_id}`;
+        setAiOutput(msg);
+        return { ok: false, error: msg };
       }
 
       if (!isProviderEnabled(req.provider_id)) {
         const st = statusForProviderUI(meta, hasKey, endpoints);
-        setAiOutput(disabledProviderMessage(st));
+        const msg = disabledProviderMessage(st);
+        setAiOutput(msg);
         openSettings(req.provider_id, "Configure in Settings to enable this provider.");
-        return;
+        return { ok: false, error: msg, needsSettings: true };
       }
 
       setAiRunning(true);
       setAiOutput("");
       try {
         const res = await aiGenerate(req);
-        setAiOutput(res?.output_text ?? "");
+        const out = res?.output_text ?? "";
+        setAiOutput(out);
 
-        // If a local provider succeeds, mark runtime reachable
         if (req.provider_id === "ollama" || req.provider_id === "lmstudio") {
           setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: true }));
         }
+
+        return { ok: true, output: out };
       } catch (err) {
         const msg = formatTauriError(err);
         setAiOutput(msg);
 
-        // UI-only hint: if a local provider looks unreachable, surface it in header
         if ((req.provider_id === "ollama" || req.provider_id === "lmstudio") && seemsConnectionError(msg)) {
           setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: false }));
         }
+
+        return { ok: false, error: msg };
       } finally {
         setAiRunning(false);
       }
@@ -610,13 +691,19 @@ export default function App() {
 
   const handleAiTest = useCallback(async () => {
     setAiTestOutput(`Testing ${aiProvider}...`);
-    await runAi({
+    const r = await runAi({
       input: "Reply with exactly: PIPELINE_OK",
       system: "You are a concise test bot. Output only the requested token.",
       temperature: 0,
       max_output_tokens: 32
     });
-  }, [aiProvider, runAi]);
+
+    if (r.ok) {
+      appendMessage("system", `Test succeeded (${aiProvider})`);
+    } else {
+      appendMessage("system", `Test failed (${aiProvider}): ${r.error || "Unknown error"}`);
+    }
+  }, [aiProvider, runAi, appendMessage]);
 
   const handleUseActiveFileAsPrompt = useCallback(() => {
     if (!activeTab) return;
@@ -638,7 +725,6 @@ export default function App() {
 
       setAiProvider(nextProviderId);
 
-      // Preset-driven providers get an auto model; manual providers show placeholder + helper.
       if (manualModelProviders(nextProviderId)) {
         setAiModel("");
         setProviderSwitchNote(
@@ -666,7 +752,6 @@ export default function App() {
     return statusForProviderUI(providerMeta, hasKey, endpoints);
   }, [providerMeta, hasKey, endpoints]);
 
-  // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
     if (providerMeta.group !== "local") return null;
 
@@ -689,7 +774,6 @@ export default function App() {
   }, [providerMeta, runtimeReachable]);
 
   const headerStatus = useMemo(() => {
-    // Prefer config status; if configured and local runtime is known-unreachable, show unreachable label.
     if (providerStatus?.tone === "ok" && activeRuntimeHint?.label === "Unreachable") {
       return { label: "Unreachable", tone: "warn" };
     }
@@ -730,6 +814,45 @@ export default function App() {
   }, [providerReady, providerStatus]);
 
   const handleDismissSwitchNote = useCallback(() => setProviderSwitchNote(""), []);
+
+  const handleSendChat = useCallback(async () => {
+    if (aiRunning) return;
+
+    const draft = String(aiPrompt || "");
+    if (!draft.trim()) {
+      appendMessage("system", "Prompt is required.");
+      return;
+    }
+
+    if (providerSwitchNote) setProviderSwitchNote("");
+
+    appendMessage("user", draft);
+
+    const r = await runAi();
+
+    if (r.ok) {
+      appendMessage("assistant", r.output ?? "");
+    } else {
+      appendMessage("system", r.error || "Unknown error");
+      if (!providerReady) {
+        openSettings(aiProvider, "Configure this provider to enable Send.");
+      }
+    }
+  }, [aiRunning, aiPrompt, appendMessage, runAi, providerSwitchNote, providerReady, openSettings, aiProvider]);
+
+  const handlePromptKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendChat();
+      }
+    },
+    [handleSendChat]
+  );
+
+  const aiPanelWidthClass = useMemo(() => {
+    return aiPanelWide ? "w-[520px]" : "w-96";
+  }, [aiPanelWide]);
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -820,11 +943,13 @@ export default function App() {
 
         {/* Right sidebar: AI panel (collapsible) */}
         {aiPanelOpen ? (
-          <div className="w-96 border-l border-zinc-800 min-h-0 flex flex-col">
+          <div className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}>
             {/* AI header: status surface */}
             <div className="p-3 border-b border-zinc-800 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold">AI Panel</div>
+                <div className="text-sm font-semibold flex items-center gap-2">
+                  <span>AI Panel</span>
+                </div>
 
                 <div className="flex items-center gap-2">
                   <div
@@ -848,6 +973,26 @@ export default function App() {
                   >
                     {headerStatus.label}
                   </div>
+
+                  {/* NEW: width toggle */}
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={() => setAiPanelWide((v) => !v)}
+                    type="button"
+                    title="Toggle panel width"
+                  >
+                    {aiPanelWide ? "Narrow" : "Wide"}
+                  </button>
+
+                  {/* Manual close button */}
+                  <button
+                    className={iconButtonClass(false)}
+                    onClick={() => setAiPanelOpen(false)}
+                    title="Hide AI panel"
+                    type="button"
+                  >
+                    <span className="text-sm opacity-80">✕</span>
+                  </button>
                 </div>
               </div>
 
@@ -914,7 +1059,6 @@ export default function App() {
                   })}
                 </select>
 
-                {/* Commit 2: reduce noise — show onboarding text only when not ready */}
                 {!providerReady && (
                   <div className="text-xs opacity-60">
                     Providers are disabled until configured. Use{" "}
@@ -958,6 +1102,30 @@ export default function App() {
                 )}
               </div>
 
+              {/* Transcript */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">Transcript</div>
+                <div className="border border-zinc-800 rounded bg-zinc-950/30">
+                  <div className="h-[260px] overflow-auto p-2 space-y-2">
+                    {messages.length === 0 ? (
+                      <div className="text-xs opacity-60 p-2">
+                        No messages yet. Send a prompt to start a conversation.
+                      </div>
+                    ) : (
+                      messages.map((m) => (
+                        <TranscriptBubble
+                          key={m.id}
+                          role={m.role}
+                          content={m.content}
+                          ts={m.ts}
+                        />
+                      ))
+                    )}
+                    <div ref={transcriptBottomRef} />
+                  </div>
+                </div>
+              </div>
+
               {/* Prompt */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -975,7 +1143,8 @@ export default function App() {
                   className={`${inputClass(!providerReady)} min-h-[120px]`}
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="Type your prompt…"
+                  onKeyDown={handlePromptKeyDown}
+                  placeholder="Type your prompt… (Enter to send, Shift+Enter for newline)"
                   disabled={!providerReady}
                 />
               </div>
@@ -1031,11 +1200,7 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <button
                     className={buttonClass("primary", !providerReady || aiRunning)}
-                    onClick={() => {
-                      // Clear switch note once the user sends, so it doesn't linger.
-                      if (providerSwitchNote) setProviderSwitchNote("");
-                      runAi();
-                    }}
+                    onClick={handleSendChat}
                     disabled={!providerReady || aiRunning}
                   >
                     {aiRunning ? "Running..." : "Send"}
@@ -1050,7 +1215,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Commit 3: inline guardrail near Send (no modals, no new chat stream) */}
                 {!providerReady && (
                   <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
                     <div className="leading-snug">{guardrailText}</div>
@@ -1065,7 +1229,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Output */}
+              {/* Output (kept for now) */}
               <div className="space-y-2">
                 <div className="text-xs uppercase tracking-wide opacity-60">Output</div>
                 <textarea
@@ -1095,7 +1259,6 @@ export default function App() {
                         } else {
                           setAiTestOutput("Ollama models: (none found)");
                         }
-                        // UI-only: successful call implies runtime reachable
                         setRuntimeReachable((prev) => ({ ...prev, ollama: true }));
                       } catch (err) {
                         const msg = formatTauriError(err);
@@ -1118,7 +1281,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          // Collapsed rail (icon appears ONLY when panel is collapsed)
+          // Collapsed rail
           <div className="w-10 border-l border-zinc-800 min-h-0 flex flex-col items-center justify-start py-2">
             <button
               className="w-8 h-8 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs"
