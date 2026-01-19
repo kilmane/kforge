@@ -107,6 +107,9 @@ const MODEL_PRESETS = {
   mock: ["mock-1"]
 };
 
+// Phase 3.4.4 context window
+const CHAT_CONTEXT_TURNS = 8;
+
 function inputClass(disabled = false) {
   return [
     "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
@@ -249,17 +252,34 @@ function formatTranscriptTime(ts) {
   }
 }
 
-function TranscriptBubble({ role, content, ts }) {
+// Build a compact context prefix (UI-only; no backend changes).
+function buildChatContextPrefix(messages, limit) {
+  const relevant = messages
+    .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+    .slice(-Math.max(0, limit));
+
+  if (relevant.length === 0) return "";
+
+  const lines = relevant.map((m) => {
+    const who = m.role === "user" ? "User" : "Assistant";
+    const text = String(m.content || "").trim();
+    return `${who}: ${text}`;
+  });
+
+  return `Conversation so far:\n${lines.join("\n")}\n\nNow respond to the latest user message.\n\n`;
+}
+
+function TranscriptBubble({ role, content, ts, actionLabel, onAction }) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
   const isSystem = role === "system";
 
   const wrap = isUser ? "justify-end" : "justify-start";
 
-  const bubbleTone = isUser
-    ? "bg-zinc-700/60 border-zinc-600/70"
+    const bubbleTone = isUser
+    ? "bg-emerald-900/20 border-emerald-700/40"
     : isAssistant
-      ? "bg-zinc-950/40 border-zinc-800"
+      ? "bg-sky-900/15 border-sky-700/40"
       : "bg-amber-900/15 border-amber-900/40";
 
   const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
@@ -271,6 +291,17 @@ function TranscriptBubble({ role, content, ts }) {
         <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>
           {content}
         </div>
+
+        {(actionLabel && onAction) ? (
+          <button
+            className="mt-2 text-xs underline opacity-90 hover:opacity-100"
+            onClick={onAction}
+            type="button"
+          >
+            {actionLabel}
+          </button>
+        ) : null}
+
         {ts ? (
           <div className="mt-1 text-[10px] opacity-60 flex items-center gap-2">
             <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">
@@ -297,7 +328,7 @@ export default function App() {
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
 
-  // NEW: right panel width toggle (UI only)
+  // Right panel width toggle (UI only)
   const [aiPanelWide, setAiPanelWide] = useState(false);
 
   // AI state
@@ -315,15 +346,18 @@ export default function App() {
   const [aiOutput, setAiOutput] = useState("");
 
   // Transcript (in-memory only)
-  const [messages, setMessages] = useState([]); // {id, role, content, ts}
+  const [messages, setMessages] = useState([]); // {id, role, content, ts, action?}
   const transcriptBottomRef = useRef(null);
+
+  // For retry: remember last “send” details
+  const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit }
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
 
   // Runtime reachability (UI-only hint; does not gate providers)
   const [runtimeReachable, setRuntimeReachable] = useState({
-    ollama: null, // true/false/null (unknown)
+    ollama: null,
     lmstudio: null
   });
 
@@ -598,9 +632,16 @@ export default function App() {
     [refreshHasKeys]
   );
 
-  const appendMessage = useCallback((role, content) => {
+  const appendMessage = useCallback((role, content, opts = {}) => {
     const text = String(content ?? "");
-    const msg = { id: uid(), role, content: text, ts: Date.now() };
+    const msg = {
+      id: uid(),
+      role,
+      content: text,
+      ts: Date.now(),
+      actionLabel: opts.actionLabel || null,
+      action: typeof opts.action === "function" ? opts.action : null
+    };
     setMessages((prev) => [...prev, msg]);
     return msg;
   }, []);
@@ -638,19 +679,19 @@ export default function App() {
       if (!req.model || !String(req.model).trim()) {
         const msg = "Model is required.";
         setAiOutput(msg);
-        return { ok: false, error: msg };
+        return { ok: false, error: msg, kind: "validation" };
       }
       if (!req.input || !String(req.input).trim()) {
         const msg = "Prompt is required.";
         setAiOutput(msg);
-        return { ok: false, error: msg };
+        return { ok: false, error: msg, kind: "validation" };
       }
 
       const meta = ALL_PROVIDERS.find((p) => p.id === req.provider_id);
       if (!meta) {
         const msg = `Unknown provider: ${req.provider_id}`;
         setAiOutput(msg);
-        return { ok: false, error: msg };
+        return { ok: false, error: msg, kind: "validation" };
       }
 
       if (!isProviderEnabled(req.provider_id)) {
@@ -658,7 +699,7 @@ export default function App() {
         const msg = disabledProviderMessage(st);
         setAiOutput(msg);
         openSettings(req.provider_id, "Configure in Settings to enable this provider.");
-        return { ok: false, error: msg, needsSettings: true };
+        return { ok: false, error: msg, kind: "config", needsSettings: true };
       }
 
       setAiRunning(true);
@@ -681,7 +722,18 @@ export default function App() {
           setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: false }));
         }
 
-        return { ok: false, error: msg };
+        // Heuristic: treat obvious auth/config-ish messages as config category
+        const m = String(msg || "").toLowerCase();
+        const looksConfig =
+          m.includes("api key") ||
+          m.includes("missing api key") ||
+          m.includes("unauthorized") ||
+          m.includes("forbidden") ||
+          m.includes("invalid api key") ||
+          m.includes("missing endpoint") ||
+          m.includes("endpoint") && m.includes("missing");
+
+        return { ok: false, error: msg, kind: looksConfig ? "config" : "runtime" };
       } finally {
         setAiRunning(false);
       }
@@ -701,9 +753,12 @@ export default function App() {
     if (r.ok) {
       appendMessage("system", `Test succeeded (${aiProvider})`);
     } else {
-      appendMessage("system", `Test failed (${aiProvider}): ${r.error || "Unknown error"}`);
+      appendMessage("system", `Test failed (${aiProvider}): ${r.error || "Unknown error"}`, {
+        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+        action: r.kind === "config" ? () => openSettings(aiProvider, "Configure provider") : null
+      });
     }
-  }, [aiProvider, runAi, appendMessage]);
+  }, [aiProvider, runAi, appendMessage, openSettings]);
 
   const handleUseActiveFileAsPrompt = useCallback(() => {
     if (!activeTab) return;
@@ -752,6 +807,7 @@ export default function App() {
     return statusForProviderUI(providerMeta, hasKey, endpoints);
   }, [providerMeta, hasKey, endpoints]);
 
+  // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
     if (providerMeta.group !== "local") return null;
 
@@ -815,30 +871,125 @@ export default function App() {
 
   const handleDismissSwitchNote = useCallback(() => setProviderSwitchNote(""), []);
 
-  const handleSendChat = useCallback(async () => {
-    if (aiRunning) return;
+  const clearConversation = useCallback(() => {
+    setMessages([]);
+    setLastSend(null);
+    appendMessage("system", "Conversation cleared.");
+  }, [appendMessage]);
 
-    const draft = String(aiPrompt || "");
-    if (!draft.trim()) {
-      appendMessage("system", "Prompt is required.");
+  // Helper: compute the “input” that includes last N turns
+  const buildInputWithContext = useCallback((rawPrompt) => {
+    const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
+    return `${prefix}${String(rawPrompt || "")}`;
+  }, [messages]);
+
+  const sendWithPrompt = useCallback(
+    async (rawPrompt, opts = {}) => {
+      if (aiRunning) return;
+
+      const draft = String(rawPrompt || "");
+      if (!draft.trim()) {
+        appendMessage("system", "Prompt is required.");
+        return;
+      }
+
+      if (providerSwitchNote) setProviderSwitchNote("");
+
+      // Save last-send for retry (captures the exact “inputs” and provider settings)
+      const ep = (endpoints[aiProvider] || "").trim();
+      setLastSend({
+        prompt: draft,
+        providerId: aiProvider,
+        model: aiModel,
+        system: aiSystem,
+        temperature: aiTemperature,
+        maxTokens: aiMaxTokens,
+        endpoint: ep || null,
+        contextLimit: CHAT_CONTEXT_TURNS
+      });
+
+      // Append user message to transcript (what user typed)
+      if (!opts.silentUserAppend) {
+        appendMessage("user", draft);
+      }
+
+      const inputWithContext = buildInputWithContext(draft);
+
+      const r = await runAi({
+        input: inputWithContext
+      });
+
+      if (r.ok) {
+        appendMessage("assistant", r.output ?? "");
+      } else {
+        appendMessage("system", r.error || "Unknown error", {
+          actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+          action: r.kind === "config" ? () => openSettings(aiProvider, "Configure provider") : null
+        });
+      }
+    },
+    [
+      aiRunning,
+      appendMessage,
+      runAi,
+      providerSwitchNote,
+      aiProvider,
+      aiModel,
+      aiSystem,
+      aiTemperature,
+      aiMaxTokens,
+      endpoints,
+      buildInputWithContext,
+      openSettings
+    ]
+  );
+
+  const handleSendChat = useCallback(async () => {
+    await sendWithPrompt(aiPrompt);
+  }, [sendWithPrompt, aiPrompt]);
+
+  const handleRetryLast = useCallback(async () => {
+    if (!lastSend) {
+      appendMessage("system", "Nothing to retry yet.");
       return;
     }
 
-    if (providerSwitchNote) setProviderSwitchNote("");
+    // Preserve existing “current” selection UI, but retry uses the last payload snapshot.
+    // This is UI-only; no provider semantics changes.
+    const retryProvider = lastSend.providerId;
+    const retryModel = lastSend.model;
 
-    appendMessage("user", draft);
+    // If retry provider is no longer enabled, route user to settings.
+    if (!isProviderEnabled(retryProvider)) {
+      appendMessage("system", `Retry blocked — provider "${retryProvider}" is not configured.`, {
+        actionLabel: "→ Open Settings",
+        action: () => openSettings(retryProvider, "Configure provider for retry")
+      });
+      return;
+    }
 
-    const r = await runAi();
+    appendMessage("system", "Retrying last request…");
+
+    // Run using last snapshot values
+    const r = await runAi({
+      provider_id: retryProvider,
+      model: retryModel,
+      system: lastSend.system?.trim() ? lastSend.system : undefined,
+      temperature: typeof lastSend.temperature === "number" ? lastSend.temperature : undefined,
+      max_output_tokens: typeof lastSend.maxTokens === "number" ? Math.max(1, lastSend.maxTokens) : undefined,
+      endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
+      input: `${buildChatContextPrefix(messages, lastSend.contextLimit || CHAT_CONTEXT_TURNS)}${lastSend.prompt}`
+    });
 
     if (r.ok) {
       appendMessage("assistant", r.output ?? "");
     } else {
-      appendMessage("system", r.error || "Unknown error");
-      if (!providerReady) {
-        openSettings(aiProvider, "Configure this provider to enable Send.");
-      }
+      appendMessage("system", r.error || "Unknown error", {
+        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+        action: r.kind === "config" ? () => openSettings(retryProvider, "Configure provider") : null
+      });
     }
-  }, [aiRunning, aiPrompt, appendMessage, runAi, providerSwitchNote, providerReady, openSettings, aiProvider]);
+  }, [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages]);
 
   const handlePromptKeyDown = useCallback(
     (e) => {
@@ -974,7 +1125,6 @@ export default function App() {
                     {headerStatus.label}
                   </div>
 
-                  {/* NEW: width toggle */}
                   <button
                     className={buttonClass("ghost")}
                     onClick={() => setAiPanelWide((v) => !v)}
@@ -984,7 +1134,6 @@ export default function App() {
                     {aiPanelWide ? "Narrow" : "Wide"}
                   </button>
 
-                  {/* Manual close button */}
                   <button
                     className={iconButtonClass(false)}
                     onClick={() => setAiPanelOpen(false)}
@@ -1104,7 +1253,33 @@ export default function App() {
 
               {/* Transcript */}
               <div className="space-y-2">
-                <div className="text-xs uppercase tracking-wide opacity-60">Transcript</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide opacity-60">
+                    Transcript <span className="opacity-60 normal-case">(last {CHAT_CONTEXT_TURNS} used as context)</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={buttonClass("ghost", !lastSend || aiRunning)}
+                      onClick={handleRetryLast}
+                      disabled={!lastSend || aiRunning}
+                      type="button"
+                      title="Retry last request"
+                    >
+                      Retry
+                    </button>
+                    <button
+                      className={buttonClass("danger", aiRunning)}
+                      onClick={clearConversation}
+                      disabled={aiRunning}
+                      type="button"
+                      title="Clear conversation"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
                 <div className="border border-zinc-800 rounded bg-zinc-950/30">
                   <div className="h-[260px] overflow-auto p-2 space-y-2">
                     {messages.length === 0 ? (
@@ -1118,6 +1293,8 @@ export default function App() {
                           role={m.role}
                           content={m.content}
                           ts={m.ts}
+                          actionLabel={m.actionLabel}
+                          onAction={m.action}
                         />
                       ))
                     )}
