@@ -7,6 +7,8 @@ import PromptPanel from "./PromptPanel.jsx";
 import SystemPanel from "./SystemPanel.jsx";
 import ParametersPanel from "./ParametersPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
+import OutputPanel from "./OutputPanel.jsx";
+import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
 export default function AiPanel({
   // layout / open state
@@ -296,51 +298,20 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        {/* Output (kept for now) */}
-        <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wide opacity-60">Output</div>
-          <textarea
-            className={
-              "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 min-h-[160px]"
-            }
-            value={aiOutput}
-            readOnly
-            placeholder="Output will appear here…"
-          />
-        </div>
+        {/* Output */}
+        <OutputPanel aiOutput={aiOutput} />
 
         {/* Ollama helper */}
         {aiProvider === "ollama" && (
-          <div className="border border-zinc-800 rounded p-3 space-y-2">
-            <div className="text-sm font-semibold">Ollama Helper</div>
-            <div className="text-xs opacity-60">List local models using the Rust command.</div>
-            <button
-              className={buttonClass("ghost", aiRunning)}
-              onClick={async () => {
-                setAiTestOutput?.("Listing Ollama models...");
-                try {
-                  const ep = (endpoints?.ollama || "").trim();
-                  const models = await invoke("ai_ollama_list_models", {
-                    endpoint: ep ? ep : undefined
-                  });
-                  if (Array.isArray(models) && models.length > 0) {
-                    setAiTestOutput?.(`Ollama models: ${models.join(", ")}`);
-                  } else {
-                    setAiTestOutput?.("Ollama models: (none found)");
-                  }
-                  setRuntimeReachable?.((prev) => ({ ...prev, ollama: true }));
-                } catch (err) {
-                  const msg = formatTauriError ? formatTauriError(err) : String(err);
-                  setAiTestOutput?.(`Ollama list models failed: ${msg}`);
-                  setRuntimeReachable?.((prev) => ({ ...prev, ollama: false }));
-                }
-              }}
-              disabled={aiRunning}
-              type="button"
-            >
-              List Models
-            </button>
-          </div>
+          <OllamaHelperPanel
+            aiRunning={aiRunning}
+            endpoints={endpoints}
+            invoke={invoke}
+            setAiTestOutput={setAiTestOutput}
+            setRuntimeReachable={setRuntimeReachable}
+            formatTauriError={formatTauriError}
+            buttonClass={buttonClass}
+          />
         )}
       </div>
 
