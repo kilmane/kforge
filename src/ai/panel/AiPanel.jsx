@@ -1,5 +1,6 @@
 // src/ai/panel/AiPanel.jsx
 import React from "react";
+import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 
 export default function AiPanel({
   // layout / open state
@@ -39,9 +40,6 @@ export default function AiPanel({
   showModelHelper,
   modelHelperText,
 
-  // patch preview element (kept computed in App for now)
-  patchPreviewPanel,
-
   // transcript
   messages,
   TranscriptBubble,
@@ -62,12 +60,12 @@ export default function AiPanel({
   askForPatch,
   setAskForPatch,
 
+  // patch preview state/handlers (kept in App)
   patchPreview,
   patchPreviewVisible,
   copyPatchToClipboard,
   setPatchPreviewVisible,
-  setPatchPreview,
-  setPatchPreviewVisibleDefaultTrue, // optional hook helper if you pass it
+  discardPatchPreview,
   appendMessage,
 
   aiPrompt,
@@ -85,7 +83,6 @@ export default function AiPanel({
   // actions
   handleSendChat,
   handleAiTest,
-  providerReadyGuardrailText,
   guardrailText,
 
   // output + ollama helper
@@ -221,7 +218,9 @@ export default function AiPanel({
           </div>
 
           <select
-            className={"w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"}
+            className={
+              "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+            }
             value={aiProvider}
             onChange={(e) => handleProviderChange(e.target.value)}
           >
@@ -236,7 +235,8 @@ export default function AiPanel({
           {!providerReady && (
             <div className="text-xs opacity-60">
               Providers are disabled until configured. Use{" "}
-              <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
+              <span className="opacity-90">Configure in Settings</span> to add an API key (and an
+              endpoint where required).
             </div>
           )}
 
@@ -281,13 +281,21 @@ export default function AiPanel({
         </div>
 
         {/* Patch Preview (read-only) */}
-        {patchPreviewPanel}
+        <PatchPreviewPanel
+          patchPreview={patchPreview}
+          patchPreviewVisible={patchPreviewVisible}
+          setPatchPreviewVisible={setPatchPreviewVisible}
+          copyPatchToClipboard={copyPatchToClipboard}
+          discardPatchPreview={discardPatchPreview}
+          buttonClass={buttonClass}
+        />
 
         {/* Transcript */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-xs uppercase tracking-wide opacity-60">
-              Transcript <span className="opacity-60 normal-case">(last {CHAT_CONTEXT_TURNS} used as context)</span>
+              Transcript{" "}
+              <span className="opacity-60 normal-case">(last {CHAT_CONTEXT_TURNS} used as context)</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -357,7 +365,7 @@ export default function AiPanel({
             <label
               className={[
                 "flex items-center gap-2 text-xs",
-                (!activeTab || !providerReady) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                !activeTab || !providerReady ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
               ].join(" ")}
               title={activeTab ? "Include active file in the next Send" : "Open a file to enable this"}
             >
@@ -436,16 +444,7 @@ export default function AiPanel({
                 </button>
                 <button
                   className={buttonClass("danger")}
-                  onClick={() => {
-                    setPatchPreview(null);
-                    // keep parity with App.js behavior
-                    if (typeof setPatchPreviewVisibleDefaultTrue === "function") {
-                      setPatchPreviewVisibleDefaultTrue();
-                    } else {
-                      setPatchPreviewVisible(true);
-                    }
-                    appendMessage?.("system", "Patch preview discarded.");
-                  }}
+                  onClick={discardPatchPreview}
                   type="button"
                   title="Discard preview"
                 >
@@ -453,9 +452,7 @@ export default function AiPanel({
                 </button>
               </div>
             ) : (
-              <div className="text-[11px] opacity-60">
-                (Preview appears when the assistant returns a diff.)
-              </div>
+              <div className="text-[11px] opacity-60">(Preview appears when the assistant returns a diff.)</div>
             )}
           </div>
 
@@ -578,7 +575,9 @@ export default function AiPanel({
         <div className="space-y-2">
           <div className="text-xs uppercase tracking-wide opacity-60">Output</div>
           <textarea
-            className={"w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 min-h-[160px]"}
+            className={
+              "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 min-h-[160px]"
+            }
             value={aiOutput}
             readOnly
             placeholder="Output will appear here…"
