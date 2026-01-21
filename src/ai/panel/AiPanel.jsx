@@ -1,5 +1,5 @@
 // src/ai/panel/AiPanel.jsx
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
@@ -11,6 +11,7 @@ import OutputPanel from "./OutputPanel.jsx";
 import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
 import { openFile, readFolderTree } from "../../lib/fs";
+import { runToolCall } from "../tools/toolRuntime.js";
 
 function uidShort() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(-6);
@@ -182,80 +183,36 @@ export default function AiPanel({
 }) {
   /**
    * Phase 3.6.3 — Real tools (consent-gated)
-   * Tools implemented here:
+   * Tools (read-only):
    * - read_file(path)   -> openFile(path)
    * - list_dir(path)    -> readFolderTree(path) (top-level summary)
+   *
+   * NOTE: Consent UI + tool transcript messages are kept identical to the previous inline implementation.
+   * The tool orchestration is delegated to toolRuntime.runToolCall with UI-adapters.
    */
 
-  const requestToolConsent = useCallback(
-    ({ tool, detail, onApprove }) => {
-      const id = uidShort();
+  // Holds the currently pending consent gate (one at a time).
+  const pendingConsentRef = useRef(null);
 
-      appendMessage(
-        "system",
-        formatToolLine({ tool, status: "request", id, detail: detail || "Awaiting approval…" }),
-        {
-          actions: [
-            {
-              label: "Approve",
-              onClick: () => {
-                appendMessage(
-                  "system",
-                  formatToolLine({ tool, status: "calling", id, detail: "Approved by user — executing…" })
-                );
-                onApprove?.(id);
-              }
-            },
-            {
-              label: "Cancel",
-              onClick: () => {
-                appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
-              }
-            }
-          ]
-        }
-      );
-    },
-    [appendMessage]
-  );
+  const invokeTool = useCallback(
+    async (toolName, args) => {
+      const t = String(toolName || "").trim();
 
-  const doReadFile = useCallback(
-    async ({ id, path }) => {
-      const tool = "read_file";
-      const filePath = String(path || "").trim();
-
-      try {
+      if (t === "read_file") {
+        const filePath = String(args?.path || "").trim();
         const content = await openFile(filePath);
         const text = String(content ?? "");
         const byteLen = new TextEncoder().encode(text).length;
         const preview = summarizeText(text, 700);
 
-        appendMessage(
-          "system",
-          formatToolLine({ tool, status: "ok", id, detail: `Read ${byteLen} bytes (Path: ${filePath})` }) +
-            `\n\n--- File preview ---\n${preview}`
-        );
-      } catch (err) {
-        appendMessage(
-          "system",
-          formatToolLine({
-            tool,
-            status: "error",
-            id,
-            detail: formatTauriError ? formatTauriError(err) : String(err)
-          })
+        return (
+          `Read ${byteLen} bytes (Path: ${filePath})` +
+          `\n\n--- File preview ---\n${preview}`
         );
       }
-    },
-    [appendMessage, formatTauriError]
-  );
 
-  const doListDir = useCallback(
-    async ({ id, dirPath }) => {
-      const tool = "list_dir";
-      const dp = String(dirPath || "").trim();
-
-      try {
+      if (t === "list_dir") {
+        const dp = String(args?.path || args?.dirPath || "").trim();
         const tree = await readFolderTree(dp);
 
         // readFolderTree likely returns an array of nodes; handle defensively.
@@ -269,29 +226,145 @@ export default function AiPanel({
         const dirs = nodes.filter((n) => isDirNode(n)).length;
         const files = Math.max(0, nodes.length - dirs);
 
-        appendMessage(
-          "system",
-          formatToolLine({
-            tool,
-            status: "ok",
-            id,
-            detail: `Listed ${nodes.length} entries (dirs: ${dirs}, files: ${files}) (Path: ${dp})`
-          }) +
-            (top.length ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}` : "\n\n(empty)")
+        return (
+          `Listed ${nodes.length} entries (dirs: ${dirs}, files: ${files}) (Path: ${dp})` +
+          (top.length ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}` : "\n\n(empty)")
         );
-      } catch (err) {
+      }
+
+      throw new Error(`Unknown tool: ${t}`);
+    },
+    []
+  );
+
+  const requestConsent = useCallback(
+    async ({ toolName, args }) => {
+      // If a prior consent is somehow still pending, cancel it to keep behavior deterministic.
+      if (pendingConsentRef.current?.resolve) {
+        try {
+          pendingConsentRef.current.resolve("cancelled");
+        } catch {
+          // ignore
+        }
+        pendingConsentRef.current = null;
+      }
+
+      const tool = String(toolName || "tool");
+      const id = uidShort();
+
+      let resolve;
+      const p = new Promise((r) => {
+        resolve = r;
+      });
+
+      pendingConsentRef.current = { id, tool, resolve };
+
+      // Keep transcript wording/actions identical to the previous implementation.
+      const detail =
+        tool === "read_file"
+          ? `Read active file (Path: ${String(args?.path || "").trim()})`
+          : tool === "list_dir"
+            ? `List directory of active file (Path: ${String(args?.path || "").trim()})`
+            : "Awaiting approval…";
+
+      appendMessage(
+        "system",
+        formatToolLine({ tool, status: "request", id, detail: detail || "Awaiting approval…" }),
+        {
+          actions: [
+            {
+              label: "Approve",
+              onClick: () => {
+                appendMessage(
+                  "system",
+                  formatToolLine({ tool, status: "calling", id, detail: "Approved by user — executing…" })
+                );
+                pendingConsentRef.current?.resolve?.("approved");
+                pendingConsentRef.current = null;
+              }
+            },
+            {
+              label: "Cancel",
+              onClick: () => {
+                appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
+                pendingConsentRef.current?.resolve?.("cancelled");
+                pendingConsentRef.current = null;
+              }
+            }
+          ]
+        }
+      );
+
+      return p;
+    },
+    [appendMessage]
+  );
+
+  const appendTranscript = useCallback(
+    (entry) => {
+      // toolRuntime will call appendTranscript for result/error/cancel.
+      // We convert these into the exact tool-style system bubbles already used in KForge.
+      const meta = entry?.meta || {};
+      const phase = meta.phase;
+
+      // We intentionally ignore the runtime's "call" phase message:
+      // our consent bubble already serves as the request surface, and we add "calling" on Approve.
+      if (phase === "call") return;
+
+      const tool = meta.toolName || "tool";
+      const id = pendingConsentRef.current?.id || ""; // best-effort; may be empty if already cleared
+
+      if (phase === "result") {
+        const body = String(entry?.content || "");
+        // If invokeTool returned detailed content, show it after the OK line.
+        appendMessage("system", formatToolLine({ tool, status: "ok", id, detail: "" }) + (body ? `\n\n${body}` : ""));
+        return;
+      }
+
+	  if (phase === "cancelled") return;
+
+      if (phase === "error") {
+        const detail = String(entry?.content || "");
         appendMessage(
           "system",
           formatToolLine({
             tool,
             status: "error",
             id,
-            detail: formatTauriError ? formatTauriError(err) : String(err)
+            detail: formatTauriError ? formatTauriError(detail) : detail
           })
         );
+        return;
       }
+
+      // Fallback: pass through.
+      appendMessage("system", String(entry?.content || ""));
     },
     [appendMessage, formatTauriError]
+  );
+
+  const runTool = useCallback(
+    async ({ toolName, args }) => {
+      // toolRuntime expects a single consent decision; we always gate for now.
+      const res = await runToolCall({
+        toolCall: { name: toolName, args },
+        appendTranscript,
+        requestConsent: async ({ toolName, args }) => requestConsent({ toolName, args }),
+        invokeTool: async (toolName, args) => {
+          try {
+            return await invokeTool(toolName, args);
+          } catch (err) {
+            const msg = formatTauriError ? formatTauriError(err) : String(err);
+            // Throw a clean error so the runtime reports it.
+            throw new Error(msg);
+          }
+        },
+        isConsentRequired: () => true
+      });
+
+      return res;
+    },
+    [appendTranscript, requestConsent, invokeTool, formatTauriError]
   );
 
   const handleRequestToolOk = useCallback(() => {
@@ -300,16 +373,9 @@ export default function AiPanel({
       appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.");
       return;
     }
-
     const p = activeTab.path;
-    requestToolConsent({
-      tool: "read_file",
-      detail: `Read active file (Path: ${p})`,
-      onApprove: (id) => {
-        doReadFile({ id, path: p });
-      }
-    });
-  }, [activeTab, appendMessage, requestToolConsent, doReadFile]);
+    runTool({ toolName: "read_file", args: { path: p } });
+  }, [activeTab, appendMessage, runTool]);
 
   const handleRequestToolErr = useCallback(() => {
     // Next real tool: list directory of the active file
@@ -317,16 +383,9 @@ export default function AiPanel({
       appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.");
       return;
     }
-
     const dir = dirnameOfPath(activeTab.path);
-    requestToolConsent({
-      tool: "list_dir",
-      detail: `List directory of active file (Path: ${dir})`,
-      onApprove: (id) => {
-        doListDir({ id, dirPath: dir });
-      }
-    });
-  }, [activeTab, appendMessage, requestToolConsent, doListDir]);
+    runTool({ toolName: "list_dir", args: { path: dir } });
+  }, [activeTab, appendMessage, runTool]);
 
   // Collapsed rail
   if (!aiPanelOpen) {
