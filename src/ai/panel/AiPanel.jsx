@@ -1,5 +1,5 @@
 // src/ai/panel/AiPanel.jsx
-import React from "react";
+import React, { useCallback } from "react";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
@@ -9,6 +9,36 @@ import ParametersPanel from "./ParametersPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
 import OutputPanel from "./OutputPanel.jsx";
 import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
+
+import { openFile } from "../../lib/fs";
+
+function uidShort() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(-6);
+}
+
+function formatToolLine({ tool, status, id, detail }) {
+  const t = String(tool || "tool").trim() || "tool";
+  const i = String(id || "").trim();
+  const d = String(detail || "").trim();
+
+  let headline = "";
+  if (status === "request") headline = `🛡 Tool request: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "calling") headline = `🛠 Calling tool: ${t}${i ? ` (${i})` : ""}…`;
+  else if (status === "ok") headline = `✅ Tool returned: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "error") headline = `❌ Tool failed: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "cancelled") headline = `🚫 Tool cancelled: ${t}${i ? ` (${i})` : ""}`;
+  else headline = `🧩 Tool event: ${t}${i ? ` (${i})` : ""}`;
+
+  const parts = [`[tool] ${headline}`];
+  if (d) parts.push(`— ${d}`);
+  return parts.join(" ");
+}
+
+function summarizeText(text, maxChars = 600) {
+  const s = String(text ?? "");
+  if (s.length <= maxChars) return s;
+  return `${s.slice(0, maxChars)}\n…(truncated)`;
+}
 
 export default function AiPanel({
   // layout / open state
@@ -104,6 +134,119 @@ export default function AiPanel({
   iconButtonClass,
   GearIcon
 }) {
+  /**
+   * Phase 3.6.3 — First real MCP-like tool (read_file)
+   * - Still consent-gated (Approve/Cancel)
+   * - On Approve: actually reads file content via openFile(path)
+   * - Narrates: request -> calling -> returned/failed
+   *
+   * For demo buttons:
+   * - Req OK reads the currently active file (if any)
+   * - Req Err tries to read an obviously invalid path to exercise error handling
+   */
+  const requestReadFileConsent = useCallback(
+    ({ path, label }) => {
+      const id = uidShort();
+      const tool = "read_file";
+      const filePath = String(path || "").trim();
+
+      if (!filePath) {
+        appendMessage("system", "[tool] 🛡 Tool request blocked — no active file to read.");
+        return;
+      }
+
+      appendMessage(
+        "system",
+        formatToolLine({
+          tool,
+          status: "request",
+          id,
+          detail: `${label} (Path: ${filePath})`
+        }),
+        {
+          actions: [
+            {
+              label: "Approve",
+              onClick: () => {
+                appendMessage(
+                  "system",
+                  formatToolLine({
+                    tool,
+                    status: "calling",
+                    id,
+                    detail: `Approved by user — reading file (Path: ${filePath})`
+                  })
+                );
+
+                (async () => {
+                  try {
+                    const content = await openFile(filePath);
+                    const text = String(content ?? "");
+                    const byteLen = new TextEncoder().encode(text).length;
+
+                    const preview = summarizeText(text, 700);
+
+                    appendMessage(
+                      "system",
+                      formatToolLine({
+                        tool,
+                        status: "ok",
+                        id,
+                        detail: `Read ${byteLen} bytes`
+                      }) + `\n\n--- File preview ---\n${preview}`
+                    );
+                  } catch (err) {
+                    appendMessage(
+                      "system",
+                      formatToolLine({
+                        tool,
+                        status: "error",
+                        id,
+                        detail: formatTauriError ? formatTauriError(err) : String(err)
+                      })
+                    );
+                  }
+                })();
+              }
+            },
+            {
+              label: "Cancel",
+              onClick: () => {
+                appendMessage(
+                  "system",
+                  formatToolLine({
+                    tool,
+                    status: "cancelled",
+                    id,
+                    detail: "User denied the request (UI-only)."
+                  })
+                );
+              }
+            }
+          ]
+        }
+      );
+    },
+    [appendMessage, formatTauriError]
+  );
+
+  const handleRequestToolOk = useCallback(() => {
+    // Real tool: read active file
+    if (!activeTab?.path) {
+      appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.");
+      return;
+    }
+    requestReadFileConsent({ path: activeTab.path, label: "Request to read active file" });
+  }, [activeTab, appendMessage, requestReadFileConsent]);
+
+  const handleRequestToolErr = useCallback(() => {
+    // Real tool: intentionally invalid path to exercise error handling (still consent gated)
+    requestReadFileConsent({
+      path: "__kforge__/definitely-not-a-real-file.__nope__",
+      label: "Request to read invalid path (error demo)"
+    });
+  }, [requestReadFileConsent]);
+
   // Collapsed rail
   if (!aiPanelOpen) {
     return (
@@ -211,7 +354,6 @@ export default function AiPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        {/* Provider + model */}
         <ProviderControlsPanel
           providerOptions={providerOptions}
           handleProviderChange={handleProviderChange}
@@ -229,7 +371,6 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        {/* Patch Preview (read-only) */}
         <PatchPreviewPanel
           patchPreview={patchPreview}
           patchPreviewVisible={patchPreviewVisible}
@@ -239,7 +380,6 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        {/* Transcript */}
         <TranscriptPanel
           messages={messages}
           TranscriptBubble={TranscriptBubble}
@@ -249,10 +389,10 @@ export default function AiPanel({
           aiRunning={aiRunning}
           handleRetryLast={handleRetryLast}
           clearConversation={clearConversation}
-          buttonClass={buttonClass}
+          onRequestToolOk={handleRequestToolOk}
+          onRequestToolErr={handleRequestToolErr}
         />
 
-        {/* Prompt */}
         <PromptPanel
           activeTab={activeTab}
           handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
@@ -274,10 +414,8 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        {/* System (optional) */}
         <SystemPanel aiSystem={aiSystem} setAiSystem={setAiSystem} providerReady={providerReady} />
 
-        {/* Parameters */}
         <ParametersPanel
           aiTemperature={aiTemperature}
           setAiTemperature={setAiTemperature}
@@ -286,7 +424,6 @@ export default function AiPanel({
           providerReady={providerReady}
         />
 
-        {/* Actions */}
         <ActionsPanel
           providerReady={providerReady}
           aiRunning={aiRunning}
@@ -298,10 +435,8 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        {/* Output */}
         <OutputPanel aiOutput={aiOutput} />
 
-        {/* Ollama helper */}
         {aiProvider === "ollama" && (
           <OllamaHelperPanel
             aiRunning={aiRunning}
