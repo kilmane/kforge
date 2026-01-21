@@ -279,33 +279,6 @@ function buildActiveFileContextBlock(filePath, fileContent) {
  * - Tool-related events must be visible in transcript as system messages.
  * - Consent surface must be visible before "execution" (simulated here).
  */
-function formatToolEventLine({ tool, status, detail, id }) {
-  const safeTool = String(tool || "tool").trim() || "tool";
-  const safeStatus = String(status || "").trim();
-  const safeDetail = String(detail || "").trim();
-  const safeId = String(id || "").trim();
-
-  const prefix = "[tool]";
-
-  let headline = "";
-  if (safeStatus === "request") {
-    headline = `🛡 Tool request: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
-  } else if (safeStatus === "calling") {
-    headline = `🛠 Calling tool: ${safeTool}${safeId ? ` (${safeId})` : ""}…`;
-  } else if (safeStatus === "ok") {
-    headline = `✅ Tool returned: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
-  } else if (safeStatus === "error") {
-    headline = `❌ Tool failed: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
-  } else if (safeStatus === "cancelled") {
-    headline = `🚫 Tool cancelled: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
-  } else {
-    headline = `🧩 Tool event: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
-  }
-
-  const parts = [`${prefix} ${headline}`];
-  if (safeDetail) parts.push(`— ${safeDetail}`);
-  return parts.join(" ");
-}
 
 /**
  * Phase 3.4.6 — Patch Preview (read-only)
@@ -552,28 +525,63 @@ export default function App() {
     if (presets.length > 0) setAiModel(presets[0]);
   }, [aiProvider, aiModel]);
 
-  const handleOpenFolder = useCallback(async () => {
+  const handleOpenFolder = useCallback(
+  async () => {
     const folder = await openProjectFolder();
     if (!folder) return;
 
+    // Try to allow the chosen folder in scope (best-effort).
     try {
       await invoke("fs_allow_directory", { path: folder });
       console.log("[kforge] FS scope allowed folder:", folder);
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
+      // We do NOT return here; we still attempt to read the tree.
+      // If it's forbidden, readFolderTree will throw and we handle it below.
     }
 
+    // Read folder tree SAFELY — forbidden paths must not crash the UI.
+    let nextTree = null;
+    try {
+      nextTree = await readFolderTree(folder);
+    } catch (err) {
+      console.error("[kforge] Failed to read folder tree:", err);
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(
+        `Open folder failed:\n${folder}\n\n${msg}\n\n` +
+          `This usually means the folder is outside the allowed allow-read-dir scope.`
+      );
+      return; // keep current project state unchanged on failure
+    }
+
+    // Only commit state changes after we successfully read the tree
     setProjectPath(folder);
     setTabs([]);
     setActiveFilePath(null);
     setSaveStatus("");
     setAiTestOutput("");
 
-    // Phase 3.4.5: If file inclusion was on, turning it off is safest when switching context
+    // Phase 3.4.5: safest to turn off file inclusion when switching context
     setIncludeActiveFile(false);
 
-    const nextTree = await readFolderTree(folder);
     setTree(nextTree || []);
+  },
+  []
+);  
+  const handleCloseFolder = useCallback(() => {
+    setProjectPath(null);
+    setTree([]);
+
+    // Close any open file tabs too (matches the old “close folder tab clears everything” behavior)
+    setTabs([]);
+    setActiveFilePath(null);
+
+    // Clear small UI statuses (safe)
+    setSaveStatus("");
+    setAiTestOutput("");
+
+    // Phase 3.4.5 safety: turn off file inclusion if context is gone
+    setIncludeActiveFile(false);
   }, []);
 
   const handleOpenFile = useCallback(
@@ -730,15 +738,6 @@ export default function App() {
     setMessages((prev) => [...prev, msg]);
     return msg;
   }, []);
-
-  const appendToolEvent = useCallback(
-    (tool, status, detail = "", extra = {}) => {
-      const id = extra.id || "";
-      const line = formatToolEventLine({ tool, status, detail, id });
-      return appendMessage("system", line, extra);
-    },
-    [appendMessage]
-  );
 
   useEffect(() => {
     if (!transcriptBottomRef.current) return;
@@ -1185,47 +1184,7 @@ export default function App() {
    * - First: show a "tool request" system bubble with Approve/Cancel.
    * - Only on Approve do we append "calling" then "returned/failed" (simulated).
    */
-  const requestToolConsent = useCallback(
-    ({ tool, willFail = false, detail = "" }) => {
-      const id = uid().slice(-6);
-
-      const requestLine = formatToolEventLine({
-        tool,
-        status: "request",
-        detail: detail || "Awaiting approval…",
-        id
-      });
-
-      appendMessage("system", requestLine, {
-        actions: [
-          {
-            label: "Approve",
-            onClick: () => {
-              // announce "calling" immediately (visibility before execution)
-              appendToolEvent(tool, "calling", "Approved by user (UI-only)", { id });
-
-              window.setTimeout(() => {
-                if (willFail) {
-                  appendToolEvent(tool, "error", "Permission denied (simulated)", { id });
-                } else {
-                  appendToolEvent(tool, "ok", "Read 1287 bytes (simulated)", { id });
-                }
-              }, 250);
-            }
-          },
-          {
-            label: "Cancel",
-            onClick: () => {
-              appendToolEvent(tool, "cancelled", "User denied the request (UI-only).", { id });
-            }
-          }
-        ]
-      });
-    },
-    [appendMessage, appendToolEvent]
-  );
-
-
+ 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <SettingsModal
@@ -1246,6 +1205,15 @@ export default function App() {
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>
+		
+		<button
+		  className={buttonClass("ghost", !projectPath)}
+		  onClick={handleCloseFolder}
+		  disabled={!projectPath}
+		  title={projectPath ? `Close folder: ${projectPath}` : "No folder open"}
+		>
+		  Close Folder
+		</button>
 
         <button
           className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
