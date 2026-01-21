@@ -10,8 +10,8 @@ import ActionsPanel from "./ActionsPanel.jsx";
 import OutputPanel from "./OutputPanel.jsx";
 import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
-import { openFile, readFolderTree } from "../../lib/fs";
 import { runToolCall } from "../tools/toolRuntime.js";
+import { runToolHandler } from "../tools/handlers/index.js";
 
 function uidShort() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(-6);
@@ -33,12 +33,6 @@ function formatToolLine({ tool, status, id, detail }) {
   const parts = [`[tool] ${headline}`];
   if (d) parts.push(`— ${d}`);
   return parts.join(" ");
-}
-
-function summarizeText(text, maxChars = 700) {
-  const s = String(text ?? "");
-  if (s.length <= maxChars) return s;
-  return `${s.slice(0, maxChars)}\n…(truncated)`;
 }
 
 function dirnameOfPath(p) {
@@ -64,27 +58,6 @@ function dirnameOfPath(p) {
   const dir = dirParts.join("/");
 
   return drive ? `${drive}/${dirParts.slice(1).join("/")}` : `/${dir}`;
-}
-
-function basenameOfPath(p) {
-  const raw = String(p || "");
-  const normalized = raw.replaceAll("\\", "/");
-  const parts = normalized.split("/");
-  return parts[parts.length - 1] || raw;
-}
-
-function isDirNode(node) {
-  if (!node || typeof node !== "object") return false;
-  if (node.type === "dir" || node.kind === "dir") return true;
-  if (Array.isArray(node.children)) return true;
-  return false;
-}
-
-function labelNode(node) {
-  if (!node) return "(unknown)";
-  if (typeof node === "string") return node;
-  const name = node.name || basenameOfPath(node.path || "");
-  return name || "(unnamed)";
 }
 
 export default function AiPanel({
@@ -182,60 +155,13 @@ export default function AiPanel({
   GearIcon
 }) {
   /**
-   * Phase 3.6.3 — Real tools (consent-gated)
-   * Tools (read-only):
-   * - read_file(path)   -> openFile(path)
-   * - list_dir(path)    -> readFolderTree(path) (top-level summary)
-   *
-   * NOTE: Consent UI + tool transcript messages are kept identical to the previous inline implementation.
-   * The tool orchestration is delegated to toolRuntime.runToolCall with UI-adapters.
+   * Phase 3.6.3C3 — Wire AiPanel tool execution through handlers registry
+   * - Tool orchestration: toolRuntime.runToolCall (consent + transcript visibility)
+   * - Tool implementations: tools/handlers/index.js (read_file, list_dir, search_in_file)
    */
 
   // Holds the currently pending consent gate (one at a time).
   const pendingConsentRef = useRef(null);
-
-  const invokeTool = useCallback(
-    async (toolName, args) => {
-      const t = String(toolName || "").trim();
-
-      if (t === "read_file") {
-        const filePath = String(args?.path || "").trim();
-        const content = await openFile(filePath);
-        const text = String(content ?? "");
-        const byteLen = new TextEncoder().encode(text).length;
-        const preview = summarizeText(text, 700);
-
-        return (
-          `Read ${byteLen} bytes (Path: ${filePath})` +
-          `\n\n--- File preview ---\n${preview}`
-        );
-      }
-
-      if (t === "list_dir") {
-        const dp = String(args?.path || args?.dirPath || "").trim();
-        const tree = await readFolderTree(dp);
-
-        // readFolderTree likely returns an array of nodes; handle defensively.
-        const nodes = Array.isArray(tree) ? tree.filter(Boolean) : [];
-
-        const top = nodes.slice(0, 40).map((n) => {
-          const kind = isDirNode(n) ? "dir" : "file";
-          return `- [${kind}] ${labelNode(n)}`;
-        });
-
-        const dirs = nodes.filter((n) => isDirNode(n)).length;
-        const files = Math.max(0, nodes.length - dirs);
-
-        return (
-          `Listed ${nodes.length} entries (dirs: ${dirs}, files: ${files}) (Path: ${dp})` +
-          (top.length ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}` : "\n\n(empty)")
-        );
-      }
-
-      throw new Error(`Unknown tool: ${t}`);
-    },
-    []
-  );
 
   const requestConsent = useCallback(
     async ({ toolName, args }) => {
@@ -259,13 +185,15 @@ export default function AiPanel({
 
       pendingConsentRef.current = { id, tool, resolve };
 
-      // Keep transcript wording/actions identical to the previous implementation.
+      // Keep transcript wording/actions identical to previous implementation.
       const detail =
         tool === "read_file"
           ? `Read active file (Path: ${String(args?.path || "").trim()})`
           : tool === "list_dir"
             ? `List directory of active file (Path: ${String(args?.path || "").trim()})`
-            : "Awaiting approval…";
+            : tool === "search_in_file"
+              ? `Search in file (Path: ${String(args?.path || "").trim()})`
+              : "Awaiting approval…";
 
       appendMessage(
         "system",
@@ -302,50 +230,42 @@ export default function AiPanel({
 
   const appendTranscript = useCallback(
     (entry) => {
-      // toolRuntime will call appendTranscript for result/error/cancel.
-      // We convert these into the exact tool-style system bubbles already used in KForge.
       const meta = entry?.meta || {};
       const phase = meta.phase;
 
-      // We intentionally ignore the runtime's "call" phase message:
-      // our consent bubble already serves as the request surface, and we add "calling" on Approve.
+      // Ignore runtime "call" (we already show request + calling in our consent UI)
       if (phase === "call") return;
+
+      // Ignore runtime "cancelled" (Cancel button already appends the cancelled bubble with id)
+      if (phase === "cancelled") return;
 
       const tool = meta.toolName || "tool";
       const id = pendingConsentRef.current?.id || ""; // best-effort; may be empty if already cleared
 
       if (phase === "result") {
         const body = String(entry?.content || "");
-        // If invokeTool returned detailed content, show it after the OK line.
         appendMessage("system", formatToolLine({ tool, status: "ok", id, detail: "" }) + (body ? `\n\n${body}` : ""));
         return;
       }
 
-	  if (phase === "cancelled") return;
-
       if (phase === "error") {
         const detail = String(entry?.content || "");
-        appendMessage(
-          "system",
-          formatToolLine({
-            tool,
-            status: "error",
-            id,
-            detail: formatTauriError ? formatTauriError(detail) : detail
-          })
-        );
+        appendMessage("system", formatToolLine({ tool, status: "error", id, detail }));
         return;
       }
 
       // Fallback: pass through.
       appendMessage("system", String(entry?.content || ""));
     },
-    [appendMessage, formatTauriError]
+    [appendMessage]
   );
+
+  const invokeTool = useCallback(async (toolName, args) => {
+    return await runToolHandler(toolName, args);
+  }, []);
 
   const runTool = useCallback(
     async ({ toolName, args }) => {
-      // toolRuntime expects a single consent decision; we always gate for now.
       const res = await runToolCall({
         toolCall: { name: toolName, args },
         appendTranscript,
@@ -355,7 +275,6 @@ export default function AiPanel({
             return await invokeTool(toolName, args);
           } catch (err) {
             const msg = formatTauriError ? formatTauriError(err) : String(err);
-            // Throw a clean error so the runtime reports it.
             throw new Error(msg);
           }
         },
@@ -378,7 +297,7 @@ export default function AiPanel({
   }, [activeTab, appendMessage, runTool]);
 
   const handleRequestToolErr = useCallback(() => {
-    // Next real tool: list directory of the active file
+    // Real tool: list directory of the active file
     if (!activeTab?.path) {
       appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.");
       return;

@@ -12,7 +12,7 @@ The project is built with a clear separation of concerns:
 
 Current status:
 
-Backend Phase 3.2.4 is complete and compiling; UI for providers and settings is now locked.
+Phase 3.5 (AI Panel modularization) in progress — UI blocks extracted, state preserved in App.js.
 
 ---
 
