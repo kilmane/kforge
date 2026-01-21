@@ -10,7 +10,7 @@ import ActionsPanel from "./ActionsPanel.jsx";
 import OutputPanel from "./OutputPanel.jsx";
 import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
-import { openFile } from "../../lib/fs";
+import { openFile, readFolderTree } from "../../lib/fs";
 
 function uidShort() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(-6);
@@ -34,10 +34,56 @@ function formatToolLine({ tool, status, id, detail }) {
   return parts.join(" ");
 }
 
-function summarizeText(text, maxChars = 600) {
+function summarizeText(text, maxChars = 700) {
   const s = String(text ?? "");
   if (s.length <= maxChars) return s;
   return `${s.slice(0, maxChars)}\n…(truncated)`;
+}
+
+function dirnameOfPath(p) {
+  const raw = String(p || "");
+  if (!raw.trim()) return "";
+
+  const normalized = raw.replaceAll("\\", "/");
+
+  // Handle "C:/" root-ish
+  const m = normalized.match(/^([A-Za-z]:)\/?$/);
+  if (m) return `${m[1]}/`;
+
+  const parts = normalized.split("/").filter((x) => x.length > 0);
+
+  // If it's something like "C:/foo/bar.txt"
+  const drive = normalized.match(/^([A-Za-z]:)\//)?.[1] || "";
+
+  if (parts.length <= 1) {
+    return drive ? `${drive}/` : "/";
+  }
+
+  const dirParts = parts.slice(0, -1);
+  const dir = dirParts.join("/");
+
+  return drive ? `${drive}/${dirParts.slice(1).join("/")}` : `/${dir}`;
+}
+
+function basenameOfPath(p) {
+  const raw = String(p || "");
+  const normalized = raw.replaceAll("\\", "/");
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || raw;
+}
+
+function isDirNode(node) {
+  if (!node || typeof node !== "object") return false;
+  if (node.type === "dir" || node.kind === "dir") return true;
+  if (Array.isArray(node.children)) return true;
+  return false;
+}
+
+function labelNode(node) {
+  if (!node) return "(unknown)";
+  if (typeof node === "string") return node;
+  const name = node.name || basenameOfPath(node.path || "");
+  return name || "(unnamed)";
 }
 
 export default function AiPanel({
@@ -135,34 +181,19 @@ export default function AiPanel({
   GearIcon
 }) {
   /**
-   * Phase 3.6.3 — First real MCP-like tool (read_file)
-   * - Still consent-gated (Approve/Cancel)
-   * - On Approve: actually reads file content via openFile(path)
-   * - Narrates: request -> calling -> returned/failed
-   *
-   * For demo buttons:
-   * - Req OK reads the currently active file (if any)
-   * - Req Err tries to read an obviously invalid path to exercise error handling
+   * Phase 3.6.3 — Real tools (consent-gated)
+   * Tools implemented here:
+   * - read_file(path)   -> openFile(path)
+   * - list_dir(path)    -> readFolderTree(path) (top-level summary)
    */
-  const requestReadFileConsent = useCallback(
-    ({ path, label }) => {
-      const id = uidShort();
-      const tool = "read_file";
-      const filePath = String(path || "").trim();
 
-      if (!filePath) {
-        appendMessage("system", "[tool] 🛡 Tool request blocked — no active file to read.");
-        return;
-      }
+  const requestToolConsent = useCallback(
+    ({ tool, detail, onApprove }) => {
+      const id = uidShort();
 
       appendMessage(
         "system",
-        formatToolLine({
-          tool,
-          status: "request",
-          id,
-          detail: `${label} (Path: ${filePath})`
-        }),
+        formatToolLine({ tool, status: "request", id, detail: detail || "Awaiting approval…" }),
         {
           actions: [
             {
@@ -170,62 +201,95 @@ export default function AiPanel({
               onClick: () => {
                 appendMessage(
                   "system",
-                  formatToolLine({
-                    tool,
-                    status: "calling",
-                    id,
-                    detail: `Approved by user — reading file (Path: ${filePath})`
-                  })
+                  formatToolLine({ tool, status: "calling", id, detail: "Approved by user — executing…" })
                 );
-
-                (async () => {
-                  try {
-                    const content = await openFile(filePath);
-                    const text = String(content ?? "");
-                    const byteLen = new TextEncoder().encode(text).length;
-
-                    const preview = summarizeText(text, 700);
-
-                    appendMessage(
-                      "system",
-                      formatToolLine({
-                        tool,
-                        status: "ok",
-                        id,
-                        detail: `Read ${byteLen} bytes`
-                      }) + `\n\n--- File preview ---\n${preview}`
-                    );
-                  } catch (err) {
-                    appendMessage(
-                      "system",
-                      formatToolLine({
-                        tool,
-                        status: "error",
-                        id,
-                        detail: formatTauriError ? formatTauriError(err) : String(err)
-                      })
-                    );
-                  }
-                })();
+                onApprove?.(id);
               }
             },
             {
               label: "Cancel",
               onClick: () => {
-                appendMessage(
-                  "system",
-                  formatToolLine({
-                    tool,
-                    status: "cancelled",
-                    id,
-                    detail: "User denied the request (UI-only)."
-                  })
-                );
+                appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
               }
             }
           ]
         }
       );
+    },
+    [appendMessage]
+  );
+
+  const doReadFile = useCallback(
+    async ({ id, path }) => {
+      const tool = "read_file";
+      const filePath = String(path || "").trim();
+
+      try {
+        const content = await openFile(filePath);
+        const text = String(content ?? "");
+        const byteLen = new TextEncoder().encode(text).length;
+        const preview = summarizeText(text, 700);
+
+        appendMessage(
+          "system",
+          formatToolLine({ tool, status: "ok", id, detail: `Read ${byteLen} bytes (Path: ${filePath})` }) +
+            `\n\n--- File preview ---\n${preview}`
+        );
+      } catch (err) {
+        appendMessage(
+          "system",
+          formatToolLine({
+            tool,
+            status: "error",
+            id,
+            detail: formatTauriError ? formatTauriError(err) : String(err)
+          })
+        );
+      }
+    },
+    [appendMessage, formatTauriError]
+  );
+
+  const doListDir = useCallback(
+    async ({ id, dirPath }) => {
+      const tool = "list_dir";
+      const dp = String(dirPath || "").trim();
+
+      try {
+        const tree = await readFolderTree(dp);
+
+        // readFolderTree likely returns an array of nodes; handle defensively.
+        const nodes = Array.isArray(tree) ? tree.filter(Boolean) : [];
+
+        const top = nodes.slice(0, 40).map((n) => {
+          const kind = isDirNode(n) ? "dir" : "file";
+          return `- [${kind}] ${labelNode(n)}`;
+        });
+
+        const dirs = nodes.filter((n) => isDirNode(n)).length;
+        const files = Math.max(0, nodes.length - dirs);
+
+        appendMessage(
+          "system",
+          formatToolLine({
+            tool,
+            status: "ok",
+            id,
+            detail: `Listed ${nodes.length} entries (dirs: ${dirs}, files: ${files}) (Path: ${dp})`
+          }) +
+            (top.length ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}` : "\n\n(empty)")
+        );
+      } catch (err) {
+        appendMessage(
+          "system",
+          formatToolLine({
+            tool,
+            status: "error",
+            id,
+            detail: formatTauriError ? formatTauriError(err) : String(err)
+          })
+        );
+      }
     },
     [appendMessage, formatTauriError]
   );
@@ -236,16 +300,33 @@ export default function AiPanel({
       appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.");
       return;
     }
-    requestReadFileConsent({ path: activeTab.path, label: "Request to read active file" });
-  }, [activeTab, appendMessage, requestReadFileConsent]);
+
+    const p = activeTab.path;
+    requestToolConsent({
+      tool: "read_file",
+      detail: `Read active file (Path: ${p})`,
+      onApprove: (id) => {
+        doReadFile({ id, path: p });
+      }
+    });
+  }, [activeTab, appendMessage, requestToolConsent, doReadFile]);
 
   const handleRequestToolErr = useCallback(() => {
-    // Real tool: intentionally invalid path to exercise error handling (still consent gated)
-    requestReadFileConsent({
-      path: "__kforge__/definitely-not-a-real-file.__nope__",
-      label: "Request to read invalid path (error demo)"
+    // Next real tool: list directory of the active file
+    if (!activeTab?.path) {
+      appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.");
+      return;
+    }
+
+    const dir = dirnameOfPath(activeTab.path);
+    requestToolConsent({
+      tool: "list_dir",
+      detail: `List directory of active file (Path: ${dir})`,
+      onApprove: (id) => {
+        doListDir({ id, dirPath: dir });
+      }
     });
-  }, [requestReadFileConsent]);
+  }, [activeTab, appendMessage, requestToolConsent, doListDir]);
 
   // Collapsed rail
   if (!aiPanelOpen) {
@@ -324,7 +405,6 @@ export default function AiPanel({
           </div>
         </div>
 
-        {/* Always-visible, non-blocking hint + route */}
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
           <div className="leading-snug">{showProviderSurfaceHint}</div>
           <button
@@ -337,16 +417,10 @@ export default function AiPanel({
           </button>
         </div>
 
-        {/* Provider switch note (ephemeral) */}
         {providerSwitchNote && (
           <div className="text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
-            <button
-              className={buttonClass("ghost")}
-              onClick={handleDismissSwitchNote}
-              type="button"
-              title="Dismiss"
-            >
+            <button className={buttonClass("ghost")} onClick={handleDismissSwitchNote} type="button" title="Dismiss">
               Dismiss
             </button>
           </div>
