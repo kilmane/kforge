@@ -34,3 +34,7 @@ dist/
 
 .env
 
+src/*.bak
+src/App*.bak
+
+
