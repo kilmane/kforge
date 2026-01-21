@@ -275,33 +275,35 @@ function buildActiveFileContextBlock(filePath, fileContent) {
 }
 
 /**
- * Phase 3.6.1 — Tool-call visibility (UI-only)
+ * Phase 3.6.1/3.6.2 — Tool visibility + consent (UI-only)
  * - Tool-related events must be visible in transcript as system messages.
- * - No execution wiring here; only standardized formatting + append helpers.
+ * - Consent surface must be visible before "execution" (simulated here).
  */
-function formatToolEventLine({ phase, tool, status, detail, id }) {
+function formatToolEventLine({ tool, status, detail, id }) {
   const safeTool = String(tool || "tool").trim() || "tool";
   const safeStatus = String(status || "").trim();
   const safeDetail = String(detail || "").trim();
   const safeId = String(id || "").trim();
 
-  const parts = [];
+  const prefix = "[tool]";
 
-  // Phase label is useful once we start mixing tools/providers.
-  if (phase) parts.push(`[tool]`);
-
-  if (safeStatus === "calling") {
-    parts.push(`🛠 Calling tool: ${safeTool}${safeId ? ` (${safeId})` : ""}…`);
+  let headline = "";
+  if (safeStatus === "request") {
+    headline = `🛡 Tool request: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
+  } else if (safeStatus === "calling") {
+    headline = `🛠 Calling tool: ${safeTool}${safeId ? ` (${safeId})` : ""}…`;
   } else if (safeStatus === "ok") {
-    parts.push(`✅ Tool returned: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+    headline = `✅ Tool returned: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
   } else if (safeStatus === "error") {
-    parts.push(`❌ Tool failed: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+    headline = `❌ Tool failed: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
+  } else if (safeStatus === "cancelled") {
+    headline = `🚫 Tool cancelled: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
   } else {
-    parts.push(`🧩 Tool event: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+    headline = `🧩 Tool event: ${safeTool}${safeId ? ` (${safeId})` : ""}`;
   }
 
+  const parts = [`${prefix} ${headline}`];
   if (safeDetail) parts.push(`— ${safeDetail}`);
-
   return parts.join(" ");
 }
 
@@ -339,7 +341,7 @@ function extractPatchFromText(text) {
   return null;
 }
 
-function TranscriptBubble({ role, content, ts, actionLabel, onAction }) {
+function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions }) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
   const isSystem = role === "system";
@@ -355,12 +357,27 @@ function TranscriptBubble({ role, content, ts, actionLabel, onAction }) {
   const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
   const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
 
+  const actionButtons = Array.isArray(actions) ? actions.filter((a) => a && a.label && typeof a.onClick === "function") : [];
+
   return (
     <div className={`w-full flex ${wrap}`}>
       <div className={`max-w-[90%] border rounded px-3 py-2 ${bubbleTone}`}>
         <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>{content}</div>
 
-        {actionLabel && onAction ? (
+        {actionButtons.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {actionButtons.map((a, idx) => (
+              <button
+                key={`${a.label}_${idx}`}
+                className="text-xs underline opacity-90 hover:opacity-100"
+                onClick={a.onClick}
+                type="button"
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        ) : actionLabel && onAction ? (
           <button className="mt-2 text-xs underline opacity-90 hover:opacity-100" onClick={onAction} type="button">
             {actionLabel}
           </button>
@@ -408,7 +425,7 @@ export default function App() {
   const [aiOutput, setAiOutput] = useState("");
 
   // Transcript (in-memory only)
-  const [messages, setMessages] = useState([]); // {id, role, content, ts, action?}
+  const [messages, setMessages] = useState([]); // {id, role, content, ts, action?, actions?}
   const transcriptBottomRef = useRef(null);
 
   // For retry: remember last “send” details
@@ -707,25 +724,17 @@ export default function App() {
       content: text,
       ts: Date.now(),
       actionLabel: opts.actionLabel || null,
-      action: typeof opts.action === "function" ? opts.action : null
+      action: typeof opts.action === "function" ? opts.action : null,
+      actions: Array.isArray(opts.actions) ? opts.actions : null
     };
     setMessages((prev) => [...prev, msg]);
     return msg;
   }, []);
 
-  /**
-   * Phase 3.6.1 helper: append tool-related transcript lines (system messages).
-   * UI-only: does not execute tools.
-   */
   const appendToolEvent = useCallback(
     (tool, status, detail = "", extra = {}) => {
-      const line = formatToolEventLine({
-        phase: "3.6.1",
-        tool,
-        status,
-        detail,
-        id: extra.id || ""
-      });
+      const id = extra.id || "";
+      const line = formatToolEventLine({ tool, status, detail, id });
       return appendMessage("system", line, extra);
     },
     [appendMessage]
@@ -917,10 +926,7 @@ export default function App() {
     [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
   );
 
-  const providerStatus = useMemo(
-    () => statusForProviderUI(providerMeta, hasKey, endpoints),
-    [providerMeta, hasKey, endpoints]
-  );
+  const providerStatus = useMemo(() => statusForProviderUI(providerMeta, hasKey, endpoints), [providerMeta, hasKey, endpoints]);
 
   // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
@@ -1172,24 +1178,53 @@ export default function App() {
     );
   }, [includeActiveFile, activeTab]);
 
-  // Phase 3.6.1 UI-only demo triggers: append tool events into transcript.
-  // This is intentionally simple and removable.
-  const simulateToolOk = useCallback(() => {
-    const id = uid().slice(-6);
-    appendToolEvent("read_file", "calling", "UI-only simulation", { id });
-    // show a "return" event shortly after; does not block UI.
-    window.setTimeout(() => {
-      appendToolEvent("read_file", "ok", "Read 1287 bytes (simulated)", { id });
-    }, 250);
-  }, [appendToolEvent]);
+  // Phase 3.6.1 UI-only demo: tool events append into transcript (no consent)
 
-  const simulateToolError = useCallback(() => {
-    const id = uid().slice(-6);
-    appendToolEvent("read_file", "calling", "UI-only simulation", { id });
-    window.setTimeout(() => {
-      appendToolEvent("read_file", "error", "Permission denied (simulated)", { id });
-    }, 250);
-  }, [appendToolEvent]);
+  /**
+   * Phase 3.6.2 UI-only demo: tool consent surface.
+   * - First: show a "tool request" system bubble with Approve/Cancel.
+   * - Only on Approve do we append "calling" then "returned/failed" (simulated).
+   */
+  const requestToolConsent = useCallback(
+    ({ tool, willFail = false, detail = "" }) => {
+      const id = uid().slice(-6);
+
+      const requestLine = formatToolEventLine({
+        tool,
+        status: "request",
+        detail: detail || "Awaiting approval…",
+        id
+      });
+
+      appendMessage("system", requestLine, {
+        actions: [
+          {
+            label: "Approve",
+            onClick: () => {
+              // announce "calling" immediately (visibility before execution)
+              appendToolEvent(tool, "calling", "Approved by user (UI-only)", { id });
+
+              window.setTimeout(() => {
+                if (willFail) {
+                  appendToolEvent(tool, "error", "Permission denied (simulated)", { id });
+                } else {
+                  appendToolEvent(tool, "ok", "Read 1287 bytes (simulated)", { id });
+                }
+              }, 250);
+            }
+          },
+          {
+            label: "Cancel",
+            onClick: () => {
+              appendToolEvent(tool, "cancelled", "User denied the request (UI-only).", { id });
+            }
+          }
+        ]
+      });
+    },
+    [appendMessage, appendToolEvent]
+  );
+
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -1237,22 +1272,9 @@ export default function App() {
           {aiPanelOpen ? "Hide AI" : "Show AI"}
         </button>
 
-        {/* Phase 3.6.1: UI-only tool visibility demo (safe + removable) */}
+        {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
         <div className="hidden md:flex items-center gap-2">
-          <span className="text-[11px] opacity-60 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
-            Tools
-          </span>
-          <button className={buttonClass("ghost")} onClick={simulateToolOk} type="button" title="Simulate tool call OK">
-            Sim OK
-          </button>
-          <button
-            className={buttonClass("ghost")}
-            onClick={simulateToolError}
-            type="button"
-            title="Simulate tool call error"
-          >
-            Sim Err
-          </button>
+        
         </div>
 
         <div className="text-sm opacity-80 truncate">
@@ -1359,3 +1381,4 @@ export default function App() {
     </div>
   );
 }
+
