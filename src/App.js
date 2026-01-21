@@ -275,6 +275,37 @@ function buildActiveFileContextBlock(filePath, fileContent) {
 }
 
 /**
+ * Phase 3.6.1 — Tool-call visibility (UI-only)
+ * - Tool-related events must be visible in transcript as system messages.
+ * - No execution wiring here; only standardized formatting + append helpers.
+ */
+function formatToolEventLine({ phase, tool, status, detail, id }) {
+  const safeTool = String(tool || "tool").trim() || "tool";
+  const safeStatus = String(status || "").trim();
+  const safeDetail = String(detail || "").trim();
+  const safeId = String(id || "").trim();
+
+  const parts = [];
+
+  // Phase label is useful once we start mixing tools/providers.
+  if (phase) parts.push(`[tool]`);
+
+  if (safeStatus === "calling") {
+    parts.push(`🛠 Calling tool: ${safeTool}${safeId ? ` (${safeId})` : ""}…`);
+  } else if (safeStatus === "ok") {
+    parts.push(`✅ Tool returned: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+  } else if (safeStatus === "error") {
+    parts.push(`❌ Tool failed: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+  } else {
+    parts.push(`🧩 Tool event: ${safeTool}${safeId ? ` (${safeId})` : ""}`);
+  }
+
+  if (safeDetail) parts.push(`— ${safeDetail}`);
+
+  return parts.join(" ");
+}
+
+/**
  * Phase 3.4.6 — Patch Preview (read-only)
  * - Detect ```diff fenced blocks OR unified diff markers.
  * - UI-only (no apply), no persistence.
@@ -682,6 +713,24 @@ export default function App() {
     return msg;
   }, []);
 
+  /**
+   * Phase 3.6.1 helper: append tool-related transcript lines (system messages).
+   * UI-only: does not execute tools.
+   */
+  const appendToolEvent = useCallback(
+    (tool, status, detail = "", extra = {}) => {
+      const line = formatToolEventLine({
+        phase: "3.6.1",
+        tool,
+        status,
+        detail,
+        id: extra.id || ""
+      });
+      return appendMessage("system", line, extra);
+    },
+    [appendMessage]
+  );
+
   useEffect(() => {
     if (!transcriptBottomRef.current) return;
     transcriptBottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -868,7 +917,10 @@ export default function App() {
     [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
   );
 
-  const providerStatus = useMemo(() => statusForProviderUI(providerMeta, hasKey, endpoints), [providerMeta, hasKey, endpoints]);
+  const providerStatus = useMemo(
+    () => statusForProviderUI(providerMeta, hasKey, endpoints),
+    [providerMeta, hasKey, endpoints]
+  );
 
   // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
@@ -1120,6 +1172,25 @@ export default function App() {
     );
   }, [includeActiveFile, activeTab]);
 
+  // Phase 3.6.1 UI-only demo triggers: append tool events into transcript.
+  // This is intentionally simple and removable.
+  const simulateToolOk = useCallback(() => {
+    const id = uid().slice(-6);
+    appendToolEvent("read_file", "calling", "UI-only simulation", { id });
+    // show a "return" event shortly after; does not block UI.
+    window.setTimeout(() => {
+      appendToolEvent("read_file", "ok", "Read 1287 bytes (simulated)", { id });
+    }, 250);
+  }, [appendToolEvent]);
+
+  const simulateToolError = useCallback(() => {
+    const id = uid().slice(-6);
+    appendToolEvent("read_file", "calling", "UI-only simulation", { id });
+    window.setTimeout(() => {
+      appendToolEvent("read_file", "error", "Permission denied (simulated)", { id });
+    }, 250);
+  }, [appendToolEvent]);
+
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <SettingsModal
@@ -1165,6 +1236,24 @@ export default function App() {
         >
           {aiPanelOpen ? "Hide AI" : "Show AI"}
         </button>
+
+        {/* Phase 3.6.1: UI-only tool visibility demo (safe + removable) */}
+        <div className="hidden md:flex items-center gap-2">
+          <span className="text-[11px] opacity-60 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
+            Tools
+          </span>
+          <button className={buttonClass("ghost")} onClick={simulateToolOk} type="button" title="Simulate tool call OK">
+            Sim OK
+          </button>
+          <button
+            className={buttonClass("ghost")}
+            onClick={simulateToolError}
+            type="button"
+            title="Simulate tool call error"
+          >
+            Sim Err
+          </button>
+        </div>
 
         <div className="text-sm opacity-80 truncate">
           {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
