@@ -1058,8 +1058,41 @@ export default function App() {
 
       if (r.ok) {
         const out = r.output ?? "";
-        appendMessage("assistant", out);
+
+        // Phase 3.6.4D — Premium transcript polish:
+        // - Strip model tool-call blocks from the assistant bubble
+        // - Surface tool blocks as system bubbles (still visible, still consent-gated in later step)
+        const toolFenceRe = /```(?:tool|tool_call)\s*([\s\S]*?)```/g;
+
+        const toolBlocks = [];
+        let cleaned = out;
+
+        cleaned = cleaned.replace(toolFenceRe, (full) => {
+          toolBlocks.push(full.trim());
+          return "";
+        });
+
+        cleaned = String(cleaned || "").trim();
+
+        // Append cleaned assistant output (keeps transcript readable)
+        if (cleaned) {
+          appendMessage("assistant", cleaned);
+        } else {
+          // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
+          if (toolBlocks.length > 0) {
+            appendMessage("assistant", "(Model requested one or more tools.)");
+          } else {
+            appendMessage("assistant", "");
+          }
+        }
+
+        // Keep patch preview detection working off the original model output
         maybeCapturePatchPreview(out);
+
+        // Surface tool requests as visible system bubbles (no silent execution)
+        for (const tb of toolBlocks) {
+          appendMessage("system", tb);
+        }
       } else {
         appendMessage("system", r.error || "Unknown error", {
           actionLabel: r.kind === "config" ? "→ Open Settings" : null,
@@ -1086,6 +1119,7 @@ export default function App() {
       maybeCapturePatchPreview
     ]
   );
+
 
   const handleSendChat = useCallback(async () => {
     await sendWithPrompt(aiPrompt);
