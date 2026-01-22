@@ -5,7 +5,7 @@
 //
 // Handlers return a STRING (for transcript display) to preserve current behavior.
 
-import { openFile, readFolderTree } from "../../../lib/fs";
+import { openFile, readFolderTree, resolvePathWithinProject, getProjectRoot } from "../../../lib/fs";
 import { search_in_file } from "./search_in_file.js";
 
 function summarizeText(text, maxChars = 700) {
@@ -35,9 +35,25 @@ function labelNode(node) {
   return name || "(unnamed)";
 }
 
+function ensureProjectRootForRelativeHelp() {
+  const root = getProjectRoot();
+  if (!root) {
+    return "No project folder is selected. Use the Explorer “Open Folder” first so relative paths like `src` can be resolved safely.";
+  }
+  return null;
+}
+
 export async function read_file(args = {}) {
-  const filePath = String(args?.path || "").trim();
-  if (!filePath) throw new Error("read_file: missing required arg: path");
+  const rawPath = String(args?.path || "").trim();
+  if (!rawPath) throw new Error("read_file: missing required arg: path");
+
+  // Helpful error when relative path is used but no root selected
+  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
+    const hint = ensureProjectRootForRelativeHelp();
+    if (hint) throw new Error(`read_file: forbidden path: ${rawPath}\n${hint}`);
+  }
+
+  const filePath = resolvePathWithinProject(rawPath);
 
   const content = await openFile(filePath);
   const text = String(content ?? "");
@@ -48,8 +64,16 @@ export async function read_file(args = {}) {
 }
 
 export async function list_dir(args = {}) {
-  const dp = String(args?.path || args?.dirPath || "").trim();
-  if (!dp) throw new Error("list_dir: missing required arg: path");
+  const rawPath = String(args?.path || args?.dirPath || "").trim();
+  if (!rawPath) throw new Error("list_dir: missing required arg: path");
+
+  // Helpful error when relative path is used but no root selected
+  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
+    const hint = ensureProjectRootForRelativeHelp();
+    if (hint) throw new Error(`list_dir: forbidden path: ${rawPath}\n${hint}`);
+  }
+
+  const dp = resolvePathWithinProject(rawPath);
 
   const tree = await readFolderTree(dp);
   const nodes = Array.isArray(tree) ? tree.filter(Boolean) : [];
