@@ -1,136 +1,214 @@
-# KForge
+KForge
 
-**KForge** is a **local-first desktop AI IDE** focused on:
-- explicit filesystem control
-- predictable behavior
-- a stable foundation for future AI features
 
-Phase 2 establishes the **editor and filesystem core** on which all future phases will build.
 
----
+Last updated: 2026-01-22 (Phase 3.6.x)
 
-## 🧭 Project Philosophy
 
-- **Local-first** — your files stay on your machine
-- **Explicit permissions** — no silent access, no hidden magic
-- **Incremental phases** — each phase locks stability before moving forward
-- **Documentation-first** — code is not complete without docs
 
----
+KForge is a local-first desktop AI IDE focused on clarity, control, and long-term stability.
 
-## 🧱 Tech Stack
 
-- **Tauri v2**
-- **React (CRA, JavaScript)**
-- **Tailwind CSS**
-- **Monaco Editor**
-- **Rust backend**
-- **pnpm**
 
----
+It is designed to feel calm, predictable, and powerful — an environment where AI assists development without adding noise or chaos.
 
-## 📁 Project Location
 
-D:\kforge
 
----
+🧭 Project Philosophy
 
-## ▶️ How to Run (Development)
 
-### Prerequisites
 
-- Node.js (LTS recommended)
-- pnpm
-- Rust toolchain
-- Tauri v2 system prerequisites
+Local-first — your files stay on your machine
 
-### Install dependencies
+
+
+Explicit permissions — no silent filesystem or network access
+
+
+
+Calm by design — minimal UI, no clutter, no surprise panels
+
+
+
+Incremental phases — stability is locked before moving forward
+
+
+
+Documentation-first — code is not complete without documentation
+
+
+
+🎯 Long-Term UI Vision (Important)
+
+
+
+KForge is moving toward a calm, ChatGPT-style interaction model:
+
+
+
+A prominent, focused chat interface (likely bottom-center)
+
+
+
+Minimal persistent UI elements
+
+
+
+All secondary UI (settings, tools, panels) are:
+
+
+
+Modular
+
+
+
+Explicitly opened
+
+
+
+Explicitly closed via a clear (X) button
+
+
+
+No permanent noise, side windows, or clutter
+
+
+
+This vision is intentional.
+
+
+
+During development, it is easy to lose sight of the final experience while solving technical problems.
+
+This document exists partly to prevent that drift.
+
+
+
+All future features should be planned with this end-state in mind.
+
+
+
+🧱 Tech Stack
+
+
+
+Tauri v2
+
+
+
+React (CRA, JavaScript)
+
+
+
+Tailwind CSS
+
+
+
+Monaco Editor
+
+
+
+Rust backend
+
+
+
+pnpm
+
+
+
+▶️ How to Run (Development)
+
+
+
+Prerequisites:
+
+
+
+Node.js (LTS)
+
+
+
+pnpm
+
+
+
+Rust toolchain
+
+
+
+Tauri v2 system prerequisites
+
+
+
+Install dependencies:
 
 pnpm install
 
-### Run the app
 
-pnpm dlx @tauri-apps/cli dev
 
-The desktop application will launch using **Tauri v2**.
+Run the app:
 
----
+pnpm run dev
 
-## ✅ Phase 2 — What Was Achieved
 
-Phase 2 focused entirely on the **local filesystem and editor foundation**.
 
-### Filesystem
+🔐 Accessibility \& Future-Proofing
 
-- Secure filesystem access via **Tauri v2 runtime scopes**
-- Explicit fs_allow_directory configuration
-- No global or unsafe permissions
-- First-open edge case fixed correctly (no hacks)
 
-### Explorer
 
-- Folder tree view
-- Click-to-open files
-- Correct path resolution
-- Stable behavior
+KForge is designed to work with as many LLMs as possible:
 
-### Editor
 
-- Monaco Editor integration
-- Tabbed file interface
-- Dirty state tracking
-- Save persistence confirmed
-- Files open correctly on first click
 
-### Stability
+Cloud providers
 
-- No build warnings
-- No runtime hacks
-- No temporary fixes
-- Git repository clean and stable
 
-Phase 2 is complete and locked.
 
----
+OpenAI-compatible endpoints
 
-## 🏷️ Git Tag
 
-The current commit is tagged as:
 
-phase-2-complete
+Local runtimes
 
----
 
-## 🚫 Out of Scope for Phase 2
 
-- AI integration
-- Chat panel
-- MCPs
-- Cloud or local model execution
+Free-tier and low-cost options
 
----
 
-## 🔒 Project Law
 
-This project follows **Project Law (Portable v2)**.
+The goal is accessibility:
 
-- No breaking changes inside a locked phase
-- No refactors during documentation steps
-- Stability over speed
+KForge should remain usable even for developers with limited funds.
 
----
 
-## 📌 Next Phase (Context Only)
 
-Phase 3 — AI Integration
+Adding new providers (local or cloud) should remain easy as the ecosystem evolves.
 
-- Cloud AIs
-- Local AIs (Ollama)
-- Chat panel
-- MCP integrations (GitHub, Supabase, Vercel, Netlify, etc.)
 
-Phase 3 will begin in a new chat.
 
----
+🔒 Project Law (Summary)
 
-Phase 2 status: COMPLETE ✅
+
+
+Stability over speed
+
+
+
+No breaking changes in locked phases
+
+
+
+One controlled change at a time
+
+
+
+Rollback before heroics
+
+
+
+Documentation and intent matter as much as code
+
+
+
+Current phase: Phase 3 — AI integration (in progress)
+
