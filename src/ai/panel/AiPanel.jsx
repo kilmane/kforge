@@ -54,6 +54,19 @@ function dirnameOfPath(p) {
   return drive ? `${drive}/${dirParts.slice(1).join("/")}` : `/${dir}`;
 }
 
+/**
+ * Phase 3.6.4 — Model-initiated tool calls (consent-gated)
+ *
+ * We accept:
+ * - ```tool / ```tool_call fenced JSON
+ * - ```json fenced JSON (if it parses to a tool request)
+ * - bare JSON tool request
+ * - XML-ish tool calls (two common variants)
+ *
+ * Safety:
+ * - whitelist only read-only tools
+ * - ALWAYS route through toolRuntime.runToolCall => consent UI
+ */
 const ALLOWED_MODEL_TOOLS = new Set(["read_file", "list_dir", "search_in_file"]);
 
 function getMsgText(msg) {
@@ -88,9 +101,18 @@ function extractFencedBlocks(text) {
 function normalizeToolShape(obj) {
   if (!obj || typeof obj !== "object") return null;
 
+  // Preferred:
+  // { name: "tool", args: {...} }
   if (typeof obj.name === "string") return { name: obj.name, args: obj.args ?? {} };
+
+  // Common alternates:
+  // { tool: "toolName", input: {...} }
   if (typeof obj.tool === "string") return { name: obj.tool, args: obj.input ?? obj.args ?? {} };
+
+  // { tool_name: "...", parameters: {...} }
   if (typeof obj.tool_name === "string") return { name: obj.tool_name, args: obj.parameters ?? obj.args ?? {} };
+
+  // { function: "...", arguments: {...} }
   if (typeof obj.function === "string") return { name: obj.function, args: obj.arguments ?? obj.args ?? {} };
 
   return null;
@@ -121,11 +143,21 @@ function tryParseBareToolJson(text) {
 }
 
 /**
- * Parse XML-ish tool calls like:
+ * Parse XML-ish tool calls.
+ *
+ * Variant A (older):
  * <tool_call>
  *   <invoke name="search_in_file">
  *     <parameter name="query">function</parameter>
  *   </invoke>
+ * </tool_call>
+ *
+ * Variant B (new DeepSeek-ish):
+ * <tool_call>
+ *   <function_name>search_in_file</function_name>
+ *   <parameters>
+ *     <search_term>toggle</search_term>
+ *   </parameters>
  * </tool_call>
  */
 function extractXmlToolCalls(text) {
@@ -134,7 +166,7 @@ function extractXmlToolCalls(text) {
 
   const calls = [];
 
-  // Find each <invoke name="..."> ... </invoke>
+  // Variant A: <invoke name="..."> ... </invoke>
   const invokeRe = /<invoke\s+name="([^"]+)"\s*>([\s\S]*?)<\/invoke>/g;
   let m;
   while ((m = invokeRe.exec(s)) !== null) {
@@ -144,7 +176,6 @@ function extractXmlToolCalls(text) {
     if (!ALLOWED_MODEL_TOOLS.has(name)) continue;
 
     const args = {};
-    // <parameter name="x">value</parameter>
     const paramRe = /<parameter\s+name="([^"]+)"\s*>([\s\S]*?)<\/parameter>/g;
     let p;
     while ((p = paramRe.exec(body)) !== null) {
@@ -153,100 +184,143 @@ function extractXmlToolCalls(text) {
       if (k) args[k] = v;
     }
 
-    calls.push({ name, args, source: "xml" });
+    calls.push({ name, args, source: "xml_invoke" });
+  }
+
+  // Variant B: <function_name>...</function_name> + <parameters>...</parameters>
+  const fnMatch = s.match(/<function_name>\s*([^<]+)\s*<\/function_name>/i);
+  if (fnMatch) {
+    const name = String(fnMatch[1] || "").trim();
+    if (ALLOWED_MODEL_TOOLS.has(name)) {
+      const args = {};
+
+      const paramsMatch = s.match(/<parameters>\s*([\s\S]*?)\s*<\/parameters>/i);
+      if (paramsMatch) {
+        const body = String(paramsMatch[1] || "");
+
+        const childRe = /<([A-Za-z0-9_:-]+)>\s*([\s\S]*?)\s*<\/\1>/g;
+        let c;
+        while ((c = childRe.exec(body)) !== null) {
+          const rawKey = String(c[1] || "").trim();
+          const val = String(c[2] || "").trim();
+          if (!rawKey) continue;
+
+          const kLower = rawKey.toLowerCase();
+          let key = rawKey;
+          if (kLower === "search_term" || kLower === "term" || kLower === "search") key = "query";
+
+          args[key] = val;
+        }
+      }
+
+      calls.push({ name, args, source: "xml_function_name" });
+    }
   }
 
   return calls;
 }
 
-export default function AiPanel(props) {
-  const {
-    aiPanelOpen,
-    aiPanelWidthClass,
-    aiPanelWide,
-    setAiPanelWide,
-    setAiPanelOpen,
+export default function AiPanel({
+  // layout / open state
+  aiPanelOpen,
+  aiPanelWidthClass,
+  aiPanelWide,
+  setAiPanelWide,
+  setAiPanelOpen,
 
-    providerMeta,
-    providerReady,
-    disabledExplainer,
-    headerStatus,
-    providerGroupLabel,
-    statusChipClass,
-    showProviderSurfaceHint,
+  // provider header surface
+  providerMeta,
+  providerReady,
+  disabledExplainer,
+  headerStatus,
+  providerGroupLabel,
+  statusChipClass,
+  showProviderSurfaceHint,
 
-    openSettings,
-    aiProvider,
+  // settings routing
+  openSettings,
+  aiProvider,
 
-    providerSwitchNote,
-    handleDismissSwitchNote,
+  // ephemeral switch note
+  providerSwitchNote,
+  handleDismissSwitchNote,
 
-    providerOptions,
-    handleProviderChange,
-    providerStatus,
-    disabledProviderMessage,
+  // provider + model controls
+  providerOptions,
+  handleProviderChange,
+  providerStatus,
+  disabledProviderMessage,
 
-    aiModel,
-    setAiModel,
-    modelPlaceholder,
-    modelSuggestions,
-    showModelHelper,
-    modelHelperText,
+  aiModel,
+  setAiModel,
+  modelPlaceholder,
+  modelSuggestions,
+  showModelHelper,
+  modelHelperText,
 
-    messages,
-    TranscriptBubble,
-    transcriptBottomRef,
-    CHAT_CONTEXT_TURNS,
-    lastSend,
-    aiRunning,
-    handleRetryLast,
-    clearConversation,
+  // transcript
+  messages,
+  TranscriptBubble,
+  transcriptBottomRef,
+  CHAT_CONTEXT_TURNS,
+  lastSend,
+  aiRunning,
+  handleRetryLast,
+  clearConversation,
 
-    activeTab,
-    handleUseActiveFileAsPrompt,
-    includeActiveFile,
-    setIncludeActiveFile,
-    activeFileChip,
+  // prompt
+  activeTab,
+  handleUseActiveFileAsPrompt,
+  includeActiveFile,
+  setIncludeActiveFile,
+  activeFileChip,
 
-    askForPatch,
-    setAskForPatch,
+  askForPatch,
+  setAskForPatch,
 
-    patchPreview,
-    patchPreviewVisible,
-    copyPatchToClipboard,
-    setPatchPreviewVisible,
-    discardPatchPreview,
-    appendMessage,
+  // patch preview state/handlers (kept in App)
+  patchPreview,
+  patchPreviewVisible,
+  copyPatchToClipboard,
+  setPatchPreviewVisible,
+  discardPatchPreview,
+  appendMessage,
 
-    aiPrompt,
-    setAiPrompt,
-    handlePromptKeyDown,
+  aiPrompt,
+  setAiPrompt,
+  handlePromptKeyDown,
 
-    aiSystem,
-    setAiSystem,
-    aiTemperature,
-    setAiTemperature,
-    aiMaxTokens,
-    setAiMaxTokens,
+  // system + params
+  aiSystem,
+  setAiSystem,
+  aiTemperature,
+  setAiTemperature,
+  aiMaxTokens,
+  setAiMaxTokens,
 
-    handleSendChat,
-    handleAiTest,
-    guardrailText,
+  // actions
+  handleSendChat,
+  handleAiTest,
+  guardrailText,
 
-    aiOutput,
-    endpoints,
-    invoke,
-    setAiTestOutput,
-    setRuntimeReachable,
-    formatTauriError,
-    buttonClass,
-    iconButtonClass,
-    GearIcon
-  } = props;
-
+  // output + ollama helper
+  aiOutput,
+  endpoints,
+  invoke,
+  setAiTestOutput,
+  setRuntimeReachable,
+  formatTauriError,
+  buttonClass,
+  iconButtonClass,
+  GearIcon
+}) {
+  // Holds the currently pending consent gate (one at a time).
   const pendingConsentRef = useRef(null);
+
+  // Prevent double-execution if the same tool payload remains in transcript.
   const processedKeysRef = useRef(new Set());
 
+  // Reset processed cache when conversation clears
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) {
       processedKeysRef.current = new Set();
@@ -255,6 +329,7 @@ export default function AiPanel(props) {
 
   const requestConsent = useCallback(
     async ({ toolName, args }) => {
+      // If a prior consent is somehow still pending, cancel it to keep behavior deterministic.
       if (pendingConsentRef.current?.resolve) {
         try {
           pendingConsentRef.current.resolve("cancelled");
@@ -283,26 +358,33 @@ export default function AiPanel(props) {
               ? `Search in file (Path: ${String(args?.path || "").trim()} | Query: ${String(args?.query || "").trim()})`
               : "Awaiting approval…";
 
-      appendMessage("system", formatToolLine({ tool, status: "request", id, detail }), {
-        actions: [
-          {
-            label: "Approve",
-            onClick: () => {
-              appendMessage("system", formatToolLine({ tool, status: "calling", id, detail: "Approved — executing…" }));
-              pendingConsentRef.current?.resolve?.("approved");
-              pendingConsentRef.current = null;
+      appendMessage(
+        "system",
+        formatToolLine({ tool, status: "request", id, detail: detail || "Awaiting approval…" }),
+        {
+          actions: [
+            {
+              label: "Approve",
+              onClick: () => {
+                appendMessage(
+                  "system",
+                  formatToolLine({ tool, status: "calling", id, detail: "Approved by user — executing…" })
+                );
+                pendingConsentRef.current?.resolve?.("approved");
+                pendingConsentRef.current = null;
+              }
+            },
+            {
+              label: "Cancel",
+              onClick: () => {
+                appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
+                pendingConsentRef.current?.resolve?.("cancelled");
+                pendingConsentRef.current = null;
+              }
             }
-          },
-          {
-            label: "Cancel",
-            onClick: () => {
-              appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
-              pendingConsentRef.current?.resolve?.("cancelled");
-              pendingConsentRef.current = null;
-            }
-          }
-        ]
-      });
+          ]
+        }
+      );
 
       return p;
     },
@@ -314,11 +396,14 @@ export default function AiPanel(props) {
       const meta = entry?.meta || {};
       const phase = meta.phase;
 
+      // Ignore runtime "call" (we already show request + calling in our consent UI)
       if (phase === "call") return;
+
+      // Ignore runtime "cancelled" (Cancel button already appends the cancelled bubble with id)
       if (phase === "cancelled") return;
 
       const tool = meta.toolName || "tool";
-      const id = pendingConsentRef.current?.id || "";
+      const id = pendingConsentRef.current?.id || ""; // best-effort; may be empty if already cleared
 
       if (phase === "result") {
         const body = String(entry?.content || "");
@@ -332,6 +417,7 @@ export default function AiPanel(props) {
         return;
       }
 
+      // Fallback: pass through.
       appendMessage("system", String(entry?.content || ""));
     },
     [appendMessage]
@@ -343,10 +429,10 @@ export default function AiPanel(props) {
 
   const runTool = useCallback(
     async ({ toolName, args }) => {
-      return await runToolCall({
+      const res = await runToolCall({
         toolCall: { name: toolName, args },
         appendTranscript,
-        requestConsent,
+        requestConsent: async ({ toolName, args }) => requestConsent({ toolName, args }),
         invokeTool: async (toolName2, args2) => {
           try {
             return await invokeTool(toolName2, args2);
@@ -357,10 +443,13 @@ export default function AiPanel(props) {
         },
         isConsentRequired: () => true
       });
+
+      return res;
     },
     [appendTranscript, requestConsent, invokeTool, formatTauriError]
   );
 
+  // Model-initiated tool detection: scan assistant + system messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
 
@@ -369,15 +458,19 @@ export default function AiPanel(props) {
       if (msg?.role !== "assistant" && msg?.role !== "system") continue;
 
       const content = getMsgText(msg);
+      if (!content) continue;
 
-      // A) XML-style tool calls
+      // A) XML tool calls (two variants)
       const xmlCalls = extractXmlToolCalls(content);
       if (xmlCalls.length) {
         for (const c of xmlCalls) {
           const args = { ...(c.args || {}) };
 
           if (c.name === "search_in_file") {
+            // infer current active file if missing
             if (!args.path && activeTab?.path) args.path = activeTab.path;
+
+            // normalize missing query
             const q = String(args.query || "").trim();
             if (!q) {
               appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
@@ -389,7 +482,7 @@ export default function AiPanel(props) {
             }
           }
 
-          const key = `mtool:xml:${c.name}:${JSON.stringify(args)}`;
+          const key = `mtool:xml:${c.source}:${c.name}:${JSON.stringify(args)}`;
           if (processedKeysRef.current.has(key)) continue;
 
           processedKeysRef.current.add(key);
@@ -398,7 +491,7 @@ export default function AiPanel(props) {
         }
       }
 
-      // B) Fenced blocks
+      // B) Fenced blocks (```tool, ```tool_call, or ```json tool-shaped)
       if (content.includes("```")) {
         const blocks = extractFencedBlocks(content);
         for (const b of blocks) {
@@ -406,8 +499,10 @@ export default function AiPanel(props) {
           if (!parsed) continue;
 
           const args = { ...(parsed.args || {}) };
+
           if (parsed.name === "search_in_file") {
             if (!args.path && activeTab?.path) args.path = activeTab.path;
+
             const q = String(args.query || "").trim();
             if (!q) {
               appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
@@ -419,7 +514,7 @@ export default function AiPanel(props) {
             }
           }
 
-          const key = `mtool:${b.source}:${b.payload}`;
+          const key = `mtool:fence:${b.source}:${b.payload}`;
           if (processedKeysRef.current.has(key)) continue;
 
           processedKeysRef.current.add(key);
@@ -428,12 +523,14 @@ export default function AiPanel(props) {
         }
       }
 
-      // C) Bare JSON (whole message)
+      // C) Bare JSON (whole message is JSON)
       const bare = tryParseBareToolJson(content);
       if (bare) {
         const args = { ...(bare.args || {}) };
+
         if (bare.name === "search_in_file") {
           if (!args.path && activeTab?.path) args.path = activeTab.path;
+
           const q = String(args.query || "").trim();
           if (!q) {
             appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
@@ -472,6 +569,7 @@ export default function AiPanel(props) {
     runTool({ toolName: "list_dir", args: { path: dir } });
   }, [activeTab, appendMessage, runTool]);
 
+  // Collapsed rail
   if (!aiPanelOpen) {
     return (
       <div className="w-10 border-l border-zinc-800 min-h-0 flex flex-col items-center justify-start py-2">
@@ -498,6 +596,7 @@ export default function AiPanel(props) {
 
   return (
     <div className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}>
+      {/* AI header: status surface */}
       <div className="p-3 border-b border-zinc-800 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold flex items-center gap-2">
