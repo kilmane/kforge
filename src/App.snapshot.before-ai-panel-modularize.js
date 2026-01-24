@@ -11,7 +11,6 @@ import Tabs from "./components/Tabs.jsx";
 
 import { aiGenerate, aiSetApiKey, aiHasApiKey, aiClearApiKey } from "./ai/client";
 import SettingsModal from "./components/settings/SettingsModal.jsx";
-import AiPanel from "./ai/panel/AiPanel.jsx";
 
 function basename(p) {
   if (!p) return "";
@@ -38,7 +37,11 @@ function formatTauriError(err) {
     return err.error.message;
   }
 
-  if (err.error && typeof err.error.kind === "string" && typeof err.error.message === "string") {
+  if (
+    err.error &&
+    typeof err.error.kind === "string" &&
+    typeof err.error.message === "string"
+  ) {
     return `${err.error.kind}: ${err.error.message}`;
   }
 
@@ -106,6 +109,13 @@ const MODEL_PRESETS = {
 
 // Phase 3.4.4 context window
 const CHAT_CONTEXT_TURNS = 8;
+
+function inputClass(disabled = false) {
+  return [
+    "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
+    disabled ? "opacity-60 cursor-not-allowed" : ""
+  ].join(" ");
+}
 
 function buttonClass(variant = "primary", disabled = false) {
   const base =
@@ -275,12 +285,6 @@ function buildActiveFileContextBlock(filePath, fileContent) {
 }
 
 /**
- * Phase 3.6.1/3.6.2 — Tool visibility + consent (UI-only)
- * - Tool-related events must be visible in transcript as system messages.
- * - Consent surface must be visible before "execution" (simulated here).
- */
-
-/**
  * Phase 3.4.6 — Patch Preview (read-only)
  * - Detect ```diff fenced blocks OR unified diff markers.
  * - UI-only (no apply), no persistence.
@@ -314,7 +318,7 @@ function extractPatchFromText(text) {
   return null;
 }
 
-function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions }) {
+function TranscriptBubble({ role, content, ts, actionLabel, onAction }) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
   const isSystem = role === "system";
@@ -330,35 +334,28 @@ function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions })
   const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
   const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
 
-  const actionButtons = Array.isArray(actions) ? actions.filter((a) => a && a.label && typeof a.onClick === "function") : [];
-
   return (
     <div className={`w-full flex ${wrap}`}>
       <div className={`max-w-[90%] border rounded px-3 py-2 ${bubbleTone}`}>
-        <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>{content}</div>
+        <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>
+          {content}
+        </div>
 
-        {actionButtons.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {actionButtons.map((a, idx) => (
-              <button
-                key={`${a.label}_${idx}`}
-                className="text-xs underline opacity-90 hover:opacity-100"
-                onClick={a.onClick}
-                type="button"
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-        ) : actionLabel && onAction ? (
-          <button className="mt-2 text-xs underline opacity-90 hover:opacity-100" onClick={onAction} type="button">
+        {(actionLabel && onAction) ? (
+          <button
+            className="mt-2 text-xs underline opacity-90 hover:opacity-100"
+            onClick={onAction}
+            type="button"
+          >
             {actionLabel}
           </button>
         ) : null}
 
         {ts ? (
           <div className="mt-1 text-[10px] opacity-60 flex items-center gap-2">
-            <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">{roleLabel}</span>
+            <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">
+              {roleLabel}
+            </span>
             <span className="opacity-70">{formatTranscriptTime(ts)}</span>
           </div>
         ) : null}
@@ -398,7 +395,7 @@ export default function App() {
   const [aiOutput, setAiOutput] = useState("");
 
   // Transcript (in-memory only)
-  const [messages, setMessages] = useState([]); // {id, role, content, ts, action?, actions?}
+  const [messages, setMessages] = useState([]); // {id, role, content, ts, action?}
   const transcriptBottomRef = useRef(null);
 
   // For retry: remember last “send” details
@@ -438,16 +435,14 @@ export default function App() {
   }, [tabs, activeFilePath]);
 
   const providerMeta = useMemo(() => {
-    return (
-      ALL_PROVIDERS.find((p) => p.id === aiProvider) || {
-        id: aiProvider,
-        label: aiProvider,
-        needsKey: true,
-        needsEndpoint: false,
-        alwaysEnabled: false,
-        group: "compatible"
-      }
-    );
+    return ALL_PROVIDERS.find((p) => p.id === aiProvider) || {
+      id: aiProvider,
+      label: aiProvider,
+      needsKey: true,
+      needsEndpoint: false,
+      alwaysEnabled: false,
+      group: "compatible"
+    };
   }, [aiProvider]);
 
   const modelSuggestions = useMemo(() => MODEL_PRESETS[aiProvider] || [], [aiProvider]);
@@ -525,63 +520,28 @@ export default function App() {
     if (presets.length > 0) setAiModel(presets[0]);
   }, [aiProvider, aiModel]);
 
-  const handleOpenFolder = useCallback(
-  async () => {
+  const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
     if (!folder) return;
 
-    // Try to allow the chosen folder in scope (best-effort).
     try {
       await invoke("fs_allow_directory", { path: folder });
       console.log("[kforge] FS scope allowed folder:", folder);
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
-      // We do NOT return here; we still attempt to read the tree.
-      // If it's forbidden, readFolderTree will throw and we handle it below.
     }
 
-    // Read folder tree SAFELY — forbidden paths must not crash the UI.
-    let nextTree = null;
-    try {
-      nextTree = await readFolderTree(folder);
-    } catch (err) {
-      console.error("[kforge] Failed to read folder tree:", err);
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(
-        `Open folder failed:\n${folder}\n\n${msg}\n\n` +
-          `This usually means the folder is outside the allowed allow-read-dir scope.`
-      );
-      return; // keep current project state unchanged on failure
-    }
-
-    // Only commit state changes after we successfully read the tree
     setProjectPath(folder);
     setTabs([]);
     setActiveFilePath(null);
     setSaveStatus("");
     setAiTestOutput("");
 
-    // Phase 3.4.5: safest to turn off file inclusion when switching context
+    // Phase 3.4.5: If file inclusion was on, turning it off is safest when switching context
     setIncludeActiveFile(false);
 
+    const nextTree = await readFolderTree(folder);
     setTree(nextTree || []);
-  },
-  []
-);  
-  const handleCloseFolder = useCallback(() => {
-    setProjectPath(null);
-    setTree([]);
-
-    // Close any open file tabs too (matches the old “close folder tab clears everything” behavior)
-    setTabs([]);
-    setActiveFilePath(null);
-
-    // Clear small UI statuses (safe)
-    setSaveStatus("");
-    setAiTestOutput("");
-
-    // Phase 3.4.5 safety: turn off file inclusion if context is gone
-    setIncludeActiveFile(false);
   }, []);
 
   const handleOpenFile = useCallback(
@@ -618,7 +578,11 @@ export default function App() {
       if (!activeFilePath) return;
 
       setTabs((prev) =>
-        prev.map((t) => (t.path === activeFilePath ? { ...t, content: nextValue, isDirty: true } : t))
+        prev.map((t) =>
+          t.path === activeFilePath
+            ? { ...t, content: nextValue, isDirty: true }
+            : t
+        )
       );
     },
     [activeFilePath]
@@ -652,7 +616,11 @@ export default function App() {
     try {
       await saveFile(activeTab.path, activeTab.content);
 
-      setTabs((prev) => prev.map((t) => (t.path === activeTab.path ? { ...t, isDirty: false } : t)));
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.path === activeTab.path ? { ...t, isDirty: false } : t
+        )
+      );
 
       setSaveStatus("Saved");
       setTimeout(() => setSaveStatus(""), 1200);
@@ -732,8 +700,7 @@ export default function App() {
       content: text,
       ts: Date.now(),
       actionLabel: opts.actionLabel || null,
-      action: typeof opts.action === "function" ? opts.action : null,
-      actions: Array.isArray(opts.actions) ? opts.actions : null
+      action: typeof opts.action === "function" ? opts.action : null
     };
     setMessages((prev) => [...prev, msg]);
     return msg;
@@ -762,12 +729,6 @@ export default function App() {
     }
   }, [patchPreview, appendMessage]);
 
-  const discardPatchPreview = useCallback(() => {
-    setPatchPreview(null);
-    setPatchPreviewVisible(true);
-    appendMessage("system", "Patch preview discarded.");
-  }, [appendMessage]);
-
   const maybeCapturePatchPreview = useCallback((assistantText) => {
     const extracted = extractPatchFromText(assistantText);
     if (extracted) {
@@ -785,7 +746,8 @@ export default function App() {
         input: aiPrompt,
         system: aiSystem?.trim() ? aiSystem : undefined,
         temperature: typeof aiTemperature === "number" ? aiTemperature : undefined,
-        max_output_tokens: typeof aiMaxTokens === "number" ? Math.max(1, aiMaxTokens) : undefined
+        max_output_tokens:
+          typeof aiMaxTokens === "number" ? Math.max(1, aiMaxTokens) : undefined
       };
 
       const ep = (endpoints[aiProvider] || "").trim();
@@ -907,7 +869,9 @@ export default function App() {
       if (manualModelProviders(nextProviderId)) {
         setAiModel("");
         setProviderSwitchNote(
-          `Switched to ${ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId} — model cleared (manual entry).`
+          `Switched to ${
+            ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId
+          } — model cleared (manual entry).`
         );
         return;
       }
@@ -925,7 +889,9 @@ export default function App() {
     [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
   );
 
-  const providerStatus = useMemo(() => statusForProviderUI(providerMeta, hasKey, endpoints), [providerMeta, hasKey, endpoints]);
+  const providerStatus = useMemo(() => {
+    return statusForProviderUI(providerMeta, hasKey, endpoints);
+  }, [providerMeta, hasKey, endpoints]);
 
   // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
@@ -940,7 +906,11 @@ export default function App() {
       };
     }
     if (reachable === true) {
-      return { label: "Reachable", tone: "ok", message: "Runtime reachable." };
+      return {
+        label: "Reachable",
+        tone: "ok",
+        message: "Runtime reachable."
+      };
     }
     return null;
   }, [providerMeta, runtimeReachable]);
@@ -996,14 +966,13 @@ export default function App() {
   }, [appendMessage]);
 
   // Helper: compute the “input” that includes last N turns + optional active file context
-  const buildInputWithContext = useCallback(
-    (rawPrompt, fileSnapshot = null) => {
-      const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
-      const fileBlock = fileSnapshot ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content) : "";
-      return `${prefix}${fileBlock}${String(rawPrompt || "")}`;
-    },
-    [messages]
-  );
+  const buildInputWithContext = useCallback((rawPrompt, fileSnapshot = null) => {
+    const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
+    const fileBlock = fileSnapshot
+      ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content)
+      : "";
+    return `${prefix}${fileBlock}${String(rawPrompt || "")}`;
+  }, [messages]);
 
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
@@ -1021,7 +990,10 @@ export default function App() {
       let fileSnapshot = null;
       if (includeActiveFile) {
         if (activeTab?.path) {
-          fileSnapshot = { path: activeTab.path, content: activeTab.content ?? "" };
+          fileSnapshot = {
+            path: activeTab.path,
+            content: activeTab.content ?? ""
+          };
         } else {
           // Safe behavior: auto-off and explain; proceed with send unchanged (no file context).
           setIncludeActiveFile(false);
@@ -1045,8 +1017,12 @@ export default function App() {
         askForPatch: !!askForPatch
       });
 
-      if (!opts.silentUserAppend) appendMessage("user", draft);
+      // Append user message to transcript (what user typed)
+      if (!opts.silentUserAppend) {
+        appendMessage("user", draft);
+      }
 
+      // Phase 3.4.6: add patch instruction (prompt helper) — UI-only; no apply.
       const patchInstruction = askForPatch
         ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
           "Read-only preview only: do not apply changes, do not write files.\n"
@@ -1054,45 +1030,14 @@ export default function App() {
 
       const inputWithContext = buildInputWithContext(`${draft}${patchInstruction}`, fileSnapshot);
 
-      const r = await runAi({ input: inputWithContext });
+      const r = await runAi({
+        input: inputWithContext
+      });
 
       if (r.ok) {
         const out = r.output ?? "";
-
-        // Phase 3.6.4D — Premium transcript polish:
-        // - Strip model tool-call blocks from the assistant bubble
-        // - Surface tool blocks as system bubbles (still visible, still consent-gated in later step)
-        const toolFenceRe = /```(?:tool|tool_call)\s*([\s\S]*?)```/g;
-
-        const toolBlocks = [];
-        let cleaned = out;
-
-        cleaned = cleaned.replace(toolFenceRe, (full) => {
-          toolBlocks.push(full.trim());
-          return "";
-        });
-
-        cleaned = String(cleaned || "").trim();
-
-        // Append cleaned assistant output (keeps transcript readable)
-        if (cleaned) {
-          appendMessage("assistant", cleaned);
-        } else {
-          // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
-          if (toolBlocks.length > 0) {
-            appendMessage("assistant", "(Model requested one or more tools.)");
-          } else {
-            appendMessage("assistant", "");
-          }
-        }
-
-        // Keep patch preview detection working off the original model output
+        appendMessage("assistant", out);
         maybeCapturePatchPreview(out);
-
-        // Surface tool requests as visible system bubbles (no silent execution)
-        for (const tb of toolBlocks) {
-          appendMessage("system", tb);
-        }
       } else {
         appendMessage("system", r.error || "Unknown error", {
           actionLabel: r.kind === "config" ? "→ Open Settings" : null,
@@ -1120,65 +1065,65 @@ export default function App() {
     ]
   );
 
-
   const handleSendChat = useCallback(async () => {
     await sendWithPrompt(aiPrompt);
   }, [sendWithPrompt, aiPrompt]);
 
-  const handleRetryLast = useCallback(
-    async () => {
-      if (!lastSend) {
-        appendMessage("system", "Nothing to retry yet.");
-        return;
-      }
+  const handleRetryLast = useCallback(async () => {
+    if (!lastSend) {
+      appendMessage("system", "Nothing to retry yet.");
+      return;
+    }
 
-      const retryProvider = lastSend.providerId;
-      const retryModel = lastSend.model;
+    // Preserve existing “current” selection UI, but retry uses the last payload snapshot.
+    // This is UI-only; no provider semantics changes.
+    const retryProvider = lastSend.providerId;
+    const retryModel = lastSend.model;
 
-      if (!isProviderEnabled(retryProvider)) {
-        appendMessage("system", `Retry blocked — provider "${retryProvider}" is not configured.`, {
-          actionLabel: "→ Open Settings",
-          action: () => openSettings(retryProvider, "Configure provider for retry")
-        });
-        return;
-      }
+    // If retry provider is no longer enabled, route user to settings.
+    if (!isProviderEnabled(retryProvider)) {
+      appendMessage("system", `Retry blocked — provider "${retryProvider}" is not configured.`, {
+        actionLabel: "→ Open Settings",
+        action: () => openSettings(retryProvider, "Configure provider for retry")
+      });
+      return;
+    }
 
-      appendMessage("system", "Retrying last request…");
+    appendMessage("system", "Retrying last request…");
 
-      const prefix = buildChatContextPrefix(messages, lastSend.contextLimit || CHAT_CONTEXT_TURNS);
-      const fileBlock =
-        lastSend.includeActiveFile && lastSend.fileSnapshot?.path
-          ? buildActiveFileContextBlock(lastSend.fileSnapshot.path, lastSend.fileSnapshot.content)
-          : "";
-
-      const patchInstruction = lastSend.askForPatch
-        ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
-          "Read-only preview only: do not apply changes, do not write files.\n"
+    const prefix = buildChatContextPrefix(messages, lastSend.contextLimit || CHAT_CONTEXT_TURNS);
+    const fileBlock =
+      lastSend.includeActiveFile && lastSend.fileSnapshot?.path
+        ? buildActiveFileContextBlock(lastSend.fileSnapshot.path, lastSend.fileSnapshot.content)
         : "";
 
-      const r = await runAi({
-        provider_id: retryProvider,
-        model: retryModel,
-        system: lastSend.system?.trim() ? lastSend.system : undefined,
-        temperature: typeof lastSend.temperature === "number" ? lastSend.temperature : undefined,
-        max_output_tokens: typeof lastSend.maxTokens === "number" ? Math.max(1, lastSend.maxTokens) : undefined,
-        endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
-        input: `${prefix}${fileBlock}${lastSend.prompt}${patchInstruction}`
-      });
+    const patchInstruction = lastSend.askForPatch
+      ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
+        "Read-only preview only: do not apply changes, do not write files.\n"
+      : "";
 
-      if (r.ok) {
-        const out = r.output ?? "";
-        appendMessage("assistant", out);
-        maybeCapturePatchPreview(out);
-      } else {
-        appendMessage("system", r.error || "Unknown error", {
-          actionLabel: r.kind === "config" ? "→ Open Settings" : null,
-          action: r.kind === "config" ? () => openSettings(retryProvider, "Configure provider") : null
-        });
-      }
-    },
-    [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages, maybeCapturePatchPreview]
-  );
+    // Run using last snapshot values
+    const r = await runAi({
+      provider_id: retryProvider,
+      model: retryModel,
+      system: lastSend.system?.trim() ? lastSend.system : undefined,
+      temperature: typeof lastSend.temperature === "number" ? lastSend.temperature : undefined,
+      max_output_tokens: typeof lastSend.maxTokens === "number" ? Math.max(1, lastSend.maxTokens) : undefined,
+      endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
+      input: `${prefix}${fileBlock}${lastSend.prompt}${patchInstruction}`
+    });
+
+    if (r.ok) {
+      const out = r.output ?? "";
+      appendMessage("assistant", out);
+      maybeCapturePatchPreview(out);
+    } else {
+      appendMessage("system", r.error || "Unknown error", {
+        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+        action: r.kind === "config" ? () => openSettings(retryProvider, "Configure provider") : null
+      });
+    }
+  }, [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages, maybeCapturePatchPreview]);
 
   const handlePromptKeyDown = useCallback(
     (e) => {
@@ -1191,6 +1136,7 @@ export default function App() {
   );
 
   const aiPanelWidthClass = useMemo(() => {
+    // Wider "Wide" panel per your request (was w-[520px])
     return aiPanelWide ? "w-[580px]" : "w-96";
   }, [aiPanelWide]);
 
@@ -1211,14 +1157,65 @@ export default function App() {
     );
   }, [includeActiveFile, activeTab]);
 
-  // Phase 3.6.1 UI-only demo: tool events append into transcript (no consent)
+  const patchPreviewPanel = useMemo(() => {
+    if (!patchPreview) return null;
 
-  /**
-   * Phase 3.6.2 UI-only demo: tool consent surface.
-   * - First: show a "tool request" system bubble with Approve/Cancel.
-   * - Only on Approve do we append "calling" then "returned/failed" (simulated).
-   */
- 
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs uppercase tracking-wide opacity-60">Patch Preview (read-only)</div>
+          <div className="flex items-center gap-2">
+            <button
+              className={buttonClass("ghost")}
+              onClick={() => setPatchPreviewVisible((v) => !v)}
+              type="button"
+              title={patchPreviewVisible ? "Hide preview" : "Show preview"}
+            >
+              {patchPreviewVisible ? "Hide" : "Show"}
+            </button>
+            <button
+              className={buttonClass("ghost")}
+              onClick={copyPatchToClipboard}
+              type="button"
+              title="Copy patch to clipboard"
+            >
+              Copy patch
+            </button>
+            <button
+              className={buttonClass("danger")}
+              onClick={() => {
+                setPatchPreview(null);
+                setPatchPreviewVisible(true);
+                appendMessage("system", "Patch preview discarded.");
+              }}
+              type="button"
+              title="Discard preview"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+
+        {patchPreviewVisible ? (
+          <div className="border border-zinc-800 rounded bg-zinc-950/30">
+            <div className="max-h-[220px] overflow-auto p-2">
+              <pre className="text-[11px] leading-snug whitespace-pre text-zinc-100">
+                {patchPreview}
+              </pre>
+            </div>
+            <div className="px-2 pb-2 text-[11px] opacity-60">
+              Preview only — nothing is applied automatically.
+            </div>
+          </div>
+        ) : (
+          <div className="text-[11px] opacity-60 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+            Preview hidden.
+          </div>
+        )}
+      </div>
+    );
+  }, [patchPreview, patchPreviewVisible, copyPatchToClipboard, appendMessage]);
+
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <SettingsModal
@@ -1239,15 +1236,6 @@ export default function App() {
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>
-		
-		<button
-		  className={buttonClass("ghost", !projectPath)}
-		  onClick={handleCloseFolder}
-		  disabled={!projectPath}
-		  title={projectPath ? `Close folder: ${projectPath}` : "No folder open"}
-		>
-		  Close Folder
-		</button>
 
         <button
           className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
@@ -1274,11 +1262,6 @@ export default function App() {
           {aiPanelOpen ? "Hide AI" : "Show AI"}
         </button>
 
-        {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
-        <div className="hidden md:flex items-center gap-2">
-        
-        </div>
-
         <div className="text-sm opacity-80 truncate">
           {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
         </div>
@@ -1292,12 +1275,19 @@ export default function App() {
         )}
 
         {activeFilePath && (
-          <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">{activeFilePath}</div>
+          <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">
+            {activeFilePath}
+          </div>
         )}
       </div>
 
       {/* Tabs */}
-      <Tabs tabs={tabs} activePath={activeFilePath} onActivate={setActiveFilePath} onClose={handleCloseTab} />
+      <Tabs
+        tabs={tabs}
+        activePath={activeFilePath}
+        onActivate={setActiveFilePath}
+        onClose={handleCloseTab}
+      />
 
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
@@ -1306,81 +1296,522 @@ export default function App() {
         </div>
 
         <div className="flex-1 min-h-0">
-          <EditorPane filePath={activeFilePath} value={activeTab?.content ?? ""} onChange={handleEditorChange} />
+          <EditorPane
+            filePath={activeFilePath}
+            value={activeTab?.content ?? ""}
+            onChange={handleEditorChange}
+          />
         </div>
 
-        <AiPanel
-          aiPanelOpen={aiPanelOpen}
-          aiPanelWidthClass={aiPanelWidthClass}
-          aiPanelWide={aiPanelWide}
-          setAiPanelWide={setAiPanelWide}
-          setAiPanelOpen={setAiPanelOpen}
-          providerMeta={providerMeta}
-          providerReady={providerReady}
-          disabledExplainer={disabledExplainer}
-          headerStatus={headerStatus}
-          providerGroupLabel={providerGroupLabel}
-          statusChipClass={statusChipClass}
-          showProviderSurfaceHint={showProviderSurfaceHint}
-          openSettings={openSettings}
-          aiProvider={aiProvider}
-          providerSwitchNote={providerSwitchNote}
-          handleDismissSwitchNote={handleDismissSwitchNote}
-          providerOptions={providerOptions}
-          handleProviderChange={handleProviderChange}
-          providerStatus={providerStatus}
-          disabledProviderMessage={disabledProviderMessage}
-          aiModel={aiModel}
-          setAiModel={setAiModel}
-          modelPlaceholder={modelPlaceholder}
-          modelSuggestions={modelSuggestions}
-          showModelHelper={showModelHelper}
-          modelHelperText={modelHelperText}
-          messages={messages}
-          TranscriptBubble={TranscriptBubble}
-          transcriptBottomRef={transcriptBottomRef}
-          CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
-          lastSend={lastSend}
-          aiRunning={aiRunning}
-          handleRetryLast={handleRetryLast}
-          clearConversation={clearConversation}
-          activeTab={activeTab}
-          handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
-          includeActiveFile={includeActiveFile}
-          setIncludeActiveFile={setIncludeActiveFile}
-          activeFileChip={activeFileChip}
-          askForPatch={askForPatch}
-          setAskForPatch={setAskForPatch}
-          patchPreview={patchPreview}
-          patchPreviewVisible={patchPreviewVisible}
-          copyPatchToClipboard={copyPatchToClipboard}
-          setPatchPreviewVisible={setPatchPreviewVisible}
-          discardPatchPreview={discardPatchPreview}
-          appendMessage={appendMessage}
-          aiPrompt={aiPrompt}
-          setAiPrompt={setAiPrompt}
-          handlePromptKeyDown={handlePromptKeyDown}
-          aiSystem={aiSystem}
-          setAiSystem={setAiSystem}
-          aiTemperature={aiTemperature}
-          setAiTemperature={setAiTemperature}
-          aiMaxTokens={aiMaxTokens}
-          setAiMaxTokens={setAiMaxTokens}
-          handleSendChat={handleSendChat}
-          handleAiTest={handleAiTest}
-          guardrailText={guardrailText}
-          aiOutput={aiOutput}
-          endpoints={endpoints}
-          invoke={invoke}
-          setAiTestOutput={setAiTestOutput}
-          setRuntimeReachable={setRuntimeReachable}
-          formatTauriError={formatTauriError}
-          buttonClass={buttonClass}
-          iconButtonClass={iconButtonClass}
-          GearIcon={GearIcon}
-        />
+        {/* Right sidebar: AI panel (collapsible) */}
+        {aiPanelOpen ? (
+          <div className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}>
+            {/* AI header: status surface */}
+            <div className="p-3 border-b border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold flex items-center gap-2">
+                  <span>AI Panel</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div
+                    className="text-[11px] px-2 py-0.5 rounded border whitespace-nowrap bg-zinc-900/40 border-zinc-800 text-zinc-200"
+                    title="Provider category"
+                  >
+                    {providerGroupLabel(providerMeta.group)}
+                  </div>
+
+                  <div className="text-xs opacity-70">
+                    {providerMeta.label}
+                    {providerReady ? "" : ` (${disabledExplainer})`}
+                  </div>
+
+                  <div
+                    className={[
+                      "text-[11px] px-2 py-0.5 rounded border whitespace-nowrap",
+                      statusChipClass(headerStatus.tone)
+                    ].join(" ")}
+                    title={providerMeta.id}
+                  >
+                    {headerStatus.label}
+                  </div>
+
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={() => setAiPanelWide((v) => !v)}
+                    type="button"
+                    title="Toggle panel width"
+                  >
+                    {aiPanelWide ? "Narrow" : "Wide"}
+                  </button>
+
+                  <button
+                    className={iconButtonClass(false)}
+                    onClick={() => setAiPanelOpen(false)}
+                    title="Hide AI panel"
+                    type="button"
+                  >
+                    <span className="text-sm opacity-80">✕</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Always-visible, non-blocking hint + route */}
+              <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
+                <div className="leading-snug">{showProviderSurfaceHint}</div>
+                <button
+                  className={buttonClass("ghost")}
+                  onClick={() => openSettings(aiProvider, "Configure in Settings")}
+                  type="button"
+                  title="Configure this provider in Settings"
+                >
+                  Configure
+                </button>
+              </div>
+
+              {/* Provider switch note (ephemeral) */}
+              {providerSwitchNote && (
+                <div className="text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
+                  <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={handleDismissSwitchNote}
+                    type="button"
+                    title="Dismiss"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-auto p-3 space-y-4">
+              {/* Provider + model */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide opacity-60">Provider</div>
+                  <button
+                    className={buttonClass("ghost")}
+                    onClick={() => openSettings(aiProvider, "Configure in Settings")}
+                    type="button"
+                    title="Configure in Settings"
+                  >
+                    Configure in Settings
+                  </button>
+                </div>
+
+                <select
+                  className={inputClass(false)}
+                  value={aiProvider}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                >
+                  {providerOptions.map((p) => {
+                    return (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        disabled={!p.enabled && p.id !== aiProvider}
+                      >
+                        {p.label}
+                        {p.suffix}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {!providerReady && (
+                  <div className="text-xs opacity-60">
+                    Providers are disabled until configured. Use{" "}
+                    <span className="opacity-90">Configure in Settings</span> to add an API key (and an endpoint where required).
+                  </div>
+                )}
+
+                {!providerReady && (
+                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex items-center justify-between gap-2">
+                    <div className="leading-snug">{disabledProviderMessage(providerStatus)}</div>
+                    <button
+                      className={buttonClass("ghost")}
+                      onClick={() => openSettings(aiProvider, "Configure in Settings")}
+                      type="button"
+                    >
+                      Configure in Settings
+                    </button>
+                  </div>
+                )}
+
+                <div className="text-xs uppercase tracking-wide opacity-60 mt-3">Model</div>
+                <input
+                  className={inputClass(!providerReady)}
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder={modelPlaceholder(aiProvider)}
+                  list={`model-suggestions-${aiProvider}`}
+                  disabled={!providerReady}
+                />
+                <datalist id={`model-suggestions-${aiProvider}`}>
+                  {modelSuggestions.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+
+                {showModelHelper && (
+                  <div className="text-xs opacity-60">
+                    {modelHelperText(aiProvider) ||
+                      "Select a preset or enter a model ID. Some providers require manual model IDs."}
+                  </div>
+                )}
+              </div>
+
+              {/* Phase 3.4.6 — Patch Preview (read-only) */}
+              {patchPreviewPanel}
+
+              {/* Transcript */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide opacity-60">
+                    Transcript <span className="opacity-60 normal-case">(last {CHAT_CONTEXT_TURNS} used as context)</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={buttonClass("ghost", !lastSend || aiRunning)}
+                      onClick={handleRetryLast}
+                      disabled={!lastSend || aiRunning}
+                      type="button"
+                      title="Retry last request"
+                    >
+                      Retry
+                    </button>
+                    <button
+                      className={buttonClass("danger", aiRunning)}
+                      onClick={clearConversation}
+                      disabled={aiRunning}
+                      type="button"
+                      title="Clear conversation"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border border-zinc-800 rounded bg-zinc-950/30">
+                  <div className="h-[260px] overflow-auto p-2 space-y-2">
+                    {messages.length === 0 ? (
+                      <div className="text-xs opacity-60 p-2">
+                        No messages yet. Send a prompt to start a conversation.
+                      </div>
+                    ) : (
+                      messages.map((m) => (
+                        <TranscriptBubble
+                          key={m.id}
+                          role={m.role}
+                          content={m.content}
+                          ts={m.ts}
+                          actionLabel={m.actionLabel}
+                          onAction={m.action}
+                        />
+                      ))
+                    )}
+                    <div ref={transcriptBottomRef} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Prompt */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs uppercase tracking-wide opacity-60">Prompt</div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={buttonClass("ghost", !activeTab || !providerReady)}
+                      onClick={handleUseActiveFileAsPrompt}
+                      disabled={!activeTab || !providerReady}
+                      title="Copy active editor content into the prompt box"
+                    >
+                      Use Active File
+                    </button>
+                  </div>
+                </div>
+
+                {/* Phase 3.4.5 — Include active file toggle + indicator */}
+                <div className="flex items-center justify-between gap-2 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+                  <label
+                    className={[
+                      "flex items-center gap-2 text-xs",
+                      (!activeTab || !providerReady) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                    ].join(" ")}
+                    title={activeTab ? "Include active file in the next Send" : "Open a file to enable this"}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-zinc-200"
+                      checked={includeActiveFile}
+                      disabled={!activeTab || !providerReady}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+
+                        if (next && !activeTab) {
+                          // Should be unreachable due to disabled state, but keep it safe.
+                          appendMessage("system", "Cannot include active file — no file is currently open.");
+                          setIncludeActiveFile(false);
+                          return;
+                        }
+
+                        setIncludeActiveFile(next);
+                      }}
+                    />
+                    <span className="opacity-80">Include active file</span>
+                  </label>
+
+                  <div className="flex items-center gap-2 min-w-0">
+                    {activeFileChip}
+
+                    {includeActiveFile && activeTab?.path ? (
+                      <button
+                        className={buttonClass("ghost")}
+                        onClick={() => setIncludeActiveFile(false)}
+                        type="button"
+                        title="Turn off active file inclusion"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Phase 3.4.6 — Ask for patch toggle (prompt helper) */}
+                <div className="flex items-center justify-between gap-2 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+                  <label
+                    className={[
+                      "flex items-center gap-2 text-xs",
+                      !providerReady ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                    ].join(" ")}
+                    title="Ask the assistant to respond with a unified diff (read-only preview)"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-zinc-200"
+                      checked={askForPatch}
+                      disabled={!providerReady}
+                      onChange={(e) => setAskForPatch(e.target.checked)}
+                    />
+                    <span className="opacity-80">Ask for patch (read-only preview)</span>
+                  </label>
+
+                  {patchPreview ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={buttonClass("ghost")}
+                        onClick={copyPatchToClipboard}
+                        type="button"
+                        title="Copy current patch"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        className={buttonClass("ghost")}
+                        onClick={() => setPatchPreviewVisible((v) => !v)}
+                        type="button"
+                        title={patchPreviewVisible ? "Hide preview" : "Show preview"}
+                      >
+                        {patchPreviewVisible ? "Hide" : "Show"}
+                      </button>
+                      <button
+                        className={buttonClass("danger")}
+                        onClick={() => {
+                          setPatchPreview(null);
+                          setPatchPreviewVisible(true);
+                          appendMessage("system", "Patch preview discarded.");
+                        }}
+                        type="button"
+                        title="Discard preview"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] opacity-60">
+                      (Preview appears when the assistant returns a diff.)
+                    </div>
+                  )}
+                </div>
+
+                {/* Helper line */}
+                <div className="text-[11px] opacity-60 leading-snug">
+                  When enabled, the assistant is prompted to return a unified diff inside a <span className="opacity-90">```diff```</span> block. The preview is read-only (no apply).
+                </div>
+
+                {!activeTab && (
+                  <div className="text-xs opacity-60">
+                    Open a file to enable <span className="opacity-90">Include active file</span>.
+                  </div>
+                )}
+
+                <textarea
+                  className={`${inputClass(!providerReady)} min-h-[120px]`}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  onKeyDown={handlePromptKeyDown}
+                  placeholder="Type your prompt… (Enter to send, Shift+Enter for newline)"
+                  disabled={!providerReady}
+                />
+              </div>
+
+              {/* System (optional) */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">System (optional)</div>
+                <textarea
+                  className={`${inputClass(!providerReady)} min-h-[70px]`}
+                  value={aiSystem}
+                  onChange={(e) => setAiSystem(e.target.value)}
+                  placeholder="Optional system instruction…"
+                  disabled={!providerReady}
+                />
+              </div>
+
+              {/* Params */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">Parameters</div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-60 mb-1">Temperature</div>
+                    <input
+                      className={inputClass(!providerReady)}
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={aiTemperature}
+                      onChange={(e) => setAiTemperature(Number(e.target.value))}
+                      disabled={!providerReady}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-60 mb-1">Max tokens</div>
+                    <input
+                      className={inputClass(!providerReady)}
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={aiMaxTokens}
+                      onChange={(e) => setAiMaxTokens(Number(e.target.value))}
+                      disabled={!providerReady}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    className={buttonClass("primary", !providerReady || aiRunning)}
+                    onClick={handleSendChat}
+                    disabled={!providerReady || aiRunning}
+                  >
+                    {aiRunning ? "Running..." : "Send"}
+                  </button>
+
+                  <button
+                    className={buttonClass("ghost", !providerReady || aiRunning)}
+                    onClick={handleAiTest}
+                    disabled={!providerReady || aiRunning}
+                  >
+                    Test
+                  </button>
+                </div>
+
+                {!providerReady && (
+                  <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
+                    <div className="leading-snug">{guardrailText}</div>
+                    <button
+                      className={buttonClass("ghost")}
+                      onClick={() => openSettings(aiProvider, "Configure this provider to enable Send.")}
+                      type="button"
+                    >
+                      Configure
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Output (kept for now) */}
+              <div className="space-y-2">
+                <div className="text-xs uppercase tracking-wide opacity-60">Output</div>
+                <textarea
+                  className={`${inputClass(false)} min-h-[160px]`}
+                  value={aiOutput}
+                  readOnly
+                  placeholder="Output will appear here…"
+                />
+              </div>
+
+              {/* Ollama helper */}
+              {aiProvider === "ollama" && (
+                <div className="border border-zinc-800 rounded p-3 space-y-2">
+                  <div className="text-sm font-semibold">Ollama Helper</div>
+                  <div className="text-xs opacity-60">List local models using the Rust command.</div>
+                  <button
+                    className={buttonClass("ghost", aiRunning)}
+                    onClick={async () => {
+                      setAiTestOutput("Listing Ollama models...");
+                      try {
+                        const ep = (endpoints.ollama || "").trim();
+                        const models = await invoke("ai_ollama_list_models", {
+                          endpoint: ep ? ep : undefined
+                        });
+                        if (Array.isArray(models) && models.length > 0) {
+                          setAiTestOutput(`Ollama models: ${models.join(", ")}`);
+                        } else {
+                          setAiTestOutput("Ollama models: (none found)");
+                        }
+                        setRuntimeReachable((prev) => ({ ...prev, ollama: true }));
+                      } catch (err) {
+                        const msg = formatTauriError(err);
+                        setAiTestOutput(`Ollama list models failed: ${msg}`);
+                        setRuntimeReachable((prev) => ({ ...prev, ollama: false }));
+                      }
+                    }}
+                    disabled={aiRunning}
+                    type="button"
+                  >
+                    List Models
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
+              Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
+              <span className="opacity-90">{aiModel || "(none)"}</span>
+            </div>
+          </div>
+        ) : (
+          // Collapsed rail
+          <div className="w-10 border-l border-zinc-800 min-h-0 flex flex-col items-center justify-start py-2">
+            <button
+              className="w-8 h-8 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs"
+              onClick={() => setAiPanelOpen(true)}
+              title="Show AI panel (Ctrl/Cmd+J)"
+              type="button"
+            >
+              AI
+            </button>
+
+            <button
+              className="mt-2 w-8 h-8 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 flex items-center justify-center"
+              onClick={() => openSettings(null, "Opened from collapsed rail")}
+              title="Settings"
+              type="button"
+            >
+              <GearIcon className="w-4 h-4 text-zinc-200" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
