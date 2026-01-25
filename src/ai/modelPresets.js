@@ -23,7 +23,11 @@ export const MODEL_PRESETS = {
 ],
 
 
-  deepseek: ["deepseek-chat"],
+deepseek: [
+  "deepseek-chat",      // 🟢 Sandbox
+  "deepseek-reasoner"   // 🟠 Main
+],
+
   
   groq: [
   "llama-3.1-8b-instant",     // 🟢 Sandbox
