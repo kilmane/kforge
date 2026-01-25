@@ -24,7 +24,12 @@ export const MODEL_PRESETS = {
 
 
   deepseek: ["deepseek-chat"],
-  groq: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"],
+  
+  groq: [
+  "llama-3.1-8b-instant",     // 🟢 Sandbox
+  "llama-3.3-70b-versatile"  // 🟠 Main
+],
+
 
   // Suggestions only; OpenRouter is manual-first
   openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
