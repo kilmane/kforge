@@ -192,12 +192,6 @@ export default function ProviderControlsPanel({
     return out;
   }, [aiProvider, modelSuggestions, userModelIds]);
 
-  const currentCostTag = useMemo(() => {
-    const cur = normalizeModelId(aiModel);
-    const found = userModels.find((r) => r.id === cur);
-    return found?.cost || "Unknown";
-  }, [aiModel, userModels]);
-
   const filteredUserModels = useMemo(() => {
     if (filter === "All") return userModels;
     if (filter === "Free") return userModels.filter((r) => r.cost === "Free");
@@ -334,6 +328,13 @@ export default function ProviderControlsPanel({
         })}
       </select>
 
+      {/* OpenRouter note (free models can rotate) */}
+      {aiProvider === "openrouter" && (
+        <div className="mt-2 text-[11px] opacity-60">
+          ℹ️ OpenRouter free models may rotate or be deprecated. You can always add model IDs manually.
+        </div>
+      )}
+
       {!providerReady && (
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex justify-between gap-2">
           <div>{disabledProviderMessage(providerStatus)}</div>
@@ -343,28 +344,24 @@ export default function ProviderControlsPanel({
         </div>
       )}
 
-      {/* Model header */}
-      <div className="flex items-center justify-between mt-3">
-        <div className="flex items-center gap-2">
-          <div className="text-xs uppercase tracking-wide opacity-60">Model</div>
-          <CostBadge tag={currentCostTag} />
-        </div>
+{/* Filter row */}
+<div className="flex items-center justify-end mt-3">
+  <div className="flex items-center gap-2">
+    <div className="text-xs opacity-60">Filter:</div>
+    <select
+      className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-100"
+      value={filter}
+      onChange={(e) => setFilter(e.target.value)}
+      disabled={!providerReady}
+      title="Filter My models list"
+    >
+      <option value="All">All</option>
+      <option value="Free">Free</option>
+      <option value="Paid">Paid</option>
+    </select>
+  </div>
+</div>
 
-        <div className="flex items-center gap-2">
-          <div className="text-xs opacity-60">Filter:</div>
-          <select
-            className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-100"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            disabled={!providerReady}
-            title="Filter My models list"
-          >
-            <option value="All">All</option>
-            <option value="Free">Free</option>
-            <option value="Paid">Paid</option>
-          </select>
-        </div>
-      </div>
 
       {/* My models */}
       <div className="text-xs opacity-70">
@@ -544,10 +541,7 @@ export default function ProviderControlsPanel({
         </div>
 
         {suggestionsOpen && (
-          <div
-            ref={suggestionsWrapRef}
-            className="max-h-56 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm"
-          >
+          <div className="max-h-56 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm">
             {allSuggestions.length === 0 ? (
               <div className="px-2 py-2 text-xs opacity-70">No suggestions for this provider.</div>
             ) : (
