@@ -36,7 +36,13 @@ deepseek: [
 
 
   // Suggestions only; OpenRouter is manual-first
-  openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+openrouter: [
+  "mistralai/devstral-2512:free",
+  "qwen/qwen3-coder:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "xiaomi/mimo-v2-flash:free"
+],
+
 
   huggingface: [],
   custom: [],
