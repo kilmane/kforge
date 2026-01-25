@@ -2,6 +2,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./index.css";
 
+import { MODEL_PRESETS } from "./ai/modelPresets";
+
 import { invoke } from "@tauri-apps/api/core";
 
 import { openProjectFolder, readFolderTree, openFile, saveFile } from "./lib/fs";
@@ -84,25 +86,6 @@ const ALL_PROVIDERS = [
   { id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true },
   { id: "mock", label: "Mock", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true }
 ];
-
-// Minimal presets
-const MODEL_PRESETS = {
-  openai: ["gpt-4o-mini", "gpt-4o"],
-  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
-  claude: ["claude-3-5-sonnet", "claude-3-5-haiku"],
-
-  deepseek: ["deepseek-chat"],
-  groq: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"],
-  // Kept as suggestions only; UX treats OpenRouter as manual entry.
-  openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
-
-  huggingface: [],
-  custom: [],
-
-  ollama: ["llama3.1", "llama3", "mistral", "qwen2.5"],
-  lmstudio: [],
-  mock: ["mock-1"]
-};
 
 // Phase 3.4.4 context window
 const CHAT_CONTEXT_TURNS = 8;
@@ -518,12 +501,21 @@ export default function App() {
   }, [refreshHasKeys]);
 
   // Auto-fill model if empty (only for preset-driven providers)
-  useEffect(() => {
-    if (manualModelProviders(aiProvider)) return;
-    if (aiModel && aiModel.trim()) return;
-    const presets = MODEL_PRESETS[aiProvider] || [];
-    if (presets.length > 0) setAiModel(presets[0]);
-  }, [aiProvider, aiModel]);
+useEffect(() => {
+  if (manualModelProviders(aiProvider)) return;
+
+  const presets = MODEL_PRESETS[aiProvider] || [];
+  if (presets.length === 0) return;
+
+  // Only choose a default when switching provider, and only if the model is empty.
+  setAiModel((cur) => {
+    const trimmed = String(cur || "").trim();
+    if (trimmed) return cur;
+    return presets[0];
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [aiProvider]);
+
 
   const handleOpenFolder = useCallback(
   async () => {

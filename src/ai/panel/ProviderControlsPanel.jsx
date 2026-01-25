@@ -35,6 +35,26 @@ function normalizeModelId(v) {
   return String(v || "").trim();
 }
 
+// For suggestion dedupe (and nicer UX), normalize provider-specific variants.
+// NOTE: We only apply this to suggestions; the user can still type anything manually.
+function normalizeSuggestionForProvider(providerId, v) {
+  let s = normalizeModelId(v);
+  const p = String(providerId || "").toLowerCase();
+
+  if (p === "gemini") {
+    // Collapse common Gemini variants so users don't see duplicates.
+    // Accept:
+    // - gemini-2.5-flash
+    // - models/gemini-2.5-flash
+    // - models/gemini-2.5-flash:generateContent
+    if (s.startsWith("models/")) s = s.slice("models/".length);
+    if (s.endsWith(":generateContent")) s = s.slice(0, -":generateContent".length);
+    s = s.trim();
+  }
+
+  return s;
+}
+
 function loadUserModelRecords(providerId) {
   const key = `kforge.userModels.v2.${providerId}`;
   try {
@@ -102,6 +122,10 @@ export default function ProviderControlsPanel({
   const isEditingModelInputRef = useRef(false);
   const restoredForProviderRef = useRef(null);
 
+  // Dropdown for suggestions
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const suggestionsWrapRef = useRef(null);
+
   // Load when provider changes
   useEffect(() => {
     setUserModels(loadUserModelRecords(aiProvider));
@@ -112,6 +136,8 @@ export default function ProviderControlsPanel({
 
     isEditingModelInputRef.current = false;
     restoredForProviderRef.current = null;
+
+    setSuggestionsOpen(false);
   }, [aiProvider]);
 
   // One-time restore only when provider changes
@@ -121,7 +147,6 @@ export default function ProviderControlsPanel({
 
     try {
       const last = normalizeModelId(localStorage.getItem(lastSelectedKey(aiProvider)));
-      // Important: only restore if we actually have something meaningful
       if (last) setAiModel(last);
     } catch {
       // ignore
@@ -151,9 +176,21 @@ export default function ProviderControlsPanel({
   const userModelIds = useMemo(() => userModels.map((r) => r.id), [userModels]);
 
   const allSuggestions = useMemo(() => {
-    const merged = [...(modelSuggestions || []), ...userModelIds].map(normalizeModelId).filter(Boolean);
-    return Array.from(new Set(merged));
-  }, [modelSuggestions, userModelIds]);
+    const mergedRaw = [...(modelSuggestions || []), ...userModelIds];
+    const normalized = mergedRaw
+      .map((m) => normalizeSuggestionForProvider(aiProvider, m))
+      .filter(Boolean);
+
+    // de-dupe while preserving order
+    const seen = new Set();
+    const out = [];
+    for (const m of normalized) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      out.push(m);
+    }
+    return out;
+  }, [aiProvider, modelSuggestions, userModelIds]);
 
   const currentCostTag = useMemo(() => {
     const cur = normalizeModelId(aiModel);
@@ -244,6 +281,29 @@ export default function ProviderControlsPanel({
     setAiModel(target);
   }
 
+  function pickSuggestion(id) {
+    const target = normalizeModelId(id);
+    if (!target) return;
+    isEditingModelInputRef.current = false;
+    setAiModel(target);
+    setSuggestionsOpen(false);
+  }
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+
+    const onDown = (e) => {
+      const root = suggestionsWrapRef.current;
+      if (!root) return;
+      if (root.contains(e.target)) return;
+      setSuggestionsOpen(false);
+    };
+
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [suggestionsOpen]);
+
   return (
     <div className="space-y-3">
       {/* Provider */}
@@ -252,6 +312,7 @@ export default function ProviderControlsPanel({
           <div className="text-xs uppercase tracking-wide opacity-60">Provider</div>
           <ProviderTypeBadge kind={pType} />
         </div>
+
         <button className={buttonClass("ghost")} onClick={() => openSettings(aiProvider, "Configure in Settings")} type="button">
           Configure in Settings
         </button>
@@ -429,31 +490,90 @@ export default function ProviderControlsPanel({
         </button>
       </div>
 
-      {/* Freeform model input (manual entry) */}
-      <input
-        className={[
-          "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100",
-          !providerReady ? "opacity-60 cursor-not-allowed" : ""
-        ].join(" ")}
-        value={aiModel}
-        onChange={(e) => {
-          isEditingModelInputRef.current = true;
-          setAiModel(e.target.value);
-        }}
-        onBlur={() => {
-          // user finished editing; allow persistence again
-          isEditingModelInputRef.current = false;
-        }}
-        placeholder={modelPlaceholder(aiProvider)}
-        list={`model-suggestions-${aiProvider}`}
-        disabled={!providerReady}
-      />
+      {/* Freeform model input + dropdown suggestions */}
+      <div className="space-y-1" ref={suggestionsWrapRef}>
+        <div className="relative">
+          <input
+            className={[
+              "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 pr-16",
+              !providerReady ? "opacity-60 cursor-not-allowed" : ""
+            ].join(" ")}
+            value={aiModel}
+            onChange={(e) => {
+              isEditingModelInputRef.current = true;
+              setAiModel(e.target.value);
+            }}
+            onBlur={() => {
+              isEditingModelInputRef.current = false;
+            }}
+            placeholder={modelPlaceholder(aiProvider)}
+            disabled={!providerReady}
+          />
 
-      <datalist id={`model-suggestions-${aiProvider}`}>
-        {allSuggestions.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
+          {/* Clear */}
+          {!!aiModel.trim() && providerReady && (
+            <button
+              type="button"
+              className="absolute right-9 top-1/2 -translate-y-1/2 text-xs opacity-70 hover:opacity-95"
+              title="Clear model"
+              onClick={() => {
+                isEditingModelInputRef.current = false;
+                setAiModel("");
+              }}
+            >
+              ×
+            </button>
+          )}
+
+          {/* Dropdown toggle */}
+          <button
+            type="button"
+            className={[
+              "absolute right-2 top-1/2 -translate-y-1/2 text-xs rounded border px-2 py-1",
+              "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800/40",
+              !providerReady ? "opacity-60 cursor-not-allowed" : ""
+            ].join(" ")}
+            disabled={!providerReady}
+            title="Show suggested models"
+            onClick={() => {
+              setSuggestionsOpen((v) => !v);
+            }}
+          >
+            ▼
+          </button>
+        </div>
+
+        {suggestionsOpen && (
+          <div
+            ref={suggestionsWrapRef}
+            className="max-h-56 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm"
+          >
+            {allSuggestions.length === 0 ? (
+              <div className="px-2 py-2 text-xs opacity-70">No suggestions for this provider.</div>
+            ) : (
+              <div className="flex flex-col">
+                {allSuggestions.map((m) => {
+                  const isActive = normalizeModelId(aiModel) === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => pickSuggestion(m)}
+                      className={[
+                        "text-left px-2 py-1.5 text-xs border-b border-zinc-900/60",
+                        isActive ? "bg-zinc-800/40 text-zinc-100" : "hover:bg-zinc-800/30 text-zinc-200"
+                      ].join(" ")}
+                      title="Use this model"
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {showModelHelper && (
         <div className="text-xs opacity-60">
