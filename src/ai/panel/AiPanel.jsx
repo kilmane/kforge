@@ -1,5 +1,5 @@
 // src/ai/panel/AiPanel.jsx
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useMemo } from "react";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
@@ -316,6 +316,13 @@ export default function AiPanel({
 }) {
   // ✅ FIX: derive the current provider endpoint from endpoints map
   const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
+
+  // ✅ HARDEN: model can be string or {id,tier,note}; always display as string
+  const aiModelStr = useMemo(() => {
+    if (typeof aiModel === "string") return aiModel;
+    if (aiModel && typeof aiModel === "object" && typeof aiModel.id === "string") return aiModel.id;
+    return "";
+  }, [aiModel]);
 
   // Holds the currently pending consent gate (one at a time).
   const pendingConsentRef = useRef(null);
@@ -771,7 +778,7 @@ export default function AiPanel({
 
       <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
         Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
-        <span className="opacity-90">{aiModel || "(none)"}</span>
+        <span className="opacity-90">{aiModelStr || "(none)"}</span>
       </div>
     </div>
   );
