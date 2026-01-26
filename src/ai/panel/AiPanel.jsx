@@ -314,6 +314,9 @@ export default function AiPanel({
   iconButtonClass,
   GearIcon
 }) {
+  // ✅ FIX: derive the current provider endpoint from endpoints map
+  const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
+
   // Holds the currently pending consent gate (one at a time).
   const pendingConsentRef = useRef(null);
 
@@ -683,6 +686,7 @@ export default function AiPanel({
           modelSuggestions={modelSuggestions}
           showModelHelper={showModelHelper}
           modelHelperText={modelHelperText}
+          aiEndpoint={aiEndpoint}
           buttonClass={buttonClass}
         />
 

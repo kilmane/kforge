@@ -20,6 +20,7 @@ function ProviderTypeBadge({ kind }) {
   );
 }
 
+// Existing (saved models) tags — we’ll keep these for “My models”
 const COST_TAGS = ["Unknown", "Free", "Paid", "Mixed"];
 
 function CostBadge({ tag }) {
@@ -35,6 +36,64 @@ function normalizeModelId(v) {
   return String(v || "").trim();
 }
 
+// --- Tiered preset support (Sandbox/Main/Heavy) ---
+
+const PRESET_TIERS = ["sandbox", "main", "heavy", "free", "unknown"];
+
+function normalizeTier(tier) {
+  const t = String(tier || "").toLowerCase().trim();
+  return PRESET_TIERS.includes(t) ? t : "unknown";
+}
+
+function tierLabel(tier) {
+  const t = normalizeTier(tier);
+  if (t === "sandbox") return "Sandbox";
+  if (t === "main") return "Main";
+  if (t === "heavy") return "Heavy";
+  if (t === "free") return "Free";
+  return "Unknown";
+}
+
+function tierDotClass(tier) {
+  const t = normalizeTier(tier);
+  // Using background tones only; no custom colors beyond tailwind defaults.
+  if (t === "sandbox") return "bg-emerald-400";
+  if (t === "main") return "bg-amber-400";
+  if (t === "heavy") return "bg-rose-400";
+  if (t === "free") return "bg-sky-400";
+  return "bg-zinc-500";
+}
+
+function TierPill({ tier }) {
+  const t = normalizeTier(tier);
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/40 text-[11px] text-zinc-200">
+      <span className={`inline-block w-2 h-2 rounded-full ${tierDotClass(t)}`} />
+      <span className="uppercase tracking-wide">{tierLabel(t)}</span>
+    </span>
+  );
+}
+
+// Suggestion item can be:
+// - "model-id"
+// - { id: "model-id", tier: "sandbox|main|heavy|free|unknown", note?: string }
+function suggestionToRecord(item) {
+  if (typeof item === "string") {
+    const id = normalizeModelId(item);
+    return id ? { id, tier: "unknown", note: "" } : null;
+  }
+  if (item && typeof item === "object") {
+    const id = normalizeModelId(item.id);
+    if (!id) return null;
+    return {
+      id,
+      tier: normalizeTier(item.tier),
+      note: String(item.note || "").trim()
+    };
+  }
+  return null;
+}
+
 // For suggestion dedupe (and nicer UX), normalize provider-specific variants.
 // NOTE: We only apply this to suggestions; the user can still type anything manually.
 function normalizeSuggestionForProvider(providerId, v) {
@@ -43,10 +102,6 @@ function normalizeSuggestionForProvider(providerId, v) {
 
   if (p === "gemini") {
     // Collapse common Gemini variants so users don't see duplicates.
-    // Accept:
-    // - gemini-2.5-flash
-    // - models/gemini-2.5-flash
-    // - models/gemini-2.5-flash:generateContent
     if (s.startsWith("models/")) s = s.slice("models/".length);
     if (s.endsWith(":generateContent")) s = s.slice(0, -":generateContent".length);
     s = s.trim();
@@ -89,6 +144,28 @@ function lastSelectedKey(providerId) {
   return `kforge.lastModel.${providerId}`;
 }
 
+function trimTrailingSlash(url) {
+  return String(url || "").trim().replace(/\/+$/, "");
+}
+
+async function fetchJsonWithTimeout(url, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    const text = await resp.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { ok: resp.ok, status: resp.status, json, text };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default function ProviderControlsPanel({
   providerOptions,
   handleProviderChange,
@@ -102,9 +179,12 @@ export default function ProviderControlsPanel({
   aiModel,
   setAiModel,
   modelPlaceholder,
-  modelSuggestions,
+  modelSuggestions, // can now be string[] or {id,tier,note}[]
   showModelHelper,
   modelHelperText,
+
+  // ✅ NEW: endpoint for current provider (needed for LM Studio /v1/models)
+  aiEndpoint,
 
   buttonClass
 }) {
@@ -126,6 +206,10 @@ export default function ProviderControlsPanel({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const suggestionsWrapRef = useRef(null);
 
+  // LM Studio list models state
+  const [lmListBusy, setLmListBusy] = useState(false);
+  const [lmListError, setLmListError] = useState("");
+
   // Load when provider changes
   useEffect(() => {
     setUserModels(loadUserModelRecords(aiProvider));
@@ -138,6 +222,9 @@ export default function ProviderControlsPanel({
     restoredForProviderRef.current = null;
 
     setSuggestionsOpen(false);
+
+    setLmListBusy(false);
+    setLmListError("");
   }, [aiProvider]);
 
   // One-time restore only when provider changes
@@ -175,22 +262,49 @@ export default function ProviderControlsPanel({
 
   const userModelIds = useMemo(() => userModels.map((r) => r.id), [userModels]);
 
-  const allSuggestions = useMemo(() => {
-    const mergedRaw = [...(modelSuggestions || []), ...userModelIds];
-    const normalized = mergedRaw
-      .map((m) => normalizeSuggestionForProvider(aiProvider, m))
-      .filter(Boolean);
+  // Build preset records (tiered)
+  const presetRecords = useMemo(() => {
+    const raw = Array.isArray(modelSuggestions) ? modelSuggestions : [];
+    const recs = raw.map(suggestionToRecord).filter(Boolean);
 
-    // de-dupe while preserving order
+    // Provider normalization (Gemini variants etc.) applied to the id
+    const normalized = recs.map((r) => ({
+      ...r,
+      id: normalizeSuggestionForProvider(aiProvider, r.id)
+    }));
+
+    // Dedupe by id (keep the first occurrence, preserves order)
     const seen = new Set();
     const out = [];
-    for (const m of normalized) {
-      if (seen.has(m)) continue;
-      seen.add(m);
-      out.push(m);
+    for (const r of normalized) {
+      if (!r?.id) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(r);
     }
     return out;
-  }, [aiProvider, modelSuggestions, userModelIds]);
+  }, [aiProvider, modelSuggestions]);
+
+  // Suggestions shown in dropdown = presets + user saved
+  const suggestionRecords = useMemo(() => {
+    // Convert user models to “unknown tier” suggestion records
+    const userAsRecords = userModelIds
+      .map((id) => normalizeSuggestionForProvider(aiProvider, id))
+      .filter(Boolean)
+      .map((id) => ({ id, tier: "unknown", note: "" }));
+
+    // Merge + dedupe by id (presets first)
+    const merged = [...presetRecords, ...userAsRecords];
+    const seen = new Set();
+    const out = [];
+    for (const r of merged) {
+      if (!r?.id) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(r);
+    }
+    return out;
+  }, [aiProvider, presetRecords, userModelIds]);
 
   const filteredUserModels = useMemo(() => {
     if (filter === "All") return userModels;
@@ -283,6 +397,72 @@ export default function ProviderControlsPanel({
     setSuggestionsOpen(false);
   }
 
+  // ✅ LM Studio: List models from /v1/models and add into “My models”
+  async function listLmStudioModels() {
+    if (!providerReady) return;
+    const endpoint = trimTrailingSlash(aiEndpoint);
+    if (!endpoint) {
+      setLmListError("Missing LM Studio endpoint. Configure it in Settings first.");
+      return;
+    }
+
+    setLmListError("");
+    setLmListBusy(true);
+
+    try {
+      const url = `${endpoint}/v1/models`;
+      const res = await fetchJsonWithTimeout(url, 9000);
+
+      if (!res.ok) {
+        const msg =
+          (res.json && (res.json.error?.message || res.json.message)) ||
+          res.text ||
+          `HTTP ${res.status}`;
+        setLmListError(`LM Studio list failed: ${msg}`);
+        return;
+      }
+
+      // OpenAI-style: { data: [{ id: "..." }, ...] }
+      const data = res.json?.data;
+      if (!Array.isArray(data)) {
+        setLmListError("LM Studio returned unexpected JSON (missing data[]).");
+        return;
+      }
+
+      const ids = data
+        .map((m) => normalizeModelId(m?.id))
+        .filter(Boolean);
+
+      if (ids.length === 0) {
+        setLmListError("LM Studio returned 0 models. Make sure a model is loaded in LM Studio.");
+        return;
+      }
+
+      // Merge into userModels (keep existing tags)
+      const existing = new Set(userModels.map((r) => r.id));
+      const toAdd = [];
+      for (const id of ids) {
+        if (existing.has(id)) continue;
+        toAdd.push({ id, cost: "Unknown" });
+      }
+
+      if (toAdd.length > 0) {
+        setUserModels([...toAdd, ...userModels]);
+      }
+
+      // If current model is empty, set it to first returned id
+      if (!normalizeModelId(aiModel)) {
+        isEditingModelInputRef.current = false;
+        setAiModel(ids[0]);
+      }
+    } catch (e) {
+      const msg = String(e?.message || e);
+      setLmListError(msg.includes("AbortError") ? "LM Studio list timed out." : `LM Studio list failed: ${msg}`);
+    } finally {
+      setLmListBusy(false);
+    }
+  }
+
   // Close suggestions on click outside
   useEffect(() => {
     if (!suggestionsOpen) return;
@@ -344,31 +524,52 @@ export default function ProviderControlsPanel({
         </div>
       )}
 
-{/* Filter row */}
-<div className="flex items-center justify-end mt-3">
-  <div className="flex items-center gap-2">
-    <div className="text-xs opacity-60">Filter:</div>
-    <select
-      className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-100"
-      value={filter}
-      onChange={(e) => setFilter(e.target.value)}
-      disabled={!providerReady}
-      title="Filter My models list"
-    >
-      <option value="All">All</option>
-      <option value="Free">Free</option>
-      <option value="Paid">Paid</option>
-    </select>
-  </div>
-</div>
-
+      {/* Filter row */}
+      <div className="flex items-center justify-end mt-3">
+        <div className="flex items-center gap-2">
+          <div className="text-xs opacity-60">Filter:</div>
+          <select
+            className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-100"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            disabled={!providerReady}
+            title="Filter My models list"
+          >
+            <option value="All">All</option>
+            <option value="Free">Free</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+      </div>
 
       {/* My models */}
       <div className="text-xs opacity-70">
         <div className="flex items-center justify-between">
           <span className="uppercase tracking-wide opacity-60">My models</span>
-          <span className="opacity-60">Click a model to use it</span>
+
+          <div className="flex items-center gap-2">
+            {/* ✅ LM Studio list button */}
+            {aiProvider === "lmstudio" && (
+              <button
+                type="button"
+                className={buttonClass("ghost", !providerReady || lmListBusy)}
+                onClick={listLmStudioModels}
+                disabled={!providerReady || lmListBusy}
+                title="Fetch models from LM Studio endpoint (/v1/models) and save them under My models"
+              >
+                {lmListBusy ? "Listing..." : "List models"}
+              </button>
+            )}
+
+            <span className="opacity-60">Click a model to use it</span>
+          </div>
         </div>
+
+        {aiProvider === "lmstudio" && lmListError && (
+          <div className="mt-2 text-[11px] opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
+            {lmListError}
+          </div>
+        )}
 
         {filteredUserModels.length === 0 ? (
           <div className="mt-2 opacity-60">{userModels.length === 0 ? "None saved yet." : "No models match filter."}</div>
@@ -541,25 +742,31 @@ export default function ProviderControlsPanel({
         </div>
 
         {suggestionsOpen && (
-          <div className="max-h-56 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm">
-            {allSuggestions.length === 0 ? (
+          <div className="max-h-64 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm">
+            {suggestionRecords.length === 0 ? (
               <div className="px-2 py-2 text-xs opacity-70">No suggestions for this provider.</div>
             ) : (
               <div className="flex flex-col">
-                {allSuggestions.map((m) => {
-                  const isActive = normalizeModelId(aiModel) === m;
+                {suggestionRecords.map((r) => {
+                  const isActive = normalizeModelId(aiModel) === r.id;
+                  const title = r.note ? r.note : "Use this model";
+
                   return (
                     <button
-                      key={m}
+                      key={r.id}
                       type="button"
-                      onClick={() => pickSuggestion(m)}
+                      onClick={() => pickSuggestion(r.id)}
                       className={[
                         "text-left px-2 py-1.5 text-xs border-b border-zinc-900/60",
                         isActive ? "bg-zinc-800/40 text-zinc-100" : "hover:bg-zinc-800/30 text-zinc-200"
                       ].join(" ")}
-                      title="Use this model"
+                      title={title}
                     >
-                      {m}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{r.id}</span>
+                        <TierPill tier={r.tier} />
+                      </div>
+                      {r.note ? <div className="mt-0.5 text-[11px] opacity-60">{r.note}</div> : null}
                     </button>
                   );
                 })}
