@@ -152,26 +152,38 @@ function manualModelProviders(providerId) {
 }
 
 function modelPlaceholder(providerId) {
-  return manualModelProviders(providerId) ? "Enter a model ID" : "model";
+  return "Enter model ID…";
 }
 
 function modelHelperText(providerId) {
-  if (!manualModelProviders(providerId)) return null;
+  const legend =
+    "\n\n" +
+    "Tier legend:\n" +
+    "🟢 Sandbox (Paid-cheap) — safe to spam / iterate\n" +
+    "🔵 Free — no billing, but often rate-limited / may rotate\n" +
+    "🟡 Main — default workhorse\n" +
+    "🔴 Heavy — expensive / use sparingly";
+
+  // Show legend for all providers
+  if (!manualModelProviders(providerId)) {
+    return legend.trim();
+  }
 
   if (providerId === "openrouter") {
-    return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini).";
+    return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini)." + legend;
   }
   if (providerId === "huggingface") {
-    return "No presets for Hugging Face. Enter the model ID required by your endpoint.";
+    return "No presets for Hugging Face. Enter the model ID required by your endpoint." + legend;
   }
   if (providerId === "custom") {
-    return "No presets for custom endpoints. Enter the model name required by your endpoint.";
+    return "No presets for custom endpoints. Enter the model name required by your endpoint." + legend;
   }
   if (providerId === "lmstudio") {
-    return "No presets for LM Studio. Enter the model ID your server expects.";
+    return "No presets for LM Studio. Enter the model ID your server expects." + legend;
   }
-  return "This provider has no presets. Enter a model ID.";
+  return "This provider has no presets. Enter a model ID." + legend;
 }
+
 
 function disabledProviderMessage(status) {
   if (status?.missing === "key") {
