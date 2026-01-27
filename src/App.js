@@ -156,18 +156,15 @@ function modelPlaceholder(providerId) {
 }
 
 function modelHelperText(providerId) {
+  if (!manualModelProviders(providerId)) return null;
+
   const legend =
     "\n\n" +
     "Tier legend:\n" +
     "🟢 Sandbox (Paid-cheap) — safe to spam / iterate\n" +
     "🔵 Free — no billing, but often rate-limited / may rotate\n" +
-    "🟡 Main — default workhorse\n" +
+    "🟠 Main — default workhorse\n" +
     "🔴 Heavy — expensive / use sparingly";
-
-  // Show legend for all providers
-  if (!manualModelProviders(providerId)) {
-    return legend.trim();
-  }
 
   if (providerId === "openrouter") {
     return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini)." + legend;

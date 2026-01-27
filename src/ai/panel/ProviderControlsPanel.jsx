@@ -190,6 +190,13 @@ export default function ProviderControlsPanel({
 }) {
   const pType = useMemo(() => providerType(aiProvider), [aiProvider]);
 
+  // ✅ HARDEN: always treat model value as a string for UI + trim/compare
+  const aiModelStr = useMemo(() => {
+    if (typeof aiModel === "string") return aiModel;
+    if (aiModel && typeof aiModel === "object" && typeof aiModel.id === "string") return aiModel.id;
+    return "";
+  }, [aiModel]);
+
   const [userModels, setUserModels] = useState([]); // [{id,cost}]
   const [draftModel, setDraftModel] = useState("");
   const [filter, setFilter] = useState("All"); // All | Free | Paid
@@ -250,7 +257,7 @@ export default function ProviderControlsPanel({
   useEffect(() => {
     if (isEditingModelInputRef.current) return;
 
-    const cur = normalizeModelId(aiModel);
+    const cur = normalizeModelId(aiModelStr);
     if (!cur) return;
 
     try {
@@ -258,7 +265,7 @@ export default function ProviderControlsPanel({
     } catch {
       // ignore
     }
-  }, [aiProvider, aiModel]);
+  }, [aiProvider, aiModelStr]);
 
   const userModelIds = useMemo(() => userModels.map((r) => r.id), [userModels]);
 
@@ -374,7 +381,7 @@ export default function ProviderControlsPanel({
     const next = userModels.map((r) => (r.id === from ? { ...r, id: to } : r));
     setUserModels(next);
 
-    if (normalizeModelId(aiModel) === from) {
+    if (normalizeModelId(aiModelStr) === from) {
       isEditingModelInputRef.current = false;
       setAiModel(to);
     }
@@ -429,9 +436,7 @@ export default function ProviderControlsPanel({
         return;
       }
 
-      const ids = data
-        .map((m) => normalizeModelId(m?.id))
-        .filter(Boolean);
+      const ids = data.map((m) => normalizeModelId(m?.id)).filter(Boolean);
 
       if (ids.length === 0) {
         setLmListError("LM Studio returned 0 models. Make sure a model is loaded in LM Studio.");
@@ -451,7 +456,7 @@ export default function ProviderControlsPanel({
       }
 
       // If current model is empty, set it to first returned id
-      if (!normalizeModelId(aiModel)) {
+      if (!normalizeModelId(aiModelStr)) {
         isEditingModelInputRef.current = false;
         setAiModel(ids[0]);
       }
@@ -576,7 +581,7 @@ export default function ProviderControlsPanel({
         ) : (
           <div className="mt-2 flex flex-col gap-2">
             {filteredUserModels.map((r) => {
-              const isActive = normalizeModelId(aiModel) === r.id;
+              const isActive = normalizeModelId(aiModelStr) === r.id;
 
               return (
                 <div
@@ -696,10 +701,10 @@ export default function ProviderControlsPanel({
               "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 pr-16",
               !providerReady ? "opacity-60 cursor-not-allowed" : ""
             ].join(" ")}
-            value={aiModel}
+            value={aiModelStr}
             onChange={(e) => {
               isEditingModelInputRef.current = true;
-              setAiModel(e.target.value);
+              setAiModel(String(e.target.value || ""));
             }}
             onBlur={() => {
               isEditingModelInputRef.current = false;
@@ -709,7 +714,7 @@ export default function ProviderControlsPanel({
           />
 
           {/* Clear */}
-          {!!aiModel.trim() && providerReady && (
+          {!!aiModelStr.trim() && providerReady && (
             <button
               type="button"
               className="absolute right-9 top-1/2 -translate-y-1/2 text-xs opacity-70 hover:opacity-95"
@@ -748,7 +753,7 @@ export default function ProviderControlsPanel({
             ) : (
               <div className="flex flex-col">
                 {suggestionRecords.map((r) => {
-                  const isActive = normalizeModelId(aiModel) === r.id;
+                  const isActive = normalizeModelId(aiModelStr) === r.id;
                   const title = r.note ? r.note : "Use this model";
 
                   return (
