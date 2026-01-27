@@ -1,4 +1,8 @@
+// D:\kforge\src-tauri\src\lib.rs
+
+use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri_plugin_fs::FsExt;
+use tauri_plugin_shell::ShellExt;
 
 mod ai;
 
@@ -17,6 +21,37 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    // ✅ Required for opening URLs in the system browser
+    .plugin(tauri_plugin_shell::init())
+    // Native menu bar: Help -> docs
+    .menu(|handle| {
+      let help = Submenu::with_items(
+        handle,
+        "Help",
+        true,
+        &[
+          &MenuItem::with_id(handle, "help.providers_models", "Providers and Models", true, None::<&str>)?,
+          &MenuItem::with_id(handle, "help.provider_labels", "Provider Color + Labels", true, None::<&str>)?,
+        ],
+      )?;
+
+      Menu::with_items(handle, &[&help])
+    })
+    .on_menu_event(|app, event| {
+      match event.id().as_ref() {
+        "help.providers_models" => {
+          let url =
+            "https://raw.githubusercontent.com/kilmane/kforge/refs/heads/main/PROVIDERS_AND_MODELS.md";
+          let _ = app.shell().open(url, None);
+        }
+        "help.provider_labels" => {
+          let url =
+            "https://raw.githubusercontent.com/kilmane/kforge/refs/heads/main/PROVIDERS_COLOR_LABELS.md";
+          let _ = app.shell().open(url, None);
+        }
+        _ => {}
+      }
+    })
     .invoke_handler(tauri::generate_handler![
       // Phase 2 command (keep)
       fs_allow_directory,
