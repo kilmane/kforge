@@ -96,5 +96,14 @@ export const MODEL_PRESETS = {
   // ------------------------
   // Mock
   // ------------------------
-  mock: [{ id: "mock-1", tier: "unknown", note: "Mock provider model." }]
+  mock: [{ id: "mock-1", tier: "unknown", note: "Mock provider model." }],
+
+  // ------------------------
+  // Mistral (API)
+  // ------------------------
+  mistral: [
+    { id: "mistral-small-latest", tier: "sandbox", note: "Good starter model (general)" },
+    { id: "codestral-latest", tier: "main", note: "Coding-focused" }
+  ],
+
 };
