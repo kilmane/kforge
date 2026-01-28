@@ -15,6 +15,7 @@ pub mod custom;
 pub mod deepseek;
 pub mod gemini;
 pub mod groq;
+pub mod mistral;
 pub mod mock;
 pub mod ollama;
 pub mod openai;
@@ -32,6 +33,7 @@ pub fn get_provider(provider_id: &str) -> Option<Box<dyn AiProvider>> {
         "openrouter" => Some(Box::new(openrouter::OpenRouterProvider::new())),
         "ollama" => Some(Box::new(ollama::OllamaProvider::new())),
         "custom" => Some(Box::new(custom::CustomEndpointProvider::new())),
+		"mistral" => Some(Box::new(mistral::MistralProvider::new())),
         _ => None,
     }
 }
