@@ -77,6 +77,7 @@ const ALL_PROVIDERS = [
 
   { id: "deepseek", label: "DeepSeek", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
   { id: "groq", label: "Groq", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  { id: "mistral", label: "Mistral", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
   { id: "openrouter", label: "OpenRouter", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
   { id: "huggingface", label: "Hugging Face", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
   { id: "custom", label: "Custom Endpoint (OpenAI-compatible)", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },

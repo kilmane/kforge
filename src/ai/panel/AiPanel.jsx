@@ -679,8 +679,8 @@ export default function AiPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-        <ProviderControlsPanel
-          providerOptions={providerOptions}
+		<ProviderControlsPanel
+		  providerOptions={providerOptions}
           handleProviderChange={handleProviderChange}
           providerStatus={providerStatus}
           disabledProviderMessage={disabledProviderMessage}
