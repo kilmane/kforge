@@ -21,8 +21,6 @@ function providerType(providerId) {
   if (id === "deepseek" || id === "groq") return "Compatible";
   if (id === "openrouter") return "Aggregator";
   if (id === "ollama" || id === "lmstudio" || id === "mock") return "Local";
-  if (id === "custom" || id === "huggingface") return "Custom";
-  return "Custom";
 }
 
 function ProviderTypeBadge({ kind }) {

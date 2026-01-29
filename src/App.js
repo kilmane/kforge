@@ -79,7 +79,6 @@ const ALL_PROVIDERS = [
   { id: "groq", label: "Groq", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
   { id: "mistral", label: "Mistral", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
   { id: "openrouter", label: "OpenRouter", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "huggingface", label: "Hugging Face", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
   { id: "custom", label: "Custom Endpoint (OpenAI-compatible)", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
 
   // Phase 3.3 UI prep
@@ -147,7 +146,6 @@ function manualModelProviders(providerId) {
   return (
     providerId === "openrouter" ||
     providerId === "custom" ||
-    providerId === "huggingface" ||
     providerId === "lmstudio"
   );
 }
@@ -169,9 +167,6 @@ function modelHelperText(providerId) {
 
   if (providerId === "openrouter") {
     return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini)." + legend;
-  }
-  if (providerId === "huggingface") {
-    return "No presets for Hugging Face. Enter the model ID required by your endpoint." + legend;
   }
   if (providerId === "custom") {
     return "No presets for custom endpoints. Enter the model name required by your endpoint." + legend;

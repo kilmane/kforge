@@ -57,18 +57,6 @@ export const MODEL_PRESETS = {
   ],
 
   // ------------------------
-  // Hugging Face
-  // NOTE: IDs are stable; availability depends on your HF endpoint/provider.
-  // ------------------------
-  huggingface: [
-    { id: "Qwen/Qwen2.5-Coder-1.5B-Instruct", tier: "sandbox", note: "Small + cheap; good for quick code tasks." },
-    { id: "Qwen/Qwen2.5-Coder-7B-Instruct", tier: "main", note: "Solid default coder size." },
-    { id: "deepseek-ai/deepseek-coder-6.7b-instruct", tier: "main", note: "Good coding quality; mid-size." },
-    { id: "codellama/CodeLlama-7b-Instruct-hf", tier: "main", note: "Classic 7B coder; decent baseline." },
-    { id: "bigcode/starcoder2-15b-instruct-v0.1", tier: "heavy", note: "Larger; slower/costlier—use sparingly." }
-  ],
-
-  // ------------------------
   // Custom endpoints
   // Unknown model IDs → leave empty
   // ------------------------
