@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="assets/kforge-logo.png" alt="KForge Logo" width="240">
+</p>
+
+
 # KForge Documentation
 
 Welcome to the official KForge documentation.
