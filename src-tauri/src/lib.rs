@@ -17,6 +17,12 @@ fn fs_allow_directory(app: tauri::AppHandle, path: String) -> Result<(), String>
     .map_err(|e: tauri::Error| e.to_string())
 }
 
+/// Open an external URL in the system browser (reuses tauri_plugin_shell).
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+  app.shell().open(&url, None).map_err(|e| e.to_string())
+}
+
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
@@ -55,6 +61,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       // Phase 2 command (keep)
       fs_allow_directory,
+      open_url,
 
       // Phase 3.1.0 AI Core commands
       ai::commands::ai_set_api_key,

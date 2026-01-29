@@ -1,5 +1,19 @@
 // src/ai/panel/ProviderControlsPanel.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+
+// GitHub Pages docs (nice reading experience, no repo tree)
+const CUSTOM_PROVIDER_DOCS_URL = "https://kilmane.github.io/kforge/custom_provider.html";
+
+async function openExternal(url) {
+  try {
+    // Use the same Rust-side browser opener style as the Help menu.
+    await invoke("open_url", { url });
+  } catch {
+    // Fallback for web/dev mode
+    window.open(url, "_blank", "noreferrer");
+  }
+}
 
 function providerType(providerId) {
   const id = String(providerId || "").toLowerCase();
@@ -520,6 +534,24 @@ export default function ProviderControlsPanel({
         </div>
       )}
 
+      {/* Custom: suggested models (docs link, not presets) */}
+      {aiProvider === "custom" && (
+        <div className="mt-2 text-[11px] opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30">
+          <details>
+            <summary className="cursor-pointer select-none">
+              Looking for models?{" "}
+              <span className="underline underline-offset-2">See suggested models for popular providers</span>
+            </summary>
+
+            <div className="mt-2">
+              <button type="button" className={buttonClass("ghost")} onClick={() => openExternal(CUSTOM_PROVIDER_DOCS_URL)}>
+                Open docs
+              </button>
+            </div>
+          </details>
+        </div>
+      )}
+
       {!providerReady && (
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex justify-between gap-2">
           <div>{disabledProviderMessage(providerStatus)}</div>
@@ -645,23 +677,11 @@ export default function ProviderControlsPanel({
                         ))}
                       </select>
 
-                      <button
-                        type="button"
-                        className="text-xs opacity-80 hover:opacity-95"
-                        onClick={() => startRename(r.id)}
-                        disabled={!providerReady}
-                        title="Rename saved model"
-                      >
+                      <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => startRename(r.id)} disabled={!providerReady} title="Rename saved model">
                         ✎
                       </button>
 
-                      <button
-                        type="button"
-                        className="text-xs opacity-80 hover:opacity-95"
-                        onClick={() => removeModel(r.id)}
-                        disabled={!providerReady}
-                        title="Remove saved model"
-                      >
+                      <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => removeModel(r.id)} disabled={!providerReady} title="Remove saved model">
                         ×
                       </button>
                     </div>
