@@ -41,12 +41,12 @@ pub fn run() {
       match event.id().as_ref() {
         "help.providers_models" => {
           let url =
-            "https://raw.githubusercontent.com/kilmane/kforge/refs/heads/main/PROVIDERS_AND_MODELS.md";
+            "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html";
           let _ = app.shell().open(url, None);
         }
         "help.provider_labels" => {
           let url =
-            "https://raw.githubusercontent.com/kilmane/kforge/refs/heads/main/PROVIDERS_COLOR_LABELS.md";
+            "https://kilmane.github.io/kforge/PROVIDERS_COLOR_LABELS.html";
           let _ = app.shell().open(url, None);
         }
         _ => {}
@@ -60,6 +60,7 @@ pub fn run() {
       ai::commands::ai_set_api_key,
       ai::commands::ai_clear_api_key,
       ai::commands::ai_has_api_key,
+      ai::commands::ai_clear_api_key,
       ai::commands::ai_is_key_persisted,
       ai::commands::ai_generate,
 
