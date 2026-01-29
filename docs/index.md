@@ -1,18 +1,21 @@
 # KForge Documentation
 
-Welcome to the official KForge user documentation.
+Welcome to the official KForge documentation.
 
-This site contains guides and reference material for using KForge,
-understanding providers and models, and extending the system.
+This site contains user guides and reference material for using KForge,
+understanding providers and models, and configuring the system.
 
 ## User Guides
-- [Providers and Models](providers_and_models.md)
+- [Providers and Models](PROVIDERS_AND_MODELS.md)
+- [Provider Color Labels](PROVIDERS_COLOR_LABELS.md)
 - [Custom Provider](custom_provider.md)
 - [Portability](portability.md)
 
-## Developer Notes
-- [Add a Provider (Developer Guide)](DEV-ADD-PROVIDER.md)
+## Developer & Contributor Docs
+These documents are intended for developers extending or contributing to KForge.
+
+- [Add a Provider (Developer Guide)](https://github.com/kilmane/kforge/blob/main/DEV-ADD-PROVIDER.md)
 
 ---
 
-
+These pages are safe to link from inside the KForge application.
