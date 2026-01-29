@@ -39,12 +39,31 @@ const COST_TAGS = ["Unknown", "Free", "Paid", "Mixed"];
 
 function CostBadge({ tag }) {
   const t = COST_TAGS.includes(tag) ? tag : "Unknown";
+
+  const dot = (() => {
+    if (t === "Free") return <span className="inline-block w-2 h-2 rounded-full bg-sky-400" />;
+    if (t === "Paid") return <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />;
+
+    // Mixed: 3-wedge dot (blue + green + yellow)
+    if (t === "Mixed") {
+      return (
+        <span className="inline-block w-2 h-2 rounded-full overflow-hidden">
+          <span className="block w-full h-full bg-[conic-gradient(#38bdf8_0_33%,#34d399_33_66%,#facc15_66_100%)]" />
+        </span>
+      );
+    }
+
+    return <span className="inline-block w-2 h-2 rounded-full bg-zinc-500" />;
+  })();
+
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] uppercase tracking-wide border border-zinc-800 bg-zinc-900/40 text-zinc-200">
-      {t}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] uppercase tracking-wide border border-zinc-800 bg-zinc-900/40 text-zinc-200">
+      {dot}
+      <span>{t}</span>
     </span>
   );
 }
+
 
 function normalizeModelId(v) {
   return String(v || "").trim();
@@ -72,7 +91,7 @@ function tierDotClass(tier) {
   const t = normalizeTier(tier);
   // Using background tones only; no custom colors beyond tailwind defaults.
   if (t === "sandbox") return "bg-emerald-400";
-  if (t === "main") return "bg-amber-400";
+  if (t === "main") return "bg-yellow-400";
   if (t === "heavy") return "bg-rose-400";
   if (t === "free") return "bg-sky-400";
   return "bg-zinc-500";
