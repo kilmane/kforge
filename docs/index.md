@@ -12,7 +12,7 @@ understanding providers and models, and configuring the system.
 
 ## User Guides
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
-- [Provider Color Labels](PROVIDERS_COLOR_LABELS.md)
+- [Models Color Labels](MODELS_COLOR_LABELS.md)
 - [Custom Provider](custom_provider.md)
 - [Portability](portability.md)
 
