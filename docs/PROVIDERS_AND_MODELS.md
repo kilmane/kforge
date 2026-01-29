@@ -1,6 +1,6 @@
 # Understanding LLM Providers & Models in KForge
 
-_Last updated: 2026-01_
+_Last updated: 29/01/2026
 
 This document explains how KForge thinks about AI providers, models, and cost.
 It is intentionally high-level and provider-agnostic.
