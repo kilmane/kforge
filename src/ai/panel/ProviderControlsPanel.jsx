@@ -818,12 +818,7 @@ export default function ProviderControlsPanel({
         )}
       </div>
 
-      {showModelHelper && (
-        <div className="text-xs opacity-60">
-          {modelHelperText(aiProvider) ||
-            "Select a preset or enter a model ID. Save models, tag them (Free/Paid), and filter quickly when credits run out."}
-        </div>
-      )}
+
     </div>
   );
 }
