@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 // GitHub Pages docs (nice reading experience, no repo tree)
 const CUSTOM_PROVIDER_DOCS_URL = "https://kilmane.github.io/kforge/custom_provider.html";
+const MODELS_COLOR_LABELS_URL = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
+
 
 async function openExternal(url) {
   try {
@@ -31,37 +33,54 @@ function ProviderTypeBadge({ kind }) {
     </span>
   );
 }
+// Saved models cost tags (stored in localStorage)
+const COST_TAGS = ["unknown", "free", "paid_sandbox", "paid_main", "paid_heavy"];
 
-// Existing (saved models) tags — we’ll keep these for “My models”
-const COST_TAGS = ["Unknown", "Free", "Paid", "Mixed"];
+function normalizeCost(raw) {
+  const v = String(raw ?? "").trim();
+
+  // migrate old values (from earlier versions)
+  if (v === "Free") return "free";
+  if (v === "Paid") return "paid_main";
+  if (v === "Mixed") return "unknown";
+  if (v === "Unknown") return "unknown";
+
+  // accept new values
+  if (COST_TAGS.includes(v)) return v;
+
+  return "unknown";
+}
+
+function costLabel(cost) {
+  const c = normalizeCost(cost);
+  if (c === "free") return "🔵 Free";
+  if (c === "paid_sandbox") return "🟢 Paid";
+  if (c === "paid_main") return "🟡 Paid";
+  if (c === "paid_heavy") return "🔴 Paid";
+  return "⚪ Unknown";
+}
 
 function CostBadge({ tag }) {
-  const t = COST_TAGS.includes(tag) ? tag : "Unknown";
+  const t = normalizeCost(tag);
 
-  const dot = (() => {
-    if (t === "Free") return <span className="inline-block w-2 h-2 rounded-full bg-sky-400" />;
-    if (t === "Paid") return <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />;
-
-    // Mixed: 3-wedge dot (blue + green + yellow)
-    if (t === "Mixed") {
-      return (
-        <span className="inline-block w-2 h-2 rounded-full overflow-hidden">
-          <span className="block w-full h-full bg-[conic-gradient(#38bdf8_0_33%,#34d399_33_66%,#facc15_66_100%)]" />
-        </span>
-      );
-    }
-
-    return <span className="inline-block w-2 h-2 rounded-full bg-zinc-500" />;
-  })();
+  const dotClass =
+    t === "free"
+      ? "bg-sky-400"
+      : t === "paid_sandbox"
+        ? "bg-emerald-400"
+        : t === "paid_main"
+          ? "bg-yellow-400"
+          : t === "paid_heavy"
+            ? "bg-rose-400"
+            : "bg-zinc-500";
 
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] uppercase tracking-wide border border-zinc-800 bg-zinc-900/40 text-zinc-200">
-      {dot}
-      <span>{t}</span>
+      <span className={`inline-block w-2 h-2 rounded-full ${dotClass}`} />
+      <span>{costLabel(t)}</span>
     </span>
   );
 }
-
 
 function normalizeModelId(v) {
   return String(v || "").trim();
@@ -154,7 +173,7 @@ function loadUserModelRecords(providerId) {
       if (!id) continue;
       if (seen.has(id)) continue;
       seen.add(id);
-      out.push({ id, cost: COST_TAGS.includes(r?.cost) ? r.cost : "Unknown" });
+      out.push({ id, cost: normalizeCost(r?.cost) });
     }
     return out;
   } catch {
@@ -346,8 +365,8 @@ export default function ProviderControlsPanel({
 
   const filteredUserModels = useMemo(() => {
     if (filter === "All") return userModels;
-    if (filter === "Free") return userModels.filter((r) => r.cost === "Free");
-    if (filter === "Paid") return userModels.filter((r) => r.cost === "Paid");
+    if (filter === "Free") return userModels.filter((r) => normalizeCost(r.cost) === "free");
+    if (filter === "Paid") return userModels.filter((r) => normalizeCost(r.cost).startsWith("paid_"));
     return userModels;
   }, [userModels, filter]);
 
@@ -363,7 +382,7 @@ export default function ProviderControlsPanel({
       return;
     }
 
-    const next = [{ id, cost: "Unknown" }, ...userModels];
+    const next = [{ id, cost: "unknown" }, ...userModels];
     setUserModels(next);
 
     isEditingModelInputRef.current = false;
@@ -380,7 +399,7 @@ export default function ProviderControlsPanel({
   function setModelCost(id, cost) {
     const target = normalizeModelId(id);
     if (!target) return;
-    const next = userModels.map((r) => (r.id === target ? { ...r, cost } : r));
+    const next = userModels.map((r) => (r.id === target ? { ...r, cost: normalizeCost(cost) } : r));
     setUserModels(next);
   }
 
@@ -479,7 +498,7 @@ export default function ProviderControlsPanel({
       const toAdd = [];
       for (const id of ids) {
         if (existing.has(id)) continue;
-        toAdd.push({ id, cost: "Unknown" });
+        toAdd.push({ id, cost: "unknown" });
       }
 
       if (toAdd.length > 0) {
@@ -682,16 +701,16 @@ export default function ProviderControlsPanel({
                     <div className="flex items-center gap-2">
                       <select
                         className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-100"
-                        value={r.cost}
+                        value={normalizeCost(r.cost)}
                         onChange={(e) => setModelCost(r.id, e.target.value)}
                         disabled={!providerReady}
                         title="Set cost tag"
                       >
-                        {COST_TAGS.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
+                    {COST_TAGS.map((t) => (
+					  <option key={t} value={t}>
+						{costLabel(t)}
+					  </option>
+					))}
                       </select>
 
                       <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => startRename(r.id)} disabled={!providerReady} title="Rename saved model">
