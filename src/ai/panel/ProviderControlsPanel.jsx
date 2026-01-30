@@ -561,6 +561,7 @@ export default function ProviderControlsPanel({
             </option>
           );
         })}
+
       </select>
 
       {/* OpenRouter note (free models can rotate) */}
@@ -571,22 +572,14 @@ export default function ProviderControlsPanel({
       )}
 
       {/* Custom: suggested models (docs link, not presets) */}
+      {/* Custom provider note */}
       {aiProvider === "custom" && (
-        <div className="mt-2 text-[11px] opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30">
-          <details>
-            <summary className="cursor-pointer select-none">
-              Looking for models?{" "}
-              <span className="underline underline-offset-2">See suggested models for popular providers</span>
-            </summary>
-
-            <div className="mt-2">
-              <button type="button" className={buttonClass("ghost")} onClick={() => openExternal(CUSTOM_PROVIDER_DOCS_URL)}>
-                Open docs
-              </button>
-            </div>
-          </details>
+        <div className="mt-2 text-[11px] opacity-60">
+          ℹ️ Custom endpoints require manual model IDs.
         </div>
       )}
+
+
 
       {!providerReady && (
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex justify-between gap-2">
@@ -618,39 +611,20 @@ export default function ProviderControlsPanel({
       {/* My models */}
       <div className="text-xs opacity-70">
         <div className="flex items-center justify-between">
-          <span className="uppercase tracking-wide opacity-60">My models</span>
+          <span className="uppercase tracking-wide opacity-60">
+            My models{" "}
+            <span className="normal-case opacity-60">(Click a model to use it)</span>
+          </span>
 
-          <div className="flex items-center gap-2">
-            {/* ✅ LM Studio list button */}
-            {aiProvider === "lmstudio" && (
-              <button
-                type="button"
-                className={buttonClass("ghost", !providerReady || lmListBusy)}
-                onClick={listLmStudioModels}
-                disabled={!providerReady || lmListBusy}
-                title="Fetch models from LM Studio endpoint (/v1/models) and save them under My models"
-              >
-                {lmListBusy ? "Listing..." : "List models"}
-             </button>
-            )}
-
-            <span className="opacity-60">Click a model to use it</span>
-			<button
-			  type="button"
-			  className={buttonClass("ghost")}
-			  onClick={() => openExternal(MODELS_COLOR_LABELS_URL)}
-			  title="Explain model colour labels"
-			>
-			  What do these mean?
-			</button>
-          </div>
+          <button
+            type="button"
+            className="text-[11px] text-orange-400 hover:text-orange-300 underline underline-offset-2"
+            onClick={() => openExternal(MODELS_COLOR_LABELS_URL)}
+          >
+            What do these labels mean?
+          </button>
         </div>
 
-        {aiProvider === "lmstudio" && lmListError && (
-          <div className="mt-2 text-[11px] opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40">
-            {lmListError}
-          </div>
-        )}
 
         {filteredUserModels.length === 0 ? (
           <div className="mt-2 opacity-60">{userModels.length === 0 ? "None saved yet." : "No models match filter."}</div>
@@ -714,11 +688,11 @@ export default function ProviderControlsPanel({
                         disabled={!providerReady}
                         title="Set cost tag"
                       >
-                    {COST_TAGS.map((t) => (
-					  <option key={t} value={t}>
-						{costLabel(t)}
-					  </option>
-					))}
+                        {COST_TAGS.map((t) => (
+                          <option key={t} value={t}>
+                            {costLabel(t)}
+                          </option>
+                        ))}
                       </select>
 
                       <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => startRename(r.id)} disabled={!providerReady} title="Rename saved model">
