@@ -631,10 +631,18 @@ export default function ProviderControlsPanel({
                 title="Fetch models from LM Studio endpoint (/v1/models) and save them under My models"
               >
                 {lmListBusy ? "Listing..." : "List models"}
-              </button>
+             </button>
             )}
 
             <span className="opacity-60">Click a model to use it</span>
+			<button
+			  type="button"
+			  className={buttonClass("ghost")}
+			  onClick={() => openExternal(MODELS_COLOR_LABELS_URL)}
+			  title="Explain model colour labels"
+			>
+			  What do these mean?
+			</button>
           </div>
         </div>
 
