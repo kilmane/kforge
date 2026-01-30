@@ -60,7 +60,18 @@ export const MODEL_PRESETS = {
   // Custom endpoints
   // Unknown model IDs → leave empty
   // ------------------------
-  custom: [],
+  // ------------------------
+  // Custom endpoints
+  // Suggested IDs (you can add your own)
+  // ------------------------
+  custom: [
+    { id: "mistral-small-latest", tier: "sandbox", note: "Low-cost paid; good for testing." },
+    { id: "mistral-medium-latest", tier: "main", note: "Workhorse paid model." },
+    { id: "deepseek-chat", tier: "free", note: "Free/sandbox-friendly (provider dependent)." },
+    { id: "llama-3.1-8b-instant", tier: "free", note: "Free/sandbox-friendly (provider dependent)." },
+    { id: "openai/gpt-4o-mini", tier: "sandbox", note: "Low-cost paid; good default for many tasks." }
+  ],
+
 
   // ------------------------
   // Ollama (local or remote)
