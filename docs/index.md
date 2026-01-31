@@ -15,6 +15,8 @@ understanding providers and models, and configuring the system.
 - [Models Color Labels](MODELS_COLOR_LABELS.md)
 - [Custom Provider](custom_provider.md)
 - [Portability](portability.md)
+- [Presets Inventory](PRESETS_INVENTORY.md)
+
 
 ## Developer & Contributor Docs
 These documents are intended for developers extending or contributing to KForge.
