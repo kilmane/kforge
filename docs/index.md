@@ -14,7 +14,7 @@ understanding providers and models, and configuring the system.
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
 - [Models Color Labels](MODELS_COLOR_LABELS.md)
 - [Custom Provider](custom_provider.md)
-- [Portability](portability.md)
+- [Portability](PORTABILITY.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
 
 --
