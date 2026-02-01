@@ -17,12 +17,6 @@ understanding providers and models, and configuring the system.
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
 
-
-## Developer & Contributor Docs
-These documents are intended for developers extending or contributing to KForge.
-
-- [Add a Provider (Developer Guide)](https://github.com/kilmane/kforge/blob/main/DEV-ADD-PROVIDER.md)
-
----
+--
 
 These pages are safe to link from inside the KForge application.
