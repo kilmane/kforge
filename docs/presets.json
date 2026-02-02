@@ -1,0 +1,211 @@
+{
+  "version": "1",
+  "updated_at": "2026-02-01",
+  "notes": "Draft generated from PRESETS_INVENTORY.md (Phase 3.12). Labels are advisory only.",
+  "providers": {
+    "claude": [
+      {
+        "id": "claude-opus-4-5",
+        "cost": "paid_heavy",
+        "usage": "heavy",
+        "note": "Highest capability; use sparingly"
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Balanced default for dev + writing"
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Cheap + fast; small tasks"
+      }
+    ],
+    "custom": [
+      {
+        "id": "deepseek-chat",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Endpoint-dependent; not guaranteed free"
+      },
+      {
+        "id": "llama-3.1-8b-instant",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Endpoint-dependent; not guaranteed free"
+      },
+      {
+        "id": "mistral-medium-latest",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Paid workhorse"
+      },
+      {
+        "id": "mistral-small-latest",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Low-cost paid"
+      },
+      {
+        "id": "openai/gpt-4o-mini",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Cheap paid default"
+      }
+    ],
+    "deepseek": [
+      {
+        "id": "deepseek-reasoner",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Stronger reasoning; slower/costlier"
+      },
+      {
+        "id": "deepseek-chat",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Cheap general chat"
+      }
+    ],
+    "gemini": [
+      {
+        "id": "gemini-3-pro-preview",
+        "cost": "paid_heavy",
+        "usage": "heavy",
+        "note": "Preview; high capability"
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Strong reasoning"
+      },
+      {
+        "id": "gemini-3-flash-preview",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Preview; may change"
+      },
+      {
+        "id": "gemini-2.5-flash",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Fast"
+      },
+      {
+        "id": "gemini-2.5-flash-lite",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Fast + cheap"
+      }
+    ],
+    "groq": [
+      {
+        "id": "llama-3.3-70b-versatile",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Large + fast"
+      },
+      {
+        "id": "llama-3.1-8b-instant",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Very fast"
+      }
+    ],
+    "mistral": [
+      {
+        "id": "codestral-latest",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Coding-focused"
+      },
+      {
+        "id": "mistral-small-latest",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "General starter"
+      }
+    ],
+    "ollama": [
+      {
+        "id": "codellama:13b",
+        "cost": "paid_heavy",
+        "usage": "heavy",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      },
+      {
+        "id": "deepseek-coder:6.7b",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      },
+      {
+        "id": "llama3.1:8b",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      },
+      {
+        "id": "qwen2.5-coder:7b",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      },
+      {
+        "id": "mistral:7b",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      },
+      {
+        "id": "qwen2.5-coder:1.5b",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Local compute cost (hardware/energy), not API billing"
+      }
+    ],
+    "openai": [
+      {
+        "id": "gpt-4.1-mini",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Day-to-day"
+      },
+      {
+        "id": "gpt-5-mini",
+        "cost": "paid_sandbox",
+        "usage": "sandbox",
+        "note": "Cheap paid testing"
+      }
+    ],
+    "openrouter": [
+      {
+        "id": "meta-llama/llama-3.3-70b-instruct:free",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Rotating / rate-limited"
+      },
+      {
+        "id": "mistralai/devstral-2512:free",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Rotating"
+      },
+      {
+        "id": "qwen/qwen3-coder:free",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Availability may change"
+      },
+      {
+        "id": "xiaomi/mimo-v2-flash:free",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "Availability may change"
+      }
+    ]
+  }
+}
