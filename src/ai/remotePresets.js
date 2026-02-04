@@ -27,7 +27,12 @@ function normalizeEntry(raw) {
   if (!isPlainObject(raw)) return null;
 
   const id = typeof raw.id === "string" ? raw.id.trim() : "";
-  const tier = typeof raw.tier === "string" ? raw.tier.trim() : "";
+  const tierRaw =
+    (typeof raw.tier === "string" && raw.tier.trim()) ||
+    (typeof raw.usage === "string" && raw.usage.trim()) ||
+    "";
+  const tier = tierRaw;
+
   const note =
     typeof raw.note === "string" && raw.note.trim().length > 0
       ? raw.note.trim()
