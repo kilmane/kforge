@@ -295,6 +295,13 @@ export default function ProviderControlsPanel({
       const loaded = await fetchRemotePresetsV0WithCache();
       if (!alive) return;
       setRemotePresets(loaded); // may be null; that's fine
+      if (process.env.NODE_ENV === "development" && loaded) {
+        const source = loaded.cached_at ? "cache" : "remote";
+        const when = loaded.updated_at || loaded.cached_at || "unknown time";
+        console.info(
+          `[kforge] presets loaded (${source}) — updated_at: ${when}`,
+        );
+      }
     })();
 
     return () => {
@@ -383,6 +390,12 @@ export default function ProviderControlsPanel({
   }, [aiProvider, modelSuggestions]);
 
   // Suggestions shown in dropdown = presets + user saved
+  const presetsWhen =
+    remotePresets?.updated_at || remotePresets?.cached_at || "";
+  const presetsTooltip = remotePresets
+    ? `Remote presets ${remotePresets?.updated_at ? "updated" : "cached"}${presetsWhen ? `: ${presetsWhen}` : ""}`
+    : "Using built-in presets (offline or not fetched yet)";
+
   const suggestionRecords = useMemo(() => {
     // Convert user models to “unknown tier” suggestion records
     const userAsRecords = userModelIds
@@ -856,7 +869,7 @@ export default function ProviderControlsPanel({
           {!!aiModelStr.trim() && providerReady && (
             <button
               type="button"
-              className="absolute right-9 top-1/2 -translate-y-1/2 text-xs opacity-70 hover:opacity-95"
+              className="absolute right-12 top-1/2 -translate-y-1/2 text-yellow-400 hover:text-zinc-200"
               title="Clear model"
               onClick={() => {
                 isEditingModelInputRef.current = false;
@@ -868,25 +881,37 @@ export default function ProviderControlsPanel({
           )}
 
           {/* Dropdown toggle */}
-          <button
-            type="button"
-            className={[
-              "absolute right-2 top-1/2 -translate-y-1/2 text-xs rounded border px-2 py-1",
-              "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800/40",
-              !providerReady ? "opacity-60 cursor-not-allowed" : "",
-            ].join(" ")}
-            disabled={!providerReady}
-            title="Show suggested models"
-            onClick={() => {
-              setSuggestionsOpen((v) => !v);
-            }}
-          >
-            ▼
-          </button>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <button
+              type="button"
+              className={[
+                "absolute right-2 top-1/2 -translate-y-1/2 text-xs rounded border px-2 py-1",
+                "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800/40",
+                !providerReady ? "opacity-60 cursor-not-allowed" : "",
+              ].join(" ")}
+              disabled={!providerReady}
+              title="Show suggested models"
+              onClick={() => {
+                setSuggestionsOpen((v) => !v);
+              }}
+            >
+              ▼
+            </button>
+          </div>
         </div>
 
         {suggestionsOpen && (
           <div className="max-h-64 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm">
+            <div className="flex items-center justify-between px-2 py-1 text-[11px] border-b border-zinc-900/60 opacity-80">
+              <span
+                title={presetsTooltip}
+                className="cursor-help text-sm text-yellow-300 opacity-90"
+                aria-label="Remote presets info"
+              >
+                ⓘ
+              </span>
+            </div>
+
             {suggestionRecords.length === 0 ? (
               <div className="px-2 py-2 text-xs opacity-70">
                 No suggestions for this provider.
