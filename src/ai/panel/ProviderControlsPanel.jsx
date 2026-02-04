@@ -288,6 +288,8 @@ export default function ProviderControlsPanel({
   const [lmListBusy, setLmListBusy] = useState(false);
   const [lmListError, setLmListError] = useState("");
   const [remotePresets, setRemotePresets] = useState(null);
+  const [remotePresetsStatus, setRemotePresetsStatus] = useState("loading"); // loading | ready | fallback
+
   useEffect(() => {
     let alive = true;
 
@@ -295,11 +297,17 @@ export default function ProviderControlsPanel({
       const loaded = await fetchRemotePresetsV0WithCache();
       if (!alive) return;
       setRemotePresets(loaded); // may be null; that's fine
+      setRemotePresetsStatus(loaded ? "ready" : "fallback");
       if (process.env.NODE_ENV === "development" && loaded) {
         const source = loaded.cached_at ? "cache" : "remote";
         const when = loaded.updated_at || loaded.cached_at || "unknown time";
         console.info(
           `[kforge] presets loaded (${source}) — updated_at: ${when}`,
+        );
+      }
+      if (process.env.NODE_ENV === "development" && !loaded) {
+        console.info(
+          "[kforge] presets: remote not available (using built-in or cache)",
         );
       }
     })();
@@ -392,9 +400,12 @@ export default function ProviderControlsPanel({
   // Suggestions shown in dropdown = presets + user saved
   const presetsWhen =
     remotePresets?.updated_at || remotePresets?.cached_at || "";
-  const presetsTooltip = remotePresets
-    ? `Remote presets ${remotePresets?.updated_at ? "updated" : "cached"}${presetsWhen ? `: ${presetsWhen}` : ""}`
-    : "Using built-in presets (offline or not fetched yet)";
+  const presetsTooltip =
+    remotePresetsStatus === "loading"
+      ? "Loading remote presets…"
+      : remotePresets
+        ? `Remote presets ${remotePresets?.updated_at ? "updated" : "cached"}${presetsWhen ? `: ${presetsWhen}` : ""}`
+        : "Using built-in presets";
 
   const suggestionRecords = useMemo(() => {
     // Convert user models to “unknown tier” suggestion records
