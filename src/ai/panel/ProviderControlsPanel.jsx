@@ -1,11 +1,14 @@
 // src/ai/panel/ProviderControlsPanel.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { fetchRemotePresetsV0WithCache } from "../remotePresets";
+import { MODEL_PRESETS } from "../modelPresets";
 
 // GitHub Pages docs (nice reading experience, no repo tree)
-const CUSTOM_PROVIDER_DOCS_URL = "https://kilmane.github.io/kforge/custom_provider.html";
-const MODELS_COLOR_LABELS_URL = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
-
+const CUSTOM_PROVIDER_DOCS_URL =
+  "https://kilmane.github.io/kforge/custom_provider.html";
+const MODELS_COLOR_LABELS_URL =
+  "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
 
 async function openExternal(url) {
   try {
@@ -34,7 +37,13 @@ function ProviderTypeBadge({ kind }) {
   );
 }
 // Saved models cost tags (stored in localStorage)
-const COST_TAGS = ["unknown", "free", "paid_sandbox", "paid_main", "paid_heavy"];
+const COST_TAGS = [
+  "unknown",
+  "free",
+  "paid_sandbox",
+  "paid_main",
+  "paid_heavy",
+];
 
 function normalizeCost(raw) {
   const v = String(raw ?? "").trim();
@@ -91,7 +100,9 @@ function normalizeModelId(v) {
 const PRESET_TIERS = ["sandbox", "main", "heavy", "free", "unknown"];
 
 function normalizeTier(tier) {
-  const t = String(tier || "").toLowerCase().trim();
+  const t = String(tier || "")
+    .toLowerCase()
+    .trim();
   return PRESET_TIERS.includes(t) ? t : "unknown";
 }
 
@@ -118,7 +129,9 @@ function TierPill({ tier }) {
   const t = normalizeTier(tier);
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/40 text-[11px] text-zinc-200">
-      <span className={`inline-block w-2 h-2 rounded-full ${tierDotClass(t)}`} />
+      <span
+        className={`inline-block w-2 h-2 rounded-full ${tierDotClass(t)}`}
+      />
       <span className="uppercase tracking-wide">{tierLabel(t)}</span>
     </span>
   );
@@ -138,7 +151,7 @@ function suggestionToRecord(item) {
     return {
       id,
       tier: normalizeTier(item.tier),
-      note: String(item.note || "").trim()
+      note: String(item.note || "").trim(),
     };
   }
   return null;
@@ -153,7 +166,8 @@ function normalizeSuggestionForProvider(providerId, v) {
   if (p === "gemini") {
     // Collapse common Gemini variants so users don't see duplicates.
     if (s.startsWith("models/")) s = s.slice("models/".length);
-    if (s.endsWith(":generateContent")) s = s.slice(0, -":generateContent".length);
+    if (s.endsWith(":generateContent"))
+      s = s.slice(0, -":generateContent".length);
     s = s.trim();
   }
 
@@ -195,7 +209,9 @@ function lastSelectedKey(providerId) {
 }
 
 function trimTrailingSlash(url) {
-  return String(url || "").trim().replace(/\/+$/, "");
+  return String(url || "")
+    .trim()
+    .replace(/\/+$/, "");
 }
 
 async function fetchJsonWithTimeout(url, ms = 8000) {
@@ -236,14 +252,19 @@ export default function ProviderControlsPanel({
   // ✅ NEW: endpoint for current provider (needed for LM Studio /v1/models)
   aiEndpoint,
 
-  buttonClass
+  buttonClass,
 }) {
   const pType = useMemo(() => providerType(aiProvider), [aiProvider]);
 
   // ✅ HARDEN: always treat model value as a string for UI + trim/compare
   const aiModelStr = useMemo(() => {
     if (typeof aiModel === "string") return aiModel;
-    if (aiModel && typeof aiModel === "object" && typeof aiModel.id === "string") return aiModel.id;
+    if (
+      aiModel &&
+      typeof aiModel === "object" &&
+      typeof aiModel.id === "string"
+    )
+      return aiModel.id;
     return "";
   }, [aiModel]);
 
@@ -266,6 +287,20 @@ export default function ProviderControlsPanel({
   // LM Studio list models state
   const [lmListBusy, setLmListBusy] = useState(false);
   const [lmListError, setLmListError] = useState("");
+  const [remotePresets, setRemotePresets] = useState(null);
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const loaded = await fetchRemotePresetsV0WithCache();
+      if (!alive) return;
+      setRemotePresets(loaded); // may be null; that's fine
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Load when provider changes
   useEffect(() => {
@@ -290,7 +325,9 @@ export default function ProviderControlsPanel({
     restoredForProviderRef.current = aiProvider;
 
     try {
-      const last = normalizeModelId(localStorage.getItem(lastSelectedKey(aiProvider)));
+      const last = normalizeModelId(
+        localStorage.getItem(lastSelectedKey(aiProvider)),
+      );
       if (last) setAiModel(last);
     } catch {
       // ignore
@@ -321,13 +358,16 @@ export default function ProviderControlsPanel({
 
   // Build preset records (tiered)
   const presetRecords = useMemo(() => {
-    const raw = Array.isArray(modelSuggestions) ? modelSuggestions : [];
-    const recs = raw.map(suggestionToRecord).filter(Boolean);
+    const remote = remotePresets?.providers?.[aiProvider];
+    const local = MODEL_PRESETS?.[aiProvider];
+    const recs = (remote ?? local ?? [])
+      .map(suggestionToRecord)
+      .filter(Boolean);
 
     // Provider normalization (Gemini variants etc.) applied to the id
     const normalized = recs.map((r) => ({
       ...r,
-      id: normalizeSuggestionForProvider(aiProvider, r.id)
+      id: normalizeSuggestionForProvider(aiProvider, r.id),
     }));
 
     // Dedupe by id (keep the first occurrence, preserves order)
@@ -365,8 +405,12 @@ export default function ProviderControlsPanel({
 
   const filteredUserModels = useMemo(() => {
     if (filter === "All") return userModels;
-    if (filter === "Free") return userModels.filter((r) => normalizeCost(r.cost) === "free");
-    if (filter === "Paid") return userModels.filter((r) => normalizeCost(r.cost).startsWith("paid_"));
+    if (filter === "Free")
+      return userModels.filter((r) => normalizeCost(r.cost) === "free");
+    if (filter === "Paid")
+      return userModels.filter((r) =>
+        normalizeCost(r.cost).startsWith("paid_"),
+      );
     return userModels;
   }, [userModels, filter]);
 
@@ -399,7 +443,9 @@ export default function ProviderControlsPanel({
   function setModelCost(id, cost) {
     const target = normalizeModelId(id);
     if (!target) return;
-    const next = userModels.map((r) => (r.id === target ? { ...r, cost: normalizeCost(cost) } : r));
+    const next = userModels.map((r) =>
+      r.id === target ? { ...r, cost: normalizeCost(cost) } : r,
+    );
     setUserModels(next);
   }
 
@@ -459,7 +505,9 @@ export default function ProviderControlsPanel({
     if (!providerReady) return;
     const endpoint = trimTrailingSlash(aiEndpoint);
     if (!endpoint) {
-      setLmListError("Missing LM Studio endpoint. Configure it in Settings first.");
+      setLmListError(
+        "Missing LM Studio endpoint. Configure it in Settings first.",
+      );
       return;
     }
 
@@ -489,7 +537,9 @@ export default function ProviderControlsPanel({
       const ids = data.map((m) => normalizeModelId(m?.id)).filter(Boolean);
 
       if (ids.length === 0) {
-        setLmListError("LM Studio returned 0 models. Make sure a model is loaded in LM Studio.");
+        setLmListError(
+          "LM Studio returned 0 models. Make sure a model is loaded in LM Studio.",
+        );
         return;
       }
 
@@ -512,7 +562,11 @@ export default function ProviderControlsPanel({
       }
     } catch (e) {
       const msg = String(e?.message || e);
-      setLmListError(msg.includes("AbortError") ? "LM Studio list timed out." : `LM Studio list failed: ${msg}`);
+      setLmListError(
+        msg.includes("AbortError")
+          ? "LM Studio list timed out."
+          : `LM Studio list failed: ${msg}`,
+      );
     } finally {
       setLmListBusy(false);
     }
@@ -538,11 +592,17 @@ export default function ProviderControlsPanel({
       {/* Provider */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="text-xs uppercase tracking-wide opacity-60">Provider</div>
+          <div className="text-xs uppercase tracking-wide opacity-60">
+            Provider
+          </div>
           <ProviderTypeBadge kind={pType} />
         </div>
 
-        <button className={buttonClass("ghost")} onClick={() => openSettings(aiProvider, "Configure in Settings")} type="button">
+        <button
+          className={buttonClass("ghost")}
+          onClick={() => openSettings(aiProvider, "Configure in Settings")}
+          type="button"
+        >
           Configure in Settings
         </button>
       </div>
@@ -555,19 +615,23 @@ export default function ProviderControlsPanel({
         {providerOptions.map((p) => {
           const k = providerType(p.id);
           return (
-            <option key={p.id} value={p.id} disabled={!p.enabled && p.id !== aiProvider}>
+            <option
+              key={p.id}
+              value={p.id}
+              disabled={!p.enabled && p.id !== aiProvider}
+            >
               {p.label}
               {p.suffix} ({k})
             </option>
           );
         })}
-
       </select>
 
       {/* OpenRouter note (free models can rotate) */}
       {aiProvider === "openrouter" && (
         <div className="mt-2 text-[11px] opacity-60">
-          ℹ️ OpenRouter free models may rotate or be deprecated. You can always add model IDs manually.
+          ℹ️ OpenRouter free models may rotate or be deprecated. You can always
+          add model IDs manually.
         </div>
       )}
 
@@ -579,12 +643,14 @@ export default function ProviderControlsPanel({
         </div>
       )}
 
-
-
       {!providerReady && (
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/40 flex justify-between gap-2">
           <div>{disabledProviderMessage(providerStatus)}</div>
-          <button className={buttonClass("ghost")} onClick={() => openSettings(aiProvider, "Configure in Settings")} type="button">
+          <button
+            className={buttonClass("ghost")}
+            onClick={() => openSettings(aiProvider, "Configure in Settings")}
+            type="button"
+          >
             Configure
           </button>
         </div>
@@ -613,7 +679,9 @@ export default function ProviderControlsPanel({
         <div className="flex items-center justify-between">
           <span className="uppercase tracking-wide opacity-60">
             My models{" "}
-            <span className="normal-case opacity-60">(Click a model to use it)</span>
+            <span className="normal-case opacity-60">
+              (Click a model to use it)
+            </span>
           </span>
 
           <button
@@ -625,9 +693,12 @@ export default function ProviderControlsPanel({
           </button>
         </div>
 
-
         {filteredUserModels.length === 0 ? (
-          <div className="mt-2 opacity-60">{userModels.length === 0 ? "None saved yet." : "No models match filter."}</div>
+          <div className="mt-2 opacity-60">
+            {userModels.length === 0
+              ? "None saved yet."
+              : "No models match filter."}
+          </div>
         ) : (
           <div className="mt-2 flex flex-col gap-2">
             {filteredUserModels.map((r) => {
@@ -638,7 +709,9 @@ export default function ProviderControlsPanel({
                   key={r.id}
                   className={[
                     "flex items-center justify-between gap-2 rounded border px-2 py-1",
-                    isActive ? "border-zinc-600 bg-zinc-900/55" : "border-zinc-800 bg-zinc-900/40"
+                    isActive
+                      ? "border-zinc-600 bg-zinc-900/55"
+                      : "border-zinc-800 bg-zinc-900/40",
                   ].join(" ")}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -650,10 +723,19 @@ export default function ProviderControlsPanel({
                           onChange={(e) => setRenameDraft(e.target.value)}
                           disabled={!providerReady}
                         />
-                        <button className={buttonClass("ghost")} type="button" onClick={commitRename} disabled={!providerReady || !renameDraft.trim()}>
+                        <button
+                          className={buttonClass("ghost")}
+                          type="button"
+                          onClick={commitRename}
+                          disabled={!providerReady || !renameDraft.trim()}
+                        >
                           Save
                         </button>
-                        <button className={buttonClass("ghost")} type="button" onClick={cancelRename}>
+                        <button
+                          className={buttonClass("ghost")}
+                          type="button"
+                          onClick={cancelRename}
+                        >
                           Cancel
                         </button>
                       </div>
@@ -667,14 +749,16 @@ export default function ProviderControlsPanel({
                             "text-xs px-2 py-1 rounded border truncate",
                             isActive
                               ? "border-zinc-600 bg-zinc-800/60 text-zinc-100"
-                              : "border-zinc-800 bg-zinc-900/50 text-zinc-200 hover:bg-zinc-800/40"
+                              : "border-zinc-800 bg-zinc-900/50 text-zinc-200 hover:bg-zinc-800/40",
                           ].join(" ")}
                           title="Use this model"
                         >
                           {r.id}
                         </button>
                         <CostBadge tag={r.cost} />
-                        {isActive && <span className="text-[11px] opacity-70">Active</span>}
+                        {isActive && (
+                          <span className="text-[11px] opacity-70">Active</span>
+                        )}
                       </>
                     )}
                   </div>
@@ -695,11 +779,23 @@ export default function ProviderControlsPanel({
                         ))}
                       </select>
 
-                      <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => startRename(r.id)} disabled={!providerReady} title="Rename saved model">
+                      <button
+                        type="button"
+                        className="text-xs opacity-80 hover:opacity-95"
+                        onClick={() => startRename(r.id)}
+                        disabled={!providerReady}
+                        title="Rename saved model"
+                      >
                         ✎
                       </button>
 
-                      <button type="button" className="text-xs opacity-80 hover:opacity-95" onClick={() => removeModel(r.id)} disabled={!providerReady} title="Remove saved model">
+                      <button
+                        type="button"
+                        className="text-xs opacity-80 hover:opacity-95"
+                        onClick={() => removeModel(r.id)}
+                        disabled={!providerReady}
+                        title="Remove saved model"
+                      >
                         ×
                       </button>
                     </div>
@@ -726,7 +822,12 @@ export default function ProviderControlsPanel({
             }
           }}
         />
-        <button className={buttonClass()} onClick={addModel} disabled={!providerReady || !draftModel.trim()} type="button">
+        <button
+          className={buttonClass()}
+          onClick={addModel}
+          disabled={!providerReady || !draftModel.trim()}
+          type="button"
+        >
           Add
         </button>
       </div>
@@ -737,7 +838,7 @@ export default function ProviderControlsPanel({
           <input
             className={[
               "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 pr-16",
-              !providerReady ? "opacity-60 cursor-not-allowed" : ""
+              !providerReady ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
             value={aiModelStr}
             onChange={(e) => {
@@ -772,7 +873,7 @@ export default function ProviderControlsPanel({
             className={[
               "absolute right-2 top-1/2 -translate-y-1/2 text-xs rounded border px-2 py-1",
               "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:bg-zinc-800/40",
-              !providerReady ? "opacity-60 cursor-not-allowed" : ""
+              !providerReady ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
             disabled={!providerReady}
             title="Show suggested models"
@@ -787,7 +888,9 @@ export default function ProviderControlsPanel({
         {suggestionsOpen && (
           <div className="max-h-64 overflow-auto rounded border border-zinc-800 bg-zinc-950/90 shadow-sm">
             {suggestionRecords.length === 0 ? (
-              <div className="px-2 py-2 text-xs opacity-70">No suggestions for this provider.</div>
+              <div className="px-2 py-2 text-xs opacity-70">
+                No suggestions for this provider.
+              </div>
             ) : (
               <div className="flex flex-col">
                 {suggestionRecords.map((r) => {
@@ -801,7 +904,9 @@ export default function ProviderControlsPanel({
                       onClick={() => pickSuggestion(r.id)}
                       className={[
                         "text-left px-2 py-1.5 text-xs border-b border-zinc-900/60",
-                        isActive ? "bg-zinc-800/40 text-zinc-100" : "hover:bg-zinc-800/30 text-zinc-200"
+                        isActive
+                          ? "bg-zinc-800/40 text-zinc-100"
+                          : "hover:bg-zinc-800/30 text-zinc-200",
                       ].join(" ")}
                       title={title}
                     >
@@ -809,7 +914,11 @@ export default function ProviderControlsPanel({
                         <span className="truncate">{r.id}</span>
                         <TierPill tier={r.tier} />
                       </div>
-                      {r.note ? <div className="mt-0.5 text-[11px] opacity-60">{r.note}</div> : null}
+                      {r.note ? (
+                        <div className="mt-0.5 text-[11px] opacity-60">
+                          {r.note}
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -818,8 +927,6 @@ export default function ProviderControlsPanel({
           </div>
         )}
       </div>
-
-
     </div>
   );
 }
