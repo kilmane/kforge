@@ -298,6 +298,9 @@ export default function ProviderControlsPanel({
       if (!alive) return;
       setRemotePresets(loaded); // may be null; that's fine
       setRemotePresetsStatus(loaded ? "ready" : "fallback");
+
+      // Dev-only: keep until we have a dedicated diagnostics/debug panel.
+
       if (process.env.NODE_ENV === "development" && loaded) {
         const source = loaded.cached_at ? "cache" : "remote";
         const when = loaded.updated_at || loaded.cached_at || "unknown time";
