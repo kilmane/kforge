@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-02-01",
+  "updated_at": "2026-02-05",
   "notes": "Draft generated from PRESETS_INVENTORY.md (Phase 3.12). Labels are advisory only.",
   "providers": {
     "claude": [
@@ -180,6 +180,12 @@
         "usage": "sandbox",
         "note": "Cheap paid testing"
       }
+      {
+  "id": "kami-test-model",
+  "cost": "free",
+  "usage": "sandbox",
+  "note": "TEST: remote presets smoke test"
+}
     ],
     "openrouter": [
       {
