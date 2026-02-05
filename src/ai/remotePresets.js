@@ -1,6 +1,8 @@
 // src/ai/remotePresets.js
 // Phase 3.8 (v0): fetch + validate + cache remote presets safely.
+// Phase 3.13: automatic refresh strategy + preserve v1 fields (cost/usage) for UI tags.
 // v0 schema per entry: { id: string, tier: string, note?: string }
+// v1-ish remote entries may include: { id, usage, cost, note, ... } (we preserve cost/usage)
 // Top-level schema expected: { providers: { [providerId]: Array<entry> }, updated_at?: string }
 
 const REMOTE_PRESETS_URL = "https://kilmane.github.io/kforge/presets.json";
@@ -23,6 +25,16 @@ function safeLocalStorage() {
   }
 }
 
+function parseIsoMs(s) {
+  const t = Date.parse(typeof s === "string" ? s : "");
+  return Number.isFinite(t) ? t : 0;
+}
+
+/**
+ * Normalize a single entry.
+ * - Requires id + (tier OR usage) (compat: usage -> tier)
+ * - Preserves optional v1 fields (usage, cost) for UI tags.
+ */
 function normalizeEntry(raw) {
   if (!isPlainObject(raw)) return null;
 
@@ -38,15 +50,31 @@ function normalizeEntry(raw) {
       ? raw.note.trim()
       : undefined;
 
+  const usage =
+    typeof raw.usage === "string" && raw.usage.trim().length > 0
+      ? raw.usage.trim()
+      : undefined;
+
+  const cost =
+    typeof raw.cost === "string" && raw.cost.trim().length > 0
+      ? raw.cost.trim()
+      : undefined;
+
   if (!id || !tier) return null;
 
-  return note ? { id, tier, note } : { id, tier };
+  // Preserve v1 fields for Phase 3.13 UI.
+  const out = { id, tier };
+  if (note) out.note = note;
+  if (usage) out.usage = usage;
+  if (cost) out.cost = cost;
+  return out;
 }
 
 /**
  * Validate the remote JSON payload.
- * Returns: { providers: Record<string, Array<{id,tier,note?}>>, updated_at?: string }
- * or null if invalid/unusable.
+ * Returns: { providers: Record<string, Array<entry>>, updated_at?: string }
+ * where entry is at least {id,tier} and may include {note,usage,cost}.
+ * Returns null if invalid/unusable.
  */
 export function validateRemotePresetsV0(payload) {
   if (!isPlainObject(payload)) return null;
@@ -166,23 +194,66 @@ export function saveCachedRemotePresetsV0(validatedPresets) {
   }
 }
 
+function shouldReplaceCache({ cached, fresh }) {
+  // If no cache, take fresh.
+  if (!cached) return true;
+  if (!fresh) return false;
+
+  const cachedMs = parseIsoMs(cached.updated_at);
+  const freshMs = parseIsoMs(fresh.updated_at);
+
+  // If fresh has no updated_at, keep cache (prevents thrash).
+  if (!freshMs) return false;
+
+  // If cache has no updated_at but fresh does, prefer fresh.
+  if (!cachedMs && freshMs) return true;
+
+  // Replace only if remote is newer.
+  return freshMs > cachedMs;
+}
+
 /**
- * Preferred helper for Phase 3.8 wiring:
+ * Preferred helper for Phase 3.8/3.13 wiring:
+ * - load cache first (fast)
  * - try remote fetch (fast timeout)
- * - if valid: cache + return
+ * - if remote valid + newer(updated_at): cache + return remote
  * - else: return cached (if valid)
  * - else: return null (caller falls back to compiled presets)
+ *
+ * Notes:
+ * - This eliminates manual cache clears for users (Option A).
+ * - In dev, we append a cache-busting ts= to dodge GH Pages/CDN caching during testing.
  */
 export async function fetchRemotePresetsV0WithCache(opts = {}) {
-  const fresh = await fetchRemotePresetsV0(opts);
-  if (fresh) {
-    // Cache the validated object.
+  const cached = loadCachedRemotePresetsV0();
+
+  const isDev =
+    typeof process !== "undefined" &&
+    process.env &&
+    process.env.NODE_ENV === "development";
+
+  const url =
+    opts.url ||
+    (isDev ? `${REMOTE_PRESETS_URL}?ts=${Date.now()}` : REMOTE_PRESETS_URL);
+
+  const fresh = await fetchRemotePresetsV0({ ...opts, url });
+
+  if (fresh && shouldReplaceCache({ cached, fresh })) {
     saveCachedRemotePresetsV0(fresh);
-    // Include cached_at for debugging if caller wants it (optional).
     return { ...fresh, cached_at: new Date().toISOString() };
   }
 
-  return loadCachedRemotePresetsV0();
+  // If fresh exists but is older (or missing updated_at), keep cache if present.
+  if (cached) return cached;
+
+  // No cache available: if we got a valid fresh payload (but chose not to replace),
+  // return it anyway. (This case mainly happens when fresh has no updated_at.)
+  if (fresh) {
+    saveCachedRemotePresetsV0(fresh);
+    return { ...fresh, cached_at: new Date().toISOString() };
+  }
+
+  return null;
 }
 
 export const REMOTE_PRESETS = {

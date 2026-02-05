@@ -136,7 +136,17 @@ function TierPill({ tier }) {
     </span>
   );
 }
-
+function MetaPill({ children, title }) {
+  if (!children) return null;
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/20 text-[10px] text-zinc-200/90"
+    >
+      {children}
+    </span>
+  );
+}
 // Suggestion item can be:
 // - "model-id"
 // - { id: "model-id", tier: "sandbox|main|heavy|free|unknown", note?: string }
@@ -152,6 +162,8 @@ function suggestionToRecord(item) {
       id,
       tier: normalizeTier(item.tier),
       note: String(item.note || "").trim(),
+      usage: typeof item.usage === "string" ? item.usage.trim() : "",
+      cost: typeof item.cost === "string" ? item.cost.trim() : "",
     };
   }
   return null;
@@ -951,7 +963,12 @@ export default function ProviderControlsPanel({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate">{r.id}</span>
-                        <TierPill tier={r.tier} />
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <TierPill tier={r.tier} />
+                          <MetaPill title="Usage">{r.usage}</MetaPill>
+                          <MetaPill title="Cost">{r.cost}</MetaPill>
+                        </div>
                       </div>
                       {r.note ? (
                         <div className="mt-0.5 text-[11px] opacity-60">
