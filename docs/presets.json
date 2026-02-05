@@ -179,13 +179,13 @@
         "cost": "paid_sandbox",
         "usage": "sandbox",
         "note": "Cheap paid testing"
-      }
+      },
       {
-  "id": "kami-test-model",
-  "cost": "free",
-  "usage": "sandbox",
-  "note": "TEST: remote presets smoke test"
-}
+        "id": "kami-test-model",
+        "cost": "free",
+        "usage": "sandbox",
+        "note": "TEST: remote presets smoke test"
+      }
     ],
     "openrouter": [
       {
