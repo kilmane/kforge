@@ -3,6 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { isTauri } from "@tauri-apps/api/core";
 
+// Phase 4.1 — Project Memory (Step 2: wire to current project root)
+import {
+  loadProjectMemory,
+  saveProjectMemory,
+  defaultMemoryV1,
+} from "../brains/project-memory.js";
+import { tauriFsAdapter } from "../brains/tauri-fs-adapter.js";
+
 /**
  * Module-scoped "current project root".
  * Set when the user picks a folder via openProjectFolder().
@@ -11,6 +19,13 @@ import { isTauri } from "@tauri-apps/api/core";
  * while preventing escape outside the project root.
  */
 let CURRENT_PROJECT_ROOT = null;
+
+/**
+ * Module-scoped Project Memory (v1).
+ * Loaded explicitly when the project root is selected.
+ */
+let CURRENT_PROJECT_MEMORY = defaultMemoryV1();
+let PROJECT_MEMORY_LOADED_FOR_ROOT = null;
 
 /**
  * Basic absolute-path detection for Windows + Unix.
@@ -142,7 +157,9 @@ export function resolvePathWithinProject(inputPath) {
   const rootWithSlash = rootNorm.endsWith("/") ? rootNorm : rootNorm + "/";
 
   // Normalize resolved for prefix check:
-  const resolvedWithSlash = resolvedNorm.endsWith("/") ? resolvedNorm : resolvedNorm + "/";
+  const resolvedWithSlash = resolvedNorm.endsWith("/")
+    ? resolvedNorm
+    : resolvedNorm + "/";
 
   if (!resolvedWithSlash.startsWith(rootWithSlash)) {
     throw new Error(`forbidden path: ${raw} (outside project scope)`);
@@ -158,6 +175,52 @@ export function getProjectRoot() {
 export function setProjectRoot(path) {
   const p = String(path || "").trim();
   CURRENT_PROJECT_ROOT = p || null;
+
+  // Reset memory linkage when root changes (explicit load happens elsewhere)
+  PROJECT_MEMORY_LOADED_FOR_ROOT = null;
+  CURRENT_PROJECT_MEMORY = defaultMemoryV1();
+}
+
+/**
+ * Project Memory accessors (explicit, user-controlled).
+ */
+export function getProjectMemory() {
+  return CURRENT_PROJECT_MEMORY;
+}
+
+export function setProjectMemory(nextMemory) {
+  CURRENT_PROJECT_MEMORY = nextMemory || defaultMemoryV1();
+}
+
+/**
+ * Load memory for CURRENT_PROJECT_ROOT (called on Open Folder / root change).
+ * Calm behavior: if missing/broken -> default memory.
+ */
+export async function loadProjectMemoryForCurrentRoot() {
+  const root = getProjectRoot();
+  if (!root) {
+    CURRENT_PROJECT_MEMORY = defaultMemoryV1();
+    PROJECT_MEMORY_LOADED_FOR_ROOT = null;
+    return CURRENT_PROJECT_MEMORY;
+  }
+
+  if (PROJECT_MEMORY_LOADED_FOR_ROOT === root) {
+    return CURRENT_PROJECT_MEMORY;
+  }
+
+  const mem = await loadProjectMemory(root, tauriFsAdapter);
+  CURRENT_PROJECT_MEMORY = mem;
+  PROJECT_MEMORY_LOADED_FOR_ROOT = root;
+  return CURRENT_PROJECT_MEMORY;
+}
+
+/**
+ * Save memory for CURRENT_PROJECT_ROOT (explicit calls only).
+ */
+export async function saveProjectMemoryForCurrentRoot() {
+  const root = getProjectRoot();
+  if (!root) return;
+  await saveProjectMemory(root, tauriFsAdapter, CURRENT_PROJECT_MEMORY);
 }
 
 /**
@@ -205,16 +268,19 @@ export async function openProjectFolder() {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Open Folder"
+    title: "Open Folder",
   });
 
   if (!selected) return null;
 
-  const chosen = Array.isArray(selected) ? selected[0] ?? null : selected;
+  const chosen = Array.isArray(selected) ? (selected[0] ?? null) : selected;
   if (!chosen) return null;
 
   // Set project root for relative path resolution
   CURRENT_PROJECT_ROOT = String(chosen);
+
+  // Phase 4.1: load project memory for this root (no UI yet)
+  await loadProjectMemoryForCurrentRoot();
 
   return chosen;
 }
