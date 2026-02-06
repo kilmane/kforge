@@ -16,6 +16,7 @@ understanding providers and models, and configuring the system.
 - [Custom Provider](custom_provider.md)
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
+- [Terminology](terminology.md)
 
 --
 
