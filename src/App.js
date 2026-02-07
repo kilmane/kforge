@@ -1,17 +1,34 @@
 // src/App.js
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import "./index.css";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 
 import { invoke } from "@tauri-apps/api/core";
 
-import { openProjectFolder, readFolderTree, openFile, saveFile } from "./lib/fs";
+import {
+  openProjectFolder,
+  readFolderTree,
+  openFile,
+  saveFile,
+} from "./lib/fs";
 import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
 import Tabs from "./components/Tabs.jsx";
+import ProjectMemoryPanel from "./components/project-memory-panel.jsx";
 
-import { aiGenerate, aiSetApiKey, aiHasApiKey, aiClearApiKey } from "./ai/client";
+import {
+  aiGenerate,
+  aiSetApiKey,
+  aiHasApiKey,
+  aiClearApiKey,
+} from "./ai/client";
 import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 
@@ -40,7 +57,11 @@ function formatTauriError(err) {
     return err.error.message;
   }
 
-  if (err.error && typeof err.error.kind === "string" && typeof err.error.message === "string") {
+  if (
+    err.error &&
+    typeof err.error.kind === "string" &&
+    typeof err.error.message === "string"
+  ) {
     return `${err.error.kind}: ${err.error.message}`;
   }
 
@@ -53,7 +74,12 @@ function formatTauriError(err) {
 
 function GearIcon({ className = "" }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d="M12 15.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z"
         stroke="currentColor"
@@ -71,20 +97,97 @@ function GearIcon({ className = "" }) {
 
 // Provider registry (UI-facing)
 const ALL_PROVIDERS = [
-  { id: "openai", label: "OpenAI", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "gemini", label: "Gemini", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "claude", label: "Claude", group: "cloud", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
+  {
+    id: "openai",
+    label: "OpenAI",
+    group: "cloud",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "gemini",
+    label: "Gemini",
+    group: "cloud",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "claude",
+    label: "Claude",
+    group: "cloud",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
 
-  { id: "deepseek", label: "DeepSeek", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "groq", label: "Groq", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "mistral", label: "Mistral", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "openrouter", label: "OpenRouter", group: "compatible", needsKey: true, needsEndpoint: false, alwaysEnabled: false },
-  { id: "custom", label: "Custom Endpoint (OpenAI-compatible)", group: "compatible", needsKey: true, needsEndpoint: true, alwaysEnabled: false },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    group: "compatible",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    group: "compatible",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "mistral",
+    label: "Mistral",
+    group: "compatible",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    group: "compatible",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
+  {
+    id: "custom",
+    label: "Custom Endpoint (OpenAI-compatible)",
+    group: "compatible",
+    needsKey: true,
+    needsEndpoint: true,
+    alwaysEnabled: false,
+  },
 
   // Phase 3.3 UI prep
-  { id: "ollama", label: "Ollama (local/remote)", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true },
-  { id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true },
-  { id: "mock", label: "Mock", group: "local", needsKey: false, needsEndpoint: false, alwaysEnabled: true }
+  {
+    id: "ollama",
+    label: "Ollama (local/remote)",
+    group: "local",
+    needsKey: false,
+    needsEndpoint: false,
+    alwaysEnabled: true,
+  },
+  {
+    id: "lmstudio",
+    label: "LM Studio",
+    group: "local",
+    needsKey: false,
+    needsEndpoint: false,
+    alwaysEnabled: true,
+  },
+  {
+    id: "mock",
+    label: "Mock",
+    group: "local",
+    needsKey: false,
+    needsEndpoint: false,
+    alwaysEnabled: true,
+  },
 ];
 
 // Phase 3.4.4 context window
@@ -104,7 +207,7 @@ function buttonClass(variant = "primary", disabled = false) {
 function iconButtonClass(disabled = false) {
   return [
     "w-8 h-8 rounded border border-zinc-800 bg-transparent hover:bg-zinc-900 flex items-center justify-center",
-    disabled ? "opacity-60 cursor-not-allowed" : ""
+    disabled ? "opacity-60 cursor-not-allowed" : "",
   ].join(" ");
 }
 
@@ -118,12 +221,14 @@ function statusForProviderUI(providerMeta, hasKeyMap, endpointsMap) {
   const hasKeyOk = !!hasKeyMap[providerMeta.id];
   const endpoint = (endpointsMap[providerMeta.id] || "").trim();
 
-  const keyOk = !providerMeta.needsKey || providerMeta.alwaysEnabled || hasKeyOk;
+  const keyOk =
+    !providerMeta.needsKey || providerMeta.alwaysEnabled || hasKeyOk;
   const endpointOk = !providerMeta.needsEndpoint || endpoint.length > 0;
 
   if (keyOk && endpointOk) return { label: "Configured", tone: "ok" };
   if (!keyOk) return { label: "Missing API key", tone: "warn", missing: "key" };
-  if (!endpointOk) return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
+  if (!endpointOk)
+    return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
   return { label: "Not configured", tone: "warn" };
 }
 
@@ -137,7 +242,8 @@ function shortSuffixForDisabled(status) {
   if (!status) return "";
   if (status.missing === "key") return "(API key)";
   if (status.missing === "endpoint") return "(Endpoint)";
-  if (typeof status.label === "string" && status.label.trim()) return `(${status.label})`;
+  if (typeof status.label === "string" && status.label.trim())
+    return `(${status.label})`;
   return "(Not configured)";
 }
 
@@ -166,17 +272,25 @@ function modelHelperText(providerId) {
     "🔴 Heavy — expensive / use sparingly";
 
   if (providerId === "openrouter") {
-    return "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini)." + legend;
+    return (
+      "No presets for OpenRouter. Enter a model ID (e.g., openai/gpt-4o-mini)." +
+      legend
+    );
   }
   if (providerId === "custom") {
-    return "No presets for custom endpoints. Enter the model name required by your endpoint." + legend;
+    return (
+      "No presets for custom endpoints. Enter the model name required by your endpoint." +
+      legend
+    );
   }
   if (providerId === "lmstudio") {
-    return "No presets for LM Studio. Enter the model ID your server expects." + legend;
+    return (
+      "No presets for LM Studio. Enter the model ID your server expects." +
+      legend
+    );
   }
   return "This provider has no presets. Enter a model ID." + legend;
 }
-
 
 function disabledProviderMessage(status) {
   if (status?.missing === "key") {
@@ -196,9 +310,11 @@ function providerGroupLabel(group) {
 }
 
 function providerGroupHint(group) {
-  if (group === "local") return "Local runtime — may fail if the server is not running.";
+  if (group === "local")
+    return "Local runtime — may fail if the server is not running.";
   if (group === "cloud") return "Cloud provider — requires an API key.";
-  if (group === "compatible") return "OpenAI-compatible provider — requires an API key (and sometimes an endpoint).";
+  if (group === "compatible")
+    return "OpenAI-compatible provider — requires an API key (and sometimes an endpoint).";
   return "";
 }
 
@@ -285,14 +401,15 @@ function extractPatchFromText(text) {
   const hasFileMarkers = /^\s*(---|\+\+\+)\s+/m.test(text);
   const hasHunks = /^\s*@@\s+/m.test(text);
 
-  const score = (hasDiffGit ? 2 : 0) + (hasFileMarkers ? 2 : 0) + (hasHunks ? 2 : 0);
+  const score =
+    (hasDiffGit ? 2 : 0) + (hasFileMarkers ? 2 : 0) + (hasHunks ? 2 : 0);
 
   if (score >= 4) {
     const candidates = [
       text.search(/^\s*diff --git\s+/m),
       text.search(/^\s*---\s+/m),
       text.search(/^\s*\+\+\+\s+/m),
-      text.search(/^\s*@@\s+/m)
+      text.search(/^\s*@@\s+/m),
     ].filter((i) => i >= 0);
 
     const start = candidates.length ? Math.min(...candidates) : 0;
@@ -302,7 +419,14 @@ function extractPatchFromText(text) {
   return null;
 }
 
-function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions }) {
+function TranscriptBubble({
+  role,
+  content,
+  ts,
+  actionLabel,
+  onAction,
+  actions,
+}) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
   const isSystem = role === "system";
@@ -318,12 +442,18 @@ function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions })
   const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
   const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
 
-  const actionButtons = Array.isArray(actions) ? actions.filter((a) => a && a.label && typeof a.onClick === "function") : [];
+  const actionButtons = Array.isArray(actions)
+    ? actions.filter((a) => a && a.label && typeof a.onClick === "function")
+    : [];
 
   return (
     <div className={`w-full flex ${wrap}`}>
       <div className={`max-w-[90%] border rounded px-3 py-2 ${bubbleTone}`}>
-        <div className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}>{content}</div>
+        <div
+          className={`whitespace-pre-wrap text-sm leading-relaxed ${textTone}`}
+        >
+          {content}
+        </div>
 
         {actionButtons.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -339,14 +469,20 @@ function TranscriptBubble({ role, content, ts, actionLabel, onAction, actions })
             ))}
           </div>
         ) : actionLabel && onAction ? (
-          <button className="mt-2 text-xs underline opacity-90 hover:opacity-100" onClick={onAction} type="button">
+          <button
+            className="mt-2 text-xs underline opacity-90 hover:opacity-100"
+            onClick={onAction}
+            type="button"
+          >
             {actionLabel}
           </button>
         ) : null}
 
         {ts ? (
           <div className="mt-1 text-[10px] opacity-60 flex items-center gap-2">
-            <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">{roleLabel}</span>
+            <span className="px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">
+              {roleLabel}
+            </span>
             <span className="opacity-70">{formatTranscriptTime(ts)}</span>
           </div>
         ) : null}
@@ -367,6 +503,9 @@ export default function App() {
 
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+
+  // Project Memory panel toggle (UI only)
+  const [memoryOpen, setMemoryOpen] = useState(false);
 
   // Right panel width toggle (UI only)
   const [aiPanelWide, setAiPanelWide] = useState(false);
@@ -398,7 +537,7 @@ export default function App() {
   // Runtime reachability (UI-only hint; does not gate providers)
   const [runtimeReachable, setRuntimeReachable] = useState({
     ollama: null,
-    lmstudio: null
+    lmstudio: null,
   });
 
   // Settings modal state
@@ -433,12 +572,15 @@ export default function App() {
         needsKey: true,
         needsEndpoint: false,
         alwaysEnabled: false,
-        group: "compatible"
+        group: "compatible",
       }
     );
   }, [aiProvider]);
 
-  const modelSuggestions = useMemo(() => MODEL_PRESETS[aiProvider] || [], [aiProvider]);
+  const modelSuggestions = useMemo(
+    () => MODEL_PRESETS[aiProvider] || [],
+    [aiProvider],
+  );
 
   // Load endpoints from localStorage (boot)
   useEffect(() => {
@@ -472,10 +614,13 @@ export default function App() {
 
       return true;
     },
-    [hasKey, endpoints]
+    [hasKey, endpoints],
   );
 
-  const providerReady = useMemo(() => isProviderEnabled(aiProvider), [aiProvider, isProviderEnabled]);
+  const providerReady = useMemo(
+    () => isProviderEnabled(aiProvider),
+    [aiProvider, isProviderEnabled],
+  );
 
   const openSettings = useCallback((focusProviderId = null, msg = "") => {
     setSettingsFocusProviderId(focusProviderId);
@@ -506,24 +651,22 @@ export default function App() {
   }, [refreshHasKeys]);
 
   // Auto-fill model if empty (only for preset-driven providers)
-useEffect(() => {
-  if (manualModelProviders(aiProvider)) return;
+  useEffect(() => {
+    if (manualModelProviders(aiProvider)) return;
 
-  const presets = MODEL_PRESETS[aiProvider] || [];
-  if (presets.length === 0) return;
+    const presets = MODEL_PRESETS[aiProvider] || [];
+    if (presets.length === 0) return;
 
-  // Only choose a default when switching provider, and only if the model is empty.
-  setAiModel((cur) => {
-    const trimmed = String(cur || "").trim();
-    if (trimmed) return cur;
-    return presets[0];
-  });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [aiProvider]);
+    // Only choose a default when switching provider, and only if the model is empty.
+    setAiModel((cur) => {
+      const trimmed = String(cur || "").trim();
+      if (trimmed) return cur;
+      return presets[0];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiProvider]);
 
-
-  const handleOpenFolder = useCallback(
-  async () => {
+  const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
     if (!folder) return;
 
@@ -546,7 +689,7 @@ useEffect(() => {
       const msg = formatTauriError ? formatTauriError(err) : String(err);
       setAiTestOutput(
         `Open folder failed:\n${folder}\n\n${msg}\n\n` +
-          `This usually means the folder is outside the allowed allow-read-dir scope.`
+          `This usually means the folder is outside the allowed allow-read-dir scope.`,
       );
       return; // keep current project state unchanged on failure
     }
@@ -562,9 +705,7 @@ useEffect(() => {
     setIncludeActiveFile(false);
 
     setTree(nextTree || []);
-  },
-  []
-);  
+  }, []);
   const handleCloseFolder = useCallback(() => {
     setProjectPath(null);
     setTree([]);
@@ -598,7 +739,7 @@ useEffect(() => {
           path,
           name: basename(path),
           content: contents ?? "",
-          isDirty: false
+          isDirty: false,
         };
 
         setTabs((prev) => [...prev, newTab]);
@@ -607,7 +748,7 @@ useEffect(() => {
         console.error("[kforge] Failed to open file:", err);
       }
     },
-    [tabs]
+    [tabs],
   );
 
   const handleEditorChange = useCallback(
@@ -615,10 +756,14 @@ useEffect(() => {
       if (!activeFilePath) return;
 
       setTabs((prev) =>
-        prev.map((t) => (t.path === activeFilePath ? { ...t, content: nextValue, isDirty: true } : t))
+        prev.map((t) =>
+          t.path === activeFilePath
+            ? { ...t, content: nextValue, isDirty: true }
+            : t,
+        ),
       );
     },
-    [activeFilePath]
+    [activeFilePath],
   );
 
   const handleCloseTab = useCallback(
@@ -639,7 +784,7 @@ useEffect(() => {
         return next;
       });
     },
-    [activeFilePath]
+    [activeFilePath],
   );
 
   const handleSaveActive = useCallback(async () => {
@@ -649,7 +794,11 @@ useEffect(() => {
     try {
       await saveFile(activeTab.path, activeTab.content);
 
-      setTabs((prev) => prev.map((t) => (t.path === activeTab.path ? { ...t, isDirty: false } : t)));
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.path === activeTab.path ? { ...t, isDirty: false } : t,
+        ),
+      );
 
       setSaveStatus("Saved");
       setTimeout(() => setSaveStatus(""), 1200);
@@ -705,7 +854,7 @@ useEffect(() => {
         setAiTestOutput(`Save key failed: ${formatTauriError(err)}`);
       }
     },
-    [refreshHasKeys]
+    [refreshHasKeys],
   );
 
   const handleClearKey = useCallback(
@@ -718,7 +867,7 @@ useEffect(() => {
         setAiTestOutput(`Clear key failed: ${formatTauriError(err)}`);
       }
     },
-    [refreshHasKeys]
+    [refreshHasKeys],
   );
 
   const appendMessage = useCallback((role, content, opts = {}) => {
@@ -730,7 +879,7 @@ useEffect(() => {
       ts: Date.now(),
       actionLabel: opts.actionLabel || null,
       action: typeof opts.action === "function" ? opts.action : null,
-      actions: Array.isArray(opts.actions) ? opts.actions : null
+      actions: Array.isArray(opts.actions) ? opts.actions : null,
     };
     setMessages((prev) => [...prev, msg]);
     return msg;
@@ -738,14 +887,20 @@ useEffect(() => {
 
   useEffect(() => {
     if (!transcriptBottomRef.current) return;
-    transcriptBottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    transcriptBottomRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [messages.length]);
 
   // Phase 3.4.5 safety: if user had "Include active file" ON and the tab disappears, auto-off with a system bubble.
   useEffect(() => {
     if (includeActiveFile && !activeTab) {
       setIncludeActiveFile(false);
-      appendMessage("system", "Include active file turned off — no active file is open.");
+      appendMessage(
+        "system",
+        "Include active file turned off — no active file is open.",
+      );
     }
   }, [includeActiveFile, activeTab, appendMessage]);
 
@@ -781,8 +936,12 @@ useEffect(() => {
         model: aiModel,
         input: aiPrompt,
         system: aiSystem?.trim() ? aiSystem : undefined,
-        temperature: typeof aiTemperature === "number" ? aiTemperature : undefined,
-        max_output_tokens: typeof aiMaxTokens === "number" ? Math.max(1, aiMaxTokens) : undefined
+        temperature:
+          typeof aiTemperature === "number" ? aiTemperature : undefined,
+        max_output_tokens:
+          typeof aiMaxTokens === "number"
+            ? Math.max(1, aiMaxTokens)
+            : undefined,
       };
 
       const ep = (endpoints[aiProvider] || "").trim();
@@ -790,7 +949,15 @@ useEffect(() => {
 
       return { ...req, ...override };
     },
-    [aiProvider, aiModel, aiPrompt, aiSystem, aiTemperature, aiMaxTokens, endpoints]
+    [
+      aiProvider,
+      aiModel,
+      aiPrompt,
+      aiSystem,
+      aiTemperature,
+      aiMaxTokens,
+      endpoints,
+    ],
   );
 
   const runAi = useCallback(
@@ -819,7 +986,10 @@ useEffect(() => {
         const st = statusForProviderUI(meta, hasKey, endpoints);
         const msg = disabledProviderMessage(st);
         setAiOutput(msg);
-        openSettings(req.provider_id, "Configure in Settings to enable this provider.");
+        openSettings(
+          req.provider_id,
+          "Configure in Settings to enable this provider.",
+        );
         return { ok: false, error: msg, kind: "config", needsSettings: true };
       }
 
@@ -839,8 +1009,14 @@ useEffect(() => {
         const msg = formatTauriError(err);
         setAiOutput(msg);
 
-        if ((req.provider_id === "ollama" || req.provider_id === "lmstudio") && seemsConnectionError(msg)) {
-          setRuntimeReachable((prev) => ({ ...prev, [req.provider_id]: false }));
+        if (
+          (req.provider_id === "ollama" || req.provider_id === "lmstudio") &&
+          seemsConnectionError(msg)
+        ) {
+          setRuntimeReachable((prev) => ({
+            ...prev,
+            [req.provider_id]: false,
+          }));
         }
 
         // Heuristic: treat obvious auth/config-ish messages as config category
@@ -854,12 +1030,16 @@ useEffect(() => {
           m.includes("missing endpoint") ||
           (m.includes("endpoint") && m.includes("missing"));
 
-        return { ok: false, error: msg, kind: looksConfig ? "config" : "runtime" };
+        return {
+          ok: false,
+          error: msg,
+          kind: looksConfig ? "config" : "runtime",
+        };
       } finally {
         setAiRunning(false);
       }
     },
-    [buildAiRequest, isProviderEnabled, openSettings, hasKey, endpoints]
+    [buildAiRequest, isProviderEnabled, openSettings, hasKey, endpoints],
   );
 
   const handleAiTest = useCallback(async () => {
@@ -868,16 +1048,23 @@ useEffect(() => {
       input: "Reply with exactly: PIPELINE_OK",
       system: "You are a concise test bot. Output only the requested token.",
       temperature: 0,
-      max_output_tokens: 32
+      max_output_tokens: 32,
     });
 
     if (r.ok) {
       appendMessage("system", `Test succeeded (${aiProvider})`);
     } else {
-      appendMessage("system", `Test failed (${aiProvider}): ${r.error || "Unknown error"}`, {
-        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
-        action: r.kind === "config" ? () => openSettings(aiProvider, "Configure provider") : null
-      });
+      appendMessage(
+        "system",
+        `Test failed (${aiProvider}): ${r.error || "Unknown error"}`,
+        {
+          actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+          action:
+            r.kind === "config"
+              ? () => openSettings(aiProvider, "Configure provider")
+              : null,
+        },
+      );
     }
   }, [aiProvider, runAi, appendMessage, openSettings]);
 
@@ -904,7 +1091,7 @@ useEffect(() => {
       if (manualModelProviders(nextProviderId)) {
         setAiModel("");
         setProviderSwitchNote(
-          `Switched to ${ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId} — model cleared (manual entry).`
+          `Switched to ${ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId} — model cleared (manual entry).`,
         );
         return;
       }
@@ -912,17 +1099,26 @@ useEffect(() => {
       const presets = MODEL_PRESETS[nextProviderId] || [];
       if (presets.length > 0) setAiModel(presets[0]);
 
-      const nextLabel = ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label || nextProviderId;
+      const nextLabel =
+        ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label ||
+        nextProviderId;
       if (presets.length > 0) {
-        setProviderSwitchNote(`Switched to ${nextLabel} — model reset to default (${presets[0]}).`);
+        setProviderSwitchNote(
+          `Switched to ${nextLabel} — model reset to default (${presets[0]}).`,
+        );
       } else {
-        setProviderSwitchNote(`Switched to ${nextLabel} — select or enter a model.`);
+        setProviderSwitchNote(
+          `Switched to ${nextLabel} — select or enter a model.`,
+        );
       }
     },
-    [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints]
+    [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints],
   );
 
-  const providerStatus = useMemo(() => statusForProviderUI(providerMeta, hasKey, endpoints), [providerMeta, hasKey, endpoints]);
+  const providerStatus = useMemo(
+    () => statusForProviderUI(providerMeta, hasKey, endpoints),
+    [providerMeta, hasKey, endpoints],
+  );
 
   // Active provider: UI-only runtime hint (does not gate)
   const activeRuntimeHint = useMemo(() => {
@@ -933,7 +1129,8 @@ useEffect(() => {
       return {
         label: "Unreachable",
         tone: "warn",
-        message: "Runtime not reachable. Make sure the server is running (and endpoint is correct, if set)."
+        message:
+          "Runtime not reachable. Make sure the server is running (and endpoint is correct, if set).",
       };
     }
     if (reachable === true) {
@@ -943,7 +1140,10 @@ useEffect(() => {
   }, [providerMeta, runtimeReachable]);
 
   const headerStatus = useMemo(() => {
-    if (providerStatus?.tone === "ok" && activeRuntimeHint?.label === "Unreachable") {
+    if (
+      providerStatus?.tone === "ok" &&
+      activeRuntimeHint?.label === "Unreachable"
+    ) {
       return { label: "Unreachable", tone: "warn" };
     }
     return providerStatus;
@@ -971,18 +1171,27 @@ useEffect(() => {
 
   const showProviderSurfaceHint = useMemo(() => {
     if (!providerReady) return disabledProviderMessage(providerStatus);
-    if (providerMeta.group === "local" && activeRuntimeHint?.label === "Unreachable") return activeRuntimeHint.message;
+    if (
+      providerMeta.group === "local" &&
+      activeRuntimeHint?.label === "Unreachable"
+    )
+      return activeRuntimeHint.message;
     return providerGroupHint(providerMeta.group);
   }, [providerReady, providerStatus, providerMeta.group, activeRuntimeHint]);
 
   const guardrailText = useMemo(() => {
     if (providerReady) return null;
-    if (providerStatus.missing === "key") return "Add an API key to enable Send.";
-    if (providerStatus.missing === "endpoint") return "Add an endpoint to enable Send.";
+    if (providerStatus.missing === "key")
+      return "Add an API key to enable Send.";
+    if (providerStatus.missing === "endpoint")
+      return "Add an endpoint to enable Send.";
     return "Configure this provider to enable Send.";
   }, [providerReady, providerStatus]);
 
-  const handleDismissSwitchNote = useCallback(() => setProviderSwitchNote(""), []);
+  const handleDismissSwitchNote = useCallback(
+    () => setProviderSwitchNote(""),
+    [],
+  );
 
   const clearConversation = useCallback(() => {
     setMessages([]);
@@ -996,10 +1205,12 @@ useEffect(() => {
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
-      const fileBlock = fileSnapshot ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content) : "";
+      const fileBlock = fileSnapshot
+        ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content)
+        : "";
       return `${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
-    [messages]
+    [messages],
   );
 
   const sendWithPrompt = useCallback(
@@ -1018,11 +1229,17 @@ useEffect(() => {
       let fileSnapshot = null;
       if (includeActiveFile) {
         if (activeTab?.path) {
-          fileSnapshot = { path: activeTab.path, content: activeTab.content ?? "" };
+          fileSnapshot = {
+            path: activeTab.path,
+            content: activeTab.content ?? "",
+          };
         } else {
           // Safe behavior: auto-off and explain; proceed with send unchanged (no file context).
           setIncludeActiveFile(false);
-          appendMessage("system", "Active file was not included because no file is currently open.");
+          appendMessage(
+            "system",
+            "Active file was not included because no file is currently open.",
+          );
         }
       }
 
@@ -1039,7 +1256,7 @@ useEffect(() => {
         contextLimit: CHAT_CONTEXT_TURNS,
         includeActiveFile: !!fileSnapshot,
         fileSnapshot: fileSnapshot ? { ...fileSnapshot } : null,
-        askForPatch: !!askForPatch
+        askForPatch: !!askForPatch,
       });
 
       if (!opts.silentUserAppend) appendMessage("user", draft);
@@ -1049,7 +1266,10 @@ useEffect(() => {
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
 
-      const inputWithContext = buildInputWithContext(`${draft}${patchInstruction}`, fileSnapshot);
+      const inputWithContext = buildInputWithContext(
+        `${draft}${patchInstruction}`,
+        fileSnapshot,
+      );
 
       const r = await runAi({ input: inputWithContext });
 
@@ -1093,7 +1313,10 @@ useEffect(() => {
       } else {
         appendMessage("system", r.error || "Unknown error", {
           actionLabel: r.kind === "config" ? "→ Open Settings" : null,
-          action: r.kind === "config" ? () => openSettings(aiProvider, "Configure provider") : null
+          action:
+            r.kind === "config"
+              ? () => openSettings(aiProvider, "Configure provider")
+              : null,
         });
       }
     },
@@ -1113,69 +1336,93 @@ useEffect(() => {
       includeActiveFile,
       activeTab,
       askForPatch,
-      maybeCapturePatchPreview
-    ]
+      maybeCapturePatchPreview,
+    ],
   );
-
 
   const handleSendChat = useCallback(async () => {
     await sendWithPrompt(aiPrompt);
   }, [sendWithPrompt, aiPrompt]);
 
-  const handleRetryLast = useCallback(
-    async () => {
-      if (!lastSend) {
-        appendMessage("system", "Nothing to retry yet.");
-        return;
-      }
+  const handleRetryLast = useCallback(async () => {
+    if (!lastSend) {
+      appendMessage("system", "Nothing to retry yet.");
+      return;
+    }
 
-      const retryProvider = lastSend.providerId;
-      const retryModel = lastSend.model;
+    const retryProvider = lastSend.providerId;
+    const retryModel = lastSend.model;
 
-      if (!isProviderEnabled(retryProvider)) {
-        appendMessage("system", `Retry blocked — provider "${retryProvider}" is not configured.`, {
+    if (!isProviderEnabled(retryProvider)) {
+      appendMessage(
+        "system",
+        `Retry blocked — provider "${retryProvider}" is not configured.`,
+        {
           actionLabel: "→ Open Settings",
-          action: () => openSettings(retryProvider, "Configure provider for retry")
-        });
-        return;
-      }
+          action: () =>
+            openSettings(retryProvider, "Configure provider for retry"),
+        },
+      );
+      return;
+    }
 
-      appendMessage("system", "Retrying last request…");
+    appendMessage("system", "Retrying last request…");
 
-      const prefix = buildChatContextPrefix(messages, lastSend.contextLimit || CHAT_CONTEXT_TURNS);
-      const fileBlock =
-        lastSend.includeActiveFile && lastSend.fileSnapshot?.path
-          ? buildActiveFileContextBlock(lastSend.fileSnapshot.path, lastSend.fileSnapshot.content)
-          : "";
-
-      const patchInstruction = lastSend.askForPatch
-        ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
-          "Read-only preview only: do not apply changes, do not write files.\n"
+    const prefix = buildChatContextPrefix(
+      messages,
+      lastSend.contextLimit || CHAT_CONTEXT_TURNS,
+    );
+    const fileBlock =
+      lastSend.includeActiveFile && lastSend.fileSnapshot?.path
+        ? buildActiveFileContextBlock(
+            lastSend.fileSnapshot.path,
+            lastSend.fileSnapshot.content,
+          )
         : "";
 
-      const r = await runAi({
-        provider_id: retryProvider,
-        model: retryModel,
-        system: lastSend.system?.trim() ? lastSend.system : undefined,
-        temperature: typeof lastSend.temperature === "number" ? lastSend.temperature : undefined,
-        max_output_tokens: typeof lastSend.maxTokens === "number" ? Math.max(1, lastSend.maxTokens) : undefined,
-        endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
-        input: `${prefix}${fileBlock}${lastSend.prompt}${patchInstruction}`
-      });
+    const patchInstruction = lastSend.askForPatch
+      ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
+        "Read-only preview only: do not apply changes, do not write files.\n"
+      : "";
 
-      if (r.ok) {
-        const out = r.output ?? "";
-        appendMessage("assistant", out);
-        maybeCapturePatchPreview(out);
-      } else {
-        appendMessage("system", r.error || "Unknown error", {
-          actionLabel: r.kind === "config" ? "→ Open Settings" : null,
-          action: r.kind === "config" ? () => openSettings(retryProvider, "Configure provider") : null
-        });
-      }
-    },
-    [lastSend, appendMessage, runAi, isProviderEnabled, openSettings, messages, maybeCapturePatchPreview]
-  );
+    const r = await runAi({
+      provider_id: retryProvider,
+      model: retryModel,
+      system: lastSend.system?.trim() ? lastSend.system : undefined,
+      temperature:
+        typeof lastSend.temperature === "number"
+          ? lastSend.temperature
+          : undefined,
+      max_output_tokens:
+        typeof lastSend.maxTokens === "number"
+          ? Math.max(1, lastSend.maxTokens)
+          : undefined,
+      endpoint: lastSend.endpoint ? lastSend.endpoint : undefined,
+      input: `${prefix}${fileBlock}${lastSend.prompt}${patchInstruction}`,
+    });
+
+    if (r.ok) {
+      const out = r.output ?? "";
+      appendMessage("assistant", out);
+      maybeCapturePatchPreview(out);
+    } else {
+      appendMessage("system", r.error || "Unknown error", {
+        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+        action:
+          r.kind === "config"
+            ? () => openSettings(retryProvider, "Configure provider")
+            : null,
+      });
+    }
+  }, [
+    lastSend,
+    appendMessage,
+    runAi,
+    isProviderEnabled,
+    openSettings,
+    messages,
+    maybeCapturePatchPreview,
+  ]);
 
   const handlePromptKeyDown = useCallback(
     (e) => {
@@ -1184,7 +1431,7 @@ useEffect(() => {
         handleSendChat();
       }
     },
-    [handleSendChat]
+    [handleSendChat],
   );
 
   const aiPanelWidthClass = useMemo(() => {
@@ -1215,7 +1462,7 @@ useEffect(() => {
    * - First: show a "tool request" system bubble with Approve/Cancel.
    * - Only on Approve do we append "calling" then "returned/failed" (simulated).
    */
- 
+
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <SettingsModal
@@ -1236,15 +1483,17 @@ useEffect(() => {
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>
-		
-		<button
-		  className={buttonClass("ghost", !projectPath)}
-		  onClick={handleCloseFolder}
-		  disabled={!projectPath}
-		  title={projectPath ? `Close folder: ${projectPath}` : "No folder open"}
-		>
-		  Close Folder
-		</button>
+
+        <button
+          className={buttonClass("ghost", !projectPath)}
+          onClick={handleCloseFolder}
+          disabled={!projectPath}
+          title={
+            projectPath ? `Close folder: ${projectPath}` : "No folder open"
+          }
+        >
+          Close Folder
+        </button>
 
         <button
           className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
@@ -1253,6 +1502,14 @@ useEffect(() => {
           title="Save (Ctrl/Cmd+S)"
         >
           Save
+        </button>
+
+        <button
+          className={buttonClass("ghost")}
+          onClick={() => setMemoryOpen((v) => !v)}
+          title="Toggle Project Memory"
+        >
+          {memoryOpen ? "Hide Memory" : "Memory"}
         </button>
 
         <button
@@ -1272,9 +1529,7 @@ useEffect(() => {
         </button>
 
         {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
-        <div className="hidden md:flex items-center gap-2">
-        
-        </div>
+        <div className="hidden md:flex items-center gap-2"></div>
 
         <div className="text-sm opacity-80 truncate">
           {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
@@ -1283,27 +1538,53 @@ useEffect(() => {
         {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
 
         {aiTestOutput && (
-          <div className="text-xs opacity-70 truncate max-w-[35%]" title={aiTestOutput}>
+          <div
+            className="text-xs opacity-70 truncate max-w-[35%]"
+            title={aiTestOutput}
+          >
             {aiTestOutput}
           </div>
         )}
 
         {activeFilePath && (
-          <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">{activeFilePath}</div>
+          <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">
+            {activeFilePath}
+          </div>
         )}
       </div>
 
       {/* Tabs */}
-      <Tabs tabs={tabs} activePath={activeFilePath} onActivate={setActiveFilePath} onClose={handleCloseTab} />
+      <Tabs
+        tabs={tabs}
+        activePath={activeFilePath}
+        onActivate={setActiveFilePath}
+        onClose={handleCloseTab}
+      />
 
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
-        <div className="w-72 border-r border-zinc-800 min-h-0">
-          <Explorer tree={tree} onOpenFile={handleOpenFile} activeFilePath={activeFilePath} />
+        <div className="w-72 border-r border-zinc-800 min-h-0 flex flex-col">
+          {memoryOpen ? (
+            <div className="max-h-[45%] overflow-auto border-b border-zinc-800">
+              <ProjectMemoryPanel />
+            </div>
+          ) : null}
+
+          <div className="flex-1 min-h-0">
+            <Explorer
+              tree={tree}
+              onOpenFile={handleOpenFile}
+              activeFilePath={activeFilePath}
+            />
+          </div>
         </div>
 
         <div className="flex-1 min-h-0">
-          <EditorPane filePath={activeFilePath} value={activeTab?.content ?? ""} onChange={handleEditorChange} />
+          <EditorPane
+            filePath={activeFilePath}
+            value={activeTab?.content ?? ""}
+            onChange={handleEditorChange}
+          />
         </div>
 
         <AiPanel
@@ -1380,4 +1661,3 @@ useEffect(() => {
     </div>
   );
 }
-
