@@ -5,6 +5,10 @@
 /.pnp
 .pnp.js
 
+# KForge runtime project memory (local only)
+.kforge/
+docs/.kforge/
+
 # testing
 /coverage
 
