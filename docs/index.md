@@ -17,6 +17,7 @@ understanding providers and models, and configuring the system.
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
 - [Terminology](terminology.md)
+- [Project Memory](project-memory.md)
 
 --
 
