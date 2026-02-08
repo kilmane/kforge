@@ -79,13 +79,28 @@ pub fn run() {
                 let _ = app.shell().open(url, None);
             }
 
-            "help.provider_labels" => {
+            "help.models color labels" => {
                 let url = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
                 let _ = app.shell().open(url, None);
             }
 
             "help.project_memory" => {
                 let url = "https://kilmane.github.io/kforge/project-memory.html";
+                let _ = app.shell().open(url, None);
+            }
+
+            "help.custom_providers" => {
+                let url = "https://kilmane.github.io/kforge/custom_provider.html";
+                let _ = app.shell().open(url, None);
+            }
+
+            "help.portability" => {
+                let url = "https://kilmane.github.io/kforge/portability.html";
+                let _ = app.shell().open(url, None);
+            }
+
+            "presets_inventory" => {
+                let url = "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html";
                 let _ = app.shell().open(url, None);
             }
 

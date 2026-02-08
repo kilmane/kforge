@@ -11,12 +11,12 @@ This site contains user guides and reference material for using KForge,
 understanding providers and models, and configuring the system.
 
 ## User Guides
+- [Terminology](terminology.md)
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
 - [Models Color Labels](MODELS_COLOR_LABELS.md)
 - [Custom Provider](custom_provider.md)
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
-- [Terminology](terminology.md)
 - [Project Memory](project-memory.md)
 
 --
