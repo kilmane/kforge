@@ -17,6 +17,7 @@ import {
   readFolderTree,
   openFile,
   saveFile,
+  getProjectMemory,
 } from "./lib/fs";
 import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
@@ -378,6 +379,66 @@ function buildActiveFileContextBlock(filePath, fileContent) {
   );
 }
 
+function buildProjectMemoryBlock() {
+  try {
+    const mem = getProjectMemory ? getProjectMemory() : null;
+    if (!mem) return "";
+
+    const anchors = Array.isArray(mem.anchors) ? mem.anchors : [];
+    const decisions = Array.isArray(mem.decisions) ? mem.decisions : [];
+    const workingSet = Array.isArray(mem.working_set) ? mem.working_set : [];
+
+    const approvedDecisions = decisions.filter(
+      (d) => d && d.status === "approved" && String(d.text || "").trim(),
+    );
+    const workingPaths = workingSet
+      .map((w) => String(w?.path || "").trim())
+      .filter(Boolean);
+
+    const anchorLines = anchors
+      .map((a) => String(a?.content || "").trim())
+      .filter(Boolean);
+
+    // If totally empty, don't inject noise.
+    if (
+      anchorLines.length === 0 &&
+      approvedDecisions.length === 0 &&
+      workingPaths.length === 0
+    )
+      return "";
+
+    let out = "";
+    out += "=== Project Memory (user-controlled; do not modify) ===\n";
+
+    if (anchorLines.length > 0) {
+      out += "Conversation Anchors (important context):\n";
+      for (const line of anchorLines) out += `- ${line}\n`;
+      out += "\n";
+    }
+
+    if (approvedDecisions.length > 0) {
+      out +=
+        "Decision Log (approved constraints — must follow unless the user explicitly overrides):\n";
+      for (const d of approvedDecisions) out += `- ${String(d.text).trim()}\n`;
+      out += "\n";
+    }
+
+    if (workingPaths.length > 0) {
+      out += "Working Set (scope boundary):\n";
+      for (const p of workingPaths) out += `- ${p}\n`;
+      out += "\n";
+      out +=
+        "Scope rule: Default to changes ONLY within the Working Set files. " +
+        "If the user's request requires edits outside the Working Set, ask to expand scope first.\n\n";
+    }
+
+    out += "=== End Project Memory ===\n\n";
+    return out;
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Phase 3.6.1/3.6.2 — Tool visibility + consent (UI-only)
  * - Tool-related events must be visible in transcript as system messages.
@@ -506,6 +567,25 @@ export default function App() {
 
   // Project Memory panel toggle (UI only)
   const [memoryOpen, setMemoryOpen] = useState(false);
+
+  const memoryBadgeCount = useMemo(() => {
+    try {
+      const mem = getProjectMemory?.();
+      if (!mem) return 0;
+
+      const anchorsCount = Array.isArray(mem.anchors) ? mem.anchors.length : 0;
+      const approvedDecisionsCount = Array.isArray(mem.decisions)
+        ? mem.decisions.filter((d) => d && d.status === "approved").length
+        : 0;
+      const workingSetCount = Array.isArray(mem.working_set)
+        ? mem.working_set.length
+        : 0;
+
+      return anchorsCount + approvedDecisionsCount + workingSetCount;
+    } catch {
+      return 0;
+    }
+  }, [projectPath, memoryOpen]);
 
   // Right panel width toggle (UI only)
   const [aiPanelWide, setAiPanelWide] = useState(false);
@@ -1204,11 +1284,12 @@ export default function App() {
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
+      const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
       const fileBlock = fileSnapshot
         ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content)
         : "";
-      return `${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages],
   );
@@ -1510,6 +1591,7 @@ export default function App() {
           title="Toggle Project Memory"
         >
           {memoryOpen ? "Hide Memory" : "Memory"}
+          {!memoryOpen && memoryBadgeCount > 0 ? ` • ${memoryBadgeCount}` : ""}
         </button>
 
         <button
