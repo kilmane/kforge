@@ -37,15 +37,15 @@ pub fn run() {
                 &[
                     &MenuItem::with_id(
                         handle,
-                        "help.providers_models",
+                        "help.providers_and_models",
                         "Providers and Models",
                         true,
                         None::<&str>,
                     )?,
                     &MenuItem::with_id(
                         handle,
-                        "help.provider_labels",
-                        "Provider Color + Labels",
+                        "help.models_color_labels",
+                        "Models Color + Labels",
                         true,
                         None::<&str>,
                     )?,
@@ -63,6 +63,27 @@ pub fn run() {
                         true,
                         None::<&str>,
                     )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.custom_providers",
+                        "Custom Provider (OpenAI-compatible)",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.portability",
+                        "Portability",
+                        true,
+                        None::<&str>,
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.presets_inventory",
+                        "Presets Inventory",
+                        true,
+                        None::<&str>,
+                    )?,
                 ],
             )?;
 
@@ -74,12 +95,12 @@ pub fn run() {
                 let _ = app.shell().open(url, None);
             }
 
-            "help.providers_models" => {
+            "help.providers_and_models" => {
                 let url = "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html";
                 let _ = app.shell().open(url, None);
             }
 
-            "help.models color labels" => {
+            "help.models_color_labels" => {
                 let url = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
                 let _ = app.shell().open(url, None);
             }
@@ -99,7 +120,7 @@ pub fn run() {
                 let _ = app.shell().open(url, None);
             }
 
-            "presets_inventory" => {
+            "help.presets_inventory" => {
                 let url = "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html";
                 let _ = app.shell().open(url, None);
             }
