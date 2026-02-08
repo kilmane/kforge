@@ -56,24 +56,39 @@ pub fn run() {
                         true,
                         None::<&str>,
                     )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "help.project_memory",
+                        "What is Project Memory?",
+                        true,
+                        None::<&str>,
+                    )?,
                 ],
             )?;
 
             Menu::with_items(handle, &[&help])
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "help.providers_models" => {
-                let url = "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html";
-                let _ = app.shell().open(url, None);
-            }
-            "help.provider_labels" => {
-                let url = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
-                let _ = app.shell().open(url, None);
-            }
             "help.terminology" => {
                 let url = "https://kilmane.github.io/kforge/terminology.html";
                 let _ = app.shell().open(url, None);
             }
+
+            "help.providers_models" => {
+                let url = "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html";
+                let _ = app.shell().open(url, None);
+            }
+
+            "help.provider_labels" => {
+                let url = "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html";
+                let _ = app.shell().open(url, None);
+            }
+
+            "help.project_memory" => {
+                let url = "https://kilmane.github.io/kforge/project-memory.html";
+                let _ = app.shell().open(url, None);
+            }
+
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
