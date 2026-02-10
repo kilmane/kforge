@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getChatUiPref, setChatUiPref } from "../../state/uiPrefs";
 
 function inputClass(disabled = false) {
   return [
     "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
-    disabled ? "opacity-60 cursor-not-allowed" : ""
+    disabled ? "opacity-60 cursor-not-allowed" : "",
   ].join(" ");
 }
 
@@ -25,22 +26,20 @@ function endpointFieldSpec(providerId) {
     return {
       title: "Endpoint URL (optional)",
       placeholder: "http://localhost:11434",
-      help:
-        "Optional for Ollama. Leave blank to use the default local endpoint. Use this to point at a remote Ollama host."
+      help: "Optional for Ollama. Leave blank to use the default local endpoint. Use this to point at a remote Ollama host.",
     };
   }
   if (providerId === "lmstudio") {
     return {
       title: "Endpoint URL (optional)",
       placeholder: "http://localhost:1234",
-      help:
-        "Optional for LM Studio. Leave blank to use the default local endpoint, or set it to your LM Studio server URL."
+      help: "Optional for LM Studio. Leave blank to use the default local endpoint, or set it to your LM Studio server URL.",
     };
   }
   return {
     title: "Endpoint URL (required)",
     placeholder: "https://your-openai-compatible-host (no /v1 needed)",
-    help: "Required for this provider. The main panel must not contain endpoints."
+    help: "Required for this provider. The main panel must not contain endpoints.",
   };
 }
 
@@ -53,7 +52,8 @@ function statusForProvider(p, hasKeyMap, endpointsMap) {
 
   if (keyOk && endpointOk) return { label: "Configured", tone: "ok" };
   if (!keyOk) return { label: "Missing API key", tone: "warn", missing: "key" };
-  if (!endpointOk) return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
+  if (!endpointOk)
+    return { label: "Missing endpoint", tone: "warn", missing: "endpoint" };
   return { label: "Not configured", tone: "warn" };
 }
 
@@ -78,7 +78,14 @@ function settingsGuidanceForStatus(p, hasKeyMap, endpointsMap) {
   return "Complete the required fields to enable this provider.";
 }
 
-function ProviderButton({ p, active, onClick, hasKeyMap, endpointsMap, registerRef }) {
+function ProviderButton({
+  p,
+  active,
+  onClick,
+  hasKeyMap,
+  endpointsMap,
+  registerRef,
+}) {
   const st = statusForProvider(p, hasKeyMap, endpointsMap);
   const chipClass =
     st.tone === "ok"
@@ -94,7 +101,7 @@ function ProviderButton({ p, active, onClick, hasKeyMap, endpointsMap, registerR
         "w-full text-left px-2 py-2 rounded border outline-none",
         active
           ? "bg-zinc-900 border-zinc-700"
-          : "bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800"
+          : "bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800",
       ].join(" ")}
       onClick={onClick}
       type="button"
@@ -102,7 +109,9 @@ function ProviderButton({ p, active, onClick, hasKeyMap, endpointsMap, registerR
     >
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-semibold">{p.label}</div>
-        <div className={`text-[11px] px-2 py-0.5 rounded border ${chipClass}`}>{st.label}</div>
+        <div className={`text-[11px] px-2 py-0.5 rounded border ${chipClass}`}>
+          {st.label}
+        </div>
       </div>
       <div className="text-xs opacity-60 mt-0.5">{p.id}</div>
     </button>
@@ -119,20 +128,33 @@ export default function SettingsModal({
   onSaveKey,
   onClearKey,
   focusProviderId,
-  message
+  message,
 }) {
   const [activeId, setActiveId] = useState(providers?.[0]?.id || "openai");
   const [keyDrafts, setKeyDrafts] = useState({}); // providerId -> string
 
+  // Phase 4.2: chat UI preference (layout only)
+  const [chatUi, setChatUi] = useState(getChatUiPref()); // "classic" | "dock"
+  function onChangeChatUi(next) {
+    setChatUi(next);
+    setChatUiPref(next);
+  }
+
   const providerButtonRefs = useRef({}); // providerId -> element
   const leftListRef = useRef(null);
 
-  const cloudItems = useMemo(() => (providers || []).filter((p) => p.group === "cloud"), [providers]);
+  const cloudItems = useMemo(
+    () => (providers || []).filter((p) => p.group === "cloud"),
+    [providers],
+  );
   const compatItems = useMemo(
     () => (providers || []).filter((p) => p.group === "compatible"),
-    [providers]
+    [providers],
   );
-  const localItems = useMemo(() => (providers || []).filter((p) => p.group === "local"), [providers]);
+  const localItems = useMemo(
+    () => (providers || []).filter((p) => p.group === "local"),
+    [providers],
+  );
 
   const activeProvider = useMemo(() => {
     const list = providers || [];
@@ -147,15 +169,24 @@ export default function SettingsModal({
 
   const settingsGuidance = useMemo(() => {
     if (!activeProvider) return "";
-    return settingsGuidanceForStatus(activeProvider, hasKeyMap || {}, endpointsMap || {});
+    return settingsGuidanceForStatus(
+      activeProvider,
+      hasKeyMap || {},
+      endpointsMap || {},
+    );
   }, [activeProvider, hasKeyMap, endpointsMap]);
 
   const showEndpoint = useMemo(() => {
     const id = activeProvider?.id;
-    return !!activeProvider?.needsEndpoint || OPTIONAL_ENDPOINT_PROVIDER_IDS.has(id);
+    return (
+      !!activeProvider?.needsEndpoint || OPTIONAL_ENDPOINT_PROVIDER_IDS.has(id)
+    );
   }, [activeProvider]);
 
-  const endpointSpec = useMemo(() => endpointFieldSpec(activeProvider?.id), [activeProvider]);
+  const endpointSpec = useMemo(
+    () => endpointFieldSpec(activeProvider?.id),
+    [activeProvider],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -203,18 +234,26 @@ export default function SettingsModal({
         {/* Header */}
         <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0">
           <div className="font-semibold">Settings</div>
-          <button className={buttonClass("ghost")} onClick={onClose} type="button">
+          <button
+            className={buttonClass("ghost")}
+            onClick={onClose}
+            type="button"
+          >
             Close
           </button>
         </div>
 
         {/* Subheader */}
         <div className="p-4 border-b border-zinc-800 text-xs opacity-70 shrink-0">
-          Configure providers here. The main panel must not show API keys or endpoints.
-          {message ? <span className="ml-2 opacity-90">• {message}</span> : null}
+          Configure providers here. The main panel must not show API keys or
+          endpoints.
+          {message ? (
+            <span className="ml-2 opacity-90">• {message}</span>
+          ) : null}
           <div className="mt-1 text-[11px] opacity-60">
-            Providers loaded: {providers?.length ?? 0} • Cloud: {cloudItems.length} • Compatible:{" "}
-            {compatItems.length} • Local: {localItems.length}
+            Providers loaded: {providers?.length ?? 0} • Cloud:{" "}
+            {cloudItems.length} • Compatible: {compatItems.length} • Local:{" "}
+            {localItems.length}
           </div>
         </div>
 
@@ -224,7 +263,8 @@ export default function SettingsModal({
           <div className="border-r border-zinc-800 min-h-0 overflow-hidden">
             <div ref={leftListRef} className="h-full overflow-auto p-3">
               <div className="text-[11px] opacity-60 px-2 mb-3 leading-snug">
-                Tip: select a provider on the left to configure its API key (and endpoint where required).
+                Tip: select a provider on the left to configure its API key (and
+                endpoint where required).
               </div>
 
               <div className="mb-4">
@@ -283,8 +323,9 @@ export default function SettingsModal({
                   ))}
                   {localItems.length === 0 ? (
                     <div className="text-xs opacity-60 px-2 leading-snug">
-                      No local runtime providers found. (This means Settings did not receive providers
-                      with <span className="opacity-90">group: "local"</span>.)
+                      No local runtime providers found. (This means Settings did
+                      not receive providers with{" "}
+                      <span className="opacity-90">group: "local"</span>.)
                     </div>
                   ) : null}
                 </div>
@@ -298,8 +339,43 @@ export default function SettingsModal({
               <div className="text-sm opacity-70">No provider selected.</div>
             ) : (
               <div className="space-y-4">
+                {/* Chat UI toggle (Phase 4.2) */}
+                <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">Chat UI</div>
+                    <div className="text-xs opacity-70">layout only</div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={buttonClass(
+                        chatUi === "classic" ? "primary" : "ghost",
+                      )}
+                      onClick={() => onChangeChatUi("classic")}
+                    >
+                      Classic
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass(
+                        chatUi === "dock" ? "primary" : "ghost",
+                      )}
+                      onClick={() => onChangeChatUi("dock")}
+                    >
+                      Bottom
+                    </button>
+                  </div>
+
+                  <div className="text-xs opacity-60">
+                    Switches layout only. No behavior changes.
+                  </div>
+                </div>
+
                 <div>
-                  <div className="text-lg font-semibold">{activeProvider.label}</div>
+                  <div className="text-lg font-semibold">
+                    {activeProvider.label}
+                  </div>
                   <div className="text-xs opacity-70 mt-1">
                     Status: <span className="opacity-90">{status.label}</span>
                   </div>
@@ -330,7 +406,7 @@ export default function SettingsModal({
                         onChange={(e) =>
                           setKeyDrafts((prev) => ({
                             ...prev,
-                            [activeProvider.id]: e.target.value
+                            [activeProvider.id]: e.target.value,
                           }))
                         }
                         placeholder={`Paste ${activeProvider.label} API key...`}
@@ -340,12 +416,17 @@ export default function SettingsModal({
                         <button
                           className={buttonClass(
                             "primary",
-                            !(keyDrafts[activeProvider.id] || "").trim()
+                            !(keyDrafts[activeProvider.id] || "").trim(),
                           )}
                           onClick={() =>
-                            onSaveKey(activeProvider.id, keyDrafts[activeProvider.id] || "")
+                            onSaveKey(
+                              activeProvider.id,
+                              keyDrafts[activeProvider.id] || "",
+                            )
                           }
-                          disabled={!(keyDrafts[activeProvider.id] || "").trim()}
+                          disabled={
+                            !(keyDrafts[activeProvider.id] || "").trim()
+                          }
                           type="button"
                         >
                           Save
@@ -375,20 +456,28 @@ export default function SettingsModal({
                 {showEndpoint ? (
                   <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">{endpointSpec.title}</div>
+                      <div className="text-sm font-semibold">
+                        {endpointSpec.title}
+                      </div>
                       <div className="text-xs opacity-70">
-                        {((endpointsMap || {})[activeProvider.id] || "").trim() ? "set" : "not set"}
+                        {((endpointsMap || {})[activeProvider.id] || "").trim()
+                          ? "set"
+                          : "not set"}
                       </div>
                     </div>
 
                     <input
                       className={inputClass(false)}
                       value={(endpointsMap || {})[activeProvider.id] || ""}
-                      onChange={(e) => onSetEndpoint(activeProvider.id, e.target.value)}
+                      onChange={(e) =>
+                        onSetEndpoint(activeProvider.id, e.target.value)
+                      }
                       placeholder={endpointSpec.placeholder}
                     />
 
-                    <div className="text-xs opacity-60">{endpointSpec.help}</div>
+                    <div className="text-xs opacity-60">
+                      {endpointSpec.help}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -398,8 +487,14 @@ export default function SettingsModal({
 
         {/* Footer */}
         <div className="h-12 px-4 border-t border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="text-xs opacity-60">Phase 3.4: provider ergonomics + Settings UX (UI-only).</div>
-          <button className={buttonClass("primary")} onClick={onClose} type="button">
+          <div className="text-xs opacity-60">
+            Phase 3.4: provider ergonomics + Settings UX (UI-only).
+          </div>
+          <button
+            className={buttonClass("primary")}
+            onClick={onClose}
+            type="button"
+          >
             Done
           </button>
         </div>
