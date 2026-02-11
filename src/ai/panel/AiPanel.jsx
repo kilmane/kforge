@@ -13,8 +13,18 @@ import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
 
+/**
+ * ✅ Global caches to prevent repeated tool prompts when AiPanel is collapsed/re-opened.
+ * These survive unmount/remount of the panel.
+ *
+ * We still clear them when the conversation is cleared (messages becomes empty).
+ */
+const GLOBAL_SEEN_TOOL_KEYS = new Set();
+
 function uidShort() {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(-6);
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
+    -6,
+  );
 }
 
 function formatToolLine({ tool, status, id, detail }) {
@@ -23,11 +33,16 @@ function formatToolLine({ tool, status, id, detail }) {
   const d = String(detail || "").trim();
 
   let headline = "";
-  if (status === "request") headline = `🛡 Tool request: ${t}${i ? ` (${i})` : ""}`;
-  else if (status === "calling") headline = `🛠 Calling tool: ${t}${i ? ` (${i})` : ""}…`;
-  else if (status === "ok") headline = `✅ Tool returned: ${t}${i ? ` (${i})` : ""}`;
-  else if (status === "error") headline = `❌ Tool failed: ${t}${i ? ` (${i})` : ""}`;
-  else if (status === "cancelled") headline = `🚫 Tool cancelled: ${t}${i ? ` (${i})` : ""}`;
+  if (status === "request")
+    headline = `🛡 Tool request: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "calling")
+    headline = `🛠 Calling tool: ${t}${i ? ` (${i})` : ""}…`;
+  else if (status === "ok")
+    headline = `✅ Tool returned: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "error")
+    headline = `❌ Tool failed: ${t}${i ? ` (${i})` : ""}`;
+  else if (status === "cancelled")
+    headline = `🚫 Tool cancelled: ${t}${i ? ` (${i})` : ""}`;
   else headline = `🧩 Tool event: ${t}${i ? ` (${i})` : ""}`;
 
   const parts = [`[tool] ${headline}`];
@@ -67,11 +82,31 @@ function dirnameOfPath(p) {
  * - whitelist only read-only tools
  * - ALWAYS route through toolRuntime.runToolCall => consent UI
  */
-const ALLOWED_MODEL_TOOLS = new Set(["read_file", "list_dir", "search_in_file"]);
+const ALLOWED_MODEL_TOOLS = new Set([
+  "read_file",
+  "list_dir",
+  "search_in_file",
+  "write_file",
+  "mkdir",
+]);
 
 function getMsgText(msg) {
   const v = msg?.content ?? msg?.text ?? msg?.message ?? msg?.body ?? "";
   return String(v || "");
+}
+
+/**
+ * Small stable hash so we don't store huge payload strings in the key.
+ * (Not crypto, just a compact fingerprint.)
+ */
+function hashString(s) {
+  const str = String(s || "");
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
 }
 
 function extractFencedBlocks(text) {
@@ -79,19 +114,42 @@ function extractFencedBlocks(text) {
 
   const blocks = [];
 
-  // ```tool / ```tool_call
+  // 1️⃣ ```tool / ```tool_call
   const reTool = /```(?:tool|tool_call)\s*([\s\S]*?)```/g;
   let m;
   while ((m = reTool.exec(text)) !== null) {
     blocks.push({ payload: (m[1] || "").trim(), source: "tool_fence" });
   }
 
-  // ```json blocks (some models put tool request JSON here)
+  // 2️⃣ ```json blocks
   const reJson = /```json\s*([\s\S]*?)```/g;
   while ((m = reJson.exec(text)) !== null) {
     const payload = (m[1] || "").trim();
     if (payload.startsWith("{") && payload.endsWith("}")) {
       blocks.push({ payload, source: "json_fence" });
+    }
+  }
+
+  // 3️⃣ Any other code block (like ```javascript``` etc)
+  const reAnyFence = /```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g;
+  while ((m = reAnyFence.exec(text)) !== null) {
+    const payload = (m[1] || "").trim();
+    if (!payload) continue;
+
+    // Entire block is JSON
+    if (payload.startsWith("{") && payload.endsWith("}")) {
+      blocks.push({ payload, source: "any_fence_json" });
+      continue;
+    }
+
+    // JSON objects inside a code block
+    const objRe = /({[\s\S]*?})/g;
+    let o;
+    while ((o = objRe.exec(payload)) !== null) {
+      const candidate = (o[1] || "").trim();
+      if (candidate.startsWith("{") && candidate.endsWith("}")) {
+        blocks.push({ payload: candidate, source: "any_fence_json_fragment" });
+      }
     }
   }
 
@@ -101,19 +159,14 @@ function extractFencedBlocks(text) {
 function normalizeToolShape(obj) {
   if (!obj || typeof obj !== "object") return null;
 
-  // Preferred:
-  // { name: "tool", args: {...} }
-  if (typeof obj.name === "string") return { name: obj.name, args: obj.args ?? {} };
-
-  // Common alternates:
-  // { tool: "toolName", input: {...} }
-  if (typeof obj.tool === "string") return { name: obj.tool, args: obj.input ?? obj.args ?? {} };
-
-  // { tool_name: "...", parameters: {...} }
-  if (typeof obj.tool_name === "string") return { name: obj.tool_name, args: obj.parameters ?? obj.args ?? {} };
-
-  // { function: "...", arguments: {...} }
-  if (typeof obj.function === "string") return { name: obj.function, args: obj.arguments ?? obj.args ?? {} };
+  if (typeof obj.name === "string")
+    return { name: obj.name, args: obj.args ?? {} };
+  if (typeof obj.tool === "string")
+    return { name: obj.tool, args: obj.input ?? obj.args ?? {} };
+  if (typeof obj.tool_name === "string")
+    return { name: obj.tool_name, args: obj.parameters ?? obj.args ?? {} };
+  if (typeof obj.function === "string")
+    return { name: obj.function, args: obj.arguments ?? obj.args ?? {} };
 
   return null;
 }
@@ -144,21 +197,6 @@ function tryParseBareToolJson(text) {
 
 /**
  * Parse XML-ish tool calls.
- *
- * Variant A (older):
- * <tool_call>
- *   <invoke name="search_in_file">
- *     <parameter name="query">function</parameter>
- *   </invoke>
- * </tool_call>
- *
- * Variant B (new DeepSeek-ish):
- * <tool_call>
- *   <function_name>search_in_file</function_name>
- *   <parameters>
- *     <search_term>toggle</search_term>
- *   </parameters>
- * </tool_call>
  */
 function extractXmlToolCalls(text) {
   const s = String(text || "");
@@ -194,7 +232,9 @@ function extractXmlToolCalls(text) {
     if (ALLOWED_MODEL_TOOLS.has(name)) {
       const args = {};
 
-      const paramsMatch = s.match(/<parameters>\s*([\s\S]*?)\s*<\/parameters>/i);
+      const paramsMatch = s.match(
+        /<parameters>\s*([\s\S]*?)\s*<\/parameters>/i,
+      );
       if (paramsMatch) {
         const body = String(paramsMatch[1] || "");
 
@@ -207,7 +247,12 @@ function extractXmlToolCalls(text) {
 
           const kLower = rawKey.toLowerCase();
           let key = rawKey;
-          if (kLower === "search_term" || kLower === "term" || kLower === "search") key = "query";
+          if (
+            kLower === "search_term" ||
+            kLower === "term" ||
+            kLower === "search"
+          )
+            key = "query";
 
           args[key] = val;
         }
@@ -312,34 +357,36 @@ export default function AiPanel({
   formatTauriError,
   buttonClass,
   iconButtonClass,
-  GearIcon
+  GearIcon,
 }) {
-  // ✅ FIX: derive the current provider endpoint from endpoints map
   const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
 
-  // ✅ HARDEN: model can be string or {id,tier,note}; always display as string
   const aiModelStr = useMemo(() => {
     if (typeof aiModel === "string") return aiModel;
-    if (aiModel && typeof aiModel === "object" && typeof aiModel.id === "string") return aiModel.id;
+    if (
+      aiModel &&
+      typeof aiModel === "object" &&
+      typeof aiModel.id === "string"
+    )
+      return aiModel.id;
     return "";
   }, [aiModel]);
 
-  // Holds the currently pending consent gate (one at a time).
   const pendingConsentRef = useRef(null);
 
-  // Prevent double-execution if the same tool payload remains in transcript.
+  // Local cache still used, but global is the real guard.
   const processedKeysRef = useRef(new Set());
 
-  // Reset processed cache when conversation clears
+  // ✅ Reset caches when conversation clears
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) {
       processedKeysRef.current = new Set();
+      GLOBAL_SEEN_TOOL_KEYS.clear();
     }
   }, [messages]);
 
   const requestConsent = useCallback(
     async ({ toolName, args }) => {
-      // If a prior consent is somehow still pending, cancel it to keep behavior deterministic.
       if (pendingConsentRef.current?.resolve) {
         try {
           pendingConsentRef.current.resolve("cancelled");
@@ -357,6 +404,8 @@ export default function AiPanel({
         resolve = r;
       });
 
+      const gate = { settled: false, resolve };
+
       pendingConsentRef.current = { id, tool, resolve };
 
       const detail =
@@ -370,35 +419,71 @@ export default function AiPanel({
 
       appendMessage(
         "system",
-        formatToolLine({ tool, status: "request", id, detail: detail || "Awaiting approval…" }),
+        formatToolLine({
+          tool,
+          status: "request",
+          id,
+          detail: detail || "Awaiting approval…",
+        }),
         {
           actions: [
             {
               label: "Approve",
               onClick: () => {
+                if (gate.settled) return;
+                gate.settled = true;
+
+                pendingConsentRef.current = null;
+
                 appendMessage(
                   "system",
-                  formatToolLine({ tool, status: "calling", id, detail: "Approved by user — executing…" })
+                  formatToolLine({
+                    tool,
+                    status: "calling",
+                    id,
+                    detail: "Approved by user — executing…",
+                  }),
                 );
-                pendingConsentRef.current?.resolve?.("approved");
-                pendingConsentRef.current = null;
-              }
+
+                try {
+                  gate.resolve("approved");
+                } catch {
+                  // ignore
+                }
+              },
             },
             {
               label: "Cancel",
               onClick: () => {
-                appendMessage("system", formatToolLine({ tool, status: "cancelled", id, detail: "User denied." }));
-                pendingConsentRef.current?.resolve?.("cancelled");
+                if (gate.settled) return;
+                gate.settled = true;
+
                 pendingConsentRef.current = null;
-              }
-            }
-          ]
-        }
+
+                appendMessage(
+                  "system",
+                  formatToolLine({
+                    tool,
+                    status: "cancelled",
+                    id,
+                    detail: "User denied.",
+                  }),
+                );
+
+                try {
+                  gate.resolve("cancelled");
+                } catch {
+                  // ignore
+                }
+              },
+            },
+          ],
+        },
       );
 
       return p;
     },
-    [appendMessage]
+    [appendMessage],
   );
 
   const appendTranscript = useCallback(
@@ -406,31 +491,34 @@ export default function AiPanel({
       const meta = entry?.meta || {};
       const phase = meta.phase;
 
-      // Ignore runtime "call" (we already show request + calling in our consent UI)
       if (phase === "call") return;
-
-      // Ignore runtime "cancelled" (Cancel button already appends the cancelled bubble with id)
       if (phase === "cancelled") return;
 
       const tool = meta.toolName || "tool";
-      const id = pendingConsentRef.current?.id || ""; // best-effort; may be empty if already cleared
+      const id = pendingConsentRef.current?.id || "";
 
       if (phase === "result") {
         const body = String(entry?.content || "");
-        appendMessage("system", formatToolLine({ tool, status: "ok", id, detail: "" }) + (body ? `\n\n${body}` : ""));
+        appendMessage(
+          "system",
+          formatToolLine({ tool, status: "ok", id, detail: "" }) +
+            (body ? `\n\n${body}` : ""),
+        );
         return;
       }
 
       if (phase === "error") {
         const detail = String(entry?.content || "");
-        appendMessage("system", formatToolLine({ tool, status: "error", id, detail }));
+        appendMessage(
+          "system",
+          formatToolLine({ tool, status: "error", id, detail }),
+        );
         return;
       }
 
-      // Fallback: pass through.
       appendMessage("system", String(entry?.content || ""));
     },
-    [appendMessage]
+    [appendMessage],
   );
 
   const invokeTool = useCallback(async (toolName, args) => {
@@ -442,7 +530,7 @@ export default function AiPanel({
       const res = await runToolCall({
         toolCall: { name: toolName, args },
         appendTranscript,
-        requestConsent: async ({ toolName, args }) => requestConsent({ toolName, args }),
+        requestConsent,
         invokeTool: async (toolName2, args2) => {
           try {
             return await invokeTool(toolName2, args2);
@@ -451,57 +539,70 @@ export default function AiPanel({
             throw new Error(msg);
           }
         },
-        isConsentRequired: () => true
+        isConsentRequired: () => true,
       });
 
       return res;
     },
-    [appendTranscript, requestConsent, invokeTool, formatTauriError]
+    [appendTranscript, requestConsent, invokeTool, formatTauriError],
   );
 
-  // Model-initiated tool detection: scan assistant + system messages.
+  // Model-initiated tool detection: scan assistant messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
 
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg?.role !== "assistant" && msg?.role !== "system") continue;
+      if (msg?.role !== "assistant") continue;
 
       const content = getMsgText(msg);
       if (!content) continue;
 
-      // A) XML tool calls (two variants)
+      const msgKey = String(msg?.id ?? msg?.ts ?? i);
+
+      // A) XML tool calls
       const xmlCalls = extractXmlToolCalls(content);
       if (xmlCalls.length) {
         for (const c of xmlCalls) {
           const args = { ...(c.args || {}) };
 
           if (c.name === "search_in_file") {
-            // infer current active file if missing
             if (!args.path && activeTab?.path) args.path = activeTab.path;
 
-            // normalize missing query
             const q = String(args.query || "").trim();
             if (!q) {
-              appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
+              appendMessage(
+                "system",
+                "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+              );
               continue;
             }
             if (!args.path) {
-              appendMessage("system", "[tool] ⚠️ search_in_file ignored: no active file and no path provided");
+              appendMessage(
+                "system",
+                "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+              );
               continue;
             }
           }
 
-          const key = `mtool:xml:${c.source}:${c.name}:${JSON.stringify(args)}`;
-          if (processedKeysRef.current.has(key)) continue;
+          const tiny = hashString(`${c.name}|${JSON.stringify(args)}`);
+          const key = `mtool:xml:${msgKey}:${tiny}`;
 
+          if (
+            GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+            processedKeysRef.current.has(key)
+          )
+            continue;
+
+          GLOBAL_SEEN_TOOL_KEYS.add(key);
           processedKeysRef.current.add(key);
           runTool({ toolName: c.name, args });
           return;
         }
       }
 
-      // B) Fenced blocks (```tool, ```tool_call, or ```json tool-shaped)
+      // B) Fenced blocks
       if (content.includes("```")) {
         const blocks = extractFencedBlocks(content);
         for (const b of blocks) {
@@ -515,25 +616,38 @@ export default function AiPanel({
 
             const q = String(args.query || "").trim();
             if (!q) {
-              appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
+              appendMessage(
+                "system",
+                "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+              );
               continue;
             }
             if (!args.path) {
-              appendMessage("system", "[tool] ⚠️ search_in_file ignored: no active file and no path provided");
+              appendMessage(
+                "system",
+                "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+              );
               continue;
             }
           }
 
-          const key = `mtool:fence:${b.source}:${b.payload}`;
-          if (processedKeysRef.current.has(key)) continue;
+          const tiny = hashString(`${parsed.name}|${b.payload}`);
+          const key = `mtool:fence:${msgKey}:${tiny}`;
 
+          if (
+            GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+            processedKeysRef.current.has(key)
+          )
+            continue;
+
+          GLOBAL_SEEN_TOOL_KEYS.add(key);
           processedKeysRef.current.add(key);
           runTool({ toolName: parsed.name, args });
           return;
         }
       }
 
-      // C) Bare JSON (whole message is JSON)
+      // C) Bare JSON
       const bare = tryParseBareToolJson(content);
       if (bare) {
         const args = { ...(bare.args || {}) };
@@ -543,18 +657,28 @@ export default function AiPanel({
 
           const q = String(args.query || "").trim();
           if (!q) {
-            appendMessage("system", "[tool] ⚠️ search_in_file ignored: missing required arg: query");
+            appendMessage(
+              "system",
+              "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+            );
             return;
           }
           if (!args.path) {
-            appendMessage("system", "[tool] ⚠️ search_in_file ignored: no active file and no path provided");
+            appendMessage(
+              "system",
+              "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+            );
             return;
           }
         }
 
-        const key = `mtool:bare:${content.trim()}`;
-        if (processedKeysRef.current.has(key)) return;
+        const tiny = hashString(`${bare.name}|${content.trim()}`);
+        const key = `mtool:bare:${msgKey}:${tiny}`;
 
+        if (GLOBAL_SEEN_TOOL_KEYS.has(key) || processedKeysRef.current.has(key))
+          return;
+
+        GLOBAL_SEEN_TOOL_KEYS.add(key);
         processedKeysRef.current.add(key);
         runTool({ toolName: bare.name, args });
         return;
@@ -564,7 +688,10 @@ export default function AiPanel({
 
   const handleRequestToolOk = useCallback(() => {
     if (!activeTab?.path) {
-      appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.");
+      appendMessage(
+        "system",
+        "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.",
+      );
       return;
     }
     runTool({ toolName: "read_file", args: { path: activeTab.path } });
@@ -572,7 +699,10 @@ export default function AiPanel({
 
   const handleRequestToolErr = useCallback(() => {
     if (!activeTab?.path) {
-      appendMessage("system", "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.");
+      appendMessage(
+        "system",
+        "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.",
+      );
       return;
     }
     const dir = dirnameOfPath(activeTab.path);
@@ -605,7 +735,9 @@ export default function AiPanel({
   }
 
   return (
-    <div className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}>
+    <div
+      className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}
+    >
       {/* AI header: status surface */}
       <div className="p-3 border-b border-zinc-800 space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -629,7 +761,7 @@ export default function AiPanel({
             <div
               className={[
                 "text-[11px] px-2 py-0.5 rounded border whitespace-nowrap",
-                statusChipClass(headerStatus.tone)
+                statusChipClass(headerStatus.tone),
               ].join(" ")}
               title={providerMeta.id}
             >
@@ -671,7 +803,12 @@ export default function AiPanel({
         {providerSwitchNote && (
           <div className="text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
-            <button className={buttonClass("ghost")} onClick={handleDismissSwitchNote} type="button" title="Dismiss">
+            <button
+              className={buttonClass("ghost")}
+              onClick={handleDismissSwitchNote}
+              type="button"
+              title="Dismiss"
+            >
               Dismiss
             </button>
           </div>
@@ -679,8 +816,8 @@ export default function AiPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-3 space-y-4">
-		<ProviderControlsPanel
-		  providerOptions={providerOptions}
+        <ProviderControlsPanel
+          providerOptions={providerOptions}
           handleProviderChange={handleProviderChange}
           providerStatus={providerStatus}
           disabledProviderMessage={disabledProviderMessage}
@@ -740,7 +877,11 @@ export default function AiPanel({
           buttonClass={buttonClass}
         />
 
-        <SystemPanel aiSystem={aiSystem} setAiSystem={setAiSystem} providerReady={providerReady} />
+        <SystemPanel
+          aiSystem={aiSystem}
+          setAiSystem={setAiSystem}
+          providerReady={providerReady}
+        />
 
         <ParametersPanel
           aiTemperature={aiTemperature}

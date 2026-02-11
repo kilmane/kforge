@@ -44,6 +44,17 @@ function basename(p) {
   return parts[parts.length - 1] || p;
 }
 
+const DEFAULT_KFORGE_SYSTEM = `
+You are KForge, a vibe-coding assistant running inside a tool-enabled environment.
+
+IMPORTANT:
+- You MUST use available tools to create or modify files.
+- Do NOT output full file contents in chat.
+- When creating files, call write_file.
+- After file creation, call list_dir to confirm.
+- Never claim files were created unless a tool call succeeded.
+`.trim();
+
 // Try hard to get a useful message out of Tauri invoke errors / Rust payloads
 function formatTauriError(err) {
   if (!err) return "Unknown error";
@@ -1345,7 +1356,8 @@ export default function App() {
         prompt: draft,
         providerId: aiProvider,
         model: aiModel,
-        system: aiSystem,
+        system:
+          aiSystem && aiSystem.trim() ? aiSystem.trim() : DEFAULT_KFORGE_SYSTEM,
         temperature: aiTemperature,
         maxTokens: aiMaxTokens,
         endpoint: ep || null,
@@ -1361,9 +1373,24 @@ export default function App() {
         ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
+      const toolInstruction = !askForPatch
+        ? "\n\nIMPORTANT:\n" +
+          "If you need to create or update files, you MUST request tools.\n" +
+          "Do NOT paste full file contents in chat.\n" +
+          "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
+          "Do NOT simulate file creation.\n" +
+          "Instead, output one or more ```tool fenced blocks, each containing JSON like:\n" +
+          "```tool\n" +
+          '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
+          "```\n" +
+          "After creating files, output a final tool call to list the folder:\n" +
+          "```tool\n" +
+          '{ "name": "list_dir", "args": { "path": "." } }\n' +
+          "```\n"
+        : "";
 
       const inputWithContext = buildInputWithContext(
-        `${draft}${patchInstruction}`,
+        `${draft}${patchInstruction}${toolInstruction}`,
         fileSnapshot,
       );
 
@@ -1402,9 +1429,9 @@ export default function App() {
         // Keep patch preview detection working off the original model output
         maybeCapturePatchPreview(out);
 
-        // Surface tool requests as visible system bubbles (no silent execution)
+        // Surface tool requests as assistant bubbles so the tool runner can detect them
         for (const tb of toolBlocks) {
-          appendMessage("system", tb);
+          appendMessage("assistant", tb);
         }
       } else {
         appendMessage("system", r.error || "Unknown error", {

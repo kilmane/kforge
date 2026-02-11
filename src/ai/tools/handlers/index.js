@@ -5,7 +5,14 @@
 //
 // Handlers return a STRING (for transcript display) to preserve current behavior.
 
-import { openFile, readFolderTree, resolvePathWithinProject, getProjectRoot } from "../../../lib/fs";
+import {
+  openFile,
+  readFolderTree,
+  resolvePathWithinProject,
+  getProjectRoot,
+  saveFile,
+  makeDir,
+} from "../../../lib/fs";
 import { search_in_file } from "./search_in_file.js";
 
 function summarizeText(text, maxChars = 700) {
@@ -43,6 +50,10 @@ function ensureProjectRootForRelativeHelp() {
   return null;
 }
 
+/**
+ * read_file
+ * args: { path }
+ */
 export async function read_file(args = {}) {
   const rawPath = String(args?.path || "").trim();
   if (!rawPath) throw new Error("read_file: missing required arg: path");
@@ -63,6 +74,10 @@ export async function read_file(args = {}) {
   return `Read ${byteLen} bytes (Path: ${filePath})\n\n--- File preview ---\n${preview}`;
 }
 
+/**
+ * list_dir
+ * args: { path } or { dirPath }
+ */
 export async function list_dir(args = {}) {
   const rawPath = String(args?.path || args?.dirPath || "").trim();
   if (!rawPath) throw new Error("list_dir: missing required arg: path");
@@ -88,15 +103,65 @@ export async function list_dir(args = {}) {
 
   return (
     `Listed ${nodes.length} entries (dirs: ${dirs}, files: ${files}) (Path: ${dp})` +
-    (top.length ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}` : "\n\n(empty)")
+    (top.length
+      ? `\n\n--- Directory listing (top-level) ---\n${top.join("\n")}`
+      : "\n\n(empty)")
   );
+}
+
+/**
+ * write_file
+ * args: { path, content }
+ */
+export async function write_file(args = {}) {
+  const rawPath = String(args?.path || "").trim();
+  const content = args?.content ?? "";
+
+  if (!rawPath) throw new Error("write_file: missing required arg: path");
+
+  // Helpful error when relative path is used but no root selected
+  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
+    const hint = ensureProjectRootForRelativeHelp();
+    if (hint)
+      throw new Error(`write_file: forbidden path: ${rawPath}\n${hint}`);
+  }
+
+  const filePath = resolvePathWithinProject(rawPath);
+
+  await saveFile(filePath, String(content));
+
+  const byteLen = new TextEncoder().encode(String(content)).length;
+  return `Wrote ${byteLen} bytes (Path: ${filePath})`;
+}
+
+/**
+ * mkdir
+ * args: { path }
+ */
+export async function mkdir(args = {}) {
+  const rawPath = String(args?.path || "").trim();
+  if (!rawPath) throw new Error("mkdir: missing required arg: path");
+
+  // Helpful error when relative path is used but no root selected
+  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
+    const hint = ensureProjectRootForRelativeHelp();
+    if (hint) throw new Error(`mkdir: forbidden path: ${rawPath}\n${hint}`);
+  }
+
+  const dirPath = resolvePathWithinProject(rawPath);
+
+  await makeDir(dirPath);
+
+  return `Created directory (Path: ${dirPath})`;
 }
 
 // Tool name -> handler mapping
 export const toolHandlers = {
   read_file,
   list_dir,
-  search_in_file
+  search_in_file,
+  write_file,
+  mkdir,
 };
 
 export function hasTool(toolName) {

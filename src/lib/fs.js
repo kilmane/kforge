@@ -1,6 +1,12 @@
 // src/lib/fs.js
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import {
+  readDir,
+  readTextFile,
+  writeTextFile,
+  mkdir,
+} from "@tauri-apps/plugin-fs";
+
 import { isTauri } from "@tauri-apps/api/core";
 
 // Phase 4.1 — Project Memory (Step 2: wire to current project root)
@@ -304,4 +310,11 @@ export async function saveFile(path, contents) {
   if (!path) throw new Error("saveFile called with empty path");
   const safe = resolvePathWithinProject(path);
   await writeTextFile(safe, contents ?? "");
+}
+
+export async function makeDir(path) {
+  if (!isTauri()) return;
+  if (!path) throw new Error("makeDir called with empty path");
+  const safe = resolvePathWithinProject(path);
+  await mkdir(safe, { recursive: true });
 }

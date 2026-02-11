@@ -1,6 +1,34 @@
 // src/ai/panel/TranscriptPanel.jsx
 import React, { useMemo } from "react";
 
+function parseToolIdFromLine(text) {
+  const s = String(text || "");
+  if (!s.includes("[tool]")) return null;
+  // Grab the first "(...)" group — that's your uidShort like (9y4qg0)
+  const m = s.match(/\(([^)]+)\)/);
+  return m ? String(m[1] || "").trim() : null;
+}
+
+function toolLineKind(text) {
+  const s = String(text || "");
+  if (!s.startsWith("[tool]")) return null;
+
+  if (s.includes("🛡 Tool request:")) return "request";
+  if (s.includes("🛠 Calling tool:")) return "calling";
+  if (s.includes("✅ Tool returned:")) return "ok";
+  if (s.includes("❌ Tool failed:")) return "error";
+  if (s.includes("🚫 Tool cancelled:")) return "cancelled";
+
+  return "other";
+}
+
+function statusTextFor(kind) {
+  if (kind === "calling" || kind === "ok") return "✅ Approved";
+  if (kind === "cancelled") return "⛔ Cancelled";
+  if (kind === "error") return "❌ Failed";
+  return "✅ Done";
+}
+
 export default function TranscriptPanel({
   messages,
   TranscriptBubble,
@@ -14,21 +42,68 @@ export default function TranscriptPanel({
 
   // Phase 3.6.2 (optional): if provided, we show Req OK / Req Err
   onRequestToolOk,
-  onRequestToolErr
+  onRequestToolErr,
 }) {
-  const safeMessages = useMemo(() => (Array.isArray(messages) ? messages.filter(Boolean) : []), [messages]);
+  const safeMessages = useMemo(
+    () => (Array.isArray(messages) ? messages.filter(Boolean) : []),
+    [messages],
+  );
 
-  const canRetry = !!lastSend && typeof handleRetryLast === "function" && !aiRunning;
+  const canRetry =
+    !!lastSend && typeof handleRetryLast === "function" && !aiRunning;
   const canClear = typeof clearConversation === "function";
 
   const showReqButtons =
-    typeof onRequestToolOk === "function" || typeof onRequestToolErr === "function";
+    typeof onRequestToolOk === "function" ||
+    typeof onRequestToolErr === "function";
+
+  /**
+   * ✅ Build a "resolved tool ids" map by reading the transcript itself.
+   * This survives collapse/re-open because it does not rely on local component state.
+   */
+  const resolvedToolIds = useMemo(() => {
+    const map = new Map(); // id -> kind (calling/ok/cancelled/error)
+    for (const m of safeMessages) {
+      if (m?.role !== "system") continue;
+
+      const content = String(m?.content || "");
+      const kind = toolLineKind(content);
+      if (!kind) continue;
+
+      // Only these mean "no more buttons"
+      if (
+        kind !== "calling" &&
+        kind !== "ok" &&
+        kind !== "cancelled" &&
+        kind !== "error"
+      )
+        continue;
+
+      const id = parseToolIdFromLine(content);
+      if (!id) continue;
+
+      // Prefer "cancelled/error" if seen, otherwise ok/calling
+      const existing = map.get(id);
+      if (!existing) {
+        map.set(id, kind);
+      } else {
+        // Keep the "stronger" final states if they appear
+        const priority = { calling: 1, ok: 2, cancelled: 3, error: 4 };
+        if ((priority[kind] || 0) > (priority[existing] || 0)) {
+          map.set(id, kind);
+        }
+      }
+    }
+    return map;
+  }, [safeMessages]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2">
       {/* Header row: title left, actions right (restore old feel) */}
       <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wide opacity-70">Transcript</div>
+        <div className="text-xs uppercase tracking-wide opacity-70">
+          Transcript
+        </div>
 
         <div className="flex items-center gap-2">
           {showReqButtons ? (
@@ -67,7 +142,7 @@ export default function TranscriptPanel({
             <button
               className={[
                 "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm",
-                canRetry ? "" : "opacity-60 cursor-not-allowed"
+                canRetry ? "" : "opacity-60 cursor-not-allowed",
               ].join(" ")}
               type="button"
               onClick={canRetry ? handleRetryLast : undefined}
@@ -97,8 +172,19 @@ export default function TranscriptPanel({
         ) : (
           safeMessages.map((m) => {
             const actions = Array.isArray(m.actions)
-              ? m.actions.filter((a) => a && a.label && typeof a.onClick === "function")
+              ? m.actions.filter(
+                  (a) => a && a.label && typeof a.onClick === "function",
+                )
               : [];
+
+            const contentStr = String(m?.content || "");
+            const isToolRequest =
+              m?.role === "system" && toolLineKind(contentStr) === "request";
+            const toolId = isToolRequest
+              ? parseToolIdFromLine(contentStr)
+              : null;
+            const resolvedKind = toolId ? resolvedToolIds.get(toolId) : null;
+            const isResolved = !!resolvedKind;
 
             return (
               <div key={m.id} className="flex flex-col gap-1">
@@ -110,20 +196,26 @@ export default function TranscriptPanel({
                   onAction={m.action}
                 />
 
-                {/* Phase 3.6.2: render multi-actions under the bubble */}
+                {/* Multi-actions under bubble */}
                 {actions.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 ml-2">
-                    {actions.map((a, idx) => (
-                      <button
-                        key={`${m.id}_${a.label}_${idx}`}
-                        className="text-xs underline opacity-90 hover:opacity-100"
-                        type="button"
-                        onClick={a.onClick}
-                      >
-                        {a.label}
-                      </button>
-                    ))}
-                  </div>
+                  isToolRequest && isResolved ? (
+                    <div className="ml-2 text-xs opacity-70 select-none">
+                      {statusTextFor(resolvedKind)}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 ml-2">
+                      {actions.map((a, idx) => (
+                        <button
+                          key={`${m.id}_${a.label}_${idx}`}
+                          className="text-xs underline opacity-90 hover:opacity-100"
+                          type="button"
+                          onClick={a.onClick}
+                        >
+                          {a.label}
+                        </button>
+                      ))}
+                    </div>
+                  )
                 ) : null}
               </div>
             );

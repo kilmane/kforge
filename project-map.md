@@ -1,237 +1,244 @@
-# **Project Map (v0)**
 
-*Baseline topology & file-finding playbook*
+# **Project Map (v1)**            Updated: 11/02/2026
+
+
+*Baseline topology & execution responsibility map*
 
 ---
 
 ## **Purpose**
 
-This document is a **living map of the current implemented structure** of the KForge repository.
+This document reflects the **actual implemented structure** of KForge as of the current AI + Tool runtime phase.
 
-It exists to answer, quickly and reliably:
+It answers:
 
-* *Where is the thing I need to change?*
-* *Where is this behavior wired?*
-* *Where do I safely intervene without breaking the app?*
+* Where does AI execution really happen?
+* Where is consent handled?
+* Where are tools detected?
+* Where does “System (optional)” flow?
+* Where are tool handlers implemented?
 
-This is **snapshot-only** documentation.
-No future plans. No speculation. No design intent.
-
----
-
-## **Scope & Versioning Rule**
-
-* This document reflects **current reality only**
-* When **entry points or responsibilities move**, update this file **in the same commit**
-* This is **v0** (baseline before major UX evolution)
+This version corrects omissions from v0.
 
 ---
 
-## **Quick Index — “Where is X?”**
-
-| Question / Task        | Primary File(s)                                            | Notes                             |
-| ---------------------- | ---------------------------------------------------------- | --------------------------------- |
-| React entry point      | `src/index.js`                                             | App bootstraps here               |
-| Main app layout wiring | `src/App.js`                                               | Current source of truth           |
-| Layout primitives      | `src/layout/*`                                             | Present, but wired via `App.js`   |
-| Sidebar / tabs         | `src/layout/Sidebar.js`, `src/layout/TabsBar.js`           | Layout building blocks            |
-| Explorer tree          | `src/components/Explorer.jsx`                              | Folder/file tree UI               |
-| Editor UI              | `src/components/Editor.jsx`, `src/components/EditorPane.*` | Editing surface                   |
-| Tabs UI                | `src/components/Tabs.jsx`                                  | Tabs behavior                     |
-| Command palette        | `src/components/CommandPalette.*`                          | Command UI                        |
-| Commands registry      | `src/commands/commands.js`                                 | Command definitions               |
-| AI panel root          | `src/ai/panel/AiPanel.jsx`                                 | AI UI mount                       |
-| AI panel sub-panels    | `src/ai/panel/*`                                           | Prompt / Output / System / Params |
-| AI client (JS)         | `src/ai/client.js`                                         | Frontend glue                     |
-| Local model presets    | `src/ai/modelPresets.js`                                   | Built-in presets                  |
-| Remote presets         | `src/ai/remotePresets.js`                                  | Fetch / cache / merge             |
-| AI tools runtime       | `src/ai/tools/toolRuntime.js`                              | Tool execution                    |
-| Tool handlers          | `src/ai/tools/handlers/*`                                  | Tool implementations              |
-| Project Memory UI      | `src/components/project-memory-panel.jsx`                  | Memory panel                      |
-| Project Memory logic   | `src/brains/project-memory.*`                              | Persistence logic                 |
-| Tauri FS adapter       | `src/brains/tauri-fs-adapter.*`                            | JS ↔ Tauri bridge                 |
-| File I/O helpers       | `src/lib/fs.js`                                            | Open / save / paths               |
-| Tauri entry            | `src-tauri/src/main.rs`                                    | Rust entry point                  |
-| Tauri wiring & menus   | `src-tauri/src/lib.rs`                                     | Central Rust wiring               |
-| Rust AI commands       | `src-tauri/src/ai/commands.*`                              | Command layer                     |
-| Rust AI providers      | `src-tauri/src/ai/providers/*`                             | Provider impls                    |
-| Tauri permissions      | `src-tauri/capabilities/default.json`                      | FS / opener permissions           |
+## 🔥 Critical Runtime Flows (Authoritative)
 
 ---
 
-## **High-Level Folder Map**
+### 🧠 AI Request Execution (Core Brain)
 
-### **Root**
+**Primary File:**
 
-* `project-map.md` — this document
-* `README.md`, `PROJECT-SNAPSHOT.md`, `PORTABILITY*.md` — project notes
-* `.kforge/` — runtime data (do **not** commit)
-* `docs/` — reference documentation
-* `scripts/` — backup / restore helpers
-* `public/` — static assets
-* `src/` — React UI + frontend logic
-* `src-tauri/` — Rust backend + Tauri config
-
----
-
-### **`src/` — Frontend**
-
-* `App.js` — main UI wiring
-* `components/` — Explorer, Editor, Tabs, Settings, Memory panel
-* `layout/` — layout primitives (sidebar, panes, tabs bar)
-* `ai/` — AI client, panels, presets, tools
-* `brains/` — continuity logic (Project Memory, adapters)
-* `lib/` — utilities (filesystem helpers)
-
----
-
-### **`src-tauri/` — Backend**
-
-* `src/main.rs` — entry point
-* `src/lib.rs` — commands, setup, menus, shell opener
-* `src/ai/` — AI commands, types, providers
-* `capabilities/` — permissions model
-* `tauri.conf.json` — app configuration
-
----
-
-## **Core Flows (v0)**
-
-### **App Boot**
-
-`src/index.js` → mounts `src/App.js`
-
----
-
-### **Explorer → Edit → Save**
-
-* UI: `Explorer.jsx`, `Editor.jsx`
-* Helpers: `src/lib/fs.js`
-* Adapter (if Tauri FS): `tauri-fs-adapter.*`
-* Permissions: `src-tauri/capabilities/default.json`
-
----
-
-### **Commands & Command Palette**
-
-* Registry: `src/commands/commands.js`
-* UI: `CommandPalette.*`
-
----
-
-### **AI Send Flow (Frontend)**
-
-* Root: `AiPanel.jsx`
-* Panels: `src/ai/panel/*`
-* Client: `src/ai/client.js`
-* Presets: `modelPresets.js`, `remotePresets.js`
-* Tools: `toolRuntime.js`, `handlers/*`
-
----
-
-### **Project Memory**
-
-* UI: `project-memory-panel.jsx`
-* Logic: `project-memory.*`
-* Runtime data: `.kforge/project-memory.json` (ignored)
-
----
-
-### **Tauri Backend**
-
-* Entry: `main.rs`
-* Wiring: `lib.rs`
-* AI commands/providers: `src/ai/*`
-* Permissions: `capabilities/default.json`
-
----
-
-## **File-Finding Playbook (PowerShell)**
-
-> Use these **before browsing folders manually**.
-
----
-
-### **Find where a component is mounted**
-
-```powershell
-Select-String -Path "src\App.js" `
-  -Pattern "Explorer|Editor|AiPanel|CommandPalette|project-memory" -List
+```
+src/App.js
 ```
 
+This file contains the real AI execution logic.
+
+Key functions:
+
+* `sendWithPrompt`
+* `handleSendChat`
+* `handleRetryLast`
+* `buildAiRequest`
+* `runAi(...)`
+* `buildInputWithContext`
+* Patch instruction injection
+* Tool instruction injection
+
+If AI behavior is wrong → start here.
+
 ---
 
-### **Find where a component is defined**
+### 🛡 Tool Detection + Consent Runtime
 
-```powershell
-Select-String -Path "src\**\*.js","src\**\*.jsx" `
-  -Pattern "function Explorer|const Explorer|export default function Explorer" -List
+**Primary File:**
+
+```
+src/ai/panel/AiPanel.jsx
 ```
 
+Responsibilities:
+
+* Detect model-initiated tool calls
+* Parse:
+
+  * ```tool fences
+    ```
+  * ```json fences
+    ```
+  * XML tool calls
+  * Bare JSON tool calls
+* Deduplicate tool payloads (`processedKeysRef`)
+* Trigger `runTool`
+* Handle consent gating (`requestConsent`)
+* Coordinate tool execution through `runToolCall`
+
+This file is both UI and runtime coordinator.
+
 ---
 
-### **Trace a command from UI to implementation**
+### 🧾 Tool Execution Layer
 
-```powershell
-Select-String -Path "src\commands\commands.js","src\components\**\*.jsx" `
-  -Pattern "CommandPalette|commands\." -List
+**Runtime Wrapper**
+
+```
+src/ai/tools/toolRuntime.js
 ```
 
+Handles:
+
+* Transcript-visible tool events
+* Consent enforcement
+* Tool invocation lifecycle
+* Status bubbles
+
 ---
 
-### **Find AI preset usage**
+### 🧰 Tool Handlers
 
-```powershell
-Select-String -Path "src\ai\**\*.js","src\ai\**\*.jsx" `
-  -Pattern "modelPresets|remotePresets|presets" -List
+**Dispatcher**
+
+```
+src/ai/tools/handlers/index.js
 ```
 
+Maps tool names → implementation functions.
+
+Current tools:
+
+* `read_file`
+* `list_dir`
+* `write_file`
+* `search_in_file`
+
 ---
 
-### **Find Tauri command boundaries**
+### 📁 Filesystem Layer
 
-```powershell
-Select-String -Path "src-tauri\src\**\*.rs" `
-  -Pattern "command|invoke_handler|tauri::command" -List
-
-Select-String -Path "src\**\*.js","src\**\*.jsx" `
-  -Pattern "invoke\(" -List
+```
+src/lib/fs.js
 ```
 
+Responsibilities:
+
+* Project root resolution
+* Path safety enforcement
+* Tauri FS integration
+* `resolvePathWithinProject`
+* `openFile`
+* `saveFile`
+* `readFolderTree`
+
+If files aren’t created → check here.
+
 ---
 
-### **Find permissions / capability issues**
+### 💬 AI Panels (UI Surfaces)
 
-```powershell
-Get-ChildItem -Path "src-tauri\capabilities" -File
+All located in:
 
-Select-String -Path "src-tauri\capabilities\**\*.json" `
-  -Pattern "fs:allow|opener:|dialog:" -List
+```
+src/ai/panel/
 ```
 
+| File                        | Responsibility                          |
+| --------------------------- | --------------------------------------- |
+| `AiPanel.jsx`               | Tool runtime + AI orchestration surface |
+| `PromptPanel.jsx`           | User prompt input                       |
+| `SystemPanel.jsx`           | “System (optional)” input               |
+| `ParametersPanel.jsx`       | Temperature + max tokens                |
+| `TranscriptPanel.jsx`       | Renders chat bubbles + action buttons   |
+| `PatchPreviewPanel.jsx`     | Diff preview                            |
+| `ProviderControlsPanel.jsx` | Provider + model selection              |
+
 ---
 
-### **Find external link opening (frontend + Rust)**
+### 🧾 “System (optional)” Flow
 
-```powershell
-Select-String -Path "src\**\*.js","src\**\*.jsx" `
-  -Pattern "http|https|open\(" -List
+UI:
 
-Select-String -Path "src-tauri\src\**\*.rs" `
-  -Pattern "shell|open\(" -List
+```
+src/ai/panel/SystemPanel.jsx
 ```
 
----
+Data flow:
 
-## **Project Law Notes (Map Edition)**
-
-* This map documents **current implemented structure only**
-* Update `project-map.md` when **entry points move**
-* Prefer **search-first** over conceptual hunting
-* Keep documentation filenames lowercase
-* Do not commit runtime data (`.kforge/`)
+SystemPanel → `aiSystem` prop →
+`App.js` → `buildAiRequest()` →
+sent to provider as `system` field.
 
 ---
 
-## **End of Document**
+### 🔄 Consent Rendering
 
+Consent buttons are created via:
+
+```js
+appendMessage("system", ..., { actions: [...] })
+```
+
+Buttons are rendered inside:
+
+```
+src/ai/panel/TranscriptPanel.jsx
+```
+
+If approval UI is broken → inspect TranscriptPanel.
+
+---
+
+## 🧩 Quick Navigation — “Where is X?”
+
+| Task                                | File                                  |
+| ----------------------------------- | ------------------------------------- |
+| Change AI request payload           | `src/App.js`                          |
+| Modify tool detection               | `src/ai/panel/AiPanel.jsx`            |
+| Add new tool                        | `src/ai/tools/handlers/index.js`      |
+| Change filesystem behavior          | `src/lib/fs.js`                       |
+| Modify consent UI                   | `AiPanel.jsx` + `TranscriptPanel.jsx` |
+| Modify “System (optional)” behavior | `SystemPanel.jsx` + `App.js`          |
+
+---
+
+## ⚠ Known Sensitive Areas
+
+These files contain multi-layer runtime logic and should be edited carefully:
+
+* `src/App.js`
+* `src/ai/panel/AiPanel.jsx`
+* `src/lib/fs.js`
+* `src/ai/tools/toolRuntime.js`
+
+---
+
+## 📌 Runtime Data
+
+Not committed:
+
+```
+.kforge/
+```
+
+Contains:
+
+* project-memory.json
+* local runtime state
+
+---
+
+## 🧭 Law for Future Changes
+
+When adding:
+
+* A new tool → update handlers + toolRuntime + Project Map
+* A new AI field → update SystemPanel / ParametersPanel / App.js
+* A new consent behavior → update AiPanel + TranscriptPanel
+* A new file interaction → update fs.js
+
+Always update this map in the same commit.
+
+---
+
+# End of Document
