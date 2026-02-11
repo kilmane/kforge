@@ -16,6 +16,13 @@ export function setChatUiPref(v) {
   try {
     if (v !== "dock" && v !== "classic") return;
     localStorage.setItem(KEY, v);
+
+    // notify same-window listeners
+    window.dispatchEvent(
+      new CustomEvent("kforge:uiPrefsChanged", {
+        detail: { key: KEY, value: v },
+      }),
+    );
   } catch {
     // ignore
   }

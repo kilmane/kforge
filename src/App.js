@@ -33,6 +33,10 @@ import {
 import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 
+import DockShell from "./layout/DockShell";
+import DockChatBar from "./layout/DockChatBar";
+import { getChatUiPref } from "./state/uiPrefs";
+
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -564,6 +568,17 @@ export default function App() {
 
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [dockExpanded, setDockExpanded] = useState(false);
+
+  // Phase 4.2: chat UI preference (classic vs dock)
+  const [chatUi, setChatUi] = useState(getChatUiPref());
+
+  useEffect(() => {
+    const onPrefsChanged = () => setChatUi(getChatUiPref());
+    window.addEventListener("kforge:uiPrefsChanged", onPrefsChanged);
+    return () =>
+      window.removeEventListener("kforge:uiPrefsChanged", onPrefsChanged);
+  }, []);
 
   // Project Memory panel toggle (UI only)
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -1543,9 +1558,113 @@ export default function App() {
    * - First: show a "tool request" system bubble with Approve/Cancel.
    * - Only on Approve do we append "calling" then "returned/failed" (simulated).
    */
+  const aiPanelEl = (
+    <AiPanel
+      aiPanelOpen={aiPanelOpen}
+      aiPanelWidthClass={chatUi === "dock" ? "w-full" : aiPanelWidthClass}
+      aiPanelWide={chatUi === "dock" ? true : aiPanelWide}
+      setAiPanelWide={chatUi === "dock" ? () => {} : setAiPanelWide}
+      setAiPanelOpen={
+        chatUi === "dock" ? () => setDockExpanded(false) : setAiPanelOpen
+      }
+      providerMeta={providerMeta}
+      providerReady={providerReady}
+      disabledExplainer={disabledExplainer}
+      headerStatus={headerStatus}
+      providerGroupLabel={providerGroupLabel}
+      statusChipClass={statusChipClass}
+      showProviderSurfaceHint={showProviderSurfaceHint}
+      openSettings={openSettings}
+      aiProvider={aiProvider}
+      providerSwitchNote={providerSwitchNote}
+      handleDismissSwitchNote={handleDismissSwitchNote}
+      providerOptions={providerOptions}
+      handleProviderChange={handleProviderChange}
+      providerStatus={providerStatus}
+      disabledProviderMessage={disabledProviderMessage}
+      aiModel={aiModel}
+      setAiModel={setAiModel}
+      modelPlaceholder={modelPlaceholder}
+      modelSuggestions={modelSuggestions}
+      showModelHelper={showModelHelper}
+      modelHelperText={modelHelperText}
+      messages={messages}
+      TranscriptBubble={TranscriptBubble}
+      transcriptBottomRef={transcriptBottomRef}
+      CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
+      lastSend={lastSend}
+      aiRunning={aiRunning}
+      handleRetryLast={handleRetryLast}
+      clearConversation={clearConversation}
+      activeTab={activeTab}
+      handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
+      includeActiveFile={includeActiveFile}
+      setIncludeActiveFile={setIncludeActiveFile}
+      activeFileChip={activeFileChip}
+      askForPatch={askForPatch}
+      setAskForPatch={setAskForPatch}
+      patchPreview={patchPreview}
+      patchPreviewVisible={patchPreviewVisible}
+      copyPatchToClipboard={copyPatchToClipboard}
+      setPatchPreviewVisible={setPatchPreviewVisible}
+      discardPatchPreview={discardPatchPreview}
+      appendMessage={appendMessage}
+      aiPrompt={aiPrompt}
+      setAiPrompt={setAiPrompt}
+      handlePromptKeyDown={handlePromptKeyDown}
+      aiSystem={aiSystem}
+      setAiSystem={setAiSystem}
+      aiTemperature={aiTemperature}
+      setAiTemperature={setAiTemperature}
+      aiMaxTokens={aiMaxTokens}
+      setAiMaxTokens={setAiMaxTokens}
+      handleSendChat={handleSendChat}
+      handleAiTest={handleAiTest}
+      guardrailText={guardrailText}
+      aiOutput={aiOutput}
+      endpoints={endpoints}
+      invoke={invoke}
+      setAiTestOutput={setAiTestOutput}
+      setRuntimeReachable={setRuntimeReachable}
+      formatTauriError={formatTauriError}
+      buttonClass={buttonClass}
+      iconButtonClass={iconButtonClass}
+      GearIcon={GearIcon}
+    />
+  );
 
-  return (
-    <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col">
+  const lastAssistantMsg = useMemo(() => {
+    if (!messages || !messages.length) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i];
+    }
+    return null;
+  }, [messages]);
+
+  const lastPreview = lastAssistantMsg
+    ? String(lastAssistantMsg.content || "")
+        .replaceAll("\n", " ")
+        .slice(0, 240)
+    : "";
+  const dockBarEl = (
+    <DockChatBar
+      value={aiPrompt}
+      onChange={setAiPrompt}
+      onKeyDown={handlePromptKeyDown}
+      onSend={handleSendChat}
+      expanded={dockExpanded}
+      onToggleExpand={() => setDockExpanded((v) => !v)}
+      disabled={aiRunning}
+      lastMessagePreview={lastPreview}
+    />
+  );
+  const classicLayout = (
+    <div
+      className={[
+        chatUi === "dock" ? "h-full w-full" : "h-screen w-screen",
+        "bg-zinc-950 text-zinc-100 flex flex-col",
+      ].join(" ")}
+    >
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -1604,10 +1723,21 @@ export default function App() {
 
         <button
           className={buttonClass("ghost")}
-          onClick={() => setAiPanelOpen((v) => !v)}
-          title="Toggle AI panel (Ctrl/Cmd+J)"
+          onClick={() => {
+            if (chatUi === "dock") {
+              setDockExpanded((v) => !v);
+            } else {
+              setAiPanelOpen((v) => !v);
+            }
+          }}
         >
-          {aiPanelOpen ? "Hide AI" : "Show AI"}
+          {chatUi === "dock"
+            ? dockExpanded
+              ? "Collapse AI"
+              : "Expand AI"
+            : aiPanelOpen
+              ? "Hide AI"
+              : "Show AI"}
         </button>
 
         {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
@@ -1669,77 +1799,20 @@ export default function App() {
           />
         </div>
 
-        <AiPanel
-          aiPanelOpen={aiPanelOpen}
-          aiPanelWidthClass={aiPanelWidthClass}
-          aiPanelWide={aiPanelWide}
-          setAiPanelWide={setAiPanelWide}
-          setAiPanelOpen={setAiPanelOpen}
-          providerMeta={providerMeta}
-          providerReady={providerReady}
-          disabledExplainer={disabledExplainer}
-          headerStatus={headerStatus}
-          providerGroupLabel={providerGroupLabel}
-          statusChipClass={statusChipClass}
-          showProviderSurfaceHint={showProviderSurfaceHint}
-          openSettings={openSettings}
-          aiProvider={aiProvider}
-          providerSwitchNote={providerSwitchNote}
-          handleDismissSwitchNote={handleDismissSwitchNote}
-          providerOptions={providerOptions}
-          handleProviderChange={handleProviderChange}
-          providerStatus={providerStatus}
-          disabledProviderMessage={disabledProviderMessage}
-          aiModel={aiModel}
-          setAiModel={setAiModel}
-          modelPlaceholder={modelPlaceholder}
-          modelSuggestions={modelSuggestions}
-          showModelHelper={showModelHelper}
-          modelHelperText={modelHelperText}
-          messages={messages}
-          TranscriptBubble={TranscriptBubble}
-          transcriptBottomRef={transcriptBottomRef}
-          CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
-          lastSend={lastSend}
-          aiRunning={aiRunning}
-          handleRetryLast={handleRetryLast}
-          clearConversation={clearConversation}
-          activeTab={activeTab}
-          handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
-          includeActiveFile={includeActiveFile}
-          setIncludeActiveFile={setIncludeActiveFile}
-          activeFileChip={activeFileChip}
-          askForPatch={askForPatch}
-          setAskForPatch={setAskForPatch}
-          patchPreview={patchPreview}
-          patchPreviewVisible={patchPreviewVisible}
-          copyPatchToClipboard={copyPatchToClipboard}
-          setPatchPreviewVisible={setPatchPreviewVisible}
-          discardPatchPreview={discardPatchPreview}
-          appendMessage={appendMessage}
-          aiPrompt={aiPrompt}
-          setAiPrompt={setAiPrompt}
-          handlePromptKeyDown={handlePromptKeyDown}
-          aiSystem={aiSystem}
-          setAiSystem={setAiSystem}
-          aiTemperature={aiTemperature}
-          setAiTemperature={setAiTemperature}
-          aiMaxTokens={aiMaxTokens}
-          setAiMaxTokens={setAiMaxTokens}
-          handleSendChat={handleSendChat}
-          handleAiTest={handleAiTest}
-          guardrailText={guardrailText}
-          aiOutput={aiOutput}
-          endpoints={endpoints}
-          invoke={invoke}
-          setAiTestOutput={setAiTestOutput}
-          setRuntimeReachable={setRuntimeReachable}
-          formatTauriError={formatTauriError}
-          buttonClass={buttonClass}
-          iconButtonClass={iconButtonClass}
-          GearIcon={GearIcon}
-        />
+        {chatUi === "classic" ? aiPanelEl : null}
       </div>
     </div>
   );
+  if (chatUi === "dock") {
+    return (
+      <DockShell
+        main={classicLayout}
+        dockBar={dockBarEl}
+        dockPanel={aiPanelEl}
+        expanded={dockExpanded}
+      />
+    );
+  }
+
+  return classicLayout;
 }
