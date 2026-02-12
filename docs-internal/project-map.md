@@ -1,6 +1,4 @@
-
-# **Project Map (v1)**            Updated: 11/02/2026
-
+# **Project Map (v1)**            Updated: 12/02/2026
 
 *Baseline topology & execution responsibility map*
 
@@ -30,9 +28,7 @@ This version corrects omissions from v0.
 
 **Primary File:**
 
-```
 src/App.js
-```
 
 This file contains the real AI execution logic.
 
@@ -47,6 +43,12 @@ Key functions:
 * Patch instruction injection
 * Tool instruction injection
 
+Also owns project lifecycle flows:
+
+* `handleOpenFolder`
+* `handleNewProject`
+* `handleRefreshTree` (manual Explorer refresh)
+
 If AI behavior is wrong → start here.
 
 ---
@@ -55,9 +57,9 @@ If AI behavior is wrong → start here.
 
 **Primary File:**
 
-```
+
 src/ai/panel/AiPanel.jsx
-```
+
 
 Responsibilities:
 
@@ -83,9 +85,9 @@ This file is both UI and runtime coordinator.
 
 **Runtime Wrapper**
 
-```
+
 src/ai/tools/toolRuntime.js
-```
+
 
 Handles:
 
@@ -100,9 +102,9 @@ Handles:
 
 **Dispatcher**
 
-```
+
 src/ai/tools/handlers/index.js
-```
+
 
 Maps tool names → implementation functions.
 
@@ -117,19 +119,23 @@ Current tools:
 
 ### 📁 Filesystem Layer
 
-```
+
 src/lib/fs.js
-```
+
 
 Responsibilities:
 
-* Project root resolution
-* Path safety enforcement
-* Tauri FS integration
-* `resolvePathWithinProject`
-* `openFile`
-* `saveFile`
-* `readFolderTree`
+* Project root resolution + safety enforcement (`resolvePathWithinProject`)
+* Project root setters (explicit, App-controlled): `setProjectRoot`
+* Project memory helpers: `loadProjectMemoryForCurrentRoot`, `saveProjectMemoryForCurrentRoot`
+* File operations: `openFile`, `saveFile`, `makeDir`
+* Tree building: `readFolderTree`
+
+Important behavior:
+
+* `openProjectFolder()` only returns the chosen folder (no root side-effects)
+* `createNewProject()` only creates the folder and returns its path (no root side-effects)
+* `App.js` is the authority that sets project root, loads memory, and commits UI state
 
 If files aren’t created → check here.
 
@@ -139,9 +145,8 @@ If files aren’t created → check here.
 
 All located in:
 
-```
 src/ai/panel/
-```
+
 
 | File                        | Responsibility                          |
 | --------------------------- | --------------------------------------- |
@@ -159,9 +164,7 @@ src/ai/panel/
 
 UI:
 
-```
 src/ai/panel/SystemPanel.jsx
-```
 
 Data flow:
 
@@ -177,19 +180,17 @@ Consent buttons are created via:
 
 ```js
 appendMessage("system", ..., { actions: [...] })
-```
+
 
 Buttons are rendered inside:
 
-```
 src/ai/panel/TranscriptPanel.jsx
-```
 
 If approval UI is broken → inspect TranscriptPanel.
 
----
 
-## 🧩 Quick Navigation — “Where is X?”
+🧩 Quick Navigation — “Where is X?”
+
 
 | Task                                | File                                  |
 | ----------------------------------- | ------------------------------------- |
@@ -197,48 +198,46 @@ If approval UI is broken → inspect TranscriptPanel.
 | Modify tool detection               | `src/ai/panel/AiPanel.jsx`            |
 | Add new tool                        | `src/ai/tools/handlers/index.js`      |
 | Change filesystem behavior          | `src/lib/fs.js`                       |
+| Create a new project                | `src/App.js` + `src/lib/fs.js`        |
+| Refresh Explorer tree               | `src/App.js`                          |
 | Modify consent UI                   | `AiPanel.jsx` + `TranscriptPanel.jsx` |
 | Modify “System (optional)” behavior | `SystemPanel.jsx` + `App.js`          |
 
----
 
-## ⚠ Known Sensitive Areas
+------------------------------------
+
+⚠ Known Sensitive Areas
 
 These files contain multi-layer runtime logic and should be edited carefully:
 
-* `src/App.js`
-* `src/ai/panel/AiPanel.jsx`
-* `src/lib/fs.js`
-* `src/ai/tools/toolRuntime.js`
+src/App.js
 
----
+src/ai/panel/AiPanel.jsx
 
-## 📌 Runtime Data
+src/lib/fs.js
+
+src/ai/tools/toolRuntime.js
+
+-----------------------------------------------
+
+📌 Runtime Data
 
 Not committed:
 
-```
 .kforge/
-```
 
-Contains:
+---------------------------------
 
-* project-memory.json
-* local runtime state
-
----
-
-## 🧭 Law for Future Changes
+🧭 Law for Future Changes
 
 When adding:
 
-* A new tool → update handlers + toolRuntime + Project Map
-* A new AI field → update SystemPanel / ParametersPanel / App.js
-* A new consent behavior → update AiPanel + TranscriptPanel
-* A new file interaction → update fs.js
+A new tool → update handlers + toolRuntime + Project Map
 
-Always update this map in the same commit.
+A new AI field → update SystemPanel / ParametersPanel / App.js
 
----
+A new consent behavior → update AiPanel + TranscriptPanel
 
-# End of Document
+A new file interaction → update fs.js
+
+Always update this map in the same commit
