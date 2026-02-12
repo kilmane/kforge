@@ -14,10 +14,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 import {
   openProjectFolder,
+  createNewProject,
   readFolderTree,
   openFile,
   saveFile,
   getProjectMemory,
+  setProjectRoot,
+  loadProjectMemoryForCurrentRoot,
 } from "./lib/fs";
 import Explorer from "./components/Explorer";
 import EditorPane from "./components/EditorPane";
@@ -783,7 +786,17 @@ export default function App() {
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
       // We do NOT return here; we still attempt to read the tree.
-      // If it's forbidden, readFolderTree will throw and we handle it below.
+    }
+
+    // ✅ App.js is the authority: set root + load memory BEFORE reading tree
+    try {
+      setProjectRoot(folder);
+      await loadProjectMemoryForCurrentRoot();
+    } catch (err) {
+      console.error("[kforge] Failed to set root / load project memory:", err);
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(`Open folder failed (memory):\n${folder}\n\n${msg}`);
+      return; // keep current project state unchanged
     }
 
     // Read folder tree SAFELY — forbidden paths must not crash the UI.
@@ -800,7 +813,7 @@ export default function App() {
       return; // keep current project state unchanged on failure
     }
 
-    // Only commit state changes after we successfully read the tree
+    // Only commit UI state changes after we successfully read the tree
     setProjectPath(folder);
     setTabs([]);
     setActiveFilePath(null);
@@ -811,7 +824,13 @@ export default function App() {
     setIncludeActiveFile(false);
 
     setTree(nextTree || []);
-  }, []);
+  }, [
+    invoke,
+    openProjectFolder,
+    readFolderTree,
+    setProjectRoot,
+    loadProjectMemoryForCurrentRoot,
+  ]);
   const handleCloseFolder = useCallback(() => {
     setProjectPath(null);
     setTree([]);
@@ -827,7 +846,71 @@ export default function App() {
     // Phase 3.4.5 safety: turn off file inclusion if context is gone
     setIncludeActiveFile(false);
   }, []);
+  const handleNewProject = useCallback(async () => {
+    const name = window.prompt("Project name?");
+    if (!name) return;
 
+    let folder;
+    try {
+      folder = await createNewProject({ name });
+    } catch (err) {
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(`New project failed:\n\n${msg}`);
+      return; // keep current project state unchanged
+    }
+
+    if (!folder) return;
+
+    // Try to allow the chosen folder in scope (best-effort).
+    try {
+      await invoke("fs_allow_directory", { path: folder });
+      console.log("[kforge] FS scope allowed folder:", folder);
+    } catch (err) {
+      console.error("[kforge] Failed to allow folder in FS scope:", err);
+      // We do NOT return here; we still attempt to read the tree.
+    }
+
+    // ✅ App.js is the authority: set root + load memory BEFORE reading tree
+    try {
+      setProjectRoot(folder);
+      await loadProjectMemoryForCurrentRoot();
+    } catch (err) {
+      console.error("[kforge] Failed to set root / load project memory:", err);
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(`New project failed (memory):\n${folder}\n\n${msg}`);
+      return; // keep current project state unchanged
+    }
+
+    // Read folder tree SAFELY — forbidden paths must not crash the UI.
+    let nextTree = null;
+    try {
+      nextTree = await readFolderTree(folder);
+    } catch (err) {
+      console.error("[kforge] Failed to read folder tree:", err);
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(
+        `New project created, but opening it failed:\n${folder}\n\n${msg}\n\n` +
+          `This usually means the folder is outside the allowed allow-read-dir scope.`,
+      );
+      return; // keep current project state unchanged
+    }
+
+    // Only commit UI state changes after we successfully read the tree
+    setProjectPath(folder);
+    setTabs([]);
+    setActiveFilePath(null);
+    setSaveStatus("");
+    setAiTestOutput("");
+    setIncludeActiveFile(false);
+
+    setTree(nextTree || []);
+  }, [
+    invoke,
+    createNewProject,
+    readFolderTree,
+    setProjectRoot,
+    loadProjectMemoryForCurrentRoot,
+  ]);
   const handleOpenFile = useCallback(
     async (path) => {
       if (!path) return;
@@ -1707,6 +1790,10 @@ export default function App() {
 
       {/* Top bar */}
       <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800">
+        <button className={buttonClass()} onClick={handleNewProject}>
+          New Project
+        </button>
+
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>

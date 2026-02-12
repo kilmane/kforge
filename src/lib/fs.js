@@ -6,7 +6,6 @@ import {
   writeTextFile,
   mkdir,
 } from "@tauri-apps/plugin-fs";
-
 import { isTauri } from "@tauri-apps/api/core";
 
 // Phase 4.1 — Project Memory (Step 2: wire to current project root)
@@ -19,16 +18,13 @@ import { tauriFsAdapter } from "../brains/tauri-fs-adapter.js";
 
 /**
  * Module-scoped "current project root".
- * Set when the user picks a folder via openProjectFolder().
- *
- * Used to resolve relative paths like "src" => "<projectRoot>/src"
- * while preventing escape outside the project root.
+ * IMPORTANT: App.js is the authority that decides when this changes.
  */
 let CURRENT_PROJECT_ROOT = null;
 
 /**
  * Module-scoped Project Memory (v1).
- * Loaded explicitly when the project root is selected.
+ * Loaded explicitly when App.js “officially opens” a root.
  */
 let CURRENT_PROJECT_MEMORY = defaultMemoryV1();
 let PROJECT_MEMORY_LOADED_FOR_ROOT = null;
@@ -159,10 +155,7 @@ export function resolvePathWithinProject(inputPath) {
   const resolvedNorm = normalizeForCompare(resolved).toLowerCase();
 
   // Ensure "resolved" is inside "root" (prefix match on normalized path).
-  // Add trailing slash to root to avoid prefix tricks (e.g., C:/proj2 matching C:/proj).
   const rootWithSlash = rootNorm.endsWith("/") ? rootNorm : rootNorm + "/";
-
-  // Normalize resolved for prefix check:
   const resolvedWithSlash = resolvedNorm.endsWith("/")
     ? resolvedNorm
     : resolvedNorm + "/";
@@ -178,6 +171,9 @@ export function getProjectRoot() {
   return CURRENT_PROJECT_ROOT;
 }
 
+/**
+ * App.js uses this to “officially open” a root.
+ */
 export function setProjectRoot(path) {
   const p = String(path || "").trim();
   CURRENT_PROJECT_ROOT = p || null;
@@ -199,7 +195,7 @@ export function setProjectMemory(nextMemory) {
 }
 
 /**
- * Load memory for CURRENT_PROJECT_ROOT (called on Open Folder / root change).
+ * Load memory for CURRENT_PROJECT_ROOT (called by App.js after opening a root).
  * Calm behavior: if missing/broken -> default memory.
  */
 export async function loadProjectMemoryForCurrentRoot() {
@@ -265,6 +261,11 @@ async function walkDir(dirPath) {
   return [...dirs, ...files];
 }
 
+/**
+ * Open Folder dialog (pick only).
+ * IMPORTANT: does NOT set project root and does NOT load memory.
+ * App.js will do that once it successfully reads tree + scopes permissions.
+ */
 export async function openProjectFolder() {
   if (!isTauri()) {
     alert("Tauri not available. Use the desktop app.");
@@ -282,13 +283,61 @@ export async function openProjectFolder() {
   const chosen = Array.isArray(selected) ? (selected[0] ?? null) : selected;
   if (!chosen) return null;
 
-  // Set project root for relative path resolution
-  CURRENT_PROJECT_ROOT = String(chosen);
+  return String(chosen);
+}
 
-  // Phase 4.1: load project memory for this root (no UI yet)
-  await loadProjectMemoryForCurrentRoot();
+/**
+ * New Project (folder-only):
+ * - Ask for a parent folder (browse)
+ * - Create <parent>/<ProjectName>
+ * - Return the created path
+ *
+ * IMPORTANT: does NOT set project root and does NOT load memory.
+ * App.js will do that as part of the “official open” flow.
+ */
+export async function createNewProject({ name, parentDir } = {}) {
+  if (!isTauri()) {
+    alert("Tauri not available. Use the desktop app.");
+    return null;
+  }
 
-  return chosen;
+  const rawName = String(name || "").trim();
+  if (!rawName) throw new Error("Project name is required.");
+
+  // Windows-safe folder name
+  const safeName = rawName
+    .replaceAll(/[<>:"/\\|?*\x00-\x1F]/g, "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+
+  if (!safeName) throw new Error("Project name is not valid.");
+
+  let base = String(parentDir || "").trim();
+
+  if (!base) {
+    const chosenParent = await open({
+      directory: true,
+      multiple: false,
+      title: "Choose where to create your project",
+    });
+
+    const parent = Array.isArray(chosenParent)
+      ? (chosenParent[0] ?? null)
+      : chosenParent;
+    if (!parent) return null;
+
+    base = String(parent);
+  }
+
+  if (!isAbsolutePath(base)) {
+    throw new Error("Project location must be an absolute folder path.");
+  }
+
+  const projectRoot = resolveDotSegments(joinPath(base, safeName));
+
+  await mkdir(projectRoot, { recursive: true });
+
+  return projectRoot;
 }
 
 export async function readFolderTree(path) {
