@@ -774,7 +774,33 @@ export default function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
+  const handleRefreshTree = useCallback(async () => {
+    if (!projectPath) {
+      setAiTestOutput("No folder open.");
+      return;
+    }
 
+    // Try to allow the chosen folder in scope (best-effort)
+    try {
+      await invoke("fs_allow_directory", { path: projectPath });
+    } catch {
+      // ignore
+    }
+
+    try {
+      // Tell fs.js what the official root is
+      setProjectRoot(projectPath);
+      await loadProjectMemoryForCurrentRoot();
+
+      const nextTree = await readFolderTree(projectPath);
+
+      setTree(nextTree || []);
+      setAiTestOutput("");
+    } catch (err) {
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
+    }
+  }, [projectPath]);
   const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
     if (!folder) return;
@@ -782,7 +808,6 @@ export default function App() {
     // Try to allow the chosen folder in scope (best-effort).
     try {
       await invoke("fs_allow_directory", { path: folder });
-      console.log("[kforge] FS scope allowed folder:", folder);
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
       // We do NOT return here; we still attempt to read the tree.
@@ -864,7 +889,6 @@ export default function App() {
     // Try to allow the chosen folder in scope (best-effort).
     try {
       await invoke("fs_allow_directory", { path: folder });
-      console.log("[kforge] FS scope allowed folder:", folder);
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
       // We do NOT return here; we still attempt to read the tree.
@@ -1797,7 +1821,14 @@ export default function App() {
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
         </button>
-
+        <button
+          className={buttonClass("ghost", !projectPath)}
+          onClick={handleRefreshTree}
+          disabled={!projectPath}
+          title={projectPath ? "Refresh Explorer" : "No folder open"}
+        >
+          Refresh
+        </button>
         <button
           className={buttonClass("ghost", !projectPath)}
           onClick={handleCloseFolder}
