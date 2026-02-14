@@ -97,6 +97,18 @@ Handles:
 * Status bubbles
 
 ---
+### 🧰 Dev tools (development-only)
+
+“Dev tools strip” (Tool OK / Tool Err) is hidden in production builds.
+
+In development builds, it can be enabled via keyboard shortcut: Ctrl+Shift+T
+
+Persisted with localStorage key: kforge:devToolsEnabled
+
+Code location: src/ai/panel/AiPanel.jsx and src/ai/panel/TranscriptPanel.jsx
+
+
+---
 
 ### 🧰 Tool Handlers
 
@@ -158,6 +170,15 @@ src/ai/panel/
 | `PatchPreviewPanel.jsx`     | Diff preview                            |
 | `ProviderControlsPanel.jsx` | Provider + model selection              |
 
+---
+### 💬 AI Panels (UI Gating)
+
+* Advanced settings toggle + gating lives in: src/ai/panel/AiPanel.jsx
+  (it controls visibility of SystemPanel / ParametersPanel / OutputPanel / Prompt advanced toggles)
+
+* Vibe-language labels for prompt controls live in: src/ai/panel/PromptPanel.jsx
+ (this is where “Send current file…” and “Suggest edits (preview)” wording is owned) 
+ 
 ---
 
 ### 🧾 “System (optional)” Flow

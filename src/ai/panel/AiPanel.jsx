@@ -1,5 +1,11 @@
 // src/ai/panel/AiPanel.jsx
-import React, { useCallback, useEffect, useRef, useMemo } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+} from "react";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
@@ -361,6 +367,36 @@ export default function AiPanel({
 }) {
   const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
 
+  // ✅ Advanced settings (power user knobs). Calm by default.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  // ✅ Dev tools are for KForge development only (not for end users).
+  // Hidden by default. Toggle with Ctrl+Shift+T (dev builds only).
+  const isDevBuild = process.env.NODE_ENV === "development";
+  const [devToolsEnabled, setDevToolsEnabled] = useState(() => {
+    if (!isDevBuild) return false;
+    return localStorage.getItem("kforge:devToolsEnabled") === "1";
+  });
+
+  useEffect(() => {
+    if (!isDevBuild) return;
+
+    const onKeyDown = (e) => {
+      const key = String(e.key || "").toLowerCase();
+      if (e.ctrlKey && e.shiftKey && key === "t") {
+        e.preventDefault();
+        setDevToolsEnabled((v) => {
+          const next = !v;
+          localStorage.setItem("kforge:devToolsEnabled", next ? "1" : "0");
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isDevBuild]);
+
   const aiModelStr = useMemo(() => {
     if (typeof aiModel === "string") return aiModel;
     if (
@@ -690,7 +726,7 @@ export default function AiPanel({
     if (!activeTab?.path) {
       appendMessage(
         "system",
-        "[tool] 🛡 Tool request blocked — open a file first, then click Req OK.",
+        "[tool] 🛡 Tool request blocked — open a file first, then click Tool: OK.",
       );
       return;
     }
@@ -701,7 +737,7 @@ export default function AiPanel({
     if (!activeTab?.path) {
       appendMessage(
         "system",
-        "[tool] 🛡 Tool request blocked — open a file first, then click Req Err.",
+        "[tool] 🛡 Tool request blocked — open a file first, then click Tool: Err.",
       );
       return;
     }
@@ -743,6 +779,20 @@ export default function AiPanel({
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold flex items-center gap-2">
             <span>AI Panel</span>
+
+            <button
+              className={[
+                "text-[11px] px-2 py-0.5 rounded border",
+                advancedOpen
+                  ? "border-emerald-700 bg-emerald-900/30 text-emerald-100"
+                  : "border-zinc-800 hover:bg-zinc-900",
+              ].join(" ")}
+              onClick={() => setAdvancedOpen((v) => !v)}
+              type="button"
+              title="Show advanced settings"
+            >
+              {advancedOpen ? "Advanced settings ▴" : "Advanced settings ▾"}
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -854,6 +904,7 @@ export default function AiPanel({
           clearConversation={clearConversation}
           onRequestToolOk={handleRequestToolOk}
           onRequestToolErr={handleRequestToolErr}
+          showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
         />
 
         <PromptPanel
@@ -875,20 +926,7 @@ export default function AiPanel({
           providerReady={providerReady}
           appendMessage={appendMessage}
           buttonClass={buttonClass}
-        />
-
-        <SystemPanel
-          aiSystem={aiSystem}
-          setAiSystem={setAiSystem}
-          providerReady={providerReady}
-        />
-
-        <ParametersPanel
-          aiTemperature={aiTemperature}
-          setAiTemperature={setAiTemperature}
-          aiMaxTokens={aiMaxTokens}
-          setAiMaxTokens={setAiMaxTokens}
-          providerReady={providerReady}
+          advancedOpen={advancedOpen}
         />
 
         <ActionsPanel
@@ -900,21 +938,41 @@ export default function AiPanel({
           openSettings={openSettings}
           aiProvider={aiProvider}
           buttonClass={buttonClass}
+          showTest={true}
+          showGuardrail={advancedOpen}
         />
 
-        <OutputPanel aiOutput={aiOutput} />
+        {advancedOpen ? (
+          <div className="space-y-4">
+            <SystemPanel
+              aiSystem={aiSystem}
+              setAiSystem={setAiSystem}
+              providerReady={providerReady}
+            />
 
-        {aiProvider === "ollama" && (
-          <OllamaHelperPanel
-            aiRunning={aiRunning}
-            endpoints={endpoints}
-            invoke={invoke}
-            setAiTestOutput={setAiTestOutput}
-            setRuntimeReachable={setRuntimeReachable}
-            formatTauriError={formatTauriError}
-            buttonClass={buttonClass}
-          />
-        )}
+            <ParametersPanel
+              aiTemperature={aiTemperature}
+              setAiTemperature={setAiTemperature}
+              aiMaxTokens={aiMaxTokens}
+              setAiMaxTokens={setAiMaxTokens}
+              providerReady={providerReady}
+            />
+
+            <OutputPanel aiOutput={aiOutput} />
+
+            {aiProvider === "ollama" && (
+              <OllamaHelperPanel
+                aiRunning={aiRunning}
+                endpoints={endpoints}
+                invoke={invoke}
+                setAiTestOutput={setAiTestOutput}
+                setRuntimeReachable={setRuntimeReachable}
+                formatTauriError={formatTauriError}
+                buttonClass={buttonClass}
+              />
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="p-3 border-t border-zinc-800 text-xs opacity-60">

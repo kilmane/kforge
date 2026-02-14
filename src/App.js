@@ -840,6 +840,8 @@ export default function App() {
 
     // Only commit UI state changes after we successfully read the tree
     setProjectPath(folder);
+    setFocusMode(false);
+    setFocusMode(false);
     setTabs([]);
     setActiveFilePath(null);
     setSaveStatus("");
@@ -856,7 +858,37 @@ export default function App() {
     setProjectRoot,
     loadProjectMemoryForCurrentRoot,
   ]);
+
+  const handleResetWorkspace = useCallback(() => {
+    // --- AI session: hard clear (no "Conversation cleared." bubble) ---
+    setMessages([]);
+    setLastSend(null);
+    setPatchPreview(null);
+    setPatchPreviewVisible(false);
+
+    // --- AI inputs / outputs ---
+    setAiPrompt("");
+    setAiSystem("");
+    setAiOutput("");
+    setAiTestOutput("");
+    setAskForPatch(false);
+    setIncludeActiveFile(false);
+
+    // --- Project/editor ---
+    setProjectPath(null);
+    setTree([]);
+    setTabs([]);
+    setActiveFilePath(null);
+    setSaveStatus("");
+
+    // --- UX landing state ---
+    setFocusMode(true);
+    // optional: if dock is expanded, collapse it:
+    // setDockExpanded(false);
+  }, []);
+
   const handleCloseFolder = useCallback(() => {
+    setFocusMode(true);
     setProjectPath(null);
     setTree([]);
 
@@ -1413,7 +1445,12 @@ export default function App() {
     setPatchPreviewVisible(true);
     appendMessage("system", "Conversation cleared.");
   }, [appendMessage]);
-
+  const clearConversationHard = useCallback(() => {
+    setMessages([]);
+    setLastSend(null);
+    setPatchPreview(null);
+    setPatchPreviewVisible(false);
+  }, []);
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
@@ -1692,11 +1729,19 @@ export default function App() {
    * - First: show a "tool request" system bubble with Approve/Cancel.
    * - Only on Approve do we append "calling" then "returned/failed" (simulated).
    */
+  // Focus Mode (v1) — reclaim space for chat
+  const [focusMode, setFocusMode] = useState(false);
+
+  const toggleFocusMode = useCallback(() => {
+    setFocusMode((v) => !v);
+  }, []);
   const aiPanelEl = (
     <AiPanel
       aiPanelOpen={aiPanelOpen}
-      aiPanelWidthClass={chatUi === "dock" ? "w-full" : aiPanelWidthClass}
-      aiPanelWide={chatUi === "dock" ? true : aiPanelWide}
+      aiPanelWidthClass={
+        focusMode ? "w-full" : chatUi === "dock" ? "w-full" : aiPanelWidthClass
+      }
+      aiPanelWide={focusMode ? true : chatUi === "dock" ? true : aiPanelWide}
       setAiPanelWide={chatUi === "dock" ? () => {} : setAiPanelWide}
       setAiPanelOpen={
         chatUi === "dock" ? () => setDockExpanded(false) : setAiPanelOpen
@@ -1814,12 +1859,23 @@ export default function App() {
 
       {/* Top bar */}
       <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800">
+        <button
+          className={buttonClass}
+          onClick={toggleFocusMode}
+          title="Focus Mode: hide explorer/editor and expand chat"
+        >
+          {focusMode ? "Exit Focus" : "Focus"}
+        </button>
+
         <button className={buttonClass()} onClick={handleNewProject}>
           New Project
         </button>
 
         <button className={buttonClass()} onClick={handleOpenFolder}>
           Open Folder
+        </button>
+        <button className={buttonClass()} onClick={handleResetWorkspace}>
+          Reset Workspace
         </button>
         <button
           className={buttonClass("ghost", !projectPath)}
@@ -1920,29 +1976,33 @@ export default function App() {
 
       {/* Main layout */}
       <div className="flex-1 flex min-h-0">
-        <div className="w-72 border-r border-zinc-800 min-h-0 flex flex-col">
-          {memoryOpen ? (
-            <div className="max-h-[45%] overflow-auto border-b border-zinc-800">
-              <ProjectMemoryPanel />
-            </div>
-          ) : null}
+        {!focusMode ? (
+          <div className="w-72 border-r border-zinc-800 min-h-0 flex flex-col">
+            {memoryOpen ? (
+              <div className="max-h-[45%] overflow-auto border-b border-zinc-800">
+                <ProjectMemoryPanel />
+              </div>
+            ) : null}
 
+            <div className="flex-1 min-h-0">
+              <Explorer
+                tree={tree}
+                onOpenFile={handleOpenFile}
+                activeFilePath={activeFilePath}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {!focusMode ? (
           <div className="flex-1 min-h-0">
-            <Explorer
-              tree={tree}
-              onOpenFile={handleOpenFile}
-              activeFilePath={activeFilePath}
+            <EditorPane
+              filePath={activeFilePath}
+              value={activeTab?.content ?? ""}
+              onChange={handleEditorChange}
             />
           </div>
-        </div>
-
-        <div className="flex-1 min-h-0">
-          <EditorPane
-            filePath={activeFilePath}
-            value={activeTab?.content ?? ""}
-            onChange={handleEditorChange}
-          />
-        </div>
+        ) : null}
 
         {chatUi === "classic" ? aiPanelEl : null}
       </div>
