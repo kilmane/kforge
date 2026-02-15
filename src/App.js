@@ -1837,6 +1837,117 @@ export default function App() {
       lastMessagePreview={lastPreview}
     />
   );
+  const topBarEl = (
+    <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800 relative z-50 bg-zinc-950">
+      <button
+        className={buttonClass}
+        onClick={toggleFocusMode}
+        title="Focus Mode: hide explorer/editor and expand chat"
+      >
+        {focusMode ? "Exit Focus" : "Focus"}
+      </button>
+
+      <button className={buttonClass()} onClick={handleNewProject}>
+        New Project
+      </button>
+
+      <button className={buttonClass()} onClick={handleOpenFolder}>
+        Open Folder
+      </button>
+
+      <button className={buttonClass()} onClick={handleResetWorkspace}>
+        Reset Workspace
+      </button>
+
+      <button
+        className={buttonClass("ghost", !projectPath)}
+        onClick={handleRefreshTree}
+        disabled={!projectPath}
+        title={projectPath ? "Refresh Explorer" : "No folder open"}
+      >
+        Refresh
+      </button>
+
+      <button
+        className={buttonClass("ghost", !projectPath)}
+        onClick={handleCloseFolder}
+        disabled={!projectPath}
+        title={projectPath ? `Close folder: ${projectPath}` : "No folder open"}
+      >
+        Close Folder
+      </button>
+
+      <button
+        className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
+        onClick={handleSaveActive}
+        disabled={!activeTab || !activeTab.isDirty}
+        title="Save (Ctrl/Cmd+S)"
+      >
+        Save
+      </button>
+
+      <button
+        className={buttonClass("ghost")}
+        onClick={() => setMemoryOpen((v) => !v)}
+        title="Toggle Project Memory"
+      >
+        {memoryOpen ? "Hide Memory" : "Memory"}
+        {!memoryOpen && memoryBadgeCount > 0 ? ` • ${memoryBadgeCount}` : ""}
+      </button>
+
+      <button
+        className={buttonClass("ghost")}
+        onClick={() => openSettings(null, "Opened from top bar")}
+        title="Settings (Ctrl/Cmd+,)"
+      >
+        Settings
+      </button>
+
+      <button
+        className={buttonClass("ghost")}
+        onClick={() => {
+          if (chatUi === "dock") {
+            setDockExpanded((v) => !v);
+          } else {
+            setAiPanelOpen((v) => !v);
+          }
+        }}
+      >
+        {chatUi === "dock"
+          ? dockExpanded
+            ? "Collapse AI"
+            : "Expand AI"
+          : aiPanelOpen
+            ? "Hide AI"
+            : "Show AI"}
+      </button>
+
+      {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
+      <div className="hidden md:flex items-center gap-2"></div>
+
+      <div className="text-sm opacity-80 truncate">
+        {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
+      </div>
+
+      {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
+
+      {aiTestOutput && (
+        <div
+          className="text-xs opacity-70 truncate max-w-[35%]"
+          title={aiTestOutput}
+        >
+          {aiTestOutput}
+        </div>
+      )}
+
+      {activeFilePath && (
+        <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">
+          {activeFilePath}
+        </div>
+      )}
+    </div>
+  );
+
   const classicLayout = (
     <div
       className={[
@@ -1856,115 +1967,6 @@ export default function App() {
         focusProviderId={settingsFocusProviderId}
         message={settingsMessage}
       />
-
-      {/* Top bar */}
-      <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800">
-        <button
-          className={buttonClass}
-          onClick={toggleFocusMode}
-          title="Focus Mode: hide explorer/editor and expand chat"
-        >
-          {focusMode ? "Exit Focus" : "Focus"}
-        </button>
-
-        <button className={buttonClass()} onClick={handleNewProject}>
-          New Project
-        </button>
-
-        <button className={buttonClass()} onClick={handleOpenFolder}>
-          Open Folder
-        </button>
-        <button className={buttonClass()} onClick={handleResetWorkspace}>
-          Reset Workspace
-        </button>
-        <button
-          className={buttonClass("ghost", !projectPath)}
-          onClick={handleRefreshTree}
-          disabled={!projectPath}
-          title={projectPath ? "Refresh Explorer" : "No folder open"}
-        >
-          Refresh
-        </button>
-        <button
-          className={buttonClass("ghost", !projectPath)}
-          onClick={handleCloseFolder}
-          disabled={!projectPath}
-          title={
-            projectPath ? `Close folder: ${projectPath}` : "No folder open"
-          }
-        >
-          Close Folder
-        </button>
-
-        <button
-          className={buttonClass("ghost", !activeTab || !activeTab.isDirty)}
-          onClick={handleSaveActive}
-          disabled={!activeTab || !activeTab.isDirty}
-          title="Save (Ctrl/Cmd+S)"
-        >
-          Save
-        </button>
-
-        <button
-          className={buttonClass("ghost")}
-          onClick={() => setMemoryOpen((v) => !v)}
-          title="Toggle Project Memory"
-        >
-          {memoryOpen ? "Hide Memory" : "Memory"}
-          {!memoryOpen && memoryBadgeCount > 0 ? ` • ${memoryBadgeCount}` : ""}
-        </button>
-
-        <button
-          className={buttonClass("ghost")}
-          onClick={() => openSettings(null, "Opened from top bar")}
-          title="Settings (Ctrl/Cmd+,)"
-        >
-          Settings
-        </button>
-
-        <button
-          className={buttonClass("ghost")}
-          onClick={() => {
-            if (chatUi === "dock") {
-              setDockExpanded((v) => !v);
-            } else {
-              setAiPanelOpen((v) => !v);
-            }
-          }}
-        >
-          {chatUi === "dock"
-            ? dockExpanded
-              ? "Collapse AI"
-              : "Expand AI"
-            : aiPanelOpen
-              ? "Hide AI"
-              : "Show AI"}
-        </button>
-
-        {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
-        <div className="hidden md:flex items-center gap-2"></div>
-
-        <div className="text-sm opacity-80 truncate">
-          {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
-        </div>
-
-        {saveStatus && <div className="text-xs opacity-70">{saveStatus}</div>}
-
-        {aiTestOutput && (
-          <div
-            className="text-xs opacity-70 truncate max-w-[35%]"
-            title={aiTestOutput}
-          >
-            {aiTestOutput}
-          </div>
-        )}
-
-        {activeFilePath && (
-          <div className="ml-auto text-xs opacity-70 truncate max-w-[45%]">
-            {activeFilePath}
-          </div>
-        )}
-      </div>
 
       {/* Tabs */}
       <Tabs
@@ -2010,14 +2012,27 @@ export default function App() {
   );
   if (chatUi === "dock") {
     return (
-      <DockShell
-        main={classicLayout}
-        dockBar={dockBarEl}
-        dockPanel={aiPanelEl}
-        expanded={dockExpanded}
-      />
+      <div className="h-full w-full flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
+        {/* Top bar always visible */}
+        <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
+
+        {/* Everything under the top bar */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <DockShell
+            main={classicLayout}
+            dockBar={dockBarEl}
+            dockPanel={aiPanelEl}
+            expanded={dockExpanded}
+          />
+        </div>
+      </div>
     );
   }
 
-  return classicLayout;
+  return (
+    <div className="h-full w-full flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
+      <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
+      <div className="flex-1 min-h-0 overflow-hidden">{classicLayout}</div>
+    </div>
+  );
 }
