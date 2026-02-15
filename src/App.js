@@ -1738,6 +1738,7 @@ export default function App() {
   const aiPanelEl = (
     <AiPanel
       aiPanelOpen={aiPanelOpen}
+      focusLayout={chatUi === "dock" && dockExpanded}
       aiPanelWidthClass={
         focusMode ? "w-full" : chatUi === "dock" ? "w-full" : aiPanelWidthClass
       }

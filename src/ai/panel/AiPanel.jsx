@@ -364,8 +364,12 @@ export default function AiPanel({
   buttonClass,
   iconButtonClass,
   GearIcon,
+
+  // focus layout (dock expanded)
+  focusLayout,
 }) {
   const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
+  const isFocusLayout = !!focusLayout;
 
   // ✅ Advanced settings (power user knobs). Calm by default.
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -865,115 +869,241 @@ export default function AiPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-auto p-3 space-y-4">
-        <ProviderControlsPanel
-          providerOptions={providerOptions}
-          handleProviderChange={handleProviderChange}
-          providerStatus={providerStatus}
-          disabledProviderMessage={disabledProviderMessage}
-          aiProvider={aiProvider}
-          providerReady={providerReady}
-          openSettings={openSettings}
-          aiModel={aiModel}
-          setAiModel={setAiModel}
-          modelPlaceholder={modelPlaceholder}
-          modelSuggestions={modelSuggestions}
-          showModelHelper={showModelHelper}
-          modelHelperText={modelHelperText}
-          aiEndpoint={aiEndpoint}
-          buttonClass={buttonClass}
-        />
-
-        <PatchPreviewPanel
-          patchPreview={patchPreview}
-          patchPreviewVisible={patchPreviewVisible}
-          setPatchPreviewVisible={setPatchPreviewVisible}
-          copyPatchToClipboard={copyPatchToClipboard}
-          discardPatchPreview={discardPatchPreview}
-          buttonClass={buttonClass}
-        />
-
-        <TranscriptPanel
-          messages={messages}
-          TranscriptBubble={TranscriptBubble}
-          transcriptBottomRef={transcriptBottomRef}
-          CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
-          lastSend={lastSend}
-          aiRunning={aiRunning}
-          handleRetryLast={handleRetryLast}
-          clearConversation={clearConversation}
-          onRequestToolOk={handleRequestToolOk}
-          onRequestToolErr={handleRequestToolErr}
-          showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
-        />
-
-        <PromptPanel
-          activeTab={activeTab}
-          handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
-          includeActiveFile={includeActiveFile}
-          setIncludeActiveFile={setIncludeActiveFile}
-          activeFileChip={activeFileChip}
-          askForPatch={askForPatch}
-          setAskForPatch={setAskForPatch}
-          patchPreview={patchPreview}
-          patchPreviewVisible={patchPreviewVisible}
-          copyPatchToClipboard={copyPatchToClipboard}
-          setPatchPreviewVisible={setPatchPreviewVisible}
-          discardPatchPreview={discardPatchPreview}
-          aiPrompt={aiPrompt}
-          setAiPrompt={setAiPrompt}
-          handlePromptKeyDown={handlePromptKeyDown}
-          providerReady={providerReady}
-          appendMessage={appendMessage}
-          buttonClass={buttonClass}
-          advancedOpen={advancedOpen}
-        />
-
-        <ActionsPanel
-          providerReady={providerReady}
-          aiRunning={aiRunning}
-          handleSendChat={handleSendChat}
-          handleAiTest={handleAiTest}
-          guardrailText={guardrailText}
-          openSettings={openSettings}
-          aiProvider={aiProvider}
-          buttonClass={buttonClass}
-          showTest={true}
-          showGuardrail={advancedOpen}
-        />
-
-        {advancedOpen ? (
-          <div className="space-y-4">
-            <SystemPanel
-              aiSystem={aiSystem}
-              setAiSystem={setAiSystem}
-              providerReady={providerReady}
-            />
-
-            <ParametersPanel
-              aiTemperature={aiTemperature}
-              setAiTemperature={setAiTemperature}
-              aiMaxTokens={aiMaxTokens}
-              setAiMaxTokens={setAiMaxTokens}
-              providerReady={providerReady}
-            />
-
-            <OutputPanel aiOutput={aiOutput} />
-
-            {aiProvider === "ollama" && (
-              <OllamaHelperPanel
-                aiRunning={aiRunning}
-                endpoints={endpoints}
-                invoke={invoke}
-                setAiTestOutput={setAiTestOutput}
-                setRuntimeReachable={setRuntimeReachable}
-                formatTauriError={formatTauriError}
+      {/* MAIN AREA */}
+      {isFocusLayout ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Scroll area: transcript lives here */}
+          <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-4">
+            {/* Provider / model controls only when Advanced is open */}
+            {advancedOpen ? (
+              <ProviderControlsPanel
+                providerOptions={providerOptions}
+                handleProviderChange={handleProviderChange}
+                providerStatus={providerStatus}
+                disabledProviderMessage={disabledProviderMessage}
+                aiProvider={aiProvider}
+                providerReady={providerReady}
+                openSettings={openSettings}
+                aiModel={aiModel}
+                setAiModel={setAiModel}
+                modelPlaceholder={modelPlaceholder}
+                modelSuggestions={modelSuggestions}
+                showModelHelper={showModelHelper}
+                modelHelperText={modelHelperText}
+                aiEndpoint={aiEndpoint}
                 buttonClass={buttonClass}
               />
-            )}
+            ) : null}
+
+            {patchPreviewVisible || patchPreview ? (
+              <PatchPreviewPanel
+                patchPreview={patchPreview}
+                patchPreviewVisible={patchPreviewVisible}
+                setPatchPreviewVisible={setPatchPreviewVisible}
+                copyPatchToClipboard={copyPatchToClipboard}
+                discardPatchPreview={discardPatchPreview}
+                buttonClass={buttonClass}
+              />
+            ) : null}
+
+            <div className="flex-1 min-h-0">
+              <TranscriptPanel
+                messages={messages}
+                TranscriptBubble={TranscriptBubble}
+                transcriptBottomRef={transcriptBottomRef}
+                CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
+                lastSend={lastSend}
+                aiRunning={aiRunning}
+                handleRetryLast={handleRetryLast}
+                clearConversation={clearConversation}
+                onRequestToolOk={handleRequestToolOk}
+                onRequestToolErr={handleRequestToolErr}
+                showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
+              />
+            </div>
+
+            {advancedOpen ? (
+              <div className="space-y-4">
+                <SystemPanel
+                  aiSystem={aiSystem}
+                  setAiSystem={setAiSystem}
+                  providerReady={providerReady}
+                />
+
+                <ParametersPanel
+                  aiTemperature={aiTemperature}
+                  setAiTemperature={setAiTemperature}
+                  aiMaxTokens={aiMaxTokens}
+                  setAiMaxTokens={setAiMaxTokens}
+                  providerReady={providerReady}
+                />
+
+                <OutputPanel aiOutput={aiOutput} />
+
+                {aiProvider === "ollama" && (
+                  <OllamaHelperPanel
+                    aiRunning={aiRunning}
+                    endpoints={endpoints}
+                    invoke={invoke}
+                    setAiTestOutput={setAiTestOutput}
+                    setRuntimeReachable={setRuntimeReachable}
+                    formatTauriError={formatTauriError}
+                    buttonClass={buttonClass}
+                  />
+                )}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+
+          {/* Fixed bottom area: prompt + actions */}
+          <div className="shrink-0 border-t border-zinc-800 p-3 space-y-3 bg-zinc-950">
+            <PromptPanel
+              activeTab={activeTab}
+              handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
+              includeActiveFile={includeActiveFile}
+              setIncludeActiveFile={setIncludeActiveFile}
+              activeFileChip={activeFileChip}
+              askForPatch={askForPatch}
+              setAskForPatch={setAskForPatch}
+              patchPreview={patchPreview}
+              patchPreviewVisible={patchPreviewVisible}
+              copyPatchToClipboard={copyPatchToClipboard}
+              setPatchPreviewVisible={setPatchPreviewVisible}
+              discardPatchPreview={discardPatchPreview}
+              aiPrompt={aiPrompt}
+              setAiPrompt={setAiPrompt}
+              handlePromptKeyDown={handlePromptKeyDown}
+              providerReady={providerReady}
+              appendMessage={appendMessage}
+              buttonClass={buttonClass}
+              advancedOpen={advancedOpen}
+            />
+
+            <ActionsPanel
+              providerReady={providerReady}
+              aiRunning={aiRunning}
+              handleSendChat={handleSendChat}
+              handleAiTest={handleAiTest}
+              guardrailText={guardrailText}
+              openSettings={openSettings}
+              aiProvider={aiProvider}
+              buttonClass={buttonClass}
+              showTest={true}
+              showGuardrail={advancedOpen}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto p-3 space-y-4">
+          <ProviderControlsPanel
+            providerOptions={providerOptions}
+            handleProviderChange={handleProviderChange}
+            providerStatus={providerStatus}
+            disabledProviderMessage={disabledProviderMessage}
+            aiProvider={aiProvider}
+            providerReady={providerReady}
+            openSettings={openSettings}
+            aiModel={aiModel}
+            setAiModel={setAiModel}
+            modelPlaceholder={modelPlaceholder}
+            modelSuggestions={modelSuggestions}
+            showModelHelper={showModelHelper}
+            modelHelperText={modelHelperText}
+            aiEndpoint={aiEndpoint}
+            buttonClass={buttonClass}
+          />
+
+          <PatchPreviewPanel
+            patchPreview={patchPreview}
+            patchPreviewVisible={patchPreviewVisible}
+            setPatchPreviewVisible={setPatchPreviewVisible}
+            copyPatchToClipboard={copyPatchToClipboard}
+            discardPatchPreview={discardPatchPreview}
+            buttonClass={buttonClass}
+          />
+
+          <TranscriptPanel
+            messages={messages}
+            TranscriptBubble={TranscriptBubble}
+            transcriptBottomRef={transcriptBottomRef}
+            CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
+            lastSend={lastSend}
+            aiRunning={aiRunning}
+            handleRetryLast={handleRetryLast}
+            clearConversation={clearConversation}
+            onRequestToolOk={handleRequestToolOk}
+            onRequestToolErr={handleRequestToolErr}
+            showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
+          />
+
+          <PromptPanel
+            activeTab={activeTab}
+            handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
+            includeActiveFile={includeActiveFile}
+            setIncludeActiveFile={setIncludeActiveFile}
+            activeFileChip={activeFileChip}
+            askForPatch={askForPatch}
+            setAskForPatch={setAskForPatch}
+            patchPreview={patchPreview}
+            patchPreviewVisible={patchPreviewVisible}
+            copyPatchToClipboard={copyPatchToClipboard}
+            setPatchPreviewVisible={setPatchPreviewVisible}
+            discardPatchPreview={discardPatchPreview}
+            aiPrompt={aiPrompt}
+            setAiPrompt={setAiPrompt}
+            handlePromptKeyDown={handlePromptKeyDown}
+            providerReady={providerReady}
+            appendMessage={appendMessage}
+            buttonClass={buttonClass}
+            advancedOpen={advancedOpen}
+          />
+
+          <ActionsPanel
+            providerReady={providerReady}
+            aiRunning={aiRunning}
+            handleSendChat={handleSendChat}
+            handleAiTest={handleAiTest}
+            guardrailText={guardrailText}
+            openSettings={openSettings}
+            aiProvider={aiProvider}
+            buttonClass={buttonClass}
+            showTest={true}
+            showGuardrail={advancedOpen}
+          />
+
+          {advancedOpen ? (
+            <div className="space-y-4">
+              <SystemPanel
+                aiSystem={aiSystem}
+                setAiSystem={setAiSystem}
+                providerReady={providerReady}
+              />
+
+              <ParametersPanel
+                aiTemperature={aiTemperature}
+                setAiTemperature={setAiTemperature}
+                aiMaxTokens={aiMaxTokens}
+                setAiMaxTokens={setAiMaxTokens}
+                providerReady={providerReady}
+              />
+
+              <OutputPanel aiOutput={aiOutput} />
+
+              {aiProvider === "ollama" && (
+                <OllamaHelperPanel
+                  aiRunning={aiRunning}
+                  endpoints={endpoints}
+                  invoke={invoke}
+                  setAiTestOutput={setAiTestOutput}
+                  setRuntimeReachable={setRuntimeReachable}
+                  formatTauriError={formatTauriError}
+                  buttonClass={buttonClass}
+                />
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
         Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
