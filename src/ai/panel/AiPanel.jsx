@@ -28,9 +28,9 @@ import { runToolHandler } from "../tools/handlers/index.js";
 const GLOBAL_SEEN_TOOL_KEYS = new Set();
 
 function uidShort() {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
-    -6,
-  );
+  return `${Date.now().toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 8)}`.slice(-6);
 }
 
 function formatToolLine({ tool, status, id, detail }) {
@@ -154,7 +154,10 @@ function extractFencedBlocks(text) {
     while ((o = objRe.exec(payload)) !== null) {
       const candidate = (o[1] || "").trim();
       if (candidate.startsWith("{") && candidate.endsWith("}")) {
-        blocks.push({ payload: candidate, source: "any_fence_json_fragment" });
+        blocks.push({
+          payload: candidate,
+          source: "any_fence_json_fragment",
+        });
       }
     }
   }
@@ -373,6 +376,9 @@ export default function AiPanel({
 
   // ✅ Advanced settings (power user knobs). Calm by default.
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  // ✅ Provider/Model picker (not "advanced")
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // ✅ Dev tools are for KForge development only (not for end users).
   // Hidden by default. Toggle with Ctrl+Shift+T (dev builds only).
@@ -842,6 +848,29 @@ export default function AiPanel({
           </div>
         </div>
 
+        {/* Using line + Change Provider/Model (always visible, not advanced) */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs opacity-80">
+            Using: <span className="opacity-95">{aiProvider}</span>
+            {" / "}
+            <span className="opacity-95">{aiModelStr || "(none)"}</span>
+          </div>
+          <button
+            className={[
+              "text-[12px] px-2 py-0.5 rounded border font-semibold",
+              "border-yellow-600/70 bg-yellow-500/10 text-yellow-200",
+              "hover:bg-yellow-500/20 hover:border-yellow-500",
+            ].join(" ")}
+            onClick={() => setModelPickerOpen(true)}
+            type="button"
+            title="Change Provider/Model"
+          >
+            <span>Change Provider</span>
+            <span className="text-zinc-200 mx-1">/</span>
+            <span>Model</span>
+          </button>
+        </div>
+
         <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
           <div className="leading-snug">{showProviderSurfaceHint}</div>
           <button
@@ -874,27 +903,6 @@ export default function AiPanel({
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Scroll area: transcript lives here */}
           <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-4">
-            {/* Provider / model controls only when Advanced is open */}
-            {advancedOpen ? (
-              <ProviderControlsPanel
-                providerOptions={providerOptions}
-                handleProviderChange={handleProviderChange}
-                providerStatus={providerStatus}
-                disabledProviderMessage={disabledProviderMessage}
-                aiProvider={aiProvider}
-                providerReady={providerReady}
-                openSettings={openSettings}
-                aiModel={aiModel}
-                setAiModel={setAiModel}
-                modelPlaceholder={modelPlaceholder}
-                modelSuggestions={modelSuggestions}
-                showModelHelper={showModelHelper}
-                modelHelperText={modelHelperText}
-                aiEndpoint={aiEndpoint}
-                buttonClass={buttonClass}
-              />
-            ) : null}
-
             {patchPreviewVisible || patchPreview ? (
               <PatchPreviewPanel
                 patchPreview={patchPreview}
@@ -1104,6 +1112,51 @@ export default function AiPanel({
           ) : null}
         </div>
       )}
+
+      {/* Change Provider/Model modal (focus layout uses this; classic layout already shows controls inline) */}
+      {modelPickerOpen ? (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setModelPickerOpen(false)}
+          />
+          <div className="absolute left-1/2 top-1/2 w-[min(820px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+              <div className="text-sm font-semibold text-zinc-100">
+                Change Provider/Model
+              </div>
+              <button
+                type="button"
+                onClick={() => setModelPickerOpen(false)}
+                className="text-[11px] px-2 py-0.5 rounded border border-zinc-800 hover:bg-zinc-900"
+                title="Close"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-4">
+              <ProviderControlsPanel
+                providerOptions={providerOptions}
+                handleProviderChange={handleProviderChange}
+                providerStatus={providerStatus}
+                disabledProviderMessage={disabledProviderMessage}
+                aiProvider={aiProvider}
+                providerReady={providerReady}
+                openSettings={openSettings}
+                aiModel={aiModel}
+                setAiModel={setAiModel}
+                modelPlaceholder={modelPlaceholder}
+                modelSuggestions={modelSuggestions}
+                showModelHelper={showModelHelper}
+                modelHelperText={modelHelperText}
+                aiEndpoint={aiEndpoint}
+                buttonClass={buttonClass}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
         Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
