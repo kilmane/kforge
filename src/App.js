@@ -1608,8 +1608,14 @@ export default function App() {
   );
 
   const handleSendChat = useCallback(async () => {
-    await sendWithPrompt(aiPrompt);
-  }, [sendWithPrompt, aiPrompt]);
+    const text = String(aiPrompt || "").trim();
+    if (!text) return;
+
+    // ✅ Clear immediately for GPT-like feel
+    setAiPrompt("");
+
+    await sendWithPrompt(text);
+  }, [sendWithPrompt, aiPrompt, setAiPrompt]);
 
   const handleRetryLast = useCallback(async () => {
     if (!lastSend) {
@@ -1828,14 +1834,9 @@ export default function App() {
     : "";
   const dockBarEl = (
     <DockChatBar
-      value={aiPrompt}
-      onChange={setAiPrompt}
-      onKeyDown={handlePromptKeyDown}
-      onSend={handleSendChat}
       expanded={dockExpanded}
       onToggleExpand={() => setDockExpanded((v) => !v)}
-      disabled={aiRunning}
-      lastMessagePreview={lastPreview}
+      disabled={false}
     />
   );
   const topBarEl = (

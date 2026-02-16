@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 
 function parseToolIdFromLine(text) {
   const s = String(text || "");
@@ -52,6 +52,14 @@ export default function TranscriptPanel({
     showDevTools &&
     (typeof onRequestToolOk === "function" ||
       typeof onRequestToolErr === "function");
+
+  // ✅ Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    transcriptBottomRef?.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [safeMessages.length, transcriptBottomRef]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2">
@@ -118,23 +126,21 @@ export default function TranscriptPanel({
         </div>
       </div>
 
+      {/* Scrollable transcript area only */}
       <div className="flex-1 min-h-0 overflow-auto pr-1 flex flex-col gap-2">
-        {safeMessages.length === 0 ? (
-          <div className="text-sm opacity-60">No messages yet.</div>
-        ) : (
-          safeMessages.map((m) => (
-            <div key={m.id} className="flex flex-col gap-1">
-              <TranscriptBubble
-                role={m.role}
-                content={m.content}
-                ts={m.ts}
-                actionLabel={m.actionLabel}
-                onAction={m.action}
-              />
-            </div>
-          ))
-        )}
+        {safeMessages.map((m) => (
+          <div key={m.id} className="flex flex-col gap-1">
+            <TranscriptBubble
+              role={m.role}
+              content={m.content}
+              ts={m.ts}
+              actionLabel={m.actionLabel}
+              onAction={m.action}
+            />
+          </div>
+        ))}
 
+        {/* Scroll anchor */}
         <div ref={transcriptBottomRef} />
       </div>
     </div>

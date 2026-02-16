@@ -28,9 +28,9 @@ import { runToolHandler } from "../tools/handlers/index.js";
 const GLOBAL_SEEN_TOOL_KEYS = new Set();
 
 function uidShort() {
-  return `${Date.now().toString(36)}${Math.random()
-    .toString(36)
-    .slice(2, 8)}`.slice(-6);
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
+    -6,
+  );
 }
 
 function formatToolLine({ tool, status, id, detail }) {
@@ -136,7 +136,7 @@ function extractFencedBlocks(text) {
     }
   }
 
-  // 3️⃣ Any other code block (like ```javascript``` etc)
+  // 3️⃣ Any other code block
   const reAnyFence = /```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g;
   while ((m = reAnyFence.exec(text)) !== null) {
     const payload = (m[1] || "").trim();
@@ -154,10 +154,7 @@ function extractFencedBlocks(text) {
     while ((o = objRe.exec(payload)) !== null) {
       const candidate = (o[1] || "").trim();
       if (candidate.startsWith("{") && candidate.endsWith("}")) {
-        blocks.push({
-          payload: candidate,
-          source: "any_fence_json_fragment",
-        });
+        blocks.push({ payload: candidate, source: "any_fence_json_fragment" });
       }
     }
   }
@@ -782,7 +779,7 @@ export default function AiPanel({
 
   return (
     <div
-      className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 flex flex-col`}
+      className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 h-full flex flex-col`}
     >
       {/* AI header: status surface */}
       <div className="p-3 border-b border-zinc-800 space-y-2">
@@ -828,14 +825,17 @@ export default function AiPanel({
               {headerStatus.label}
             </div>
 
-            <button
-              className={buttonClass("ghost")}
-              onClick={() => setAiPanelWide((v) => !v)}
-              type="button"
-              title="Toggle panel width"
-            >
-              {aiPanelWide ? "Narrow" : "Wide"}
-            </button>
+            {/* Wide/Narrow is not meaningful in focus layout */}
+            {!isFocusLayout ? (
+              <button
+                className={buttonClass("ghost")}
+                onClick={() => setAiPanelWide((v) => !v)}
+                type="button"
+                title="Toggle panel width"
+              >
+                {aiPanelWide ? "Narrow" : "Wide"}
+              </button>
+            ) : null}
 
             <button
               className={iconButtonClass(false)}
@@ -848,16 +848,17 @@ export default function AiPanel({
           </div>
         </div>
 
-        {/* Using line + Change Provider/Model (always visible, not advanced) */}
+        {/* Using line + Change Provider/Model */}
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs opacity-80">
             Using: <span className="opacity-95">{aiProvider}</span>
             {" / "}
             <span className="opacity-95">{aiModelStr || "(none)"}</span>
           </div>
+
           <button
             className={[
-              "text-[12px] px-2 py-0.5 rounded border font-semibold",
+              "text-[14px] px-3 py-1 rounded border font-semibold",
               "border-yellow-600/70 bg-yellow-500/10 text-yellow-200",
               "hover:bg-yellow-500/20 hover:border-yellow-500",
             ].join(" ")}
@@ -866,7 +867,7 @@ export default function AiPanel({
             title="Change Provider/Model"
           >
             <span>Change Provider</span>
-            <span className="text-zinc-200 mx-1">/</span>
+            <span className="text-white mx-1">/</span>
             <span>Model</span>
           </button>
         </div>
@@ -901,37 +902,23 @@ export default function AiPanel({
       {/* MAIN AREA */}
       {isFocusLayout ? (
         <div className="flex-1 min-h-0 flex flex-col">
-          {/* Scroll area: transcript lives here */}
+          {/* Top content area (no page scrolling) */}
           <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-4">
             {patchPreviewVisible || patchPreview ? (
-              <PatchPreviewPanel
-                patchPreview={patchPreview}
-                patchPreviewVisible={patchPreviewVisible}
-                setPatchPreviewVisible={setPatchPreviewVisible}
-                copyPatchToClipboard={copyPatchToClipboard}
-                discardPatchPreview={discardPatchPreview}
-                buttonClass={buttonClass}
-              />
+              <div className="shrink-0">
+                <PatchPreviewPanel
+                  patchPreview={patchPreview}
+                  patchPreviewVisible={patchPreviewVisible}
+                  setPatchPreviewVisible={setPatchPreviewVisible}
+                  copyPatchToClipboard={copyPatchToClipboard}
+                  discardPatchPreview={discardPatchPreview}
+                  buttonClass={buttonClass}
+                />
+              </div>
             ) : null}
 
-            <div className="flex-1 min-h-0">
-              <TranscriptPanel
-                messages={messages}
-                TranscriptBubble={TranscriptBubble}
-                transcriptBottomRef={transcriptBottomRef}
-                CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
-                lastSend={lastSend}
-                aiRunning={aiRunning}
-                handleRetryLast={handleRetryLast}
-                clearConversation={clearConversation}
-                onRequestToolOk={handleRequestToolOk}
-                onRequestToolErr={handleRequestToolErr}
-                showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
-              />
-            </div>
-
             {advancedOpen ? (
-              <div className="space-y-4">
+              <div className="shrink-0 space-y-4">
                 <SystemPanel
                   aiSystem={aiSystem}
                   setAiSystem={setAiSystem}
@@ -961,10 +948,27 @@ export default function AiPanel({
                 )}
               </div>
             ) : null}
+
+            {/* Transcript occupies remaining space */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <TranscriptPanel
+                messages={messages}
+                TranscriptBubble={TranscriptBubble}
+                transcriptBottomRef={transcriptBottomRef}
+                CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
+                lastSend={lastSend}
+                aiRunning={aiRunning}
+                handleRetryLast={handleRetryLast}
+                clearConversation={clearConversation}
+                onRequestToolOk={handleRequestToolOk}
+                onRequestToolErr={handleRequestToolErr}
+                showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
+              />
+            </div>
           </div>
 
-          {/* Fixed bottom area: prompt + actions */}
-          <div className="shrink-0 border-t border-zinc-800 p-3 space-y-3 bg-zinc-950">
+          {/* Prompt pinned (BIG GUNS): sticky bottom to survive parent scroll/overflow quirks */}
+          <div className="sticky bottom-0 z-20 shrink-0 border-t border-zinc-800 p-3 space-y-3 bg-zinc-950">
             <PromptPanel
               activeTab={activeTab}
               handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
@@ -1003,6 +1007,7 @@ export default function AiPanel({
         </div>
       ) : (
         <div className="flex-1 overflow-auto p-3 space-y-4">
+          {/* Classic / non-focus layout keeps provider controls inline */}
           <ProviderControlsPanel
             providerOptions={providerOptions}
             handleProviderChange={handleProviderChange}
@@ -1113,14 +1118,17 @@ export default function AiPanel({
         </div>
       )}
 
-      {/* Change Provider/Model modal (focus layout uses this; classic layout already shows controls inline) */}
+      {/* Change Provider/Model modal */}
       {modelPickerOpen ? (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-[200]">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setModelPickerOpen(false)}
           />
-          <div className="absolute left-1/2 top-1/2 w-[min(820px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl">
+          <div
+            className="absolute left-1/2 top-1/2 w-[min(820px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
               <div className="text-sm font-semibold text-zinc-100">
                 Change Provider/Model
@@ -1157,11 +1165,6 @@ export default function AiPanel({
           </div>
         </div>
       ) : null}
-
-      <div className="p-3 border-t border-zinc-800 text-xs opacity-60">
-        Provider: <span className="opacity-90">{aiProvider}</span> • Model:{" "}
-        <span className="opacity-90">{aiModelStr || "(none)"}</span>
-      </div>
     </div>
   );
 }
