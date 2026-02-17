@@ -1746,9 +1746,9 @@ export default function App() {
       aiPanelOpen={aiPanelOpen}
       focusLayout={chatUi === "dock" && dockExpanded}
       aiPanelWidthClass={
-        focusMode ? "w-full" : chatUi === "dock" ? "w-full" : aiPanelWidthClass
+        chatUi === "dock" ? "w-full" : focusMode ? "w-full" : aiPanelWidthClass
       }
-      aiPanelWide={focusMode ? true : chatUi === "dock" ? true : aiPanelWide}
+      aiPanelWide={chatUi === "dock" ? true : focusMode ? true : aiPanelWide}
       setAiPanelWide={chatUi === "dock" ? () => {} : setAiPanelWide}
       setAiPanelOpen={
         chatUi === "dock" ? () => setDockExpanded(false) : setAiPanelOpen
@@ -2022,9 +2022,8 @@ export default function App() {
         <div className="flex-1 min-h-0 overflow-hidden">
           <DockShell
             main={classicLayout}
-            dockBar={dockBarEl}
             dockPanel={aiPanelEl}
-            expanded={dockExpanded}
+            dockOpen={aiPanelOpen}
           />
         </div>
       </div>
