@@ -37,7 +37,6 @@ import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 
 import DockShell from "./layout/DockShell";
-import DockChatBar from "./layout/DockChatBar";
 import { getChatUiPref } from "./state/uiPrefs";
 
 function basename(p) {
@@ -582,7 +581,6 @@ export default function App() {
 
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
-  const [dockExpanded, setDockExpanded] = useState(false);
 
   // Phase 4.2: chat UI preference (classic vs dock)
   const [chatUi, setChatUi] = useState(getChatUiPref());
@@ -883,8 +881,6 @@ export default function App() {
 
     // --- UX landing state ---
     setFocusMode(true);
-    // optional: if dock is expanded, collapse it:
-    // setDockExpanded(false);
   }, []);
 
   const handleCloseFolder = useCallback(() => {
@@ -1744,15 +1740,13 @@ export default function App() {
   const aiPanelEl = (
     <AiPanel
       aiPanelOpen={aiPanelOpen}
-      focusLayout={chatUi === "dock" && dockExpanded}
+      focusLayout={chatUi === "dock"}
       aiPanelWidthClass={
         chatUi === "dock" ? "w-full" : focusMode ? "w-full" : aiPanelWidthClass
       }
       aiPanelWide={chatUi === "dock" ? true : focusMode ? true : aiPanelWide}
       setAiPanelWide={chatUi === "dock" ? () => {} : setAiPanelWide}
-      setAiPanelOpen={
-        chatUi === "dock" ? () => setDockExpanded(false) : setAiPanelOpen
-      }
+      setAiPanelOpen={setAiPanelOpen}
       providerMeta={providerMeta}
       providerReady={providerReady}
       disabledExplainer={disabledExplainer}
@@ -1832,13 +1826,7 @@ export default function App() {
         .replaceAll("\n", " ")
         .slice(0, 240)
     : "";
-  const dockBarEl = (
-    <DockChatBar
-      expanded={dockExpanded}
-      onToggleExpand={() => setDockExpanded((v) => !v)}
-      disabled={false}
-    />
-  );
+
   const topBarEl = (
     <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800 relative z-50 bg-zinc-950">
       <button
@@ -1907,21 +1895,9 @@ export default function App() {
 
       <button
         className={buttonClass("ghost")}
-        onClick={() => {
-          if (chatUi === "dock") {
-            setDockExpanded((v) => !v);
-          } else {
-            setAiPanelOpen((v) => !v);
-          }
-        }}
+        onClick={() => setAiPanelOpen((v) => !v)}
       >
-        {chatUi === "dock"
-          ? dockExpanded
-            ? "Collapse AI"
-            : "Expand AI"
-          : aiPanelOpen
-            ? "Hide AI"
-            : "Show AI"}
+        {aiPanelOpen ? "Hide AI" : "Show AI"}
       </button>
 
       {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
