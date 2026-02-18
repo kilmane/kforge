@@ -15,6 +15,15 @@ docs/.kforge/
 # production
 /build
 
+# ---------------------------------------------
+# Local KForge maintenance scripts (dev-only)
+# These PowerShell utilities clean caches,
+# Tauri build artifacts, and WebView storage.
+# They are machine-specific and not part of
+# the application source.
+# ---------------------------------------------
+clean-kforge*.ps1
+
 # misc
 .DS_Store
 .env.local
