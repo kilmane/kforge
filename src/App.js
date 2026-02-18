@@ -37,7 +37,6 @@ import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 
 import DockShell from "./layout/DockShell";
-import { getChatUiPref } from "./state/uiPrefs";
 
 function basename(p) {
   if (!p) return "";
@@ -581,16 +580,6 @@ export default function App() {
 
   // AI panel open/close
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
-
-  // Phase 4.2: chat UI preference (classic vs dock)
-  const [chatUi, setChatUi] = useState(getChatUiPref());
-
-  useEffect(() => {
-    const onPrefsChanged = () => setChatUi(getChatUiPref());
-    window.addEventListener("kforge:uiPrefsChanged", onPrefsChanged);
-    return () =>
-      window.removeEventListener("kforge:uiPrefsChanged", onPrefsChanged);
-  }, []);
 
   // Project Memory panel toggle (UI only)
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -1740,12 +1729,10 @@ export default function App() {
   const aiPanelEl = (
     <AiPanel
       aiPanelOpen={aiPanelOpen}
-      focusLayout={chatUi === "dock"}
-      aiPanelWidthClass={
-        chatUi === "dock" ? "w-full" : focusMode ? "w-full" : aiPanelWidthClass
-      }
-      aiPanelWide={chatUi === "dock" ? true : focusMode ? true : aiPanelWide}
-      setAiPanelWide={chatUi === "dock" ? () => {} : setAiPanelWide}
+      focusLayout={true}
+      aiPanelWidthClass={focusMode ? "w-full" : aiPanelWidthClass}
+      aiPanelWide={focusMode ? true : aiPanelWide}
+      setAiPanelWide={setAiPanelWide}
       setAiPanelOpen={setAiPanelOpen}
       providerMeta={providerMeta}
       providerReady={providerReady}
@@ -1927,12 +1914,7 @@ export default function App() {
   );
 
   const classicLayout = (
-    <div
-      className={[
-        chatUi === "dock" ? "h-full w-full" : "h-screen w-screen",
-        "bg-zinc-950 text-zinc-100 flex flex-col",
-      ].join(" ")}
-    >
+    <div className="h-full w-full bg-zinc-950 text-zinc-100 flex flex-col">
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -1983,33 +1965,21 @@ export default function App() {
             />
           </div>
         ) : null}
-
-        {chatUi === "classic" ? aiPanelEl : null}
       </div>
     </div>
   );
-  if (chatUi === "dock") {
-    return (
-      <div className="h-full w-full flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
-        {/* Top bar always visible */}
-        <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
-
-        {/* Everything under the top bar */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <DockShell
-            main={classicLayout}
-            dockPanel={aiPanelEl}
-            dockOpen={aiPanelOpen}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full w-full flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
       <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
-      <div className="flex-1 min-h-0 overflow-hidden">{classicLayout}</div>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <DockShell
+          main={classicLayout}
+          dockPanel={aiPanelEl}
+          dockOpen={aiPanelOpen}
+        />
+      </div>
     </div>
   );
 }
