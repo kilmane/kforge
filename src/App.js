@@ -1692,10 +1692,6 @@ export default function App() {
     [handleSendChat],
   );
 
-  const aiPanelWidthClass = useMemo(() => {
-    return aiPanelWide ? "w-[580px]" : "w-96";
-  }, [aiPanelWide]);
-
   const activeFileChip = useMemo(() => {
     if (!includeActiveFile) return null;
     if (!activeTab?.path) return null;
@@ -1730,9 +1726,9 @@ export default function App() {
     <AiPanel
       aiPanelOpen={aiPanelOpen}
       focusLayout={true}
-      aiPanelWidthClass={focusMode ? "w-full" : aiPanelWidthClass}
-      aiPanelWide={focusMode ? true : aiPanelWide}
-      setAiPanelWide={setAiPanelWide}
+      aiPanelWidthClass="w-full"
+      aiPanelWide={true}
+      setAiPanelWide={() => {}}
       setAiPanelOpen={setAiPanelOpen}
       providerMeta={providerMeta}
       providerReady={providerReady}
