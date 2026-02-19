@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getChatUiPref, setChatUiPref } from "../../state/uiPrefs";
 
 function inputClass(disabled = false) {
   return [
@@ -132,13 +131,6 @@ export default function SettingsModal({
 }) {
   const [activeId, setActiveId] = useState(providers?.[0]?.id || "openai");
   const [keyDrafts, setKeyDrafts] = useState({}); // providerId -> string
-
-  // Phase 4.2: chat UI preference (layout only)
-  const [chatUi, setChatUi] = useState(getChatUiPref()); // "classic" | "dock"
-  function onChangeChatUi(next) {
-    setChatUi(next);
-    setChatUiPref(next);
-  }
 
   const providerButtonRefs = useRef({}); // providerId -> element
   const leftListRef = useRef(null);
@@ -339,39 +331,6 @@ export default function SettingsModal({
               <div className="text-sm opacity-70">No provider selected.</div>
             ) : (
               <div className="space-y-4">
-                {/* Chat UI toggle (Phase 4.2) */}
-                <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold">Chat UI</div>
-                    <div className="text-xs opacity-70">layout only</div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className={buttonClass(
-                        chatUi === "classic" ? "primary" : "ghost",
-                      )}
-                      onClick={() => onChangeChatUi("classic")}
-                    >
-                      Classic
-                    </button>
-                    <button
-                      type="button"
-                      className={buttonClass(
-                        chatUi === "dock" ? "primary" : "ghost",
-                      )}
-                      onClick={() => onChangeChatUi("dock")}
-                    >
-                      Bottom
-                    </button>
-                  </div>
-
-                  <div className="text-xs opacity-60">
-                    Switches layout only. No behavior changes.
-                  </div>
-                </div>
-
                 <div>
                   <div className="text-lg font-semibold">
                     {activeProvider.label}
