@@ -1861,7 +1861,10 @@ export default function App() {
 
       <button
         className={buttonClass("ghost")}
-        onClick={() => setMemoryOpen((v) => !v)}
+        onClick={() => {
+          setFocusMode(false);
+          setMemoryOpen((v) => !v);
+        }}
         title="Toggle Project Memory"
       >
         {memoryOpen ? "Hide Memory" : "Memory"}
