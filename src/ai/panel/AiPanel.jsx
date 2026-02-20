@@ -267,8 +267,83 @@ function extractXmlToolCalls(text) {
       calls.push({ name, args, source: "xml_function_name" });
     }
   }
-
   return calls;
+}
+
+function ProviderMenuButton({
+  provider,
+  model,
+  configured,
+  advancedOpen,
+  onToggleAdvanced,
+  onChangeProviderModel,
+  onConfigure,
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  const label = `${provider || "No Provider"} / ${model || "(none)"}`;
+
+  const buttonTone = configured
+    ? "bg-emerald-600/90 hover:bg-emerald-600 border-emerald-500/60"
+    : "bg-red-600/90 hover:bg-red-600 border-red-500/60";
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        title={label}
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          "flex items-center gap-2 px-3 py-1.5 rounded-md border",
+          "text-sm font-semibold text-white",
+          "max-w-[520px]",
+          buttonTone,
+        ].join(" ")}
+      >
+        <span className="truncate max-w-[460px]">{label}</span>
+        <span className="text-yellow-300 font-extrabold text-xs leading-none">
+          ▼
+        </span>
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 mt-2 w-64 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg z-50 overflow-hidden">
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900"
+            onClick={() => {
+              setOpen(false);
+              onChangeProviderModel();
+            }}
+          >
+            Change Provider / Model
+          </button>
+
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900"
+            onClick={() => {
+              setOpen(false);
+              onConfigure();
+            }}
+          >
+            Configure AI
+          </button>
+
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900"
+            onClick={() => {
+              setOpen(false);
+              onToggleAdvanced();
+            }}
+          >
+            {advancedOpen ? "Advanced settings ▴" : "Advanced settings ▾"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function AiPanel({
@@ -376,6 +451,7 @@ export default function AiPanel({
 
   // ✅ Provider/Model picker (not "advanced")
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   // ✅ Dev tools are for KForge development only (not for end users).
   // Hidden by default. Toggle with Ctrl+Shift+T (dev builds only).
@@ -781,61 +857,32 @@ export default function AiPanel({
     <div
       className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 h-full flex flex-col`}
     >
-      {/* AI header: status surface */}
-      <div className="p-3 border-b border-zinc-800 space-y-2">
+      {/* AI header: GPT-clean control */}
+      <div className="p-3 border-b border-zinc-800 sticky top-0 z-30 bg-zinc-950">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold flex items-center gap-2">
-            <span>AI Panel</span>
-
-            <button
-              className={[
-                "text-[11px] px-2 py-0.5 rounded border",
-                advancedOpen
-                  ? "border-emerald-700 bg-emerald-900/30 text-emerald-100"
-                  : "border-zinc-800 hover:bg-zinc-900",
-              ].join(" ")}
-              onClick={() => setAdvancedOpen((v) => !v)}
-              type="button"
-              title="Show advanced settings"
-            >
-              {advancedOpen ? "Advanced settings ▴" : "Advanced settings ▾"}
-            </button>
-          </div>
+          <ProviderMenuButton
+            provider={aiProvider}
+            model={aiModelStr || "(none)"}
+            configured={providerReady}
+            advancedOpen={advancedOpen}
+            onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
+            onChangeProviderModel={() => setModelPickerOpen(true)}
+            onConfigure={() =>
+              openSettings(aiProvider, "Configure in Settings")
+            }
+          />
 
           <div className="flex items-center gap-2">
-            <div
-              className="text-[11px] px-2 py-0.5 rounded border whitespace-nowrap bg-zinc-900/40 border-zinc-800 text-zinc-200"
-              title="Provider category"
+            <button
+              type="button"
+              className="text-xs text-zinc-400 hover:text-zinc-200"
+              onClick={() => setShowTranscript((v) => !v)}
+              title={
+                showTranscript ? "Return to chat view" : "Open full transcript"
+              }
             >
-              {providerGroupLabel(providerMeta.group)}
-            </div>
-
-            <div className="text-xs opacity-70">
-              {providerMeta.label}
-              {providerReady ? "" : ` (${disabledExplainer})`}
-            </div>
-
-            <div
-              className={[
-                "text-[11px] px-2 py-0.5 rounded border whitespace-nowrap",
-                statusChipClass(headerStatus.tone),
-              ].join(" ")}
-              title={providerMeta.id}
-            >
-              {headerStatus.label}
-            </div>
-
-            {/* Wide/Narrow is not meaningful in focus layout */}
-            {!isFocusLayout ? (
-              <button
-                className={buttonClass("ghost")}
-                onClick={() => setAiPanelWide((v) => !v)}
-                type="button"
-                title="Toggle panel width"
-              >
-                {aiPanelWide ? "Narrow" : "Wide"}
-              </button>
-            ) : null}
+              {showTranscript ? "Back to Chat" : "View Transcript"}
+            </button>
 
             <button
               className={iconButtonClass(false)}
@@ -848,44 +895,8 @@ export default function AiPanel({
           </div>
         </div>
 
-        {/* Using line + Change Provider/Model */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs opacity-80">
-            Using: <span className="opacity-95">{aiProvider}</span>
-            {" / "}
-            <span className="opacity-95">{aiModelStr || "(none)"}</span>
-          </div>
-
-          <button
-            className={[
-              "text-[14px] px-3 py-1 rounded border font-semibold",
-              "border-yellow-600/70 bg-yellow-500/10 text-yellow-200",
-              "hover:bg-yellow-500/20 hover:border-yellow-500",
-            ].join(" ")}
-            onClick={() => setModelPickerOpen(true)}
-            type="button"
-            title="Change Provider/Model"
-          >
-            <span>Change Provider</span>
-            <span className="text-white mx-1">/</span>
-            <span>Model</span>
-          </button>
-        </div>
-
-        <div className="text-xs opacity-70 border border-zinc-800 rounded p-2 bg-zinc-900/30 flex items-center justify-between gap-2">
-          <div className="leading-snug">{showProviderSurfaceHint}</div>
-          <button
-            className={buttonClass("ghost")}
-            onClick={() => openSettings(aiProvider, "Configure in Settings")}
-            type="button"
-            title="Configure this provider in Settings"
-          >
-            Configure
-          </button>
-        </div>
-
-        {providerSwitchNote && (
-          <div className="text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
+        {providerSwitchNote ? (
+          <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
             <button
               className={buttonClass("ghost")}
@@ -896,14 +907,15 @@ export default function AiPanel({
               Dismiss
             </button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* MAIN AREA */}
       {isFocusLayout ? (
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Top content area (no page scrolling) */}
-          <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-4">
+          <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-2">
+            {/* Patch preview stays above chat when present */}
             {patchPreviewVisible || patchPreview ? (
               <div className="shrink-0">
                 <PatchPreviewPanel
@@ -917,6 +929,7 @@ export default function AiPanel({
               </div>
             ) : null}
 
+            {/* Advanced panels only when toggled */}
             {advancedOpen ? (
               <div className="shrink-0 space-y-4">
                 <SystemPanel
@@ -949,21 +962,38 @@ export default function AiPanel({
               </div>
             ) : null}
 
-            {/* Transcript occupies remaining space */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <TranscriptPanel
-                messages={messages}
-                TranscriptBubble={TranscriptBubble}
-                transcriptBottomRef={transcriptBottomRef}
-                CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
-                lastSend={lastSend}
-                aiRunning={aiRunning}
-                handleRetryLast={handleRetryLast}
-                clearConversation={clearConversation}
-                onRequestToolOk={handleRequestToolOk}
-                onRequestToolErr={handleRequestToolErr}
-                showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
-              />
+            {/* CHAT / TRANSCRIPT AREA */}
+            <div className="flex-1 min-h-0 overflow-hidden rounded border border-zinc-800/60 bg-zinc-950/30">
+              <div className="h-full min-h-0 overflow-y-auto p-3">
+                {showTranscript ? (
+                  <TranscriptPanel
+                    messages={messages}
+                    TranscriptBubble={TranscriptBubble}
+                    transcriptBottomRef={transcriptBottomRef}
+                    CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
+                    lastSend={lastSend}
+                    aiRunning={aiRunning}
+                    handleRetryLast={handleRetryLast}
+                    clearConversation={clearConversation}
+                    onRequestToolOk={handleRequestToolOk}
+                    onRequestToolErr={handleRequestToolErr}
+                    showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
+                    hideChrome={false}
+                  />
+                ) : (
+                  <>
+                    {/* GPT-clean chat view: user + assistant only */}
+                    {messages
+                      .filter(
+                        (m) => m?.role === "user" || m?.role === "assistant",
+                      )
+                      .map((m, i) => (
+                        <TranscriptBubble key={m.id || i} message={m} msg={m} />
+                      ))}
+                    <div ref={transcriptBottomRef} />
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

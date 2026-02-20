@@ -38,6 +38,7 @@ export default function TranscriptPanel({
   onRequestToolOk,
   onRequestToolErr,
   showDevTools = false,
+  hideChrome = false,
 }) {
   const safeMessages = useMemo(
     () => (Array.isArray(messages) ? messages.filter(Boolean) : []),
@@ -67,65 +68,65 @@ export default function TranscriptPanel({
         <div className="text-xs uppercase tracking-wide opacity-70">
           Transcript
         </div>
+        {!hideChrome ? (
+          <div className="flex items-center gap-2">
+            {showReqButtons ? (
+              <>
+                <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
+                  Dev tools
+                </span>
 
-        <div className="flex items-center gap-2">
-          {showReqButtons ? (
-            <>
-              <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
-                Dev tools
-              </span>
+                {typeof onRequestToolOk === "function" ? (
+                  <button
+                    className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                    type="button"
+                    onClick={onRequestToolOk}
+                  >
+                    Tool: OK
+                  </button>
+                ) : null}
 
-              {typeof onRequestToolOk === "function" ? (
-                <button
-                  className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-                  type="button"
-                  onClick={onRequestToolOk}
-                >
-                  Tool: OK
-                </button>
-              ) : null}
+                {typeof onRequestToolErr === "function" ? (
+                  <button
+                    className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                    type="button"
+                    onClick={onRequestToolErr}
+                  >
+                    Tool: Err
+                  </button>
+                ) : null}
 
-              {typeof onRequestToolErr === "function" ? (
-                <button
-                  className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-                  type="button"
-                  onClick={onRequestToolErr}
-                >
-                  Tool: Err
-                </button>
-              ) : null}
+                <span className="mx-1 h-5 w-px bg-zinc-800" />
+              </>
+            ) : null}
 
-              <span className="mx-1 h-5 w-px bg-zinc-800" />
-            </>
-          ) : null}
+            {typeof handleRetryLast === "function" ? (
+              <button
+                className={[
+                  "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm",
+                  canRetry ? "" : "opacity-60 cursor-not-allowed",
+                ].join(" ")}
+                type="button"
+                onClick={canRetry ? handleRetryLast : undefined}
+                disabled={!canRetry}
+                title={lastSend ? "Retry last request" : "Nothing to retry"}
+              >
+                Retry
+              </button>
+            ) : null}
 
-          {typeof handleRetryLast === "function" ? (
-            <button
-              className={[
-                "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm",
-                canRetry ? "" : "opacity-60 cursor-not-allowed",
-              ].join(" ")}
-              type="button"
-              onClick={canRetry ? handleRetryLast : undefined}
-              disabled={!canRetry}
-              title={lastSend ? "Retry last request" : "Nothing to retry"}
-            >
-              Retry
-            </button>
-          ) : null}
-
-          {canClear ? (
-            <button
-              className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-              type="button"
-              onClick={clearConversation}
-            >
-              Clear
-            </button>
-          ) : null}
-        </div>
+            {canClear ? (
+              <button
+                className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                type="button"
+                onClick={clearConversation}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-
       {/* Scrollable transcript area only */}
       <div className="flex-1 min-h-0 overflow-auto pr-1 flex flex-col gap-2">
         {safeMessages.map((m) => (
