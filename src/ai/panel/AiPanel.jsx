@@ -984,11 +984,19 @@ export default function AiPanel({
                   <>
                     {/* GPT-clean chat view: user + assistant only */}
                     {messages
-                      .filter(
-                        (m) => m?.role === "user" || m?.role === "assistant",
-                      )
+                      .filter((m) => {
+                        const r = String(m?.role || "").toLowerCase();
+                        return r === "assistant" || r === "ai";
+                      })
                       .map((m, i) => (
-                        <TranscriptBubble key={m.id || i} message={m} msg={m} />
+                        <TranscriptBubble
+                          key={m.id || i}
+                          role={m.role}
+                          content={m.content}
+                          ts={m.ts}
+                          actionLabel={m.actionLabel}
+                          onAction={m.action}
+                        />
                       ))}
                     <div ref={transcriptBottomRef} />
                   </>
