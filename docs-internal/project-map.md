@@ -198,6 +198,73 @@ Advanced settings toggle + gating lives in: src/ai/panel/AiPanel.jsx
 
 Vibe-language labels for prompt controls live in: src/ai/panel/PromptPanel.jsx
 (this is where “Send current file…” and “Suggest edits (preview)” wording is owned)
+----
+
+🔹 AI Message Flow & Rendering Architecture (Phase 4.2i)
+
+Single Source of Truth
+messages state lives in src/App.js
+This is the canonical conversation stream.
+
+Structure:
+{ id, role, content, ts, action?, actionLabel? }
+
+TranscriptBubble Definition
+
+Defined in: src/App.js
+
+Passed down as a prop:
+
+App.js → AiPanel → TranscriptPanel
+
+No duplicate bubble implementations exist.
+
+Rendering Surfaces
+
+There are now two projections of the same messages array:
+
+Chat View (GPT-style)
+
+Location: AiPanel.jsx
+
+Filter: assistant-only
+
+Purpose: Clean AI response surface
+
+No system/tool/user noise
+
+Transcript View
+
+Location: TranscriptPanel.jsx
+
+Filter: full message stream
+
+Includes:
+
+user
+
+assistant
+
+system/tool events
+
+Includes Retry / Clear controls
+
+Important Architectural Rule
+
+Chat View is a filtered projection of Transcript.
+Transcript is the full system log.
+There is only one message store.
+
+This prevents:
+
+Diverging UI logic
+
+Duplicate message state
+
+Bubble prop shape mismatches
+
+
+----
 
 🧾 “System (optional)” Flow
 
