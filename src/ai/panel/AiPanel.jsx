@@ -914,7 +914,7 @@ export default function AiPanel({
       {isFocusLayout ? (
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Top content area (no page scrolling) */}
-          <div className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col gap-2">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {/* Patch preview stays above chat when present */}
             {patchPreviewVisible || patchPreview ? (
               <div className="shrink-0">
@@ -963,7 +963,7 @@ export default function AiPanel({
             ) : null}
 
             {/* CHAT / TRANSCRIPT AREA */}
-            <div className="flex-1 min-h-0 overflow-hidden rounded border border-zinc-800/60 bg-zinc-950/30">
+            <div className="flex-1 min-h-0 overflow-hidden rounded border border-zinc-800/60 bg-zinc-950/30 m-3">
               <div className="h-full min-h-0 overflow-y-auto p-3">
                 {showTranscript ? (
                   <TranscriptPanel

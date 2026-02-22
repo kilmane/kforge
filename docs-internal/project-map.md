@@ -1,335 +1,431 @@
-D:\kforge\docs-internal\project-map.md
 
-Project Map (v1) Updated: 21/02/2026
+# 🗺 KForge Project Map
 
-Baseline topology & execution responsibility map
+**Version:** v2
+**Updated:** 22/02/2026
+**Purpose:** Architectural topology & execution responsibility map
 
-Purpose
+---
 
-This document reflects the actual implemented structure of KForge as of the current AI + Tool runtime phase.
+# 1️⃣ Core Application Architecture
 
-It answers:
+## 🧠 1.1 Application Root (Execution Authority)
 
-Where does AI execution really happen?
+### 📍 `src/App.js`
 
-Where is consent handled?
+This is the **brain of the application**.
 
-Where are tools detected?
+### Responsibilities
 
-Where does “System (optional)” flow?
+* Owns global state:
 
-Where are tool handlers implemented?
+  * `messages`
+  * `focusMode`
+  * project root
+  * AI configuration
+* Executes AI requests
+* Injects system instructions
+* Injects patch instructions
+* Builds contextual prompt
+* Handles retry logic
+* Controls project lifecycle
+* Owns top-level layout
+* Defines `TranscriptBubble`
 
-This version corrects omissions from v0.
+### Key Functions
 
-🔥 Critical Runtime Flows (Authoritative)
-🧠 AI Request Execution (Core Brain)
+* `sendWithPrompt`
+* `handleSendChat`
+* `handleRetryLast`
+* `buildInputWithContext`
+* `runAi(...)`
+* `maybeCapturePatchPreview`
 
-Primary File:
+### Project Lifecycle (App-level Authority)
 
+* `handleOpenFolder`
+* `handleNewProject`
+* `handleRefreshTree`
+* Sets project root
+* Loads project memory
+* Commits UI state
+
+> If AI behavior is wrong → start here.
+
+---
+
+# 2️⃣ AI System Architecture
+
+## 🔹 2.1 Single Message Store (Critical Rule)
+
+### Canonical State
+
+```js
+messages = [{ id, role, content, ts, action?, actionLabel? }]
+```
+
+📍 Defined in: `src/App.js`
+
+There is **only one message store**.
+
+Everything renders from it.
+
+---
+
+## 🔹 2.2 Message Rendering Surfaces
+
+### 🧩 TranscriptBubble
+
+Defined in:
+
+```
 src/App.js
+```
 
-This file contains the real AI execution logic.
+Injected downward:
 
-Key functions:
+```
+App.js → AiPanel → TranscriptPanel
+```
 
-sendWithPrompt
+There are **no duplicate bubble implementations**.
 
-handleSendChat
+---
 
-handleRetryLast
+### 🧠 Chat View (GPT-style Surface)
 
-buildAiRequest
+📍 `src/ai/panel/AiPanel.jsx`
 
-runAi(...)
+* Renders assistant-only messages
+* Clean surface
+* No system/tool noise
+* No duplicate state
 
-buildInputWithContext
+Filter:
 
-Patch instruction injection
+```js
+role === "assistant" || role === "ai"
+```
 
-Tool instruction injection
+---
 
-Also owns project lifecycle flows:
+### 📜 Transcript View
 
-handleOpenFolder
+📍 `src/ai/panel/TranscriptPanel.jsx`
 
-handleNewProject
+* Renders full message stream
+* Includes:
 
-handleRefreshTree (manual Explorer refresh)
+  * user
+  * assistant
+  * system
+  * tool events
+* Contains Retry / Clear controls
+* Renders consent buttons
 
-If AI behavior is wrong → start here.
+---
 
-🧩 AI UI Model (Single Surface)
+### 🧭 Architectural Rule
 
-KForge previously experimented with multiple chat UI modes.
+> Chat View is a filtered projection of Transcript.
+> Transcript is the full system log.
+> There is only one message store.
 
-Current reality:
+Prevents:
 
-One GPT-clean AI surface is used in both states:
+* UI drift
+* Bubble prop mismatch bugs
+* State duplication
+* Ghost rendering bugs
 
-Focus ON: AI-first (less distraction)
+---
 
-Focus OFF: AI surface stays the same, but Explorer + Memory remain available
+# 3️⃣ Tool Runtime Architecture
 
-This reduces state conflicts and prevents “mode bugs”.
+## 🔍 3.1 Tool Detection & Coordination
 
-Primary UI file for the AI surface:
-
-src/ai/panel/AiPanel.jsx
-
-🛡 Tool Detection + Consent Runtime
-
-Primary File:
-
-src/ai/panel/AiPanel.jsx
+📍 `src/ai/panel/AiPanel.jsx`
 
 Responsibilities:
 
-Detect model-initiated tool calls
+* Detect model-initiated tool calls
+* Parse:
 
-Parse:
+  * ```tool fences
+    ```
+  * ```json fences
+    ```
+  * XML tool calls
+  * Bare JSON tool calls
+* Deduplicate payloads (`processedKeysRef`)
+* Trigger `runToolCall`
+* Gate execution behind consent
 
-tool fences
+This file is both:
 
-json fences
+* UI controller
+* Runtime coordinator
 
-XML tool calls
+---
 
-Bare JSON tool calls
+## ⚙ 3.2 Tool Runtime Wrapper
 
-Deduplicate tool payloads (processedKeysRef)
-
-Trigger runTool
-
-Handle consent gating (requestConsent)
-
-Coordinate tool execution through runToolCall
-
-This file is both UI and runtime coordinator.
-
-🧾 Tool Execution Layer
-
-Runtime Wrapper
-
-src/ai/tools/toolRuntime.js
+📍 `src/ai/tools/toolRuntime.js`
 
 Handles:
 
-Transcript-visible tool events
+* Consent enforcement
+* Tool lifecycle state
+* Transcript-visible system messages
+* Success/error formatting
+* Invocation coordination
 
-Consent enforcement
+---
 
-Tool invocation lifecycle
+## 🧰 3.3 Tool Handlers (Execution Layer)
 
-Status bubbles
+📍 `src/ai/tools/handlers/index.js`
 
-🧰 Dev tools (development-only)
+Maps:
 
-“Dev tools strip” (Tool OK / Tool Err) is hidden in production builds.
-
-In development builds, it can be enabled via keyboard shortcut: Ctrl+Shift+T
-
-Persisted with localStorage key: kforge:devToolsEnabled
-
-Code location: src/ai/panel/AiPanel.jsx and src/ai/panel/TranscriptPanel.jsx
-
-🧰 Tool Handlers
-
-Dispatcher
-
-src/ai/tools/handlers/index.js
-
-Maps tool names → implementation functions.
+```
+tool name → implementation
+```
 
 Current tools:
 
-read_file
+* `read_file`
+* `list_dir`
+* `write_file`
+* `search_in_file`
 
-list_dir
+---
 
-write_file
+# 4️⃣ Filesystem Layer
 
-search_in_file
-
-📁 Filesystem Layer
-
-src/lib/fs.js
+📍 `src/lib/fs.js`
 
 Responsibilities:
 
-Project root resolution + safety enforcement (resolvePathWithinProject)
+* Safe path resolution
+* Project root enforcement
+* Memory loading/saving
+* File operations
+* Folder tree building
 
-Project root setters (explicit, App-controlled): setProjectRoot
+Important rule:
 
-Project memory helpers: loadProjectMemoryForCurrentRoot, saveProjectMemoryForCurrentRoot
+> App.js is the only authority that sets project root.
 
-File operations: openFile, saveFile, makeDir
+These functions:
 
-Tree building: readFolderTree
+* `openProjectFolder()`
+* `createNewProject()`
 
-Important behavior:
+Do NOT mutate global state.
 
-openProjectFolder() only returns the chosen folder (no root side-effects)
+If file creation fails → check here.
 
-createNewProject() only creates the folder and returns its path (no root side-effects)
+---
 
-App.js is the authority that sets project root, loads memory, and commits UI state
+# 5️⃣ Layout & Dock Architecture
 
-If files aren’t created → check here.
+## 🔹 DockShell (Layout Controller)
 
-💬 AI Panels (UI Surfaces)
+📍 `src/layout/DockShell.jsx`
 
-All located in:
+This component controls:
 
-src/ai/panel/
+* Main layout surface
+* Dock positioning
+* Height behavior
 
-File	Responsibility
-AiPanel.jsx	Tool runtime + GPT-clean AI surface
-PromptPanel.jsx	User prompt input
-SystemPanel.jsx	“System (optional)” input
-ParametersPanel.jsx	Temperature + max tokens
-TranscriptPanel.jsx	Renders chat bubbles + action buttons
-PatchPreviewPanel.jsx	Diff preview
-ProviderControlsPanel.jsx	Provider + model selection
-💬 AI Panels (UI Gating)
+---
 
-Advanced settings toggle + gating lives in: src/ai/panel/AiPanel.jsx
-(it controls visibility of SystemPanel / ParametersPanel / OutputPanel / Prompt advanced toggles)
+## 🔹 Dock Modes (Phase 4.2i)
 
-Vibe-language labels for prompt controls live in: src/ai/panel/PromptPanel.jsx
-(this is where “Send current file…” and “Suggest edits (preview)” wording is owned)
-----
+### 1️⃣ Bottom Dock Mode (default)
 
-🔹 AI Message Flow & Rendering Architecture (Phase 4.2i)
+```js
+dockMode="bottom"
+```
 
-Single Source of Truth
-messages state lives in src/App.js
-This is the canonical conversation stream.
+* Main layout occupies space
+* Dock panel capped at `max-h-[55vh]`
+* Used when Focus OFF
 
-Structure:
-{ id, role, content, ts, action?, actionLabel? }
+---
 
-TranscriptBubble Definition
+### 2️⃣ Full Surface Mode (Focus)
 
-Defined in: src/App.js
+```js
+dockMode="full"
+```
 
-Passed down as a prop:
+* Dock panel replaces main layout
+* Occupies full height under top bar
+* Used when Focus ON
 
-App.js → AiPanel → TranscriptPanel
+---
 
-No duplicate bubble implementations exist.
+### Architectural Principle
 
-Rendering Surfaces
+> Focus Mode is not a resized dock.
+> It is a surface promotion of the dock panel.
 
-There are now two projections of the same messages array:
+Eliminates:
 
-Chat View (GPT-style)
+* Height fighting
+* 50/50 splits
+* Artificial max-height caps
+* Dock centering bugs
 
-Location: AiPanel.jsx
+---
 
-Filter: assistant-only
+# 6️⃣ AI UI Panels (Surface Components)
 
-Purpose: Clean AI response surface
+📍 `src/ai/panel/`
 
-No system/tool/user noise
+| File                        | Responsibility                         |
+| --------------------------- | -------------------------------------- |
+| `AiPanel.jsx`               | AI surface + tool runtime coordination |
+| `PromptPanel.jsx`           | Prompt input UI                        |
+| `SystemPanel.jsx`           | System (optional) field                |
+| `ParametersPanel.jsx`       | Temperature + tokens                   |
+| `TranscriptPanel.jsx`       | Transcript rendering                   |
+| `PatchPreviewPanel.jsx`     | Diff preview                           |
+| `ProviderControlsPanel.jsx` | Provider/model selection               |
 
-Transcript View
+---
 
-Location: TranscriptPanel.jsx
-
-Filter: full message stream
-
-Includes:
-
-user
-
-assistant
-
-system/tool events
-
-Includes Retry / Clear controls
-
-Important Architectural Rule
-
-Chat View is a filtered projection of Transcript.
-Transcript is the full system log.
-There is only one message store.
-
-This prevents:
-
-Diverging UI logic
-
-Duplicate message state
-
-Bubble prop shape mismatches
-
-
-----
-
-🧾 “System (optional)” Flow
+# 7️⃣ System Field Flow
 
 UI:
 
-src/ai/panel/SystemPanel.jsx
+```
+SystemPanel.jsx
+```
 
 Data flow:
 
-SystemPanel → aiSystem prop →
-App.js → buildAiRequest() →
-sent to provider as system field.
+```
+SystemPanel
+→ AiPanel
+→ App.js
+→ buildInputWithContext()
+→ sent to provider as `system`
+```
 
-🔄 Consent Rendering
+---
 
-Consent buttons are created via:
+# 8️⃣ Consent Rendering
 
+Consent buttons are created using:
+
+```js
 appendMessage("system", ..., { actions: [...] })
+```
 
-Buttons are rendered inside:
+Rendered in:
 
-src/ai/panel/TranscriptPanel.jsx
+```
+TranscriptPanel.jsx
+```
 
-If approval UI is broken → inspect TranscriptPanel.
+If consent UI breaks → inspect:
 
-🧩 Quick Navigation — “Where is X?”
+* AiPanel
+* TranscriptPanel
 
-Task	File
-Change AI request payload	src/App.js
-Modify tool detection	src/ai/panel/AiPanel.jsx
-Add new tool	src/ai/tools/handlers/index.js
-Change filesystem behavior	src/lib/fs.js
-Create a new project	src/App.js + src/lib/fs.js
-Refresh Explorer tree	src/App.js
-Modify consent UI	AiPanel.jsx + TranscriptPanel.jsx
-Modify “System (optional)” behavior	SystemPanel.jsx + App.js
+---
 
-⚠ Known Sensitive Areas
+# 9️⃣ Dev Tools (Development Only)
 
-These files contain multi-layer runtime logic and should be edited carefully:
+Hidden in production.
 
-src/App.js
+Enabled via:
 
-src/ai/panel/AiPanel.jsx
+```
+Ctrl + Shift + T
+```
 
-src/lib/fs.js
+Persisted:
 
-src/ai/tools/toolRuntime.js
+```
+localStorage: kforge:devToolsEnabled
+```
 
-📌 Runtime Data
+Located in:
 
-Not committed:
+* `AiPanel.jsx`
+* `TranscriptPanel.jsx`
 
+---
+
+# 🔟 Quick Navigation (“Where is X?”)
+
+| Task                       | File                                  |
+| -------------------------- | ------------------------------------- |
+| Modify AI request payload  | `src/App.js`                          |
+| Change tool detection      | `src/ai/panel/AiPanel.jsx`            |
+| Add a new tool             | `src/ai/tools/handlers/index.js`      |
+| Change filesystem behavior | `src/lib/fs.js`                       |
+| Modify dock behavior       | `src/layout/DockShell.jsx`            |
+| Modify chat rendering      | `src/App.js`                          |
+| Modify transcript UI       | `TranscriptPanel.jsx`                 |
+| Modify consent behavior    | `AiPanel.jsx` + `TranscriptPanel.jsx` |
+
+---
+
+# ⚠ Sensitive Runtime Files
+
+Edit carefully:
+
+* `src/App.js`
+* `src/ai/panel/AiPanel.jsx`
+* `src/lib/fs.js`
+* `src/ai/tools/toolRuntime.js`
+* `src/layout/DockShell.jsx`
+
+These files coordinate multiple systems.
+
+---
+
+# 📦 Runtime Data (Not Committed)
+
+```
 .kforge/
+```
 
-🧭 Law for Future Changes
+---
+
+# 🧭 Law for Future Changes
 
 When adding:
 
-A new tool → update handlers + toolRuntime + Project Map
+* **New tool** → update handlers + toolRuntime + Project Map
+* **New AI parameter** → update SystemPanel / ParametersPanel / App.js
+* **New consent behavior** → update AiPanel + TranscriptPanel
+* **New file interaction** → update fs.js
+* **New layout mode** → update DockShell + Project Map
 
-A new AI field → update SystemPanel / ParametersPanel / App.js
+> Always update this map in the same commit as architectural changes.
 
-A new consent behavior → update AiPanel + TranscriptPanel
+---
 
-A new file interaction → update fs.js
+# 🧠 Architectural Summary
 
-Always update this map in the same commit
+KForge is built around:
+
+* One canonical message store
+* One AI execution authority (App.js)
+* One surface promoted via DockShell
+* One tool runtime pipeline
+* Strict separation of UI projection vs runtime state
+
+No duplicate message systems.
+No duplicated bubble renderers.
+No split dock logic.
+
+---
+

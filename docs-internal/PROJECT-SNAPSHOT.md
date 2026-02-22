@@ -1,271 +1,300 @@
-D:\kforge\docs-internal\SNAPSHOT.md
 
-🧭 Portability & Project Notes — KForge (Internal)
+# 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
-Last updated: February 21st, 2026 (Phase 4.2.x)
+**Last Updated:** February 22nd, 2026
+**Phase:** 4.2i — Single-Surface GPT UI + Full Focus Mode
+**Status:** Architecturally Stable
 
-This file is the canonical internal context and operational reference.
+This file is the authoritative operational reference.
 
-If something conflicts with:
+If anything conflicts with:
 
-memory
-
-chat history
-
-assumptions
+* chat memory
+* assumptions
+* scattered notes
 
 This file wins.
 
-This document is not user-facing.
+Not user-facing.
 
-🟠 Project Overview
+---
 
-KForge is a desktop-first developer workspace with:
+# 🟠 1️⃣ Project Overview
 
-an AI assistant
+KForge is a desktop-first developer workspace built around:
 
-secure filesystem control
+• A GPT-clean AI surface
+• Secure filesystem access
+• Explicit, consent-gated tooling
+• Calm, attention-disciplined UI
 
-a modular, calm UI philosophy
+KForge is **chat-first**, not tool-first.
 
-Current focus
+---
 
-Phase 4.2 — GPT-clean AI UI (single UI surface, focus-friendly)
+# 🟣 2️⃣ Current Architectural Reality (Phase 4.2i)
 
-Built on top of a stable editor and AI + tool runtime foundation
+## 🧠 Execution Authority
 
-🔒 Backup & Safety Discipline (IMPORTANT)
-
-KForge follows a strict multi-layer backup strategy.
-
-Layers
-
-Local git repository
-
-GitHub remote repository
-
-Physical backups
-
-Zip archive of the full kforge folder
-
-Created at major phase milestones
-
-Stored externally (e.g. Google Drive)
-
-⚠️ Risky work is never done without rollback options.
-
-🧩 UI Authority (Current State)
-
-UI authority currently lives in:
+AI execution lives in:
 
 src/App.js
 
-Layout (current reality)
+This file owns:
 
-Top: Toolbar
+• Canonical message state
+• AI request building
+• Context injection
+• Patch instruction injection
+• Retry logic
+• Project lifecycle control
+• TranscriptBubble definition
 
-Left (Focus off): Explorer
+If AI behaves incorrectly → start here.
 
-Center: Editor (tabs + Monaco)
+---
 
-AI surface: GPT-clean chat UI (focus-friendly)
+## 💬 Single Message Store (Critical Rule)
 
-Major UI change (Phase 4.2)
+There is exactly one message array:
 
-KForge previously experimented with multiple UI modes.
+messages (owned by App.js)
 
-KForge now uses a single, consistent AI experience:
+Everything renders from this.
 
-GPT-clean pinned header + pinned prompt
+Structure:
+id, role, content, ts, optional action metadata
 
-Focus mode is the same AI UI, but with fewer distractions
+No duplicate message systems exist.
 
-Focus off keeps access to Explorer and Memory
+---
 
-This change is intentional:
+## 🧩 Rendering Surfaces
 
-one predictable interaction model
+There are two projections of the same message store:
 
-fewer state conflicts
+### Chat View (GPT-clean)
 
-fewer “mode bugs”
+File: src/ai/panel/AiPanel.jsx
 
-🎯 UI Philosophy & Attention Discipline
+• Assistant-only projection
+• Clean reasoning surface
+• No tool/system noise
+• Used in both Focus ON and Focus OFF
 
-KForge is not a debug console with chat bolted on.
+### Transcript View
 
-KForge is a chat-first thinking environment with optional diagnostics.
+File: src/ai/panel/TranscriptPanel.jsx
 
-Guiding principles
+• Full message stream
+• Includes user, assistant, system, tool
+• Includes Retry + Clear controls
+• Renders consent actions
 
-Chat is the primary surface for reasoning, iteration, and “vibe coding”
+Architectural law:
 
-Diagnostics and raw payloads are secondary
+Chat is a filtered projection of Transcript.
+Transcript is the complete system log.
+There is only one message store.
 
-Debug information must never dominate attention
+---
 
-Supporting rules
+# 🟢 3️⃣ Layout & Dock Architecture
 
-Tools must feel intentional, explicit, and calm
+## 🔹 DockShell
 
-Errors should be summarized in human language first
+File: src/layout/DockShell.jsx
 
-Raw details must be available on demand
+DockShell now supports two explicit layout modes:
 
-Model quirks should be handled through protocol enforcement and recovery loops
+### Bottom Mode (default)
 
-UI noise is not an acceptable solution
+dockMode = "bottom"
 
-Power-user diagnostics
+• Main layout occupies screen
+• Dock appears below
+• Dock capped at max 55% viewport height
+• Used when Focus OFF
 
-Must be optional
+### Full Surface Mode (Focus)
 
-Must be collapsible
+dockMode = "full"
 
-Must never be auto-intrusive
+• Dock replaces main layout
+• Occupies full height under top bar
+• No height cap
+• No 50/50 split
+• Used when Focus ON
 
-This philosophy informs:
+Architectural principle:
 
-tool UX and consent flows
+Focus mode is a surface promotion, not a resized dock.
 
-error handling and recovery behavior
+This eliminated:
+• Height fighting
+• Dock centering bugs
+• Artificial max-height constraints
 
-provider and model variability handling
+---
 
-future refactors toward a chat-centric workspace
+# 🔵 4️⃣ Tool Runtime Pipeline
 
-🧠 Provider Strategy (Locked)
+## Tool Detection + Coordination
 
-Support many LLMs, especially free-tier options
+File: src/ai/panel/AiPanel.jsx
 
-Cloud, OpenAI-compatible, and local runtimes are first-class citizens
+Responsible for:
 
-Custom endpoints enable future providers without rewrites
+• Parsing model tool requests
+• Handling fenced tool/json/XML payloads
+• Deduplication
+• Triggering runtime execution
+• Consent gating
 
-Accessibility and flexibility are core design constraints
+---
 
-🧪 Model Flexibility (User-Editable)
+## Tool Runtime Wrapper
 
-KForge must allow users to:
+File: src/ai/tools/toolRuntime.js
 
-add and manage model IDs on the fly
+Responsible for:
 
-per provider
+• Consent enforcement
+• Lifecycle messaging
+• Transcript-visible tool events
+• Success/error formatting
 
-without rebuilds or redeployments
+---
 
-As long as the provider is supported, models are user-controlled.
+## Tool Handlers
 
-Why this matters
+File: src/ai/tools/handlers/index.js
 
-Model availability changes constantly:
+Maps tool name → implementation.
 
-deprecations
+Filesystem authority lives in:
 
-billing plan changes
+src/lib/fs.js
 
-provider catalog updates
+App.js sets project root.
+fs.js enforces path safety.
 
-KForge must remain useful even when presets become stale.
+---
 
-Important rules
+# 🟡 5️⃣ UI Philosophy (Locked)
 
-Model IDs must be exact provider identifiers
+KForge is not:
 
-Case-sensitive
+A debug console with chat attached.
 
-No friendly names
+KForge is:
 
-Cost tags are metadata only
+A reasoning-first, calm coding surface.
 
-Cost tags must never be appended to the model ID sent to providers
+Principles:
 
-Implementation preference (future UX)
+• Chat is primary
+• Tools are explicit
+• Diagnostics are optional
+• Errors summarized in human language first
+• Raw data available on demand
+• No hidden side effects
 
-Per-provider “Add model ID” input
+Power-user controls must be:
+• Optional
+• Collapsible
+• Never intrusive
 
-Saved per-provider “My models” list
+---
 
-Persist user-added models locally
+# 🟠 6️⃣ Focus Mode Intent
 
-Merge user models with shipped presets at runtime
+Focus Mode exists to:
 
-💸 Token Efficiency & Cost Awareness
+• Remove distraction
+• Promote AI surface
+• Preserve editor integrity
 
-KForge is designed to burn fewer tokens per useful result.
+Focus Mode does NOT:
+• Change AI behavior
+• Create a new chat mode
+• Duplicate message logic
 
-This is achieved through:
+It only changes layout.
 
-explicit context control (limited rolling chat window)
+---
 
-no hidden system prompt bloat
+# 🟣 7️⃣ Provider Strategy (Locked)
 
-active file context included only by user intent
+KForge supports:
 
-no silent resending of large buffers or workspace state
+• Cloud LLMs
+• OpenAI-compatible endpoints
+• Local runtimes (Ollama etc.)
 
-As a result:
+Model IDs:
 
-users get more meaningful work per token
+• User-editable
+• Case-sensitive
+• Sent exactly as provider expects
+• Cost tags are metadata only
 
-compared to tools that resend entire conversations implicitly
+No friendly renaming at runtime layer.
 
-Token efficiency is a core product principle, not an afterthought.
+---
 
-🛠️ Tooling & MCP Direction
+# 🔴 8️⃣ Backup & Safety Discipline
 
-Tools are explicit, consent-gated, and transcript-visible
+KForge enforces multi-layer backup:
 
-No silent execution
+• Local git
+• Remote GitHub
+• Periodic zip snapshots
+• External storage backup
 
-No filesystem access without user intent
+Risky refactors must always be reversible.
 
-Tool runtime is being extracted out of App.js for stability.
+---
 
-📎 Lessons from External Tools (Reminder)
+# ⚖ 9️⃣ Operational Laws
 
-Prior experience with other “vibe coding” tools revealed:
+• One objective per chat
+• Major milestone → new chat
+• Revert before hacking deeper
+• Prefer clarity over cleverness
+• Full-file edits preferred for core files
+• Temporary code must be removed
+• Architecture changes must update Project Map + Snapshot
 
-fragile state handling
+---
 
-poor consistency
+# 🧠 10️⃣ Current Stability State
 
-hidden side effects
+As of Phase 4.2i:
 
-KForge intentionally avoids these patterns.
+• Single-surface GPT UI stable
+• Assistant-only chat projection working
+• Transcript view stable
+• DockShell dual-mode working
+• Focus mode full-height surface working
+• No duplicate rendering paths
+• No split dock logic
 
-Concrete lessons will be added here later as a reference checklist.
+This is a restore-grade architecture checkpoint.
 
-📜 Project Laws (Operational)
+---
 
-One objective per chat
+# 🧭 When To Update This File
 
-Major milestones → new chat
+Update when:
 
-If stuck: revert, commit, regroup
+• Dock behavior changes
+• Message flow changes
+• Tool runtime changes
+• Provider architecture changes
+• Layout authority shifts
+• UI philosophy evolves
 
-Prefer reliability over cleverness
+This file documents architectural truth.
 
-Full file replacement preferred for core files
-
-Temporary test code must be removed
-
-Modularization requires cleanup of redundant logic
-
-Markdown files must be Notepad-friendly (no triple backticks)
-
-🧭 Usage
-
-At the start of a new chat:
-
-paste the Context Summary
-
-reference this file if deeper context is needed
-
-Update this file whenever:
-
-architecture changes
-
-rules evolve
-
-project direction shifts
+---

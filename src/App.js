@@ -1977,6 +1977,7 @@ export default function App() {
           main={classicLayout}
           dockPanel={aiPanelEl}
           dockOpen={aiPanelOpen}
+          dockMode={focusMode ? "full" : "bottom"}
         />
       </div>
     </div>
