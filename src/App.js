@@ -1862,8 +1862,10 @@ export default function App() {
       <button
         className={buttonClass("ghost")}
         onClick={() => {
-          setFocusMode(false);
-          setMemoryOpen((v) => !v);
+          const next = !memoryOpen;
+          setMemoryOpen(next);
+          setFocusMode(!next);
+          // open memory => focus OFF, hide memory => focus ON
         }}
         title="Toggle Project Memory"
       >
@@ -1914,19 +1916,6 @@ export default function App() {
 
   const classicLayout = (
     <div className="h-full w-full bg-zinc-950 text-zinc-100 flex flex-col">
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        providers={ALL_PROVIDERS}
-        hasKeyMap={hasKey}
-        endpointsMap={endpoints}
-        onSetEndpoint={setEndpointForProvider}
-        onSaveKey={handleSaveKey}
-        onClearKey={handleClearKey}
-        focusProviderId={settingsFocusProviderId}
-        message={settingsMessage}
-      />
-
       {/* Tabs */}
       <Tabs
         tabs={tabs}
@@ -1970,6 +1959,19 @@ export default function App() {
 
   return (
     <div className="h-full w-full flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden">
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        providers={ALL_PROVIDERS}
+        hasKeyMap={hasKey}
+        endpointsMap={endpoints}
+        onSetEndpoint={setEndpointForProvider}
+        onSaveKey={handleSaveKey}
+        onClearKey={handleClearKey}
+        focusProviderId={settingsFocusProviderId}
+        message={settingsMessage}
+      />
+
       <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
