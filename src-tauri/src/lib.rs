@@ -5,6 +5,7 @@ use tauri_plugin_fs::FsExt;
 use tauri_plugin_shell::ShellExt;
 
 mod ai;
+mod preview;
 
 /// Allow a user-selected directory to be used by the FS plugin.
 /// This updates the runtime FS scope (safer than broad wildcards).
@@ -26,6 +27,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(preview::PreviewState::default())
         // ✅ Required for opening URLs in the system browser
         .plugin(tauri_plugin_shell::init())
         // Native menu bar: Help -> docs
@@ -139,7 +141,11 @@ pub fn run() {
             ai::commands::ai_is_key_persisted,
             ai::commands::ai_generate,
             // Phase 3.2 Ollama helper
-            ai::commands::ai_ollama_list_models
+            ai::commands::ai_ollama_list_models,
+            // 🔥 Preview runner
+            preview::preview_install,
+            preview::preview_start,
+            preview::preview_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -32,6 +32,55 @@ Added: YYYY-MM-DD
 
 ---
 
+### Packaging-Readiness Extension — Preview & Deploy Tooling Rules
+Status: Planned
+Added: 2026-02-26
+
+**Why**
+- Preview and deploy features introduce external tooling dependencies (Node, pnpm, Git, Vercel CLI, Netlify CLI).
+- These must be handled deliberately to avoid hidden runtime assumptions.
+- Packaging constraints (process management, port handling, sandbox safety) must be formalized once the features are stable.
+- The packaging-readiness document should reflect implemented reality, not speculative design.
+
+**Where**
+- File: packaging-readiness.md
+- Section: New section under "Dependencies & External Runtimes"
+- Notes: Add only after Preview Runner + Deploy pipeline are stable and verified in dev mode.
+
+**Plan**
+1) Add an "External Tooling Requirements" subsection:
+   - Explicitly list required runtimes (Node, pnpm, Git, etc.).
+   - Define early detection requirement before execution.
+   - Define calm failure messaging standard.
+
+2) Add a "Process Management Rule":
+   - Dev servers must be safely startable and stoppable.
+   - No orphaned/zombie processes after app close.
+   - Process lifecycle owned by backend (not UI-only).
+
+3) Add a "Port & Localhost Safety Rule":
+   - Dev servers must bind to localhost only.
+   - No automatic external network exposure.
+   - Ports must be detectable and clearly surfaced to user.
+
+4) Add a "Deploy Safety Rule":
+   - Deploy commands must be explicit user actions.
+   - No background or automatic remote pushes.
+   - Clear separation between preview and deployment modes.
+
+**Risks / gotchas**
+- Silent dependency assumptions breaking packaged builds.
+- Dev servers persisting after KForge exit.
+- Port conflicts on user machines.
+- Platform differences (Windows/macOS) surfacing late.
+
+**Done when**
+- Preview Runner MVP is stable.
+- Deploy pipeline (Vercel/Netlify) is functional in development mode.
+- All external tooling is detected before execution.
+- packaging-readiness.md reflects real, tested behavior.
+
+---------------
 ### Project root authority lives in App.js
 Status: **Completed**
 Added: 2026-02-12

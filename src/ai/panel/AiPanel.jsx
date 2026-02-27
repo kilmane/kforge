@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import PreviewPanel from "../../runtime/PreviewPanel.jsx";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
@@ -348,6 +349,7 @@ function ProviderMenuButton({
 
 export default function AiPanel({
   // layout / open state
+  projectPath,
   aiPanelOpen,
   aiPanelWidthClass,
   aiPanelWide,
@@ -460,6 +462,10 @@ export default function AiPanel({
     if (!isDevBuild) return false;
     return localStorage.getItem("kforge:devToolsEnabled") === "1";
   });
+
+  // 🔧 Preview runner panel (dev-only runtime tool).
+  // Collapsed by default to keep UI calm.
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!isDevBuild) return;
@@ -894,7 +900,28 @@ export default function AiPanel({
             </button>
           </div>
         </div>
+        {isDevBuild && (
+          <div className="border-b border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setPreviewOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+            >
+              <span className="font-medium">
+                {previewOpen ? "▼ Preview" : "▶ Preview"}
+              </span>
+              <span className="text-xs text-zinc-500">
+                {previewOpen ? "Hide runtime tools" : "Show runtime tools"}
+              </span>
+            </button>
 
+            {previewOpen && (
+              <div className="p-3 border-t border-zinc-800">
+                <PreviewPanel projectPath={projectPath} />
+              </div>
+            )}
+          </div>
+        )}
         {providerSwitchNote ? (
           <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>

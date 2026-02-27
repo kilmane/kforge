@@ -1724,6 +1724,7 @@ export default function App() {
   }, []);
   const aiPanelEl = (
     <AiPanel
+      projectPath={projectPath}
       aiPanelOpen={aiPanelOpen}
       focusLayout={true}
       aiPanelWidthClass="w-full"
