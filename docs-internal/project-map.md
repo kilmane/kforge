@@ -7,7 +7,7 @@
 
 ---
 
-# 1️⃣ Core Application Architecture
+# 1️ Core Application Architecture
 
 ## 🧠 1.1 Application Root (Execution Authority)
 
@@ -54,7 +54,7 @@ This is the **brain of the application**.
 
 ---
 
-# 2️⃣ AI System Architecture
+# 2️ AI System Architecture
 
 ## 🔹 2.1 Single Message Store (Critical Rule)
 
@@ -140,7 +140,7 @@ Prevents:
 
 ---
 
-# 3️⃣ Tool Runtime Architecture
+# 3️ Tool Runtime Architecture
 
 ## 🔍 3.1 Tool Detection & Coordination
 
@@ -182,7 +182,27 @@ Handles:
 
 ---
 
-## ⚙ 3️.3 Preview Runner (Phase 4.3.1 — Dev Runtime)
+
+## 🧰 3.3 Tool Handlers (Execution Layer)
+
+📍 `src/ai/tools/handlers/index.js`
+
+Maps:
+
+```
+tool name → implementation
+```
+
+Current tools:
+
+* `read_file`
+* `list_dir`
+* `write_file`
+* `search_in_file`
+
+---
+
+# 3️b Preview Runner (Phase 4.3.1 — Dev Runtime)
 
 📍 Backend: `src-tauri/src/preview.rs`  
 📍 Frontend bridge: `src/runtime/previewRunner.js`  
@@ -230,25 +250,18 @@ State is managed via `.manage(preview::PreviewState::default())` in `lib.rs`.
 
 ---
 
-## 🧰 3.4 Tool Handlers (Execution Layer)
+App.js → AiPanel → PreviewPanel
 
-📍 `src/ai/tools/handlers/index.js`
 
-Maps:
+### Design Constraints
 
-```
-tool name → implementation
-```
+- Dev-only (not visible in production builds)
+- Explicit user-triggered execution
+- No automatic network exposure
+- Localhost only
+- No background daemons
 
-Current tools:
-
-* `read_file`
-* `list_dir`
-* `write_file`
-* `search_in_file`
-
----
-
+----
 # 4️ Filesystem Layer
 
 📍 `src/lib/fs.js`
