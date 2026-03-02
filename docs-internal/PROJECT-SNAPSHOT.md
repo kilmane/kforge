@@ -1,9 +1,9 @@
 
 # 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
-**Last Updated:** February 22nd, 2026
-**Phase:** 4.2i — Single-Surface GPT UI + Full Focus Mode
-**Status:** Architecturally Stable
+**Last Updated:** February 27th, 2026
+**Phase:** 4.3.1 — Preview Runner MVP (Dev Runtime)
+**Status:** Architecturally Stable + Runtime Extended
 
 This file is the authoritative operational reference.
 
@@ -180,6 +180,43 @@ App.js sets project root.
 fs.js enforces path safety.
 
 ---
+# 🟤 4️⃣b Preview Runtime (Phase 4.3.1)
+
+Preview execution is now part of the architecture.
+
+Purpose:
+• Run project-local development servers
+• Stream logs safely into UI
+• Allow explicit start / stop control
+• Detect localhost preview URLs
+
+Backend authority:
+
+src-tauri/src/preview.rs
+
+Frontend bridge:
+
+src/runtime/previewRunner.js
+
+UI surface:
+
+src/runtime/PreviewPanel.jsx
+
+Design constraints:
+
+• Dev-only
+• Explicit user-triggered execution
+• No automatic network exposure
+• No background daemons
+• Fully collapsible UI
+• Does not interfere with AI execution pipeline
+
+Preview is runtime tooling.
+It does not alter AI message flow.
+It does not modify message state.
+It is architecturally isolated from the chat system.
+
+----
 
 # 🟡 5️⃣ UI Philosophy (Locked)
 
@@ -279,6 +316,10 @@ As of Phase 4.2i:
 • Focus mode full-height surface working
 • No duplicate rendering paths
 • No split dock logic
+• Tauri preview process runner stable
+• Async log streaming stable
+• Collapsible dev runtime panel integrated
+• No AI pipeline regression
 
 This is a restore-grade architecture checkpoint.
 
