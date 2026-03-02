@@ -182,7 +182,55 @@ Handles:
 
 ---
 
-## 🧰 3.3 Tool Handlers (Execution Layer)
+## ⚙ 3️.3 Preview Runner (Phase 4.3.1 — Dev Runtime)
+
+📍 Backend: `src-tauri/src/preview.rs`  
+📍 Frontend bridge: `src/runtime/previewRunner.js`  
+📍 UI: `src/runtime/PreviewPanel.jsx`  
+
+## Purpose
+
+Provides controlled local project preview via:
+
+- `pnpm install`
+- `pnpm dev`
+- Process lifecycle management (start / stop)
+- Log streaming (stdout / stderr)
+- Localhost URL detection
+
+## Architecture
+
+### Backend (Tauri)
+
+- Uses `tauri_plugin_shell` to spawn child processes
+- Stores active process in `PreviewState`
+- Emits events:
+  - `kforge://preview/log`
+  - `kforge://preview/status`
+
+State is managed via `.manage(preview::PreviewState::default())` in `lib.rs`.
+
+### Frontend Bridge
+
+`previewRunner.js`:
+
+- Wraps `invoke()` calls:
+  - `preview_install`
+  - `preview_start`
+  - `preview_stop`
+- Subscribes to emitted log/status events
+
+### UI Layer
+
+`PreviewPanel.jsx`:
+
+- Dev-only
+- Collapsible
+- Receives `projectPath` from:
+
+---
+
+## 🧰 3.4 Tool Handlers (Execution Layer)
 
 📍 `src/ai/tools/handlers/index.js`
 
@@ -201,7 +249,7 @@ Current tools:
 
 ---
 
-# 4️⃣ Filesystem Layer
+# 4️ Filesystem Layer
 
 📍 `src/lib/fs.js`
 
