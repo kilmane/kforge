@@ -6,6 +6,7 @@ use tauri_plugin_shell::ShellExt;
 
 mod ai;
 mod preview;
+mod scaffold;
 
 /// Allow a user-selected directory to be used by the FS plugin.
 /// This updates the runtime FS scope (safer than broad wildcards).
@@ -146,6 +147,8 @@ pub fn run() {
             preview::preview_install,
             preview::preview_start,
             preview::preview_stop,
+            // 🔧 Scaffold
+            scaffold::scaffold_vite_react,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
