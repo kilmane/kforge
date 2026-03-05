@@ -74,7 +74,7 @@ pub fn preview_install(
 
     let cmd = app
         .shell()
-        .command("pnpm")
+        .command(if cfg!(windows) { "pnpm.cmd" } else { "pnpm" })
         .args(["install"])
         .current_dir(project_path);
 
@@ -149,7 +149,7 @@ pub fn preview_start(
 
     let cmd = app
         .shell()
-        .command("pnpm")
+        .command(if cfg!(windows) { "pnpm.cmd" } else { "pnpm" })
         .args(["dev"])
         .current_dir(project_path);
 

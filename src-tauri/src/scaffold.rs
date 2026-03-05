@@ -23,7 +23,7 @@ struct PreviewStatusPayload {
 }
 
 fn join_path(parent: &str, child: &str) -> String {
-    // Normalize to forward slashes for the UI; Windows accepts them fine in most places.
+    // Normalize to forward slashes for the UI.
     format!(
         "{}/{}",
         parent.trim_end_matches(['/', '\\']),
@@ -31,8 +31,13 @@ fn join_path(parent: &str, child: &str) -> String {
     )
 }
 
-#[tauri::command]
-pub fn scaffold_vite_react(
+fn is_bad_app_name(name: &str) -> bool {
+    // We expect a folder name, not a path.
+    // Reject obvious path characters.
+    name.contains('\\') || name.contains('/') || name.contains(':')
+}
+
+fn run_scaffold_blocking(
     window: tauri::Window,
     parent_path: String,
     app_name: String,
@@ -41,10 +46,15 @@ pub fn scaffold_vite_react(
     let app_name = app_name.trim().to_string();
 
     if parent_path.is_empty() {
-        return Err("parent_path cannot be empty".into());
+        return Err("parentPath cannot be empty".into());
     }
     if app_name.is_empty() {
-        return Err("app_name cannot be empty".into());
+        return Err("appName cannot be empty".into());
+    }
+    if is_bad_app_name(&app_name) {
+        return Err(
+            "App name should be a folder name (e.g. my-react-app), not a full path.".into(),
+        );
     }
 
     let _ = window.emit(
@@ -59,27 +69,29 @@ pub fn scaffold_vite_react(
         PreviewLogPayload {
             kind: "stdout",
             line: format!(
-                "scaffold: running pnpm create vite@latest {} --template react",
-                app_name
-            ),
+  "scaffold: running pnpm dlx create-vite@latest {} --template react --no-interactive",
+  app_name
+),
         },
     );
 
-    // Scaffold only (no install/dev). Use pnpm.cmd on Windows.
+    // Windows spawn fix
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
+    // IMPORTANT:
+    // For pnpm create, args after `--` are forwarded to create-vite.
+    // This is the form documented by Vite for non-interactive scaffolding. :contentReference[oaicite:0]{index=0}
     let mut child = Command::new(pnpm)
         .current_dir(&parent_path)
-        .arg("create")
-        .arg("vite@latest")
+        // dlx runs a package binary without installing globally
+        .arg("dlx")
+        .arg("create-vite@latest")
         .arg(&app_name)
         .arg("--template")
         .arg("react")
-        // try to suppress prompts where possible
-        .arg("--yes")
-        // vite's internal prompts sometimes respect this
-        .arg("--")
         .arg("--no-interactive")
+        // extra safety: many CLIs respect CI=1 to disable prompts
+        .env("CI", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -99,7 +111,7 @@ pub fn scaffold_vite_react(
         .take()
         .ok_or_else(|| "Failed to capture stderr".to_string())?;
 
-    // Stream stdout lines into the existing PreviewPanel log
+    // Stream stdout lines
     let win_out = window.clone();
     let out_handle = thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -114,7 +126,7 @@ pub fn scaffold_vite_react(
         }
     });
 
-    // Stream stderr lines into the same log
+    // Stream stderr lines
     let win_err = window.clone();
     let err_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
@@ -137,13 +149,6 @@ pub fn scaffold_vite_react(
     let _ = err_handle.join();
 
     if !status.success() {
-        let _ = window.emit(
-            PREVIEW_STATUS_EVENT,
-            PreviewStatusPayload {
-                status: "scaffold:failed".to_string(),
-            },
-        );
-
         return Err(format!(
             "Vite scaffold failed with exit code: {:?}",
             status.code()
@@ -153,6 +158,22 @@ pub fn scaffold_vite_react(
     let generated_path = join_path(&parent_path, &app_name);
 
     let _ = window.emit(
+        PREVIEW_LOG_EVENT,
+        PreviewLogPayload {
+            kind: "stdout",
+            line: format!("scaffold complete: {}", generated_path),
+        },
+    );
+
+    // Return UI to idle so Install/Preview buttons re-enable
+    let _ = window.emit(
+        PREVIEW_STATUS_EVENT,
+        PreviewStatusPayload {
+            status: "idle".to_string(),
+        },
+    );
+
+    let _ = window.emit(
         PREVIEW_STATUS_EVENT,
         PreviewStatusPayload {
             status: format!("scaffold:done:{generated_path}"),
@@ -160,4 +181,18 @@ pub fn scaffold_vite_react(
     );
 
     Ok(generated_path)
+}
+
+#[tauri::command]
+pub async fn scaffold_vite_react(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+) -> Result<String, String> {
+    // Run the blocking scaffold on a background thread so the UI doesn't "egg timer".
+    tauri::async_runtime::spawn_blocking(move || {
+        run_scaffold_blocking(window, parent_path, app_name)
+    })
+    .await
+    .map_err(|e| format!("Scaffold task join error: {}", e))?
 }
