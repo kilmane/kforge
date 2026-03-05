@@ -20,16 +20,23 @@ export default function PreviewPanel({ projectPath }) {
   const [previewUrl, setPreviewUrl] = useState("");
   const endRef = useRef(null);
 
+  // De-dupe: ignore identical consecutive log lines
+  const lastLogKeyRef = useRef("");
+
   // Scaffold state
   const [viteAppName, setViteAppName] = useState("my-react-app");
   const [scaffoldBusy, setScaffoldBusy] = useState(false);
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [scaffoldPath, setScaffoldPath] = useState("");
 
+  // B) Explicit target selection (base vs generated)
+  const [useGeneratedTarget, setUseGeneratedTarget] = useState(true);
+
   // Load persisted scaffoldPath whenever projectPath changes
   useEffect(() => {
     setScaffoldErr("");
     setPreviewUrl("");
+    lastLogKeyRef.current = "";
 
     if (!projectPath) {
       setScaffoldPath("");
@@ -41,7 +48,6 @@ export default function PreviewPanel({ projectPath }) {
       const saved = k ? localStorage.getItem(k) : "";
       setScaffoldPath(saved || "");
     } catch {
-      // ignore storage errors
       setScaffoldPath("");
     }
   }, [projectPath]);
@@ -66,9 +72,13 @@ export default function PreviewPanel({ projectPath }) {
     (async () => {
       unLog = await onPreviewLog(({ kind, line }) => {
         const raw = String(line ?? "");
-
-        // remove ANSI color codes
+        // strip ANSI color codes so URL detection works
         const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
+
+        // A) de-dupe identical consecutive lines
+        const key = `${kind}|${text}`;
+        if (key === lastLogKeyRef.current) return;
+        lastLogKeyRef.current = key;
 
         setLogs((prev) => {
           const next = [...prev, { kind, line: text, ts: Date.now() }];
@@ -94,7 +104,12 @@ export default function PreviewPanel({ projectPath }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs.length]);
 
-  const effectivePath = scaffoldPath || projectPath;
+  const generatedAvailable = Boolean(scaffoldPath);
+
+  const targetPath = useMemo(() => {
+    if (useGeneratedTarget && scaffoldPath) return scaffoldPath;
+    return projectPath;
+  }, [useGeneratedTarget, scaffoldPath, projectPath]);
 
   // Treat scaffold statuses as "idle enough" for enabling Install/Preview
   const isRunnerIdle = useMemo(() => {
@@ -104,7 +119,7 @@ export default function PreviewPanel({ projectPath }) {
     return false;
   }, [status]);
 
-  const disabled = !effectivePath;
+  const disabled = !targetPath;
 
   async function handleOpen() {
     if (!previewUrl) return;
@@ -131,7 +146,8 @@ export default function PreviewPanel({ projectPath }) {
         appName: name,
       });
       if (typeof out === "string" && out.length) {
-        setScaffoldPath(out); // becomes new effective target
+        setScaffoldPath(out);
+        setUseGeneratedTarget(true); // B) automatically use the generated target after create
       }
     } catch (e) {
       setScaffoldErr(String(e));
@@ -140,14 +156,16 @@ export default function PreviewPanel({ projectPath }) {
     }
   }
 
-  function handleResetTarget() {
+  function handleResetGenerated() {
     setScaffoldPath("");
+    setUseGeneratedTarget(false);
     setScaffoldErr("");
   }
 
   function clearLogs() {
     setLogs([]);
     setPreviewUrl("");
+    lastLogKeyRef.current = "";
   }
 
   return (
@@ -169,22 +187,31 @@ export default function PreviewPanel({ projectPath }) {
                 • <span className="text-zinc-300">No folder open</span>
               </>
             )}
-            {effectivePath ? (
+            {targetPath ? (
               <>
                 <br />
-                Target: <span className="text-zinc-200">{effectivePath}</span>
+                Target: <span className="text-zinc-200">{targetPath}</span>
               </>
             ) : null}
+            {/* C) URL pill (no auto-open) */}
             {previewUrl ? (
-              <>
-                <br />
-                URL: <span className="text-zinc-200">{previewUrl}</span>
-              </>
+              <div className="mt-2">
+                <button
+                  className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-zinc-700/60 bg-black/20 hover:bg-black/30"
+                  onClick={handleOpen}
+                  title="Open preview URL"
+                >
+                  <span className="text-zinc-500">URL</span>
+                  <span className="font-mono text-[11px] text-blue-400 hover:text-blue-300 underline">
+                    {previewUrl}
+                  </span>
+                </button>
+              </div>
             ) : null}
           </div>
 
           {/* Scaffold controls */}
-          <div className="w-full mt-2 flex items-center gap-2">
+          <div className="w-full mt-3 flex items-center gap-2">
             <input
               className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-zinc-950/40 border border-zinc-700/40 text-zinc-100 text-sm"
               value={viteAppName}
@@ -207,24 +234,55 @@ export default function PreviewPanel({ projectPath }) {
 
             <button
               className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-              disabled={!scaffoldPath}
-              onClick={handleResetTarget}
-              title="Reset target back to the base folder"
+              disabled={!generatedAvailable}
+              onClick={handleResetGenerated}
+              title="Forget generated target"
             >
               Reset
             </button>
           </div>
 
-          {scaffoldErr ? (
-            <div className="mt-2 text-xs text-red-300">{scaffoldErr}</div>
-          ) : null}
+          {/* B) Target toggle */}
+          <div className="mt-2 flex items-center gap-2 text-xs">
+            <span className="text-zinc-400">Use:</span>
+            <button
+              className={
+                "px-2 py-1 rounded-md border text-zinc-100 " +
+                (!useGeneratedTarget
+                  ? "border-zinc-500/70 bg-zinc-800/60"
+                  : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
+              }
+              disabled={!projectPath}
+              onClick={() => setUseGeneratedTarget(false)}
+              title="Use the base folder as the target"
+            >
+              Base
+            </button>
+            <button
+              className={
+                "px-2 py-1 rounded-md border text-zinc-100 " +
+                (useGeneratedTarget
+                  ? "border-zinc-500/70 bg-zinc-800/60"
+                  : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
+              }
+              disabled={!generatedAvailable}
+              onClick={() => setUseGeneratedTarget(true)}
+              title="Use the generated app folder as the target"
+            >
+              Generated
+            </button>
+
+            {scaffoldErr ? (
+              <span className="ml-2 text-red-300">{scaffoldErr}</span>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
           <button
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={disabled || !isRunnerIdle}
-            onClick={() => previewInstall(effectivePath)}
+            onClick={() => previewInstall(targetPath)}
             title="Run pnpm install in the target folder"
           >
             Install
@@ -233,7 +291,7 @@ export default function PreviewPanel({ projectPath }) {
           <button
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={disabled || !isRunnerIdle}
-            onClick={() => previewStart(effectivePath)}
+            onClick={() => previewStart(targetPath)}
             title="Run pnpm dev in the target folder"
           >
             Preview
