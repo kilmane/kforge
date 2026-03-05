@@ -1,7 +1,26 @@
-
 # 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
-**Last Updated:** February 27th, 2026
+
+**Last Updated:** March 05th, 2026
+
+**Phase:** 4.3.1 Preview Runner — Process Handling (Windows)
+
+The Preview Runner launches development servers using `pnpm`.
+
+Example process chain:
+
+pnpm
+ └ node
+    └ vite
+
+When the **Stop** command is issued, Windows uses:
+
+taskkill /PID <pid> /T /F
+
+This ensures the entire process tree is terminated and prevents orphan `node.exe` processes that can lock project folders.
+
+-----
+
 **Phase:** 4.3.1 — Preview Runner MVP (Dev Runtime)
 **Status:** Architecturally Stable + Runtime Extended
 
