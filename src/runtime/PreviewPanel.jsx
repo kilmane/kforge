@@ -65,7 +65,10 @@ export default function PreviewPanel({ projectPath }) {
 
     (async () => {
       unLog = await onPreviewLog(({ kind, line }) => {
-        const text = String(line ?? "");
+        const raw = String(line ?? "");
+
+        // remove ANSI color codes
+        const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
 
         setLogs((prev) => {
           const next = [...prev, { kind, line: text, ts: Date.now() }];
