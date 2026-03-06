@@ -29,6 +29,75 @@ Added: YYYY-MM-DD
 
 **Done when**
 - …
+-----
+### Template System — Expand Scaffold Templates
+
+Status: Planned
+Added: 2026-03-06
+
+**Why**
+
+* KForge currently supports generating a single scaffold template (**Vite + React**).
+* Expanding the template system allows users to quickly generate different project types directly from the Preview panel.
+* This moves KForge toward becoming a **general-purpose development sandbox and prototyping environment**.
+
+**Where**
+
+* File: `src/runtime/PreviewPanel.jsx`
+* File: `src-tauri/src/scaffold.rs`
+* Function(s): `scaffold_vite_react`
+* Notes:
+
+  * Current implementation is hardcoded for the Vite React template.
+  * Future work should abstract scaffolding into a **template registry** so new templates can be added without modifying core preview logic.
+
+**Plan**
+
+1. Introduce a **Template Registry** structure (Rust or JS side).
+2. Allow the Preview panel to select a template before scaffolding.
+3. Implement additional scaffold commands.
+
+Planned templates:
+
+```
+Vite + React (current)
+Next.js
+Svelte
+Vue
+```
+
+Future full-stack generators may include:
+
+```
+Next.js full-stack
+tRPC + React
+Supabase starter
+Express / Fastify backends
+```
+
+Each template should define:
+
+* scaffold command
+* dependency install command
+* dev server command
+* preview URL detection rules
+
+**Risks / gotchas**
+
+* Different frameworks use different dev server commands and ports.
+* Some frameworks require additional environment setup.
+* The Preview Runner must remain generic enough to support multiple template types.
+
+**Done when**
+
+* Preview panel allows template selection.
+* Scaffold commands are template-driven rather than hardcoded.
+* At least two templates are supported (e.g. React + Next.js).
+
+
+
+
+
 
 ---
 
