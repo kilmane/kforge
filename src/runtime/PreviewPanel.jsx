@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   onPreviewLog,
   onPreviewStatus,
+  previewGetStatus,
   previewInstall,
   previewStart,
   previewStop,
@@ -10,29 +11,51 @@ import {
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
 
-function storageKey(projectPath) {
+function scaffoldPathStorageKey(projectPath) {
   return projectPath ? `kforge.preview.scaffoldPath:${projectPath}` : "";
 }
 
+function targetModeStorageKey(projectPath) {
+  return projectPath ? `kforge.preview.useGeneratedTarget:${projectPath}` : "";
+}
+
+function persistScaffoldPath(projectPath, value) {
+  if (!projectPath) return;
+  try {
+    const key = scaffoldPathStorageKey(projectPath);
+    if (!key) return;
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function persistTargetMode(projectPath, useGeneratedTarget) {
+  if (!projectPath) return;
+  try {
+    const key = targetModeStorageKey(projectPath);
+    if (!key) return;
+    localStorage.setItem(key, useGeneratedTarget ? "generated" : "base");
+  } catch {
+    // ignore
+  }
+}
+
 export default function PreviewPanel({ projectPath }) {
-  const [status, setStatus] = useState("idle"); // idle | installing | running | scaffold:...
+  const [status, setStatus] = useState("idle");
   const [logs, setLogs] = useState([]);
   const [previewUrl, setPreviewUrl] = useState("");
   const endRef = useRef(null);
 
-  // De-dupe: ignore identical consecutive log lines
   const lastLogKeyRef = useRef("");
 
-  // Scaffold state
   const [viteAppName, setViteAppName] = useState("my-react-app");
   const [scaffoldBusy, setScaffoldBusy] = useState(false);
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [scaffoldPath, setScaffoldPath] = useState("");
-
-  // B) Explicit target selection (base vs generated)
   const [useGeneratedTarget, setUseGeneratedTarget] = useState(true);
 
-  // Load persisted scaffoldPath whenever projectPath changes
   useEffect(() => {
     setScaffoldErr("");
     setPreviewUrl("");
@@ -40,42 +63,46 @@ export default function PreviewPanel({ projectPath }) {
 
     if (!projectPath) {
       setScaffoldPath("");
+      setUseGeneratedTarget(true);
       return;
     }
 
     try {
-      const k = storageKey(projectPath);
-      const saved = k ? localStorage.getItem(k) : "";
-      setScaffoldPath(saved || "");
+      const savedScaffoldPath = localStorage.getItem(
+        scaffoldPathStorageKey(projectPath),
+      );
+      setScaffoldPath(savedScaffoldPath || "");
     } catch {
       setScaffoldPath("");
     }
-  }, [projectPath]);
 
-  // Persist scaffoldPath
-  useEffect(() => {
-    if (!projectPath) return;
     try {
-      const k = storageKey(projectPath);
-      if (!k) return;
-      if (scaffoldPath) localStorage.setItem(k, scaffoldPath);
-      else localStorage.removeItem(k);
+      const savedTargetMode = localStorage.getItem(
+        targetModeStorageKey(projectPath),
+      );
+      setUseGeneratedTarget(savedTargetMode !== "base");
     } catch {
-      // ignore
+      setUseGeneratedTarget(true);
     }
-  }, [projectPath, scaffoldPath]);
+  }, [projectPath]);
 
   useEffect(() => {
     let unLog;
     let unStatus;
+    let cancelled = false;
 
     (async () => {
+      try {
+        const currentStatus = await previewGetStatus();
+        if (!cancelled) setStatus(currentStatus || "idle");
+      } catch {
+        if (!cancelled) setStatus("idle");
+      }
+
       unLog = await onPreviewLog(({ kind, line }) => {
         const raw = String(line ?? "");
-        // strip ANSI color codes so URL detection works
         const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
 
-        // A) de-dupe identical consecutive lines
         const key = `${kind}|${text}`;
         if (key === lastLogKeyRef.current) return;
         lastLogKeyRef.current = key;
@@ -90,15 +117,29 @@ export default function PreviewPanel({ projectPath }) {
       });
 
       unStatus = await onPreviewStatus(({ status }) => {
-        setStatus(status || "idle");
+        const nextStatus = String(status || "idle");
+        if (cancelled) return;
+
+        setStatus(nextStatus);
+
+        if (nextStatus.startsWith("scaffold:done:")) {
+          const maybePath = nextStatus.slice("scaffold:done:".length).trim();
+          if (maybePath) {
+            setScaffoldPath(maybePath);
+            setUseGeneratedTarget(true);
+            persistScaffoldPath(projectPath, maybePath);
+            persistTargetMode(projectPath, true);
+          }
+        }
       });
     })();
 
     return () => {
+      cancelled = true;
       if (unLog) unLog();
       if (unStatus) unStatus();
     };
-  }, []);
+  }, [projectPath]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,7 +152,6 @@ export default function PreviewPanel({ projectPath }) {
     return projectPath;
   }, [useGeneratedTarget, scaffoldPath, projectPath]);
 
-  // Treat scaffold statuses as "idle enough" for enabling Install/Preview
   const isRunnerIdle = useMemo(() => {
     if (!status) return true;
     if (status === "idle") return true;
@@ -145,9 +185,12 @@ export default function PreviewPanel({ projectPath }) {
         parentPath: projectPath,
         appName: name,
       });
+
       if (typeof out === "string" && out.length) {
         setScaffoldPath(out);
-        setUseGeneratedTarget(true); // B) automatically use the generated target after create
+        setUseGeneratedTarget(true);
+        persistScaffoldPath(projectPath, out);
+        persistTargetMode(projectPath, true);
       }
     } catch (e) {
       setScaffoldErr(String(e));
@@ -156,10 +199,22 @@ export default function PreviewPanel({ projectPath }) {
     }
   }
 
+  function handleUseBase() {
+    setUseGeneratedTarget(false);
+    persistTargetMode(projectPath, false);
+  }
+
+  function handleUseGenerated() {
+    setUseGeneratedTarget(true);
+    persistTargetMode(projectPath, true);
+  }
+
   function handleResetGenerated() {
     setScaffoldPath("");
     setUseGeneratedTarget(false);
     setScaffoldErr("");
+    persistScaffoldPath(projectPath, "");
+    persistTargetMode(projectPath, false);
   }
 
   function clearLogs() {
@@ -193,7 +248,6 @@ export default function PreviewPanel({ projectPath }) {
                 Target: <span className="text-zinc-200">{targetPath}</span>
               </>
             ) : null}
-            {/* C) URL pill (no auto-open) */}
             {previewUrl ? (
               <div className="mt-2">
                 <button
@@ -210,7 +264,6 @@ export default function PreviewPanel({ projectPath }) {
             ) : null}
           </div>
 
-          {/* Scaffold controls */}
           <div className="w-full mt-3 flex items-center gap-2">
             <input
               className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-zinc-950/40 border border-zinc-700/40 text-zinc-100 text-sm"
@@ -242,7 +295,6 @@ export default function PreviewPanel({ projectPath }) {
             </button>
           </div>
 
-          {/* B) Target toggle */}
           <div className="mt-2 flex items-center gap-2 text-xs">
             <span className="text-zinc-400">Use:</span>
             <button
@@ -253,7 +305,7 @@ export default function PreviewPanel({ projectPath }) {
                   : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
               }
               disabled={!projectPath}
-              onClick={() => setUseGeneratedTarget(false)}
+              onClick={handleUseBase}
               title="Use the base folder as the target"
             >
               Base
@@ -266,7 +318,7 @@ export default function PreviewPanel({ projectPath }) {
                   : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
               }
               disabled={!generatedAvailable}
-              onClick={() => setUseGeneratedTarget(true)}
+              onClick={handleUseGenerated}
               title="Use the generated app folder as the target"
             >
               Generated

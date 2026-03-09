@@ -11,6 +11,10 @@ export function onPreviewStatus(cb) {
   return listen("kforge://preview/status", (event) => cb(event.payload));
 }
 
+export async function previewGetStatus() {
+  return invoke("preview_get_status");
+}
+
 export async function previewInstall(projectPath) {
   return invoke("preview_install", { projectPath });
 }

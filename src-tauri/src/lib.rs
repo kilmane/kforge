@@ -144,6 +144,7 @@ pub fn run() {
             // Phase 3.2 Ollama helper
             ai::commands::ai_ollama_list_models,
             // 🔥 Preview runner
+            preview::preview_get_status,
             preview::preview_install,
             preview::preview_start,
             preview::preview_stop,
