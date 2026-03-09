@@ -222,11 +222,25 @@ Provides controlled local project preview via:
 
 ### Backend (Tauri)
 
-- Uses `tauri_plugin_shell` to spawn child processes
-- Stores active process in `PreviewState`
-- Emits events:
-  - `kforge://preview/log`
-  - `kforge://preview/status`
+### Backend (Tauri)
+
+- Uses `std::process::Command` to spawn `pnpm install` and `pnpm dev`
+- Tracks the spawned process PID in `PreviewState`
+- Uses Windows `taskkill /PID <pid> /T /F` to terminate the entire dev server tree
+- Streams stdout / stderr lines into the UI
+
+Events emitted:
+
+- `kforge://preview/log`
+- `kforge://preview/status`
+
+Preview state is registered via:
+
+.manage(preview::PreviewState::default())
+
+in `src-tauri/src/lib.rs`.
+
+This avoids Windows PID tracking issues previously observed with `tauri_plugin_shell`.`
 
 State is managed via `.manage(preview::PreviewState::default())` in `lib.rs`.
 

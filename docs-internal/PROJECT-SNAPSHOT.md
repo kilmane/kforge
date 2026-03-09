@@ -1,9 +1,9 @@
 # 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 
-**Last Updated:** March 05th, 2026
+**Last Updated:** March 09th, 2026
 
-**Phase:** 4.3.1 Preview Runner — Process Handling (Windows)
+**Phase:**: 4.3.2 Preview Runner — Process Handling + State Sync
 
 The Preview Runner launches development servers using `pnpm`.
 
@@ -199,7 +199,7 @@ App.js sets project root.
 fs.js enforces path safety.
 
 ---
-# 🟤 4️⃣b Preview Runtime (Phase 4.3.1)
+# 🟤 4️b  Preview Runtime (Phase 4.3.2)
 
 Preview execution is now part of the architecture.
 
@@ -235,6 +235,20 @@ It does not alter AI message flow.
 It does not modify message state.
 It is architecturally isolated from the chat system.
 
+Recent stabilization work (Phase 4.3.2):
+
+• Preview process spawning migrated from `tauri_plugin_shell` to `std::process::Command`
+• Windows PID tracking corrected to prevent orphan `node.exe` dev servers
+• Stop now reliably terminates the full process tree
+• Preview UI state now hydrates from backend using `preview_get_status`
+• Generated scaffold target persists across panel remount via localStorage
+• Preview panel can be closed and reopened without losing runtime state
+
+This ensures:
+
+Generate → Install → Preview → Stop → Iterate
+
+is now a stable development loop.
 ----
 
 # 🟡 5️⃣ UI Philosophy (Locked)
