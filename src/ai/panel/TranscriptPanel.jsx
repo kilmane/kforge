@@ -137,6 +137,7 @@ export default function TranscriptPanel({
               ts={m.ts}
               actionLabel={m.actionLabel}
               onAction={m.action}
+              actions={m.actions}
             />
           </div>
         ))}

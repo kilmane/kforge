@@ -1013,7 +1013,20 @@ export default function AiPanel({
                     {messages
                       .filter((m) => {
                         const r = String(m?.role || "").toLowerCase();
-                        return r === "assistant" || r === "ai";
+                        const content = String(m?.content || "");
+                        const hasActions =
+                          Array.isArray(m?.actions) && m.actions.length > 0;
+
+                        if (r === "assistant" || r === "ai") return true;
+
+                        if (
+                          r === "system" &&
+                          (hasActions || content.startsWith("[tool]"))
+                        ) {
+                          return true;
+                        }
+
+                        return false;
                       })
                       .map((m, i) => (
                         <TranscriptBubble
@@ -1023,6 +1036,7 @@ export default function AiPanel({
                           ts={m.ts}
                           actionLabel={m.actionLabel}
                           onAction={m.action}
+                          actions={m.actions}
                         />
                       ))}
                     <div ref={transcriptBottomRef} />

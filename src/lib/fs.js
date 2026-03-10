@@ -77,6 +77,48 @@ function joinPath(parent, name) {
 }
 
 /**
+ * Return the parent directory for a path.
+ * Keeps platform style based on the incoming path.
+ */
+function dirnameOfPath(inputPath) {
+  const raw = String(inputPath || "").trim();
+  if (!raw) return "";
+
+  const normalized = raw.replaceAll("\\", "/");
+
+  // Windows drive root: C:\ or C:/
+  const driveRoot = normalized.match(/^([A-Za-z]:)\/?$/);
+  if (driveRoot) return `${driveRoot[1]}/`;
+
+  // Unix root
+  if (normalized === "/") return "/";
+
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length === 0) return "";
+
+  const drivePrefix = normalized.match(/^([A-Za-z]:)\//)?.[1] || "";
+  const isUnixAbs = normalized.startsWith("/");
+
+  if (parts.length === 1) {
+    if (drivePrefix) return `${drivePrefix}/`;
+    if (isUnixAbs) return "/";
+    return "";
+  }
+
+  const dirParts = parts.slice(0, -1);
+
+  if (drivePrefix) {
+    return `${drivePrefix}/${dirParts.slice(1).join("/")}`;
+  }
+
+  if (isUnixAbs) {
+    return `/${dirParts.join("/")}`;
+  }
+
+  return dirParts.join("/");
+}
+
+/**
  * Resolve "." and ".." segments in a path (without touching the filesystem).
  * Works for both Windows and Unix-style paths.
  */
@@ -357,7 +399,14 @@ export async function openFile(path) {
 export async function saveFile(path, contents) {
   if (!isTauri()) return;
   if (!path) throw new Error("saveFile called with empty path");
+
   const safe = resolvePathWithinProject(path);
+  const parent = dirnameOfPath(safe);
+
+  if (parent) {
+    await mkdir(parent, { recursive: true });
+  }
+
   await writeTextFile(safe, contents ?? "");
 }
 
