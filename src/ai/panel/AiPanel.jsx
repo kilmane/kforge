@@ -413,6 +413,7 @@ export default function AiPanel({
   setPatchPreviewVisible,
   discardPatchPreview,
   appendMessage,
+  updateMessage,
 
   aiPrompt,
   setAiPrompt,
@@ -542,7 +543,7 @@ export default function AiPanel({
               ? `Search in file (Path: ${String(args?.path || "").trim()} | Query: ${String(args?.query || "").trim()})`
               : "Awaiting approval…";
 
-      appendMessage(
+      const requestMsg = appendMessage(
         "system",
         formatToolLine({
           tool,
@@ -559,6 +560,15 @@ export default function AiPanel({
                 gate.settled = true;
 
                 pendingConsentRef.current = null;
+
+                updateMessage(requestMsg.id, {
+                  actions: [
+                    {
+                      label: "Approved",
+                      onClick: () => {},
+                    },
+                  ],
+                });
 
                 appendMessage(
                   "system",
@@ -585,6 +595,15 @@ export default function AiPanel({
 
                 pendingConsentRef.current = null;
 
+                updateMessage(requestMsg.id, {
+                  actions: [
+                    {
+                      label: "Cancelled",
+                      onClick: () => {},
+                    },
+                  ],
+                });
+
                 appendMessage(
                   "system",
                   formatToolLine({
@@ -608,7 +627,7 @@ export default function AiPanel({
 
       return p;
     },
-    [appendMessage],
+    [appendMessage, updateMessage],
   );
 
   const appendTranscript = useCallback(
@@ -1009,19 +1028,32 @@ export default function AiPanel({
                   />
                 ) : (
                   <>
-                    {/* GPT-clean chat view: user + assistant only */}
+                    {/* GPT-clean chat view: assistant + relevant tool system messages */}
                     {messages
                       .filter((m) => {
                         const r = String(m?.role || "").toLowerCase();
                         const content = String(m?.content || "");
-                        const hasActions =
-                          Array.isArray(m?.actions) && m.actions.length > 0;
+                        const actionLabels = Array.isArray(m?.actions)
+                          ? m.actions.map((a) => String(a?.label || ""))
+                          : [];
 
                         if (r === "assistant" || r === "ai") return true;
 
+                        // Hide resolved consent request rows from normal chat,
+                        // but keep them in Transcript for history.
+                        const isResolvedConsentRequest =
+                          r === "system" &&
+                          content.includes("🛡 Tool request:") &&
+                          (actionLabels.includes("Approved") ||
+                            actionLabels.includes("Cancelled"));
+
+                        if (isResolvedConsentRequest) return false;
+
                         if (
                           r === "system" &&
-                          (hasActions || content.startsWith("[tool]"))
+                          ((Array.isArray(m?.actions) &&
+                            m.actions.length > 0) ||
+                            content.startsWith("[tool]"))
                         ) {
                           return true;
                         }

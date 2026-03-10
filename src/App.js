@@ -523,6 +523,13 @@ function TranscriptBubble({
     ? actions.filter((a) => a && a.label && typeof a.onClick === "function")
     : [];
 
+  const isResolvedActionLabel = (label) => {
+    const s = String(label || "")
+      .trim()
+      .toLowerCase();
+    return s === "approved" || s === "cancelled";
+  };
+
   return (
     <div className={`w-full flex ${wrap}`}>
       <div className={`max-w-[90%] border rounded px-3 py-2 ${bubbleTone}`}>
@@ -534,16 +541,27 @@ function TranscriptBubble({
 
         {actionButtons.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
-            {actionButtons.map((a, idx) => (
-              <button
-                key={`${a.label}_${idx}`}
-                className="text-xs underline opacity-90 hover:opacity-100"
-                onClick={a.onClick}
-                type="button"
-              >
-                {a.label}
-              </button>
-            ))}
+            {actionButtons.map((a, idx) => {
+              const resolved = isResolvedActionLabel(a.label);
+
+              return resolved ? (
+                <span
+                  key={`${a.label}_${idx}`}
+                  className="text-xs px-2 py-0.5 rounded border border-zinc-700 bg-zinc-900/40 text-zinc-400 cursor-default select-none"
+                >
+                  {a.label}
+                </span>
+              ) : (
+                <button
+                  key={`${a.label}_${idx}`}
+                  className="text-xs underline opacity-90 hover:opacity-100"
+                  onClick={a.onClick}
+                  type="button"
+                >
+                  {a.label}
+                </button>
+              );
+            })}
           </div>
         ) : actionLabel && onAction ? (
           <button
@@ -567,7 +585,6 @@ function TranscriptBubble({
     </div>
   );
 }
-
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -1114,7 +1131,32 @@ export default function App() {
     setMessages((prev) => [...prev, msg]);
     return msg;
   }, []);
+  const updateMessage = useCallback((id, patch = {}) => {
+    const targetId = String(id || "").trim();
+    if (!targetId) return;
 
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m?.id !== targetId) return m;
+
+        return {
+          ...m,
+          ...patch,
+          action:
+            typeof patch.action === "function"
+              ? patch.action
+              : patch.action === null
+                ? null
+                : m.action,
+          actions: Array.isArray(patch.actions)
+            ? patch.actions
+            : patch.actions === null
+              ? null
+              : m.actions,
+        };
+      }),
+    );
+  }, []);
   useEffect(() => {
     if (!transcriptBottomRef.current) return;
     transcriptBottomRef.current.scrollIntoView({
@@ -1773,6 +1815,7 @@ export default function App() {
       setPatchPreviewVisible={setPatchPreviewVisible}
       discardPatchPreview={discardPatchPreview}
       appendMessage={appendMessage}
+      updateMessage={updateMessage}
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}
