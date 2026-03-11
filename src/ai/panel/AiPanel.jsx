@@ -504,6 +504,7 @@ export default function AiPanel({
 
   // Local cache still used, but global is the real guard.
   const processedKeysRef = useRef(new Set());
+  const toolBatchRunningRef = useRef(false);
 
   // ✅ Reset caches when conversation clears
   useEffect(() => {
@@ -714,140 +715,149 @@ export default function AiPanel({
   // Model-initiated tool detection: scan assistant messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
+    if (toolBatchRunningRef.current) return;
 
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg?.role !== "assistant") continue;
+    const processAssistantToolCalls = async () => {
+      toolBatchRunningRef.current = true;
 
-      const content = getMsgText(msg);
-      if (!content) continue;
+      try {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (msg?.role !== "assistant") continue;
 
-      const msgKey = String(msg?.id ?? msg?.ts ?? i);
+          const content = getMsgText(msg);
+          if (!content) continue;
 
-      // A) XML tool calls
-      const xmlCalls = extractXmlToolCalls(content);
-      if (xmlCalls.length) {
-        for (const c of xmlCalls) {
-          const args = { ...(c.args || {}) };
+          const msgKey = String(msg?.id ?? msg?.ts ?? i);
+          const pendingCalls = [];
 
-          if (c.name === "search_in_file") {
-            if (!args.path && activeTab?.path) args.path = activeTab.path;
-
-            const q = String(args.query || "").trim();
-            if (!q) {
-              appendMessage(
-                "system",
-                "[tool] ⚠️ search_in_file ignored: missing required arg: query",
-              );
-              continue;
+          const queueCall = ({ key, toolName, args }) => {
+            if (
+              GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+              processedKeysRef.current.has(key)
+            ) {
+              return;
             }
-            if (!args.path) {
-              appendMessage(
-                "system",
-                "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
-              );
-              continue;
-            }
-          }
 
-          const tiny = hashString(`${c.name}|${JSON.stringify(args)}`);
-          const key = `mtool:xml:${msgKey}:${tiny}`;
+            GLOBAL_SEEN_TOOL_KEYS.add(key);
+            processedKeysRef.current.add(key);
+            pendingCalls.push({ toolName, args });
+          };
 
-          if (
-            GLOBAL_SEEN_TOOL_KEYS.has(key) ||
-            processedKeysRef.current.has(key)
-          )
-            continue;
+          // A) XML tool calls
+          const xmlCalls = extractXmlToolCalls(content);
+          if (xmlCalls.length) {
+            for (const c of xmlCalls) {
+              const args = { ...(c.args || {}) };
 
-          GLOBAL_SEEN_TOOL_KEYS.add(key);
-          processedKeysRef.current.add(key);
-          runTool({ toolName: c.name, args });
-          return;
-        }
-      }
+              if (c.name === "search_in_file") {
+                if (!args.path && activeTab?.path) args.path = activeTab.path;
 
-      // B) Fenced blocks
-      if (content.includes("```")) {
-        const blocks = extractFencedBlocks(content);
-        for (const b of blocks) {
-          const parsed = safeParseToolRequestJson(b.payload);
-          if (!parsed) continue;
+                const q = String(args.query || "").trim();
+                if (!q) {
+                  appendMessage(
+                    "system",
+                    "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+                  );
+                  continue;
+                }
+                if (!args.path) {
+                  appendMessage(
+                    "system",
+                    "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+                  );
+                  continue;
+                }
+              }
 
-          const args = { ...(parsed.args || {}) };
-
-          if (parsed.name === "search_in_file") {
-            if (!args.path && activeTab?.path) args.path = activeTab.path;
-
-            const q = String(args.query || "").trim();
-            if (!q) {
-              appendMessage(
-                "system",
-                "[tool] ⚠️ search_in_file ignored: missing required arg: query",
-              );
-              continue;
-            }
-            if (!args.path) {
-              appendMessage(
-                "system",
-                "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
-              );
-              continue;
+              const tiny = hashString(`${c.name}|${JSON.stringify(args)}`);
+              const key = `mtool:xml:${msgKey}:${tiny}`;
+              queueCall({ key, toolName: c.name, args });
             }
           }
 
-          const tiny = hashString(`${parsed.name}|${b.payload}`);
-          const key = `mtool:fence:${msgKey}:${tiny}`;
+          // B) Fenced blocks
+          if (content.includes("```")) {
+            const blocks = extractFencedBlocks(content);
+            for (const b of blocks) {
+              const parsed = safeParseToolRequestJson(b.payload);
+              if (!parsed) continue;
 
-          if (
-            GLOBAL_SEEN_TOOL_KEYS.has(key) ||
-            processedKeysRef.current.has(key)
-          )
-            continue;
+              const args = { ...(parsed.args || {}) };
 
-          GLOBAL_SEEN_TOOL_KEYS.add(key);
-          processedKeysRef.current.add(key);
-          runTool({ toolName: parsed.name, args });
-          return;
-        }
-      }
+              if (parsed.name === "search_in_file") {
+                if (!args.path && activeTab?.path) args.path = activeTab.path;
 
-      // C) Bare JSON
-      const bare = tryParseBareToolJson(content);
-      if (bare) {
-        const args = { ...(bare.args || {}) };
+                const q = String(args.query || "").trim();
+                if (!q) {
+                  appendMessage(
+                    "system",
+                    "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+                  );
+                  continue;
+                }
+                if (!args.path) {
+                  appendMessage(
+                    "system",
+                    "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+                  );
+                  continue;
+                }
+              }
 
-        if (bare.name === "search_in_file") {
-          if (!args.path && activeTab?.path) args.path = activeTab.path;
+              const tiny = hashString(`${parsed.name}|${b.payload}`);
+              const key = `mtool:fence:${msgKey}:${tiny}`;
+              queueCall({ key, toolName: parsed.name, args });
+            }
+          }
 
-          const q = String(args.query || "").trim();
-          if (!q) {
-            appendMessage(
-              "system",
-              "[tool] ⚠️ search_in_file ignored: missing required arg: query",
-            );
+          // C) Bare JSON
+          const bare = tryParseBareToolJson(content);
+          if (bare) {
+            const args = { ...(bare.args || {}) };
+
+            if (bare.name === "search_in_file") {
+              if (!args.path && activeTab?.path) args.path = activeTab.path;
+
+              const q = String(args.query || "").trim();
+              if (!q) {
+                appendMessage(
+                  "system",
+                  "[tool] ⚠️ search_in_file ignored: missing required arg: query",
+                );
+              } else if (!args.path) {
+                appendMessage(
+                  "system",
+                  "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
+                );
+              } else {
+                const tiny = hashString(`${bare.name}|${content.trim()}`);
+                const key = `mtool:bare:${msgKey}:${tiny}`;
+                queueCall({ key, toolName: bare.name, args });
+              }
+            } else {
+              const tiny = hashString(`${bare.name}|${content.trim()}`);
+              const key = `mtool:bare:${msgKey}:${tiny}`;
+              queueCall({ key, toolName: bare.name, args });
+            }
+          }
+
+          if (pendingCalls.length > 0) {
+            for (const call of pendingCalls) {
+              await runTool({
+                toolName: call.toolName,
+                args: call.args,
+              });
+            }
             return;
           }
-          if (!args.path) {
-            appendMessage(
-              "system",
-              "[tool] ⚠️ search_in_file ignored: no active file and no path provided",
-            );
-            return;
-          }
         }
-
-        const tiny = hashString(`${bare.name}|${content.trim()}`);
-        const key = `mtool:bare:${msgKey}:${tiny}`;
-
-        if (GLOBAL_SEEN_TOOL_KEYS.has(key) || processedKeysRef.current.has(key))
-          return;
-
-        GLOBAL_SEEN_TOOL_KEYS.add(key);
-        processedKeysRef.current.add(key);
-        runTool({ toolName: bare.name, args });
-        return;
+      } finally {
+        toolBatchRunningRef.current = false;
       }
-    }
+    };
+
+    processAssistantToolCalls();
   }, [messages, activeTab, appendMessage, runTool]);
 
   const handleRequestToolOk = useCallback(() => {
