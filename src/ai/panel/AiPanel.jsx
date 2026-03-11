@@ -414,6 +414,7 @@ export default function AiPanel({
   discardPatchPreview,
   appendMessage,
   updateMessage,
+  onWorkspaceTreeRefresh,
 
   aiPrompt,
   setAiPrompt,
@@ -686,9 +687,27 @@ export default function AiPanel({
         isConsentRequired: () => true,
       });
 
+      if (
+        res?.ok &&
+        (toolName === "write_file" || toolName === "mkdir") &&
+        typeof onWorkspaceTreeRefresh === "function"
+      ) {
+        try {
+          await onWorkspaceTreeRefresh();
+        } catch {
+          // Keep tool success intact even if Explorer refresh fails.
+        }
+      }
+
       return res;
     },
-    [appendTranscript, requestConsent, invokeTool, formatTauriError],
+    [
+      appendTranscript,
+      requestConsent,
+      invokeTool,
+      formatTauriError,
+      onWorkspaceTreeRefresh,
+    ],
   );
 
   // Model-initiated tool detection: scan assistant messages.

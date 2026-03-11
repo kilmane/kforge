@@ -1816,6 +1816,7 @@ export default function App() {
       discardPatchPreview={discardPatchPreview}
       appendMessage={appendMessage}
       updateMessage={updateMessage}
+      onWorkspaceTreeRefresh={handleRefreshTree}
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}
