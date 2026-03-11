@@ -1773,6 +1773,7 @@ export default function App() {
       aiPanelWide={true}
       setAiPanelWide={() => {}}
       setAiPanelOpen={setAiPanelOpen}
+      setFocusMode={setFocusMode}
       providerMeta={providerMeta}
       providerReady={providerReady}
       disabledExplainer={disabledExplainer}

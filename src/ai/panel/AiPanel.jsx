@@ -355,6 +355,7 @@ export default function AiPanel({
   aiPanelWide,
   setAiPanelWide,
   setAiPanelOpen,
+  setFocusMode,
 
   // provider header surface
   providerMeta,
@@ -942,7 +943,12 @@ export default function AiPanel({
           <div className="border-b border-zinc-800">
             <button
               type="button"
-              onClick={() => setPreviewOpen((v) => !v)}
+              onClick={() => {
+                if (typeof setFocusMode === "function") {
+                  setFocusMode(true);
+                }
+                setPreviewOpen((v) => !v);
+              }}
               className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
             >
               <span className="font-medium">
