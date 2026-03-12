@@ -97,6 +97,14 @@ const ALLOWED_MODEL_TOOLS = new Set([
   "mkdir",
 ]);
 
+const SAFE_AUTOMATIC_TOOLS = new Set([
+  "read_file",
+  "list_dir",
+  "search_in_file",
+  "write_file",
+  "mkdir",
+]);
+
 function getMsgText(msg) {
   const v = msg?.content ?? msg?.text ?? msg?.message ?? msg?.body ?? "";
   return String(v || "");
@@ -201,7 +209,14 @@ function tryParseBareToolJson(text) {
   if (!(trimmed.startsWith("{") && trimmed.endsWith("}"))) return null;
   return safeParseToolRequestJson(trimmed);
 }
+function stripToolBlocksForChat(text) {
+  const s = String(text || "");
 
+  return s
+    .replace(/```(?:tool|tool_call)\s*[\s\S]*?```/g, "")
+    .replace(/^\(Model requested one or more tools\.\)\s*$/gim, "")
+    .trim();
+}
 /**
  * Parse XML-ish tool calls.
  */
@@ -686,7 +701,7 @@ export default function AiPanel({
             throw new Error(msg);
           }
         },
-        isConsentRequired: () => true,
+        isConsentRequired: (toolName2) => !SAFE_AUTOMATIC_TOOLS.has(toolName2),
       });
 
       if (
@@ -1086,26 +1101,41 @@ export default function AiPanel({
 
                         if (
                           r === "system" &&
-                          ((Array.isArray(m?.actions) &&
-                            m.actions.length > 0) ||
-                            content.startsWith("[tool]"))
+                          Array.isArray(m?.actions) &&
+                          m.actions.length > 0
                         ) {
                           return true;
                         }
 
                         return false;
                       })
-                      .map((m, i) => (
-                        <TranscriptBubble
-                          key={m.id || i}
-                          role={m.role}
-                          content={m.content}
-                          ts={m.ts}
-                          actionLabel={m.actionLabel}
-                          onAction={m.action}
-                          actions={m.actions}
-                        />
-                      ))}
+                      .map((m, i) => {
+                        const role = String(m?.role || "").toLowerCase();
+
+                        const content =
+                          role === "assistant" || role === "ai"
+                            ? stripToolBlocksForChat(m.content)
+                            : m.content;
+
+                        if (
+                          (role === "assistant" || role === "ai") &&
+                          !String(content || "").trim()
+                        ) {
+                          return null;
+                        }
+
+                        return (
+                          <TranscriptBubble
+                            key={m.id || i}
+                            role={m.role}
+                            content={content}
+                            ts={m.ts}
+                            actionLabel={m.actionLabel}
+                            onAction={m.action}
+                            actions={m.actions}
+                          />
+                        );
+                      })}
                     <div ref={transcriptBottomRef} />
                   </>
                 )}
