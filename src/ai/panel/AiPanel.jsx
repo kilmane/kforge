@@ -210,13 +210,69 @@ function tryParseBareToolJson(text) {
   return safeParseToolRequestJson(trimmed);
 }
 function stripToolBlocksForChat(text) {
-  const s = String(text || "");
+  let s = String(text || "");
 
-  return s
-    .replace(/```(?:tool|tool_call)\s*[\s\S]*?```/g, "")
-    .replace(/^\(Model requested one or more tools\.\)\s*$/gim, "")
-    .trim();
+  // Remove complete tool fences
+  s = s.replace(/```(?:tool|tool_call)\s*[\s\S]*?```/gi, "");
+
+  // Remove incomplete tool fences that never closed
+  s = s.replace(/```(?:tool|tool_call)\s*[\s\S]*$/gi, "");
+
+  // Remove the helper line sometimes emitted before tool calls
+  s = s.replace(/^\(Model requested one or more tools\.\)\s*$/gim, "");
+  // Remove model sentence referring to tool calls (now hidden in calm chat)
+  s = s.replace(/Here are the tool calls to create these files:\s*/gi, "");
+  return s.trim();
 }
+
+function collectToolBatchPaths(calls, toolName) {
+  return (Array.isArray(calls) ? calls : [])
+    .filter((c) => c?.toolName === toolName)
+    .map((c) => String(c?.args?.path || "").trim())
+    .filter(Boolean);
+}
+
+function buildToolBatchWorkingMessage(calls) {
+  const writePaths = collectToolBatchPaths(calls, "write_file");
+  const dirPaths = collectToolBatchPaths(calls, "mkdir");
+  const createdCount = writePaths.length + dirPaths.length;
+
+  if (createdCount > 0) {
+    if (createdCount === 1) {
+      const onlyPath = writePaths[0] || dirPaths[0];
+      return `Working…....... creating ${onlyPath}.`;
+    }
+    return "Working…........ creating project files.";
+  }
+
+  const total = Array.isArray(calls) ? calls.length : 0;
+  return `Working… applying ${total} project ${total === 1 ? "change" : "changes"}.`;
+}
+
+function buildToolBatchDoneMessage(calls) {
+  const writePaths = collectToolBatchPaths(calls, "write_file");
+  const dirPaths = collectToolBatchPaths(calls, "mkdir");
+  const listed = [...dirPaths, ...writePaths].filter(Boolean);
+  const totalCreated = listed.length;
+
+  if (totalCreated > 0) {
+    const lines = listed.slice(0, 6).map((p) => `- ${p}`);
+    if (listed.length > 6) {
+      lines.push(`- ...and ${listed.length - 6} more`);
+    }
+
+    const intro =
+      totalCreated === 1
+        ? "Done> created the following file:"
+        : "Done> created the following files:";
+
+    return `${intro}\n${lines.join("\n")}`;
+  }
+
+  const total = Array.isArray(calls) ? calls.length : 0;
+  return `Done — applied ${total} project ${total === 1 ? "change" : "changes"}.`;
+}
+
 /**
  * Parse XML-ish tool calls.
  */
@@ -734,6 +790,7 @@ export default function AiPanel({
 
     const processAssistantToolCalls = async () => {
       toolBatchRunningRef.current = true;
+      const batchCalls = [];
 
       try {
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -756,7 +813,7 @@ export default function AiPanel({
 
             GLOBAL_SEEN_TOOL_KEYS.add(key);
             processedKeysRef.current.add(key);
-            pendingCalls.push({ toolName, args });
+            batchCalls.push({ toolName, args });
           };
 
           // A) XML tool calls
@@ -856,16 +913,21 @@ export default function AiPanel({
               queueCall({ key, toolName: bare.name, args });
             }
           }
-
           if (pendingCalls.length > 0) {
-            for (const call of pendingCalls) {
-              await runTool({
-                toolName: call.toolName,
-                args: call.args,
-              });
-            }
-            return;
+            continue;
           }
+        }
+        if (batchCalls.length > 0) {
+          appendMessage("assistant", buildToolBatchWorkingMessage(batchCalls));
+
+          for (const call of batchCalls) {
+            await runTool({
+              toolName: call.toolName,
+              args: call.args,
+            });
+          }
+
+          appendMessage("assistant", buildToolBatchDoneMessage(batchCalls));
         }
       } finally {
         toolBatchRunningRef.current = false;
