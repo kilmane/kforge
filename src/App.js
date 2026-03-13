@@ -632,7 +632,7 @@ export default function App() {
   const [aiSystem, setAiSystem] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiTemperature, setAiTemperature] = useState(0.2);
-  const [aiMaxTokens, setAiMaxTokens] = useState(512);
+  const [aiMaxTokens, setAiMaxTokens] = useState(4000);
 
   const [aiRunning, setAiRunning] = useState(false);
   const [aiOutput, setAiOutput] = useState("");
