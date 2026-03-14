@@ -23,6 +23,17 @@ function scaffoldPathStorageKey(projectPath) {
 function targetModeStorageKey(projectPath) {
   return projectPath ? `kforge.preview.useGeneratedTarget:${projectPath}` : "";
 }
+function getStatusLabel(status) {
+  const value = String(status || "idle");
+
+  if (value === "idle") return "Ready";
+  if (value === "installing") return "Installing dependencies…";
+  if (value === "running") return "Preview running";
+  if (value === "scaffold:starting") return "Generating template…";
+  if (value.startsWith("scaffold:done:")) return "Template generated";
+
+  return value;
+}
 
 function persistScaffoldPath(projectPath, value) {
   if (!projectPath) return;
@@ -242,6 +253,8 @@ export default function PreviewPanel({ projectPath }) {
 
           <div className="text-xs text-zinc-400 mt-0.5">
             Status: <span className="text-zinc-200">{status || "idle"}</span>
+            Status:{" "}
+            <span className="text-zinc-200">{getStatusLabel(status)}</span>
             {projectPath ? (
               <>
                 <br />

@@ -46,6 +46,33 @@ fn clear_pid(app: &AppHandle, expected_pid: u32) {
         }
     }
 }
+fn completion_message(label: &str, exit_code: Option<i32>) -> String {
+    if is_expected_stop(label, exit_code) {
+        return "✔ Preview stopped".to_string();
+    }
+
+    match exit_code {
+        Some(0) => match label {
+            "pnpm install" => "✔ Dependencies installed successfully".to_string(),
+            "pnpm dev" => "✔ Preview stopped".to_string(),
+            _ => format!("✔ {} completed successfully", label),
+        },
+        Some(code) => match label {
+            "pnpm install" => format!("❌ Install failed (exit code {})", code),
+            "pnpm dev" => format!("❌ Preview failed (exit code {})", code),
+            _ => format!("❌ {} failed (exit code {})", label, code),
+        },
+        None => match label {
+            "pnpm install" => "Install process ended".to_string(),
+            "pnpm dev" => "✔ Preview stopped".to_string(),
+            _ => format!("{} ended", label),
+        },
+    }
+}
+
+fn is_expected_stop(label: &str, exit_code: Option<i32>) -> bool {
+    label == "pnpm dev" && matches!(exit_code, Some(1) | Some(130) | Some(143) | None)
+}
 
 fn spawn_preview_process(
     app: AppHandle,
@@ -136,13 +163,14 @@ fn spawn_preview_process(
         let status = child.wait();
 
         match status {
-            Ok(exit_status) => {
+                       Ok(exit_status) => {
                 emit_log(
                     &app_wait,
                     "status",
-                    &format!("{} terminated: {:?}", label_wait, exit_status.code()),
+                    &completion_message(&label_wait, exit_status.code()),
                 );
             }
+
             Err(err) => {
                 emit_log(
                     &app_wait,
@@ -209,11 +237,8 @@ pub fn preview_stop(app: AppHandle, state: tauri::State<PreviewState>) -> Result
     };
 
     if let Some(pid) = pid {
-        emit_log(
-            &app,
-            "status",
-            &format!("Stopping preview process... [tracked pid={}]", pid),
-        );
+               emit_log(&app, "status", "Stopping preview…");
+
 
         #[cfg(target_os = "windows")]
         {
