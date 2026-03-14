@@ -1,12 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  appendPreviewLog,
+  clearPreviewLogBuffer,
+  getPreviewLogBuffer,
+  getPreviewStatusValue,
   onPreviewLog,
   onPreviewStatus,
   previewGetStatus,
   previewInstall,
   previewStart,
   previewStop,
+  setPreviewStatusValue,
 } from "./previewRunner";
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
@@ -43,8 +48,9 @@ function persistTargetMode(projectPath, useGeneratedTarget) {
 }
 
 export default function PreviewPanel({ projectPath }) {
-  const [status, setStatus] = useState("idle");
-  const [logs, setLogs] = useState([]);
+  const [status, setStatus] = useState(getPreviewStatusValue());
+  const [logs, setLogs] = useState(() => getPreviewLogBuffer());
+
   const [previewUrl, setPreviewUrl] = useState("");
   const endRef = useRef(null);
 
@@ -60,6 +66,8 @@ export default function PreviewPanel({ projectPath }) {
     setScaffoldErr("");
     setPreviewUrl("");
     lastLogKeyRef.current = "";
+    setLogs(getPreviewLogBuffer());
+    setStatus(getPreviewStatusValue());
 
     if (!projectPath) {
       setScaffoldPath("");
@@ -94,8 +102,11 @@ export default function PreviewPanel({ projectPath }) {
     (async () => {
       try {
         const currentStatus = await previewGetStatus();
-        if (!cancelled) setStatus(currentStatus || "idle");
+        const nextStatus = currentStatus || "idle";
+        setPreviewStatusValue(nextStatus);
+        if (!cancelled) setStatus(nextStatus);
       } catch {
+        setPreviewStatusValue("idle");
         if (!cancelled) setStatus("idle");
       }
 
@@ -107,10 +118,9 @@ export default function PreviewPanel({ projectPath }) {
         if (key === lastLogKeyRef.current) return;
         lastLogKeyRef.current = key;
 
-        setLogs((prev) => {
-          const next = [...prev, { kind, line: text, ts: Date.now() }];
-          return next.slice(-600);
-        });
+        const entry = { kind, line: text, ts: Date.now() };
+        appendPreviewLog(entry);
+        setLogs(getPreviewLogBuffer());
 
         const m = text.match(URL_RE);
         if (m && m[1]) setPreviewUrl((prev) => prev || m[1]);
@@ -120,6 +130,7 @@ export default function PreviewPanel({ projectPath }) {
         const nextStatus = String(status || "idle");
         if (cancelled) return;
 
+        setPreviewStatusValue(nextStatus);
         setStatus(nextStatus);
 
         if (nextStatus.startsWith("scaffold:done:")) {
@@ -216,8 +227,8 @@ export default function PreviewPanel({ projectPath }) {
     persistScaffoldPath(projectPath, "");
     persistTargetMode(projectPath, false);
   }
-
   function clearLogs() {
+    clearPreviewLogBuffer();
     setLogs([]);
     setPreviewUrl("");
     lastLogKeyRef.current = "";
