@@ -121,7 +121,7 @@ export default function PreviewPanel({ projectPath }) {
         if (!cancelled) setStatus("idle");
       }
 
-      unLog = await onPreviewLog(({ kind, line }) => {
+      const logUnlisten = await onPreviewLog(({ kind, line }) => {
         const raw = String(line ?? "");
         const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -137,7 +137,13 @@ export default function PreviewPanel({ projectPath }) {
         if (m && m[1]) setPreviewUrl((prev) => prev || m[1]);
       });
 
-      unStatus = await onPreviewStatus(({ status }) => {
+      if (cancelled) {
+        if (typeof logUnlisten === "function") logUnlisten();
+      } else {
+        unLog = logUnlisten;
+      }
+
+      const statusUnlisten = await onPreviewStatus(({ status }) => {
         const nextStatus = String(status || "idle");
         if (cancelled) return;
 
@@ -154,12 +160,30 @@ export default function PreviewPanel({ projectPath }) {
           }
         }
       });
+
+      if (cancelled) {
+        if (typeof statusUnlisten === "function") statusUnlisten();
+      } else {
+        unStatus = statusUnlisten;
+      }
     })();
 
     return () => {
       cancelled = true;
-      if (unLog) unLog();
-      if (unStatus) unStatus();
+
+      if (typeof unLog === "function") unLog();
+      else if (unLog && typeof unLog.then === "function") {
+        unLog.then((fn) => {
+          if (typeof fn === "function") fn();
+        });
+      }
+
+      if (typeof unStatus === "function") unStatus();
+      else if (unStatus && typeof unStatus.then === "function") {
+        unStatus.then((fn) => {
+          if (typeof fn === "function") fn();
+        });
+      }
     };
   }, [projectPath]);
 
@@ -252,7 +276,6 @@ export default function PreviewPanel({ projectPath }) {
           <div className="text-sm font-semibold text-zinc-100">Preview</div>
 
           <div className="text-xs text-zinc-400 mt-0.5">
-            Status: <span className="text-zinc-200">{status || "idle"}</span>
             Status:{" "}
             <span className="text-zinc-200">{getStatusLabel(status)}</span>
             {projectPath ? (
@@ -319,37 +342,47 @@ export default function PreviewPanel({ projectPath }) {
             </button>
           </div>
 
-          <div className="mt-2 flex items-center gap-2 text-xs">
-            <span className="text-zinc-400">Use:</span>
-            <button
-              className={
-                "px-2 py-1 rounded-md border text-zinc-100 " +
-                (!useGeneratedTarget
-                  ? "border-zinc-500/70 bg-zinc-800/60"
-                  : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
-              }
-              disabled={!projectPath}
-              onClick={handleUseBase}
-              title="Use the base folder as the target"
-            >
-              Base
-            </button>
-            <button
-              className={
-                "px-2 py-1 rounded-md border text-zinc-100 " +
-                (useGeneratedTarget
-                  ? "border-zinc-500/70 bg-zinc-800/60"
-                  : "border-zinc-700/50 bg-black/10 hover:bg-black/20")
-              }
-              disabled={!generatedAvailable}
-              onClick={handleUseGenerated}
-              title="Use the generated app folder as the target"
-            >
-              Generated
-            </button>
+          <div className="mt-2">
+            <div className="text-xs text-zinc-400 mb-1">
+              Active Preview Root
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                className={
+                  "px-3 py-1.5 rounded-lg border text-sm " +
+                  (!useGeneratedTarget
+                    ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                    : "border-zinc-700/50 bg-black/10 hover:bg-black/20 text-zinc-200")
+                }
+                disabled={!projectPath}
+                onClick={handleUseBase}
+                title="Preview the opened workspace folder"
+              >
+                Base Folder
+              </button>
+
+              <button
+                className={
+                  "px-3 py-1.5 rounded-lg border text-sm " +
+                  (useGeneratedTarget
+                    ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                    : "border-zinc-700/50 bg-black/10 hover:bg-black/20 text-zinc-200")
+                }
+                disabled={!generatedAvailable}
+                onClick={handleUseGenerated}
+                title="Preview the generated template project"
+              >
+                Generated Template
+              </button>
+            </div>
+
+            <div className="text-[11px] text-zinc-500 mt-1">
+              Base = opened folder · Generated = scaffolded template project
+            </div>
 
             {scaffoldErr ? (
-              <span className="ml-2 text-red-300">{scaffoldErr}</span>
+              <div className="mt-1 text-xs text-red-300">{scaffoldErr}</div>
             ) : null}
           </div>
         </div>
