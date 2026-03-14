@@ -135,3 +135,145 @@ Stops the running development server.
 **Clear**
 
 Clears the preview runner log output.
+
+----
+
+Of course captain ⚓ — good idea to document this early before users get confused like we did during testing.
+
+Here are **clean user-manual notes** you can drop into your docs.
+
+---
+
+# 📘 Preview Runner — Base vs Generated
+
+The Preview Runner can run your app from two different locations depending on how the project was created.
+
+You will see these options in the Preview panel:
+
+```text
+Use:
+Base     Generated
+```
+
+These buttons choose **which folder the preview server runs from**.
+
+---
+
+# Base
+
+**Base** is the folder you originally opened in KForge.
+
+Example:
+
+```text
+D:\kforge-workspaces\test-captain-dance
+```
+
+This is the normal choice when:
+
+* you are **vibe coding**
+* the AI is creating files directly in the opened folder
+* your project already exists
+* you are editing an existing project
+
+Typical workflow:
+
+```text
+Open folder
+Prompt the AI
+AI creates files
+Install
+Preview
+Open
+```
+
+In this workflow you should normally use:
+
+```text
+Base
+```
+
+---
+
+# Generated
+
+**Generated** is the folder created automatically when you use the **Generate** button in the Preview Runner.
+
+For example, when generating a Vite template KForge may create:
+
+```text
+D:\kforge-workspaces\test-captain-dance\my-react-app
+```
+
+This becomes the **Generated project folder**.
+
+Use **Generated** when:
+
+* you created a project using **Generate**
+* the template created a **nested project folder**
+* the preview server should run from the generated template project
+
+Typical workflow:
+
+```text
+Open folder
+Generate template
+Install
+Preview
+Open
+```
+
+In this workflow you should normally use:
+
+```text
+Generated
+```
+
+---
+
+# Why this exists
+
+Some project generators create a **new project folder inside the folder you opened**.
+
+Example:
+
+```text
+Opened folder
+D:\workspace\my-project
+
+Generated project
+D:\workspace\my-project\my-react-app
+```
+
+KForge lets you choose whether Preview should run from:
+
+* the **original folder (Base)**
+  or
+* the **generated project folder (Generated)**
+
+---
+
+# Tip
+
+If your app does not update or the preview seems to run the wrong project, check that the correct option is selected:
+
+```text
+Use: Base / Generated
+```
+
+Switching the preview root can resolve many preview issues.
+
+---
+
+If you want, next time we can also write the **Preview Runner section of the user manual**, which will explain the full flow:
+
+```
+Generate
+Install
+Preview
+Open
+Stop
+Reset
+```
+
+That will save you a lot of documentation work later.

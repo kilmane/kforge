@@ -240,9 +240,9 @@ function buildToolBatchWorkingMessage(calls) {
   if (createdCount > 0) {
     if (createdCount === 1) {
       const onlyPath = writePaths[0] || dirPaths[0];
-      return `Working…....... creating ${onlyPath}.`;
+      return `Working… creating ${onlyPath}.`;
     }
-    return "Working…........ creating project files.";
+    return "Working… creating project files";
   }
 
   const total = Array.isArray(calls) ? calls.length : 0;
