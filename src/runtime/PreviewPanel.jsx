@@ -15,7 +15,7 @@ import {
 } from "./previewRunner";
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
-
+const CLI_HINT_RE = [/press h to show help/i, /use --host to expose/i];
 function scaffoldPathStorageKey(projectPath) {
   return projectPath ? `kforge.preview.scaffoldPath:${projectPath}` : "";
 }
@@ -124,7 +124,9 @@ export default function PreviewPanel({ projectPath }) {
       const logUnlisten = await onPreviewLog(({ kind, line }) => {
         const raw = String(line ?? "");
         const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
-
+        if (CLI_HINT_RE.some((r) => r.test(text))) {
+          return;
+        }
         const key = `${kind}|${text}`;
         if (key === lastLogKeyRef.current) return;
         lastLogKeyRef.current = key;
