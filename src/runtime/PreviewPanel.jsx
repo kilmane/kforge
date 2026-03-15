@@ -379,10 +379,6 @@ export default function PreviewPanel({ projectPath }) {
               </button>
             </div>
 
-            <div className="text-[11px] text-zinc-500 mt-1">
-              Base = opened folder · Generated = scaffolded template project
-            </div>
-
             {scaffoldErr ? (
               <div className="mt-1 text-xs text-red-300">{scaffoldErr}</div>
             ) : null}
@@ -403,7 +399,7 @@ export default function PreviewPanel({ projectPath }) {
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={disabled || !isRunnerIdle}
             onClick={() => previewStart(targetPath)}
-            title="Run pnpm dev in the target folder"
+            title="Start the development server"
           >
             Preview
           </button>
@@ -423,7 +419,7 @@ export default function PreviewPanel({ projectPath }) {
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={!previewUrl}
             onClick={handleOpen}
-            title="Open preview URL in your browser"
+            title="Open the running preview in your browser"
           >
             Open
           </button>
@@ -438,7 +434,11 @@ export default function PreviewPanel({ projectPath }) {
           </button>
         </div>
       </div>
-
+      <div className="mt-2 text-[11px] text-zinc-500">
+        To preview your app: click{" "}
+        <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
+        <span className="font-semibold text-yellow-300">Open</span>
+      </div>
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
         {logs.length === 0 ? (
           <div className="text-zinc-500">No logs yet.</div>
