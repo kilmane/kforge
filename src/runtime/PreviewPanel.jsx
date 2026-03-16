@@ -41,23 +41,23 @@ export default function PreviewPanel({ projectPath }) {
   const [scaffoldBusy, setScaffoldBusy] = useState(false);
   const [scaffoldErr, setScaffoldErr] = useState("");
 
- useEffect(() => {
-   setScaffoldErr("");
-   lastLogKeyRef.current = "";
+  useEffect(() => {
+    setScaffoldErr("");
+    lastLogKeyRef.current = "";
 
-   const bufferedLogs = getPreviewLogBuffer();
-   setLogs(bufferedLogs);
-   setStatus(getPreviewStatusValue());
+    const bufferedLogs = getPreviewLogBuffer();
+    setLogs(bufferedLogs);
+    setStatus(getPreviewStatusValue());
 
-   const restoredUrl =
-     bufferedLogs.find((entry) => {
-       const text = String(entry?.line ?? "");
-       return URL_RE.test(text);
-     })?.line ?? "";
+    const restoredUrl =
+      bufferedLogs.find((entry) => {
+        const text = String(entry?.line ?? "");
+        return URL_RE.test(text);
+      })?.line ?? "";
 
-   const match = restoredUrl.match(URL_RE);
-   setPreviewUrl(match?.[1] || "");
- }, [projectPath]);
+    const match = restoredUrl.match(URL_RE);
+    setPreviewUrl(match?.[1] || "");
+  }, [projectPath]);
 
   useEffect(() => {
     let unLog;
@@ -143,8 +143,10 @@ export default function PreviewPanel({ projectPath }) {
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs.length]);
+    endRef.current?.scrollIntoView({
+      behavior: logs.length > 1 ? "smooth" : "auto",
+    });
+  }, [logs]);
 
   const targetPath = useMemo(() => projectPath || "", [projectPath]);
 
@@ -289,13 +291,10 @@ export default function PreviewPanel({ projectPath }) {
           </button>
         </div>
       </div>
-
-      <div className="mt-2 text-[11px] text-zinc-500">
-        To preview your app: click{" "}
-        <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
-        <span className="font-semibold text-yellow-300">Open</span>
-      </div>
-
+      To preview your app: click{" "}
+      <span className="font-semibold text-yellow-300">Install</span>,{" "}
+      <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
+      <span className="font-semibold text-yellow-300">Open</span>
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
         {logs.length === 0 ? (
           <div className="text-zinc-500">No logs yet.</div>
