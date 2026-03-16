@@ -292,9 +292,13 @@ export default function PreviewPanel({ projectPath }) {
         </div>
       </div>
       To preview your app: click{" "}
-      <span className="font-semibold text-yellow-300">Install</span>,{" "}
       <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
-      <span className="font-semibold text-yellow-300">Open</span>
+      <span className="font-semibold text-yellow-300">Open</span>.
+      <span className="text-zinc-400">
+        {" "}
+        Use <span className="font-semibold text-yellow-300">Install</span> only
+        for projects that need dependencies.
+      </span>
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
         {logs.length === 0 ? (
           <div className="text-zinc-500">No logs yet.</div>

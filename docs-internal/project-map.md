@@ -3,8 +3,8 @@
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v4
-**Updated:** 15/03/2026
+**Version:** v5
+**Updated:** 16/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -27,9 +27,12 @@ Responsibilities:
 * prompt construction
 * retry logic
 * project lifecycle
+* workspace root management
 * layout authority
 
 This is the **AI execution brain**.
+
+App.js is also the **authority for the current project root**.
 
 ---
 
@@ -198,6 +201,7 @@ Preview runner provides controlled local development runtime:
 * stream logs
 * detect preview URL
 * stop processes
+* persist preview logs across panel reopen
 
 Commands executed:
 
@@ -235,7 +239,7 @@ kforge://preview/status
 
 ## Frontend Bridge
 
-previewRunner.js:
+previewRunner.js provides:
 
 * preview_install
 * preview_start
@@ -243,6 +247,8 @@ previewRunner.js:
 * preview_get_status
 
 Also subscribes to preview log/status events.
+
+These events drive the Preview UI state.
 
 ---
 
@@ -260,41 +266,102 @@ PreviewPanel.jsx handles:
 Additional UX responsibilities:
 
 * preview log persistence
-* preview root selector (Base / Generated)
+* preview URL detection and restoration
 * scaffold path persistence
 * human-readable install/preview completion messages
 * CLI hint filtering
+* preview log auto-scroll
+* preview workflow instructions
 
 ---
 
-## Preview Root Concept
+# 3c Scaffold System
 
-Preview can run from two locations.
+Backend implementation:
 
-**Base Folder**
+```
+src-tauri/src/scaffold.rs
+```
 
-The folder originally opened in KForge.
+Frontend trigger:
 
-Used when:
-
-* AI generates files
-* editing existing projects
-* vibe coding workflows
+```
+PreviewPanel.jsx → invoke("scaffold_vite_react")
+```
 
 ---
 
-**Generated Template**
+## Scaffold Behavior
 
-The nested project created by **Generate**.
+Generate creates a project template using Vite.
+
+Command executed:
+
+```
+pnpm dlx create-vite . --template react
+```
+
+Important architectural rule:
+
+```
+Scaffold now runs directly in the workspace root.
+```
 
 Example:
 
 ```
 workspace/
-└─ my-react-app/
+ ├ src/
+ ├ package.json
+ ├ vite.config.js
+ └ index.html
 ```
 
-Allows preview to run inside the generated template.
+No nested folder is created.
+
+---
+
+## Why this design
+
+The preview runner, filesystem tools, and AI editing tools must all operate on the **same project root**.
+
+Therefore:
+
+```
+workspace root == scaffold root == preview root
+```
+
+This prevents mismatches between:
+
+```
+AI edits
+Preview server
+Explorer tree
+```
+
+---
+
+# 3d Workspace Refresh Events
+
+KForge emits a workspace refresh event when filesystem changes occur.
+
+Event:
+
+```
+kforge://workspace/refresh
+```
+
+Handled in:
+
+```
+src/App.js
+```
+
+This refreshes the Explorer tree after:
+
+* AI file writes
+* directory creation
+* scaffold generation
 
 ---
 
@@ -312,8 +379,11 @@ Responsibilities:
 * project root enforcement
 * file read/write
 * folder tree building
+* project memory integration
 
 Parent folders are auto-created for writes.
+
+Filesystem operations are **restricted to the active project root**.
 
 ---
 
@@ -385,16 +455,17 @@ Used for development debugging.
 
 # Quick Navigation
 
-| Task              | File                           |
-| ----------------- | ------------------------------ |
-| Modify AI request | src/App.js                     |
-| Tool detection    | src/ai/panel/AiPanel.jsx       |
-| Tool handlers     | src/ai/tools/handlers/index.js |
-| Filesystem logic  | src/lib/fs.js                  |
-| Dock behavior     | src/layout/DockShell.jsx       |
-| Preview runtime   | src-tauri/src/preview.rs       |
-| Preview bridge    | src/runtime/previewRunner.js   |
-| Preview UI        | src/runtime/PreviewPanel.jsx   |
+| Task               | File                           |
+| ------------------ | ------------------------------ |
+| Modify AI request  | src/App.js                     |
+| Tool detection     | src/ai/panel/AiPanel.jsx       |
+| Tool handlers      | src/ai/tools/handlers/index.js |
+| Filesystem logic   | src/lib/fs.js                  |
+| Dock behavior      | src/layout/DockShell.jsx       |
+| Preview runtime    | src-tauri/src/preview.rs       |
+| Preview bridge     | src/runtime/previewRunner.js   |
+| Preview UI         | src/runtime/PreviewPanel.jsx   |
+| Scaffold generator | src-tauri/src/scaffold.rs      |
 
 ---
 
@@ -408,7 +479,19 @@ KForge architecture principles:
 * one filesystem bridge
 * preview runtime isolated from AI logic
 * UI projections separated from runtime state
+* single unified project root
 
-This architecture supports:
+The system workflow:
 
-AI → filesystem edits → preview runtime → browser feedback.
+```
+AI → filesystem edits → preview runtime → browser feedback
+```
+
+This architecture supports the **vibe coding loop**:
+
+```
+prompt
+→ AI edits files
+→ preview updates
+→ user sees result instantly
+```
