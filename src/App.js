@@ -778,6 +778,7 @@ export default function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
+
   const handleRefreshTree = useCallback(async () => {
     if (!projectPath) {
       setAiTestOutput("No folder open.");
@@ -805,6 +806,23 @@ export default function App() {
       setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
     }
   }, [projectPath]);
+  useEffect(() => {
+    function handleExternalRefresh() {
+      handleRefreshTree();
+    }
+
+    window.addEventListener(
+      "kforge://workspace/refresh",
+      handleExternalRefresh,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "kforge://workspace/refresh",
+        handleExternalRefresh,
+      );
+    };
+  }, [handleRefreshTree]);
   const handleOpenFolder = useCallback(async () => {
     const folder = await openProjectFolder();
     if (!folder) return;

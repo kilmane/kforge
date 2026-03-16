@@ -89,13 +89,21 @@ export default function PreviewPanel({ projectPath }) {
       } else {
         unLog = logUnlisten;
       }
-
       const statusUnlisten = await onPreviewStatus(({ status }) => {
         const nextStatus = String(status || "idle");
         if (cancelled) return;
 
         setPreviewStatusValue(nextStatus);
         setStatus(nextStatus);
+
+        // 🔁 After scaffold completes, refresh the workspace tree
+        if (nextStatus.startsWith("scaffold:done:")) {
+          try {
+            window.dispatchEvent(new CustomEvent("kforge://workspace/refresh"));
+          } catch {
+            // ignore
+          }
+        }
       });
 
       if (cancelled) {

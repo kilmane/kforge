@@ -66,8 +66,10 @@ export default function Explorer({ tree, onOpenFile, activeFilePath }) {
 
   return (
     <div className="h-full overflow-auto p-2">
-      {rootNodes.length === 0 ? (
+      {!tree ? (
         <div className="text-sm opacity-70 p-2">No folder opened.</div>
+      ) : rootNodes.length === 0 ? (
+        <div className="text-sm opacity-70 p-2">Folder is empty.</div>
       ) : (
         rootNodes.map((node) => (
           <NodeRow
