@@ -3,9 +3,9 @@
 **Location:**
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-**Last Updated:** March 15th, 2026
+**Last Updated:** March 16th, 2026
 
-**Phase:** 4.3.4 — Preview Runner UX polish
+**Phase:** 4.3.2.g — Workspace Root Unification
 **Status:** Stable milestone reached
 
 This file is the authoritative operational reference.
@@ -53,6 +53,7 @@ This file owns:
 * Patch instruction injection
 * Retry logic
 * Project lifecycle control
+* Workspace root management
 * TranscriptBubble definition
 
 If AI behaves incorrectly → start here.
@@ -81,9 +82,9 @@ No duplicate message systems exist.
 
 # 🧩 Rendering Surfaces
 
-There are two projections of the same message store.
+Two projections of the same message store.
 
-## Chat View (GPT-clean, tool-aware)
+## Chat View (GPT-clean)
 
 File:
 
@@ -91,15 +92,12 @@ File:
 src/ai/panel/AiPanel.jsx
 ```
 
-Current behavior:
+Shows:
 
-* assistant messages visible
-* AI messages visible
-* tool-related system messages visible when relevant
-* consent prompts visible in normal chat
-* tool success/failure visible in normal chat
-
-This was stabilized in Phase 4.3.2.d so AI file editing can be approved without opening Transcript.
+* assistant messages
+* AI messages
+* relevant tool messages
+* consent prompts
 
 ---
 
@@ -111,25 +109,26 @@ File:
 src/ai/panel/TranscriptPanel.jsx
 ```
 
-Current behavior:
+Full system log.
 
-* full message stream
-* user / assistant / system / tool events
+Contains:
+
+* user / assistant / system / tool messages
 * Retry + Clear controls
-* consent actions rendered
+* consent actions
 
-Architectural law:
+Architectural rule:
 
-Chat is a filtered projection of Transcript.
-Transcript is the complete system log.
-
-There is only one message store.
+```
+Chat = filtered projection
+Transcript = complete system log
+```
 
 ---
 
 # 🟢 3️⃣ Layout & Dock Architecture
 
-## 🔹 DockShell
+## DockShell
 
 File:
 
@@ -137,7 +136,7 @@ File:
 src/layout/DockShell.jsx
 ```
 
-DockShell supports two layout modes.
+Supports two layout modes.
 
 ### Bottom Mode (default)
 
@@ -145,27 +144,17 @@ DockShell supports two layout modes.
 dockMode = "bottom"
 ```
 
-* Main layout occupies screen
-* Dock appears below
-* Dock capped at max 55% viewport height
-
-Used when Focus OFF.
+Dock sits under main workspace.
 
 ---
 
-### Full Surface Mode (Focus)
+### Focus Mode
 
 ```
 dockMode = "full"
 ```
 
-* Dock replaces main layout
-* Occupies full height under top bar
-* No height cap
-
-Used when Focus ON.
-
-Architectural principle:
+Dock replaces main layout.
 
 Focus mode is a **surface promotion**, not a resized dock.
 
@@ -173,7 +162,7 @@ Focus mode is a **surface promotion**, not a resized dock.
 
 # 🔵 4️⃣ Tool Runtime Pipeline
 
-## Tool Detection + Coordination
+## Tool Detection
 
 File:
 
@@ -181,18 +170,13 @@ File:
 src/ai/panel/AiPanel.jsx
 ```
 
-Responsibilities:
+Handles:
 
-* parse model tool requests
-* detect JSON / XML tool payloads
-* deduplicate tool calls
-* trigger runtime execution
-* enforce consent gating
-
-Supported tool input shapes:
-
-* XML tool payloads
-* JSON tool calls
+* tool payload parsing
+* JSON/XML tool formats
+* deduplication
+* consent gating
+* execution dispatch
 
 ---
 
@@ -207,18 +191,17 @@ src/ai/tools/toolRuntime.js
 Responsibilities:
 
 * consent enforcement
-* lifecycle messaging
-* transcript-visible tool events
-* success/error formatting
+* lifecycle messages
+* transcript logging
+* error formatting
 
 Runtime flow:
 
 ```
 detect tool
-→ request consent
-→ user approves
-→ invoke tool handler
-→ append result/error
+→ consent request
+→ handler execution
+→ append result
 ```
 
 ---
@@ -231,9 +214,7 @@ File:
 src/ai/tools/handlers/index.js
 ```
 
-Maps tool name → implementation.
-
-Current tools:
+Tools currently available:
 
 * read_file
 * list_dir
@@ -241,29 +222,22 @@ Current tools:
 * search_in_file
 * mkdir
 
-Filesystem authority lives in:
+Filesystem authority:
 
 ```
 src/lib/fs.js
 ```
 
 App.js sets project root.
-fs.js enforces path safety.
+fs.js enforces safety.
 
 ---
 
-# 🟤 4️b Preview Runtime (Phase 4.3)
+# 🟤 4b Preview Runtime
 
-Preview execution is now a core part of the development loop.
+Preview runner executes project dev servers.
 
-Purpose:
-
-* run project-local development servers
-* stream logs safely into UI
-* allow explicit start / stop control
-* detect localhost preview URLs
-
-Backend authority:
+Backend:
 
 ```
 src-tauri/src/preview.rs
@@ -283,134 +257,162 @@ src/runtime/PreviewPanel.jsx
 
 ---
 
-## Design Constraints
+## Preview Responsibilities
 
-* dev-only
-* explicit user-triggered execution
-* no automatic network exposure
-* no background daemons
-* localhost-only preview
-* preview runtime isolated from AI pipeline
+Preview runner provides:
 
-Preview does **not modify AI message flow**.
+* dependency installation
+* development server startup
+* log streaming
+* URL detection
+* controlled process stop
+* preview log persistence
 
----
+Commands executed:
 
-## Preview Panel Responsibilities
-
-PreviewPanel.jsx now handles:
-
-* Generate / Install / Preview / Stop / Open / Clear controls
-* preview log display
-* preview status display
-* preview URL detection
-* preview root selection (Base vs Generated)
-* scaffold target persistence
-* preview log persistence across panel close/reopen
-* human-readable process completion messages
-* filtering CLI-only terminal hints
+```
+pnpm install
+pnpm dev
+```
 
 ---
 
-## Preview Root Selection
+## Backend Behavior
 
-Preview can run from two locations:
+Uses:
 
-**Base Folder**
+```
+std::process::Command
+```
 
-The folder originally opened in KForge.
+Tracks process PID.
 
-Used for:
+Stop command:
 
-* AI-generated projects
-* existing projects
-* vibe coding workflows
+```
+taskkill /PID <pid> /T /F
+```
 
-**Generated Template**
+Events emitted:
 
-The nested project created by the **Generate** button.
+```
+kforge://preview/log
+kforge://preview/status
+```
 
-Example:
+---
+
+# 🧱 4c Scaffold System
+
+File:
+
+```
+src-tauri/src/scaffold.rs
+```
+
+Frontend trigger:
+
+```
+PreviewPanel.jsx → invoke("scaffold_vite_react")
+```
+
+---
+
+## Current Scaffold Behavior
+
+Templates are generated using:
+
+```
+pnpm dlx create-vite . --template react
+```
+
+Important architectural rule:
+
+```
+Scaffold runs directly in the workspace root.
+```
+
+Example result:
 
 ```
 workspace/
-└─ my-react-app/
+ ├ src/
+ ├ package.json
+ ├ vite.config.js
+ └ index.html
 ```
 
-This allows preview to run from the generated template root.
+No nested project directory is created.
 
 ---
 
-## Stable Development Loop
+## Why this matters
+
+KForge must maintain a single project root.
 
 ```
-Generate → Install → Preview → Open → Stop → Iterate
+workspace root
+== AI editing root
+== preview runtime root
+== explorer root
 ```
 
-This is the canonical preview workflow.
+This prevents mismatches where:
+
+```
+AI edits files
+but preview server runs elsewhere
+```
 
 ---
 
-# 🟠 5️⃣ AI Filesystem Writing (Phase 4.3.2.d)
+# 🟡 5️⃣ Stable Development Loop
 
-This phase delivered the first real AI → workspace write loop.
-
-Validated flow:
+The canonical workflow:
 
 ```
 Open folder
-→ AI prompt
-→ AI emits write_file tool
-→ consent requested
-→ user approves
-→ file written to disk
+Generate (optional)
+Install
+Preview
+Open
+Stop
+Iterate
 ```
 
-Confirmed working cases:
+AI editing workflow:
 
-* file creation
-* file editing
-* nested folder writes
+```
+Open folder
+Prompt AI
+AI writes files
+Install
+Preview
+Hot reload
+```
 
-Filesystem guarantees:
+---
+
+# 🟢 6️⃣ Filesystem Guarantees
+
+Filesystem layer ensures:
 
 * writes scoped to project root
 * parent folders auto-created
-* errors surfaced visibly
+* invalid paths blocked
+* errors surfaced clearly
+
+Explorer auto-refreshes after:
+
+* AI file writes
+* directory creation
+* scaffold generation
 
 ---
 
-# 🟡 6️⃣ Known Remaining Gaps
+# 🟠 7️⃣ UI Philosophy
 
-Explorer refresh gap.
-
-After AI writes files successfully, Explorer does not auto-refresh.
-
-Next ship:
-
-```
-Phase 4.3.2.e — Explorer auto-refresh
-```
-
-Multi-tool execution gap.
-
-When a model response contains multiple tool calls:
-
-* only the first tool executes
-
-Next ship:
-
-```
-Phase 4.3.2.f — Multi-tool execution
-```
-
----
-
-# 🟤 7️⃣ UI Philosophy (Locked)
-
-KForge is not:
-
-A debug console with chat attached.
+KForge is not a debug console.
 
 KForge is:
 
@@ -422,78 +424,21 @@ Principles:
 * tools are explicit
 * diagnostics optional
 * human-readable errors first
-* raw data available on demand
 * no hidden side effects
 
 ---
 
-# 🟠 8️⃣ Focus Mode Intent
+# 🧠 8️⃣ Current Stability State
 
-Focus Mode:
-
-* removes distraction
-* promotes AI surface
-* preserves editor integrity
-
-Focus Mode does **not** change AI behavior.
-
-It only changes layout.
-
----
-
-# 🟣 9️⃣ Provider Strategy
-
-KForge supports:
-
-* cloud LLMs
-* OpenAI-compatible endpoints
-* local runtimes (Ollama etc.)
-
-Model IDs are:
-
-* user-editable
-* case-sensitive
-* passed to providers exactly
-
-Cost tags are metadata only.
-
----
-
-# 🔴 10️⃣ Backup & Safety Discipline
-
-KForge enforces:
-
-* local git commits
-* GitHub pushes
-* periodic zip snapshots
-* external backup
-
-Risky refactors must always be reversible.
-
----
-
-# ⚖ 11️⃣ Operational Laws
-
-* one objective per chat
-* major milestone → new chat
-* revert before hacking deeper
-* clarity over cleverness
-* architecture updates must update documentation
-
----
-
-# 🧠 12️⃣ Current Stability State
-
-As of Phase 4.3.4:
+As of Phase 4.3.2.g:
 
 * GPT surface stable
-* tool consent visible
-* AI file editing working
-* filesystem writes scoped safely
+* tool consent working
+* AI filesystem writes validated
 * preview runner stable
-* preview logs persist across panel reopen
-* preview UX clarified
-* preview root selection visible
-* CLI terminal hints filtered
+* preview URL persistence implemented
+* explorer refresh fixed
+* scaffold root unified
+* preview UX polished
 
 This is a **restore-grade checkpoint** for the AI editing + preview workflow.
