@@ -146,6 +146,14 @@ fn run_scaffold_blocking(
         PREVIEW_LOG_EVENT,
         PreviewLogPayload {
             kind: "stdout",
+            line: "Tip: In KForge use the Install → Preview buttons.".to_string(),
+        },
+    );
+
+    let _ = window.emit(
+        PREVIEW_LOG_EVENT,
+        PreviewLogPayload {
+            kind: "stdout",
             line: format!("scaffold complete: {}", generated_path),
         },
     );
