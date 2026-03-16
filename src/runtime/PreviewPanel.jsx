@@ -41,13 +41,23 @@ export default function PreviewPanel({ projectPath }) {
   const [scaffoldBusy, setScaffoldBusy] = useState(false);
   const [scaffoldErr, setScaffoldErr] = useState("");
 
-  useEffect(() => {
-    setScaffoldErr("");
-    setPreviewUrl("");
-    lastLogKeyRef.current = "";
-    setLogs(getPreviewLogBuffer());
-    setStatus(getPreviewStatusValue());
-  }, [projectPath]);
+ useEffect(() => {
+   setScaffoldErr("");
+   lastLogKeyRef.current = "";
+
+   const bufferedLogs = getPreviewLogBuffer();
+   setLogs(bufferedLogs);
+   setStatus(getPreviewStatusValue());
+
+   const restoredUrl =
+     bufferedLogs.find((entry) => {
+       const text = String(entry?.line ?? "");
+       return URL_RE.test(text);
+     })?.line ?? "";
+
+   const match = restoredUrl.match(URL_RE);
+   setPreviewUrl(match?.[1] || "");
+ }, [projectPath]);
 
   useEffect(() => {
     let unLog;
