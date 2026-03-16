@@ -86,6 +86,51 @@ Open
 In that scenario the **Generate button is not needed**.
 
 ---
+### Preview Root Selection
+
+The Preview Runner can run from two different locations:
+
+- **Base Folder** = the folder originally opened in KForge
+- **Generated Template** = the nested project folder created by **Generate**
+
+Typical usage:
+
+**Base Folder**
+
+Use this when the project already exists in the opened folder, or when the AI is creating/editing files directly in that opened workspace.
+
+Example flow:
+
+Open Folder  
+AI creates or edits files  
+Install  
+Preview  
+Open
+
+In this workflow, preview should normally run from **Base Folder**.
+
+**Generated Template**
+
+Use this when the user clicks **Generate** and KForge creates a starter app in a nested folder such as:
+
+```text
+D:\workspace\my-project\my-react-app
+
+Example flow:
+
+Open Folder
+Generate
+Install
+Preview
+Open
+
+In this workflow, preview should normally run from Generated Template.
+
+Tip:
+
+If preview appears to run the wrong project, check Active Preview Root in the Preview panel and switch between Base Folder and Generated Template.
+
+---
 
 **Install**
 

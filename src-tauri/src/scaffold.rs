@@ -22,18 +22,9 @@ struct PreviewStatusPayload {
     status: String,
 }
 
-fn join_path(parent: &str, child: &str) -> String {
-    // Normalize to forward slashes for the UI.
-    format!(
-        "{}/{}",
-        parent.trim_end_matches(['/', '\\']),
-        child.trim_matches(['/', '\\'])
-    )
-}
-
 fn is_bad_app_name(name: &str) -> bool {
-    // We expect a folder name, not a path.
-    // Reject obvious path characters.
+    // Keep light validation for now because the UI still supplies this field.
+    // We no longer use it as a folder name, but we still reject obvious path-like input.
     name.contains('\\') || name.contains('/') || name.contains(':')
 }
 
@@ -53,7 +44,7 @@ fn run_scaffold_blocking(
     }
     if is_bad_app_name(&app_name) {
         return Err(
-            "App name should be a folder name (e.g. my-react-app), not a full path.".into(),
+            "App name should be plain text only and must not contain path characters.".into(),
         );
     }
 
@@ -68,29 +59,23 @@ fn run_scaffold_blocking(
         PREVIEW_LOG_EVENT,
         PreviewLogPayload {
             kind: "stdout",
-            line: format!(
-  "scaffold: running pnpm dlx create-vite@latest {} --template react --no-interactive",
-  app_name
-),
+            line:
+                "scaffold: running pnpm dlx create-vite@latest . --template react --no-interactive"
+                    .to_string(),
         },
     );
 
     // Windows spawn fix
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
-    // IMPORTANT:
-    // For pnpm create, args after `--` are forwarded to create-vite.
-    // This is the form documented by Vite for non-interactive scaffolding. :contentReference[oaicite:0]{index=0}
     let mut child = Command::new(pnpm)
         .current_dir(&parent_path)
-        // dlx runs a package binary without installing globally
         .arg("dlx")
         .arg("create-vite@latest")
-        .arg(&app_name)
+        .arg(".")
         .arg("--template")
         .arg("react")
         .arg("--no-interactive")
-        // extra safety: many CLIs respect CI=1 to disable prompts
         .env("CI", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -155,7 +140,7 @@ fn run_scaffold_blocking(
         ));
     }
 
-    let generated_path = join_path(&parent_path, &app_name);
+    let generated_path = parent_path.clone();
 
     let _ = window.emit(
         PREVIEW_LOG_EVENT,
@@ -189,7 +174,6 @@ pub async fn scaffold_vite_react(
     parent_path: String,
     app_name: String,
 ) -> Result<String, String> {
-    // Run the blocking scaffold on a background thread so the UI doesn't "egg timer".
     tauri::async_runtime::spawn_blocking(move || {
         run_scaffold_blocking(window, parent_path, app_name)
     })
