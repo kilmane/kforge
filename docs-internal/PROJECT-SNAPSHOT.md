@@ -385,7 +385,7 @@ AI editing workflow:
 ```
 Open folder
 Prompt AI
-AI writes files
+AI wyrites files
 Install
 Preview
 Hot reload
@@ -430,7 +430,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of Phase 4.3.2.g:
+As of Phase 4.3.5.1:
 
 * GPT surface stable
 * tool consent working
@@ -439,6 +439,31 @@ As of Phase 4.3.2.g:
 * preview URL persistence implemented
 * explorer refresh fixed
 * scaffold root unified
+* static HTML preview implemented
+* preview project detection implemented
 * preview UX polished
+
+Preview runner now supports:
+
+
+Framework dev servers
+Static HTML/CSS/JS sites
+
+
+Preview detection rules:
+
+
+package.json → dev server preview
+index.html → static preview server
+
+
+Static preview uses an internal Rust HTTP server and requires **no dependency install**.
+
+UI adapts automatically:
+
+
+Static project → Preview → Open
+Package project → Install → Preview → Open
+
 
 This is a **restore-grade checkpoint** for the AI editing + preview workflow.

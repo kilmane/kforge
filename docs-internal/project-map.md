@@ -1,10 +1,11 @@
+D:\kforge\docs-internal\project-map.md
 # 🗺 KForge Project Map
 
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v5
-**Updated:** 16/03/2026
+**Version:** v6  
+**Updated:** 17/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -16,9 +17,9 @@ Purpose: architectural topology & execution responsibility map.
 
 File:
 
-```
+
 src/App.js
-```
+
 
 Responsibilities:
 
@@ -42,15 +43,15 @@ App.js is also the **authority for the current project root**.
 
 Defined in:
 
-```
+
 src/App.js
-```
+
 
 Structure:
 
-```
+
 messages = [{ id, role, content, ts, action?, actions? }]
-```
+
 
 Everything renders from this.
 
@@ -64,9 +65,9 @@ There are **no duplicate message systems**.
 
 File:
 
-```
+
 src/ai/panel/AiPanel.jsx
-```
+
 
 Filtered projection of message store.
 
@@ -83,9 +84,9 @@ Shows:
 
 File:
 
-```
+
 src/ai/panel/TranscriptPanel.jsx
-```
+
 
 Full system log.
 
@@ -106,9 +107,9 @@ Contains Retry + Clear controls.
 
 File:
 
-```
+
 src/ai/panel/AiPanel.jsx
-```
+
 
 Detects:
 
@@ -123,9 +124,9 @@ Triggers runtime execution.
 
 File:
 
-```
+
 src/ai/tools/toolRuntime.js
-```
+
 
 Handles:
 
@@ -135,12 +136,12 @@ Handles:
 
 Runtime flow:
 
-```
+
 detect tool
 → consent
 → handler execution
 → result appended
-```
+
 
 ---
 
@@ -148,9 +149,9 @@ detect tool
 
 File:
 
-```
+
 src/ai/tools/handlers/index.js
-```
+
 
 Current tools:
 
@@ -162,9 +163,9 @@ Current tools:
 
 Filesystem layer:
 
-```
+
 src/lib/fs.js
-```
+
 
 Ensures project-root safety.
 
@@ -174,41 +175,110 @@ Ensures project-root safety.
 
 Backend:
 
-```
+
 src-tauri/src/preview.rs
-```
+
 
 Frontend bridge:
 
-```
+
 src/runtime/previewRunner.js
-```
+
 
 UI surface:
 
-```
+
 src/runtime/PreviewPanel.jsx
-```
+
 
 ---
 
 ## Responsibilities
 
-Preview runner provides controlled local development runtime:
+Preview runner provides a controlled runtime for running local projects.
+
+Capabilities:
 
 * install dependencies
-* start dev server
+* start dev servers
+* serve static sites
 * stream logs
 * detect preview URL
 * stop processes
-* persist preview logs across panel reopen
+* persist preview logs
+
+---
+
+## Preview Detection
+
+Preview behavior is determined automatically based on project structure.
+
+Detection rules:
+
+
+package.json → package project preview
+index.html → static site preview
+
+
+Package projects run a dev server.
+
+Static projects run KForge's built-in static server.
+
+Detection is implemented in:
+
+
+preview_detect_kind()
+
+
+in:
+
+
+src-tauri/src/preview.rs
+
+
+---
+
+## Package Project Preview
 
 Commands executed:
 
-```
+
 pnpm install
 pnpm dev
-```
+
+
+Used for:
+
+* Vite
+* React
+* Next.js
+* future framework templates
+
+---
+
+## Static Project Preview
+
+If a folder contains:
+
+
+index.html
+
+
+KForge starts an internal static server.
+
+Example URL:
+
+
+http://127.0.0.1:56566/
+
+
+Features:
+
+* serves HTML/CSS/JS
+* streams preview logs
+* supports index.html fallback for unknown routes
+* clean process stop
+* no dependency install required
 
 ---
 
@@ -216,24 +286,26 @@ pnpm dev
 
 Uses:
 
-```
+
 std::process::Command
-```
+
 
 Tracks child process PID.
 
 Stop uses:
 
-```
+
 taskkill /PID <pid> /T /F
-```
+
+
+Static preview uses an internal Rust HTTP server.
 
 Events emitted:
 
-```
+
 kforge://preview/log
 kforge://preview/status
-```
+
 
 ---
 
@@ -241,6 +313,7 @@ kforge://preview/status
 
 previewRunner.js provides:
 
+* preview_detect_kind
 * preview_install
 * preview_start
 * preview_stop
@@ -273,21 +346,35 @@ Additional UX responsibilities:
 * preview log auto-scroll
 * preview workflow instructions
 
+UI adapts based on project type:
+
+Static projects:
+
+
+Preview → Open
+
+
+Package projects:
+
+
+Install → Preview → Open
+
+
 ---
 
 # 3c Scaffold System
 
 Backend implementation:
 
-```
+
 src-tauri/src/scaffold.rs
-```
+
 
 Frontend trigger:
 
-```
+
 PreviewPanel.jsx → invoke("scaffold_vite_react")
-```
+
 
 ---
 
@@ -297,67 +384,64 @@ Generate creates a project template using Vite.
 
 Command executed:
 
-```
+
 pnpm dlx create-vite . --template react
-```
+
 
 Important architectural rule:
 
-```
+
 Scaffold now runs directly in the workspace root.
-```
+
 
 Example:
 
-```
+
 workspace/
- ├ src/
- ├ package.json
- ├ vite.config.js
- └ index.html
-```
+├ src/
+├ package.json
+├ vite.config.js
+└ index.html
+
 
 No nested folder is created.
 
 ---
 
-## Why this design
+## Future Direction
 
-The preview runner, filesystem tools, and AI editing tools must all operate on the **same project root**.
+The **Generate button will evolve into a Template Picker**.
 
-Therefore:
+Future flow:
 
-```
-workspace root == scaffold root == preview root
-```
 
-This prevents mismatches between:
+Generate
+├ Static site
+├ React (Vite)
+├ Next.js
+├ Vue
+└ Svelte
 
-```
-AI edits
-Preview server
-Explorer tree
-```
+
+Templates will eventually be defined in a **Template Registry**.
 
 ---
 
 # 3d Workspace Refresh Events
 
-KForge emits a workspace refresh event when filesystem changes occur.
+Event emitted when filesystem changes occur:
 
-Event:
 
-```
 kforge://workspace/refresh
-```
+
 
 Handled in:
 
-```
-src/App.js
-```
 
-This refreshes the Explorer tree after:
+src/App.js
+
+
+Explorer refreshes after:
 
 * AI file writes
 * directory creation
@@ -369,9 +453,9 @@ This refreshes the Explorer tree after:
 
 File:
 
-```
+
 src/lib/fs.js
-```
+
 
 Responsibilities:
 
@@ -381,9 +465,7 @@ Responsibilities:
 * folder tree building
 * project memory integration
 
-Parent folders are auto-created for writes.
-
-Filesystem operations are **restricted to the active project root**.
+Filesystem operations are restricted to the **active project root**.
 
 ---
 
@@ -393,79 +475,25 @@ DockShell controls layout.
 
 File:
 
-```
+
 src/layout/DockShell.jsx
-```
+
 
 Modes:
 
 Bottom Mode (default)
 
-```
+
 dockMode="bottom"
-```
 
-Focus Mode (full surface)
 
-```
+Focus Mode
+
+
 dockMode="full"
-```
+
 
 Focus mode promotes the dock to the main surface.
-
----
-
-# 6 UI Panels
-
-Directory:
-
-```
-src/ai/panel/
-```
-
-Components:
-
-AiPanel.jsx
-PromptPanel.jsx
-SystemPanel.jsx
-ParametersPanel.jsx
-TranscriptPanel.jsx
-PatchPreviewPanel.jsx
-ProviderControlsPanel.jsx
-
----
-
-# 7 Dev Tools
-
-Enabled via:
-
-```
-Ctrl + Shift + T
-```
-
-Stored in:
-
-```
-localStorage: kforge:devToolsEnabled
-```
-
-Used for development debugging.
-
----
-
-# Quick Navigation
-
-| Task               | File                           |
-| ------------------ | ------------------------------ |
-| Modify AI request  | src/App.js                     |
-| Tool detection     | src/ai/panel/AiPanel.jsx       |
-| Tool handlers      | src/ai/tools/handlers/index.js |
-| Filesystem logic   | src/lib/fs.js                  |
-| Dock behavior      | src/layout/DockShell.jsx       |
-| Preview runtime    | src-tauri/src/preview.rs       |
-| Preview bridge     | src/runtime/previewRunner.js   |
-| Preview UI         | src/runtime/PreviewPanel.jsx   |
-| Scaffold generator | src-tauri/src/scaffold.rs      |
 
 ---
 
@@ -481,17 +509,16 @@ KForge architecture principles:
 * UI projections separated from runtime state
 * single unified project root
 
-The system workflow:
+System workflow:
 
-```
+
 AI → filesystem edits → preview runtime → browser feedback
-```
+
 
 This architecture supports the **vibe coding loop**:
 
-```
+
 prompt
 → AI edits files
 → preview updates
 → user sees result instantly
-```
