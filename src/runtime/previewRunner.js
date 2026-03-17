@@ -33,7 +33,9 @@ export function onPreviewStatus(cb) {
   // cb({ status })
   return listen("kforge://preview/status", (event) => cb(event.payload));
 }
-
+export async function previewDetectKind(projectPath) {
+  return invoke("preview_detect_kind", { projectPath });
+}
 export async function previewGetStatus() {
   return invoke("preview_get_status");
 }

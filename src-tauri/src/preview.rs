@@ -405,12 +405,18 @@ fn handle_static_connection(mut stream: std::net::TcpStream, root: &Path) -> std
     }
 
     if !file_path.exists() || !file_path.is_file() {
-        return write_http_response(
-            &mut stream,
-            "404 Not Found",
-            "text/plain; charset=utf-8",
-            b"Not Found",
-        );
+        let fallback = root.join("index.html");
+
+        if fallback.is_file() {
+            file_path = fallback;
+        } else {
+            return write_http_response(
+                &mut stream,
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                b"Not Found",
+            );
+        }
     }
 
     let body = fs::read(&file_path)?;
@@ -518,7 +524,14 @@ fn start_static_preview(
 
     Ok(())
 }
-
+#[tauri::command]
+pub fn preview_detect_kind(project_path: String) -> Result<String, String> {
+    let root = validate_project_path(&project_path)?;
+    match detect_preview_kind(&root)? {
+        PreviewKind::PackageProject => Ok("package".to_string()),
+        PreviewKind::StaticSite => Ok("static".to_string()),
+    }
+}
 #[tauri::command]
 pub fn preview_get_status(state: tauri::State<PreviewState>) -> Result<String, String> {
     let guard = state

@@ -7,6 +7,7 @@ import {
   getPreviewStatusValue,
   onPreviewLog,
   onPreviewStatus,
+  previewDetectKind,
   previewGetStatus,
   previewInstall,
   previewStart,
@@ -40,6 +41,8 @@ export default function PreviewPanel({ projectPath }) {
 
   const [scaffoldBusy, setScaffoldBusy] = useState(false);
   const [scaffoldErr, setScaffoldErr] = useState("");
+  const [hasPackageJson, setHasPackageJson] = useState(false);
+  const [hasIndexHtml, setHasIndexHtml] = useState(false);
 
   useEffect(() => {
     setScaffoldErr("");
@@ -58,7 +61,39 @@ export default function PreviewPanel({ projectPath }) {
     const match = restoredUrl.match(URL_RE);
     setPreviewUrl(match?.[1] || "");
   }, [projectPath]);
+  useEffect(() => {
+    let cancelled = false;
 
+    async function detectProjectShape() {
+      if (!projectPath) {
+        if (!cancelled) {
+          setHasPackageJson(false);
+          setHasIndexHtml(false);
+        }
+        return;
+      }
+
+      try {
+        const kind = await previewDetectKind(projectPath);
+
+        if (!cancelled) {
+          setHasPackageJson(kind === "package");
+          setHasIndexHtml(kind === "static");
+        }
+      } catch {
+        if (!cancelled) {
+          setHasPackageJson(false);
+          setHasIndexHtml(false);
+        }
+      }
+    }
+
+    detectProjectShape();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
   useEffect(() => {
     let unLog;
     let unStatus;
@@ -158,6 +193,8 @@ export default function PreviewPanel({ projectPath }) {
   }, [status]);
 
   const disabled = !targetPath;
+  const isStaticOnlyProject = hasIndexHtml && !hasPackageJson;
+  const showInstallButton = !isStaticOnlyProject;
 
   async function handleOpen() {
     if (!previewUrl) return;
@@ -243,20 +280,26 @@ export default function PreviewPanel({ projectPath }) {
             {scaffoldBusy ? "Generating…" : "Generate"}
           </button>
 
-          <button
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-            disabled={disabled || !isRunnerIdle}
-            onClick={() => previewInstall(targetPath)}
-            title="Run pnpm install in the project folder"
-          >
-            Install
-          </button>
+          {showInstallButton ? (
+            <button
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
+              disabled={disabled || !isRunnerIdle}
+              onClick={() => previewInstall(targetPath)}
+              title="Run install for projects that need dependencies"
+            >
+              Install
+            </button>
+          ) : null}
 
           <button
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={disabled || !isRunnerIdle}
             onClick={() => previewStart(targetPath)}
-            title="Start the development server"
+            title={
+              isStaticOnlyProject
+                ? "Start static preview"
+                : "Start the development server"
+            }
           >
             Preview
           </button>
@@ -295,9 +338,17 @@ export default function PreviewPanel({ projectPath }) {
       <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
       <span className="font-semibold text-yellow-300">Open</span>.
       <span className="text-zinc-400">
-        {" "}
-        Use <span className="font-semibold text-yellow-300">Install</span> only
-        for projects that need dependencies.
+        {showInstallButton ? (
+          <>
+            {" "}
+            Use <span className="font-semibold text-yellow-300">
+              Install
+            </span>{" "}
+            only for projects that need dependencies.
+          </>
+        ) : (
+          <> Static projects do not need Install.</>
+        )}
       </span>
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
         {logs.length === 0 ? (
