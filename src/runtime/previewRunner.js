@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { findTemplatesByDetectedKind } from "./templateRegistry";
 
 let previewLogBuffer = [];
 let previewStatusValue = "idle";
@@ -33,9 +34,21 @@ export function onPreviewStatus(cb) {
   // cb({ status })
   return listen("kforge://preview/status", (event) => cb(event.payload));
 }
+
 export async function previewDetectKind(projectPath) {
   return invoke("preview_detect_kind", { projectPath });
 }
+
+export async function previewDetectTemplates(projectPath) {
+  const kind = await previewDetectKind(projectPath);
+  const templates = findTemplatesByDetectedKind(kind);
+
+  return {
+    kind,
+    templates,
+  };
+}
+
 export async function previewGetStatus() {
   return invoke("preview_get_status");
 }
