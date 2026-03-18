@@ -7,12 +7,15 @@ export const TEMPLATE_REGISTRY = [
     scaffold: null,
     install: {
       required: false,
+      installsDuringScaffold: false,
     },
     preview: {
       strategy: "static-index",
     },
     detection: {
+      kind: "static",
       files: ["index.html"],
+      hints: [],
     },
   },
   {
@@ -26,13 +29,15 @@ export const TEMPLATE_REGISTRY = [
     },
     install: {
       required: true,
+      installsDuringScaffold: false,
     },
     preview: {
       strategy: "dev-server",
     },
     detection: {
+      kind: "package",
       files: ["package.json"],
-      hints: ["vite"],
+      hints: ["vite", "react"],
     },
   },
   {
@@ -52,11 +57,16 @@ export const TEMPLATE_REGISTRY = [
       strategy: "dev-server",
     },
     detection: {
+      kind: "package",
       files: ["package.json"],
-      hints: ["next"],
+      hints: ["next", "nextjs"],
     },
   },
 ];
+
+export function listTemplates() {
+  return TEMPLATE_REGISTRY;
+}
 
 export function listScaffoldTemplates() {
   return TEMPLATE_REGISTRY.filter((template) => template.scaffold);
@@ -66,4 +76,40 @@ export function getTemplateById(templateId) {
   return (
     TEMPLATE_REGISTRY.find((template) => template.id === templateId) || null
   );
+}
+
+export function findTemplatesByDetectedKind(kind) {
+  const normalizedKind = String(kind || "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedKind) return [];
+
+  return TEMPLATE_REGISTRY.filter(
+    (template) => template?.detection?.kind === normalizedKind,
+  );
+}
+
+export function findTemplateByHint(hint) {
+  const normalizedHint = String(hint || "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedHint) return null;
+
+  return (
+    TEMPLATE_REGISTRY.find((template) =>
+      Array.isArray(template?.detection?.hints)
+        ? template.detection.hints.some(
+            (entry) => String(entry).toLowerCase() === normalizedHint,
+          )
+        : false,
+    ) || null
+  );
+}
+
+export function templateInstallsDuringScaffold(templateId) {
+  return Boolean(getTemplateById(templateId)?.install?.installsDuringScaffold);
+}
+
+export function templateRequiresInstall(templateId) {
+  return Boolean(getTemplateById(templateId)?.install?.required);
 }
