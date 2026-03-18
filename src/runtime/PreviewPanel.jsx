@@ -7,7 +7,7 @@ import {
   getPreviewStatusValue,
   onPreviewLog,
   onPreviewStatus,
-  previewDetectKind,
+  previewDetectTemplates,
   previewGetStatus,
   previewInstall,
   previewStart,
@@ -44,6 +44,8 @@ export default function PreviewPanel({ projectPath }) {
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [hasPackageJson, setHasPackageJson] = useState(false);
   const [hasIndexHtml, setHasIndexHtml] = useState(false);
+  const [detectedKind, setDetectedKind] = useState("");
+  const [compatibleTemplates, setCompatibleTemplates] = useState([]);
 
   const scaffoldTemplates = useMemo(() => listScaffoldTemplates(), []);
 
@@ -73,21 +75,31 @@ export default function PreviewPanel({ projectPath }) {
         if (!cancelled) {
           setHasPackageJson(false);
           setHasIndexHtml(false);
+          setDetectedKind("");
+          setCompatibleTemplates([]);
         }
         return;
       }
 
       try {
-        const kind = await previewDetectKind(projectPath);
+        const result = await previewDetectTemplates(projectPath);
+        const kind = String(result?.kind || "");
+        const templates = Array.isArray(result?.templates)
+          ? result.templates
+          : [];
 
         if (!cancelled) {
           setHasPackageJson(kind === "package");
           setHasIndexHtml(kind === "static");
+          setDetectedKind(kind);
+          setCompatibleTemplates(templates);
         }
       } catch {
         if (!cancelled) {
           setHasPackageJson(false);
           setHasIndexHtml(false);
+          setDetectedKind("");
+          setCompatibleTemplates([]);
         }
       }
     }
@@ -201,6 +213,20 @@ export default function PreviewPanel({ projectPath }) {
   const isStaticOnlyProject = hasIndexHtml && !hasPackageJson;
   const showInstallButton = !isStaticOnlyProject;
 
+  const detectedTemplateLabel = useMemo(() => {
+    if (compatibleTemplates.length === 1) {
+      return compatibleTemplates[0]?.name || "";
+    }
+    return "";
+  }, [compatibleTemplates]);
+
+  const compatibleTemplateNames = useMemo(() => {
+    return compatibleTemplates
+      .map((template) => template?.name)
+      .filter(Boolean)
+      .join(", ");
+  }, [compatibleTemplates]);
+
   async function handleOpen() {
     if (!previewUrl) return;
     await invoke("open_url", { url: previewUrl });
@@ -254,6 +280,30 @@ export default function PreviewPanel({ projectPath }) {
               <>
                 <br />
                 Project: <span className="text-zinc-300">{projectPath}</span>
+                {detectedTemplateLabel ? (
+                  <>
+                    <br />
+                    Detected:{" "}
+                    <span className="text-zinc-200">
+                      {detectedTemplateLabel}
+                    </span>
+                  </>
+                ) : detectedKind ? (
+                  <>
+                    <br />
+                    Detected kind:{" "}
+                    <span className="text-zinc-200">{detectedKind}</span>
+                  </>
+                ) : null}
+                {compatibleTemplates.length > 1 ? (
+                  <>
+                    <br />
+                    Compatible templates:{" "}
+                    <span className="text-zinc-300">
+                      {compatibleTemplateNames}
+                    </span>
+                  </>
+                ) : null}
               </>
             ) : (
               <>
