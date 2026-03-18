@@ -150,7 +150,9 @@ pub fn run() {
             preview::preview_start,
             preview::preview_stop,
             // 🔧 Scaffold
+                        // ���� Scaffold
             scaffold::scaffold_vite_react,
+            scaffold::scaffold_nextjs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

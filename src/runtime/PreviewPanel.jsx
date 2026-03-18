@@ -22,9 +22,9 @@ function getStatusLabel(status) {
   const value = String(status || "idle");
 
   if (value === "idle") return "Ready";
-  if (value === "installing") return "Installing dependencies…";
+  if (value === "installing") return "Installing dependencies...";
   if (value === "running") return "Preview running";
-  if (value === "scaffold:starting") return "Generating template…";
+  if (value === "scaffold:starting") return "Generating template...";
   if (value.startsWith("scaffold:done:")) return "Template generated";
 
   return value;
@@ -39,7 +39,7 @@ export default function PreviewPanel({ projectPath }) {
 
   const lastLogKeyRef = useRef("");
 
-  const [scaffoldBusy, setScaffoldBusy] = useState(false);
+  const [activeScaffold, setActiveScaffold] = useState("");
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [hasPackageJson, setHasPackageJson] = useState(false);
   const [hasIndexHtml, setHasIndexHtml] = useState(false);
@@ -61,6 +61,7 @@ export default function PreviewPanel({ projectPath }) {
     const match = restoredUrl.match(URL_RE);
     setPreviewUrl(match?.[1] || "");
   }, [projectPath]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -94,6 +95,7 @@ export default function PreviewPanel({ projectPath }) {
       cancelled = true;
     };
   }, [projectPath]);
+
   useEffect(() => {
     let unLog;
     let unStatus;
@@ -134,6 +136,7 @@ export default function PreviewPanel({ projectPath }) {
       } else {
         unLog = logUnlisten;
       }
+
       const statusUnlisten = await onPreviewStatus(({ status }) => {
         const nextStatus = String(status || "idle");
         if (cancelled) return;
@@ -141,7 +144,6 @@ export default function PreviewPanel({ projectPath }) {
         setPreviewStatusValue(nextStatus);
         setStatus(nextStatus);
 
-        // 🔁 After scaffold completes, refresh the workspace tree
         if (nextStatus.startsWith("scaffold:done:")) {
           try {
             window.dispatchEvent(new CustomEvent("kforge://workspace/refresh"));
@@ -201,7 +203,32 @@ export default function PreviewPanel({ projectPath }) {
     await invoke("open_url", { url: previewUrl });
   }
 
-  async function handleGenerate() {
+   async function handleGenerateViteReact() {
+     if (activeScaffold) return;
+
+     setScaffoldErr("");
+
+     if (!projectPath) {
+       setScaffoldErr("Open a folder first.");
+       return;
+     }
+
+     setActiveScaffold("vite");
+     try {
+       await invoke("scaffold_vite_react", {
+         parentPath: projectPath,
+         appName: "vite-react-app",
+       });
+     } catch (e) {
+       setScaffoldErr(String(e));
+     } finally {
+       setActiveScaffold("");
+     }
+   }
+
+  async function handleGenerateNextjs() {
+    if (activeScaffold) return;
+
     setScaffoldErr("");
 
     if (!projectPath) {
@@ -209,16 +236,16 @@ export default function PreviewPanel({ projectPath }) {
       return;
     }
 
-    setScaffoldBusy(true);
+    setActiveScaffold("nextjs");
     try {
-      await invoke("scaffold_vite_react", {
+      await invoke("scaffold_nextjs", {
         parentPath: projectPath,
-        appName: "vite-react-app",
+        appName: "nextjs-app",
       });
     } catch (e) {
       setScaffoldErr(String(e));
     } finally {
-      setScaffoldBusy(false);
+      setActiveScaffold("");
     }
   }
 
@@ -246,7 +273,7 @@ export default function PreviewPanel({ projectPath }) {
             ) : (
               <>
                 {" "}
-                • <span className="text-zinc-300">No folder open</span>
+                — <span className="text-zinc-300">No folder open</span>
               </>
             )}
             {previewUrl ? (
@@ -273,11 +300,26 @@ export default function PreviewPanel({ projectPath }) {
         <div className="flex shrink-0 flex-wrap gap-2">
           <button
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-            disabled={!projectPath || scaffoldBusy || !isRunnerIdle}
-            onClick={handleGenerate}
+            disabled={
+              !projectPath || !isRunnerIdle || activeScaffold === "vite"
+            }
+            onClick={handleGenerateViteReact}
             title="Generate a Vite + React app in the opened folder"
           >
-            {scaffoldBusy ? "Generating…" : "Generate"}
+            {activeScaffold === "vite"
+              ? "Generating..."
+              : "Generate Vite + React"}
+          </button>
+
+          <button
+            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
+            disabled={
+              !projectPath || !isRunnerIdle || activeScaffold === "nextjs"
+            }
+            onClick={handleGenerateNextjs}
+            title="Generate a Next.js app in the opened folder"
+          >
+            {activeScaffold === "nextjs" ? "Generating..." : "Generate Next.js"}
           </button>
 
           {showInstallButton ? (
@@ -334,22 +376,26 @@ export default function PreviewPanel({ projectPath }) {
           </button>
         </div>
       </div>
-      To preview your app: click{" "}
-      <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
-      <span className="font-semibold text-yellow-300">Open</span>.
-      <span className="text-zinc-400">
-        {showInstallButton ? (
-          <>
-            {" "}
-            Use <span className="font-semibold text-yellow-300">
-              Install
-            </span>{" "}
-            only for projects that need dependencies.
-          </>
-        ) : (
-          <> Static projects do not need Install.</>
-        )}
-      </span>
+
+      <div className="mt-2 text-xs text-zinc-400">
+        To preview your app: click{" "}
+        <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
+        <span className="font-semibold text-yellow-300">Open</span>.
+        <span className="text-zinc-400">
+          {showInstallButton ? (
+            <>
+              {" "}
+              Use <span className="font-semibold text-yellow-300">
+                Install
+              </span>{" "}
+              if dependencies are not already installed.
+            </>
+          ) : (
+            <> Static projects do not need Install.</>
+          )}
+        </span>
+      </div>
+
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
         {logs.length === 0 ? (
           <div className="text-zinc-500">No logs yet.</div>

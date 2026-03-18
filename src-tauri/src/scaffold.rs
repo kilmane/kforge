@@ -32,6 +32,9 @@ fn run_scaffold_blocking(
     window: tauri::Window,
     parent_path: String,
     app_name: String,
+    command_label: &'static str,
+    command_args: &'static [&'static str],
+    failure_label: &'static str,
 ) -> Result<String, String> {
     let parent_path = parent_path.trim().to_string();
     let app_name = app_name.trim().to_string();
@@ -59,9 +62,7 @@ fn run_scaffold_blocking(
         PREVIEW_LOG_EVENT,
         PreviewLogPayload {
             kind: "stdout",
-            line:
-                "scaffold: running pnpm dlx create-vite@latest . --template react --no-interactive"
-                    .to_string(),
+            line: format!("scaffold: running {}", command_label),
         },
     );
 
@@ -70,12 +71,7 @@ fn run_scaffold_blocking(
 
     let mut child = Command::new(pnpm)
         .current_dir(&parent_path)
-        .arg("dlx")
-        .arg("create-vite@latest")
-        .arg(".")
-        .arg("--template")
-        .arg("react")
-        .arg("--no-interactive")
+        .args(command_args)
         .env("CI", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -96,7 +92,6 @@ fn run_scaffold_blocking(
         .take()
         .ok_or_else(|| "Failed to capture stderr".to_string())?;
 
-    // Stream stdout lines
     let win_out = window.clone();
     let out_handle = thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -111,7 +106,6 @@ fn run_scaffold_blocking(
         }
     });
 
-    // Stream stderr lines
     let win_err = window.clone();
     let err_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
@@ -135,7 +129,8 @@ fn run_scaffold_blocking(
 
     if !status.success() {
         return Err(format!(
-            "Vite scaffold failed with exit code: {:?}",
+            "{} scaffold failed with exit code: {:?}",
+            failure_label,
             status.code()
         ));
     }
@@ -158,7 +153,6 @@ fn run_scaffold_blocking(
         },
     );
 
-    // Return UI to idle so Install/Preview buttons re-enable
     let _ = window.emit(
         PREVIEW_STATUS_EVENT,
         PreviewStatusPayload {
@@ -183,7 +177,41 @@ pub async fn scaffold_vite_react(
     app_name: String,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        run_scaffold_blocking(window, parent_path, app_name)
+        run_scaffold_blocking(
+            window,
+            parent_path,
+            app_name,
+            "pnpm dlx create-vite@latest . --template react --no-interactive",
+            &[
+                "dlx",
+                "create-vite@latest",
+                ".",
+                "--template",
+                "react",
+                "--no-interactive",
+            ],
+            "Vite",
+        )
+    })
+    .await
+    .map_err(|e| format!("Scaffold task join error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn scaffold_nextjs(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_scaffold_blocking(
+            window,
+            parent_path,
+            app_name,
+            "pnpm create next-app@latest . --yes",
+            &["create", "next-app@latest", ".", "--yes"],
+            "Next.js",
+        )
     })
     .await
     .map_err(|e| format!("Scaffold task join error: {}", e))?
