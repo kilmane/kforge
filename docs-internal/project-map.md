@@ -1,11 +1,10 @@
-D:\kforge\docs-internal\project-map.md
 # 🗺 KForge Project Map
 
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v6  
-**Updated:** 17/03/2026
+**Version:** v7
+**Updated:** 18/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -17,9 +16,9 @@ Purpose: architectural topology & execution responsibility map.
 
 File:
 
-
+```
 src/App.js
-
+```
 
 Responsibilities:
 
@@ -43,15 +42,15 @@ App.js is also the **authority for the current project root**.
 
 Defined in:
 
-
+```
 src/App.js
-
+```
 
 Structure:
 
-
+```
 messages = [{ id, role, content, ts, action?, actions? }]
-
+```
 
 Everything renders from this.
 
@@ -65,9 +64,9 @@ There are **no duplicate message systems**.
 
 File:
 
-
+```
 src/ai/panel/AiPanel.jsx
-
+```
 
 Filtered projection of message store.
 
@@ -84,9 +83,9 @@ Shows:
 
 File:
 
-
+```
 src/ai/panel/TranscriptPanel.jsx
-
+```
 
 Full system log.
 
@@ -107,9 +106,9 @@ Contains Retry + Clear controls.
 
 File:
 
-
+```
 src/ai/panel/AiPanel.jsx
-
+```
 
 Detects:
 
@@ -124,9 +123,9 @@ Triggers runtime execution.
 
 File:
 
-
+```
 src/ai/tools/toolRuntime.js
-
+```
 
 Handles:
 
@@ -136,12 +135,12 @@ Handles:
 
 Runtime flow:
 
-
+```
 detect tool
 → consent
 → handler execution
 → result appended
-
+```
 
 ---
 
@@ -149,9 +148,9 @@ detect tool
 
 File:
 
-
+```
 src/ai/tools/handlers/index.js
-
+```
 
 Current tools:
 
@@ -163,9 +162,9 @@ Current tools:
 
 Filesystem layer:
 
-
+```
 src/lib/fs.js
-
+```
 
 Ensures project-root safety.
 
@@ -175,21 +174,21 @@ Ensures project-root safety.
 
 Backend:
 
-
+```
 src-tauri/src/preview.rs
-
+```
 
 Frontend bridge:
 
-
+```
 src/runtime/previewRunner.js
-
+```
 
 UI surface:
 
-
+```
 src/runtime/PreviewPanel.jsx
-
+```
 
 ---
 
@@ -215,10 +214,10 @@ Preview behavior is determined automatically based on project structure.
 
 Detection rules:
 
-
+```
 package.json → package project preview
 index.html → static site preview
-
+```
 
 Package projects run a dev server.
 
@@ -226,15 +225,15 @@ Static projects run KForge's built-in static server.
 
 Detection is implemented in:
 
-
+```
 preview_detect_kind()
-
+```
 
 in:
 
-
+```
 src-tauri/src/preview.rs
-
+```
 
 ---
 
@@ -242,10 +241,10 @@ src-tauri/src/preview.rs
 
 Commands executed:
 
-
+```
 pnpm install
 pnpm dev
-
+```
 
 Used for:
 
@@ -260,17 +259,17 @@ Used for:
 
 If a folder contains:
 
-
+```
 index.html
-
+```
 
 KForge starts an internal static server.
 
 Example URL:
 
-
+```
 http://127.0.0.1:56566/
-
+```
 
 Features:
 
@@ -286,32 +285,32 @@ Features:
 
 Uses:
 
-
+```
 std::process::Command
-
+```
 
 Tracks child process PID.
 
 Stop uses:
 
-
+```
 taskkill /PID <pid> /T /F
-
+```
 
 Static preview uses an internal Rust HTTP server.
 
 Events emitted:
 
-
+```
 kforge://preview/log
 kforge://preview/status
-
+```
 
 ---
 
 ## Frontend Bridge
 
-previewRunner.js provides:
+`previewRunner.js` provides:
 
 * preview_detect_kind
 * preview_install
@@ -346,19 +345,19 @@ Additional UX responsibilities:
 * preview log auto-scroll
 * preview workflow instructions
 
-UI adapts based on project type:
+UI adapts based on project type.
 
-Static projects:
+### Static projects
 
-
+```
 Preview → Open
+```
 
+### Package projects
 
-Package projects:
-
-
+```
 Install → Preview → Open
-
+```
 
 ---
 
@@ -366,64 +365,115 @@ Install → Preview → Open
 
 Backend implementation:
 
-
+```
 src-tauri/src/scaffold.rs
-
+```
 
 Frontend trigger:
 
+```
+PreviewPanel.jsx
+```
 
-PreviewPanel.jsx → invoke("scaffold_vite_react")
+Commands currently used:
 
+```
+invoke("scaffold_vite_react")
+invoke("scaffold_nextjs")
+```
 
 ---
 
 ## Scaffold Behavior
 
-Generate creates a project template using Vite.
-
-Command executed:
-
-
-pnpm dlx create-vite . --template react
-
-
-Important architectural rule:
-
-
-Scaffold now runs directly in the workspace root.
-
+Scaffold generates project templates directly in the workspace root.
 
 Example:
 
-
+```
 workspace/
 ├ src/
 ├ package.json
 ├ vite.config.js
 └ index.html
-
+```
 
 No nested folder is created.
 
 ---
 
-## Future Direction
+## Current Templates (Phase 4.3.6)
 
-The **Generate button will evolve into a Template Picker**.
+KForge currently supports two template generators.
+
+### Vite + React
+
+Command executed:
+
+```
+pnpm dlx create-vite@latest . --template react --no-interactive
+```
+
+Behavior:
+
+* lightweight scaffold
+* dependencies installed separately via Install button
+
+---
+
+### Next.js
+
+Command executed:
+
+```
+pnpm create next-app@latest . --yes
+```
+
+Behavior:
+
+* heavier scaffold
+* dependencies installed during generation
+* significantly larger dependency tree
+
+This is expected because `create-next-app` performs a full dependency install.
+
+---
+
+## Important UX Note
+
+After Next.js scaffold completes:
+
+* dependencies are already installed
+* Install button may still appear available
+
+This is acceptable for now but may be improved later by deriving install readiness from actual project state rather than template type.
+
+---
+
+## Future Direction — Template Registry
+
+Phase **4.3.7 — Template Registry** will replace the current dual-button generation UI.
 
 Future flow:
 
-
+```
 Generate
-├ Static site
+│
+├ Static HTML site
 ├ React (Vite)
 ├ Next.js
 ├ Vue
 └ Svelte
+```
 
+Templates will be defined in a **Template Registry** which provides:
 
-Templates will eventually be defined in a **Template Registry**.
+* template metadata
+* scaffold commands
+* preview behavior
+* install expectations
+
+This will allow KForge to support additional frameworks without hardcoding them into the UI.
 
 ---
 
@@ -431,15 +481,15 @@ Templates will eventually be defined in a **Template Registry**.
 
 Event emitted when filesystem changes occur:
 
-
+```
 kforge://workspace/refresh
-
+```
 
 Handled in:
 
-
+```
 src/App.js
-
+```
 
 Explorer refreshes after:
 
@@ -453,9 +503,9 @@ Explorer refreshes after:
 
 File:
 
-
+```
 src/lib/fs.js
-
+```
 
 Responsibilities:
 
@@ -475,23 +525,23 @@ DockShell controls layout.
 
 File:
 
-
+```
 src/layout/DockShell.jsx
-
+```
 
 Modes:
 
-Bottom Mode (default)
+### Bottom Mode (default)
 
-
+```
 dockMode="bottom"
+```
 
+### Focus Mode
 
-Focus Mode
-
-
+```
 dockMode="full"
-
+```
 
 Focus mode promotes the dock to the main surface.
 
@@ -511,14 +561,17 @@ KForge architecture principles:
 
 System workflow:
 
-
+```
 AI → filesystem edits → preview runtime → browser feedback
-
+```
 
 This architecture supports the **vibe coding loop**:
 
-
+```
 prompt
 → AI edits files
 → preview updates
 → user sees result instantly
+```
+
+

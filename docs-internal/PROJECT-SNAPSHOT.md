@@ -3,10 +3,16 @@
 **Location:**
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-**Last Updated:** March 16th, 2026
+**Last Updated:** March 18th, 2026
 
-**Phase:** 4.3.2.g — Workspace Root Unification
+**Phase:** 4.3.6 — Add Next.js template (full-stack runway)
 **Status:** Stable milestone reached
+
+**Stable commit:**
+
+```
+55efb06
+```
 
 This file is the authoritative operational reference.
 
@@ -235,7 +241,7 @@ fs.js enforces safety.
 
 # 🟤 4b Preview Runtime
 
-Preview runner executes project dev servers.
+Preview runner executes project development environments.
 
 Backend:
 
@@ -263,12 +269,13 @@ Preview runner provides:
 
 * dependency installation
 * development server startup
+* static site preview
 * log streaming
 * URL detection
 * controlled process stop
 * preview log persistence
 
-Commands executed:
+Typical commands executed:
 
 ```
 pnpm install
@@ -302,9 +309,33 @@ kforge://preview/status
 
 ---
 
+## Automatic Preview Detection
+
+Preview behavior is determined automatically based on project structure.
+
+Detection rules:
+
+```
+package.json → dev server preview
+index.html → static preview server
+```
+
+Static preview uses an internal Rust HTTP server.
+
+Static sites require **no dependency install**.
+
+UI adapts automatically:
+
+```
+Static project → Preview → Open
+Package project → Install → Preview → Open
+```
+
+---
+
 # 🧱 4c Scaffold System
 
-File:
+Backend:
 
 ```
 src-tauri/src/scaffold.rs
@@ -313,24 +344,80 @@ src-tauri/src/scaffold.rs
 Frontend trigger:
 
 ```
-PreviewPanel.jsx → invoke("scaffold_vite_react")
+PreviewPanel.jsx
+```
+
+Current scaffold commands:
+
+```
+invoke("scaffold_vite_react")
+invoke("scaffold_nextjs")
 ```
 
 ---
 
-## Current Scaffold Behavior
+## Current Templates (Phase 4.3.6)
 
-Templates are generated using:
+### Vite + React
 
-```
-pnpm dlx create-vite . --template react
-```
-
-Important architectural rule:
+Command:
 
 ```
-Scaffold runs directly in the workspace root.
+pnpm dlx create-vite@latest . --template react --no-interactive
 ```
+
+Characteristics:
+
+* lightweight scaffold
+* dependencies installed separately via **Install** button
+* very fast generation
+
+---
+
+### Next.js
+
+Command:
+
+```
+pnpm create next-app@latest . --yes
+```
+
+Characteristics:
+
+* heavier scaffold
+* installs dependencies during generation
+* creates a much larger dependency tree
+
+Generation therefore takes significantly longer than Vite templates.
+This is expected behavior from `create-next-app`.
+
+---
+
+## Important UX Note
+
+After Next.js scaffold completes:
+
+* dependencies are already installed
+* the **Install** button may still appear available
+
+This is currently acceptable behavior.
+
+Future improvement may derive install readiness from project state (for example whether dependencies are already installed) rather than template type.
+
+---
+
+## Workspace Root Rule (Critical)
+
+KForge enforces a **single workspace root**.
+
+```
+workspace root
+== AI editing root
+== preview runtime root
+== explorer root
+```
+
+Scaffold therefore runs **directly in the workspace folder**, not inside a nested directory.
 
 Example result:
 
@@ -340,21 +427,6 @@ workspace/
  ├ package.json
  ├ vite.config.js
  └ index.html
-```
-
-No nested project directory is created.
-
----
-
-## Why this matters
-
-KForge must maintain a single project root.
-
-```
-workspace root
-== AI editing root
-== preview runtime root
-== explorer root
 ```
 
 This prevents mismatches where:
@@ -368,7 +440,7 @@ but preview server runs elsewhere
 
 # 🟡 5️⃣ Stable Development Loop
 
-The canonical workflow:
+Canonical user workflow:
 
 ```
 Open folder
@@ -385,7 +457,7 @@ AI editing workflow:
 ```
 Open folder
 Prompt AI
-AI wyrites files
+AI writes files
 Install
 Preview
 Hot reload
@@ -430,7 +502,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of Phase 4.3.5.1:
+As of **Phase 4.3.6**:
 
 * GPT surface stable
 * tool consent working
@@ -440,30 +512,24 @@ As of Phase 4.3.5.1:
 * explorer refresh fixed
 * scaffold root unified
 * static HTML preview implemented
-* preview project detection implemented
+* automatic preview detection implemented
 * preview UX polished
+* **Next.js scaffold template implemented**
 
 Preview runner now supports:
 
-
+```
 Framework dev servers
 Static HTML/CSS/JS sites
-
+```
 
 Preview detection rules:
 
-
+```
 package.json → dev server preview
 index.html → static preview server
-
-
-Static preview uses an internal Rust HTTP server and requires **no dependency install**.
-
-UI adapts automatically:
-
-
-Static project → Preview → Open
-Package project → Install → Preview → Open
-
+```
 
 This is a **restore-grade checkpoint** for the AI editing + preview workflow.
+
+
