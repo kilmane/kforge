@@ -14,7 +14,11 @@ import {
   previewStop,
   setPreviewStatusValue,
 } from "./previewRunner";
-import { listScaffoldTemplates } from "./templateRegistry";
+import {
+  getTemplateById,
+  listScaffoldTemplates,
+  templateInstallsDuringScaffold,
+} from "./templateRegistry";
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
 const CLI_HINT_RE = [/press h to show help/i, /use --host to expose/i];
@@ -41,6 +45,7 @@ export default function PreviewPanel({ projectPath }) {
   const lastLogKeyRef = useRef("");
 
   const [activeScaffold, setActiveScaffold] = useState("");
+  const [lastGeneratedTemplateId, setLastGeneratedTemplateId] = useState("");
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [hasPackageJson, setHasPackageJson] = useState(false);
   const [hasIndexHtml, setHasIndexHtml] = useState(false);
@@ -51,6 +56,7 @@ export default function PreviewPanel({ projectPath }) {
 
   useEffect(() => {
     setScaffoldErr("");
+    setLastGeneratedTemplateId("");
     lastLogKeyRef.current = "";
 
     const bufferedLogs = getPreviewLogBuffer();
@@ -227,6 +233,24 @@ export default function PreviewPanel({ projectPath }) {
       .join(", ");
   }, [compatibleTemplates]);
 
+  const installGuidance = useMemo(() => {
+    if (!showInstallButton) {
+      return "Static projects do not need Install.";
+    }
+
+    if (
+      lastGeneratedTemplateId &&
+      templateInstallsDuringScaffold(lastGeneratedTemplateId)
+    ) {
+      const templateName =
+        getTemplateById(lastGeneratedTemplateId)?.name || "This template";
+
+      return `${templateName} usually installs dependencies during generation, so Install may not be needed immediately.`;
+    }
+
+    return "Use Install if dependencies are not already installed.";
+  }, [lastGeneratedTemplateId, showInstallButton]);
+
   async function handleOpen() {
     if (!previewUrl) return;
     await invoke("open_url", { url: previewUrl });
@@ -253,6 +277,7 @@ export default function PreviewPanel({ projectPath }) {
         parentPath: projectPath,
         appName: template.scaffold.appName,
       });
+      setLastGeneratedTemplateId(template.id);
     } catch (e) {
       setScaffoldErr(String(e));
     } finally {
@@ -408,19 +433,7 @@ export default function PreviewPanel({ projectPath }) {
         To preview your app: click{" "}
         <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
         <span className="font-semibold text-yellow-300">Open</span>.
-        <span className="text-zinc-400">
-          {showInstallButton ? (
-            <>
-              {" "}
-              Use <span className="font-semibold text-yellow-300">
-                Install
-              </span>{" "}
-              if dependencies are not already installed.
-            </>
-          ) : (
-            <> Static projects do not need Install.</>
-          )}
-        </span>
+        <span className="text-zinc-400"> {installGuidance}</span>
       </div>
 
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
