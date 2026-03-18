@@ -45,6 +45,7 @@ export default function PreviewPanel({ projectPath }) {
   const lastLogKeyRef = useRef("");
 
   const [activeScaffold, setActiveScaffold] = useState("");
+  const [generateMenuOpen, setGenerateMenuOpen] = useState(false);
   const [lastGeneratedTemplateId, setLastGeneratedTemplateId] = useState("");
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [hasPackageJson, setHasPackageJson] = useState(false);
@@ -272,6 +273,7 @@ export default function PreviewPanel({ projectPath }) {
     }
 
     setActiveScaffold(template.id);
+    setGenerateMenuOpen(false);
     try {
       await invoke(template.scaffold.command, {
         parentPath: projectPath,
@@ -358,21 +360,33 @@ export default function PreviewPanel({ projectPath }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          {scaffoldTemplates.map((template) => (
+          <div className="relative">
             <button
-              key={template.id}
               className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-              disabled={
-                !projectPath || !isRunnerIdle || activeScaffold === template.id
-              }
-              onClick={() => handleGenerateTemplate(template)}
-              title={`Generate ${template.name} in the opened folder`}
+              disabled={!projectPath || !isRunnerIdle}
+              onClick={() => setGenerateMenuOpen((v) => !v)}
+              title="Generate a project template"
             >
-              {activeScaffold === template.id
-                ? "Generating..."
-                : `Generate ${template.name}`}
+              Generate ▾
             </button>
-          ))}
+
+            {generateMenuOpen && (
+              <div className="absolute right-0 mt-1 w-44 rounded-lg border border-zinc-700 bg-zinc-900 shadow-lg z-10">
+                {scaffoldTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    className="block w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+                    onClick={() => {
+                      setGenerateMenuOpen(false);
+                      handleGenerateTemplate(template);
+                    }}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {showInstallButton ? (
             <button
