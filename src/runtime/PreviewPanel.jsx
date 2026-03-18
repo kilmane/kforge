@@ -14,6 +14,7 @@ import {
   previewStop,
   setPreviewStatusValue,
 } from "./previewRunner";
+import { listScaffoldTemplates } from "./templateRegistry";
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
 const CLI_HINT_RE = [/press h to show help/i, /use --host to expose/i];
@@ -43,6 +44,8 @@ export default function PreviewPanel({ projectPath }) {
   const [scaffoldErr, setScaffoldErr] = useState("");
   const [hasPackageJson, setHasPackageJson] = useState(false);
   const [hasIndexHtml, setHasIndexHtml] = useState(false);
+
+  const scaffoldTemplates = useMemo(() => listScaffoldTemplates(), []);
 
   useEffect(() => {
     setScaffoldErr("");
@@ -203,30 +206,7 @@ export default function PreviewPanel({ projectPath }) {
     await invoke("open_url", { url: previewUrl });
   }
 
-   async function handleGenerateViteReact() {
-     if (activeScaffold) return;
-
-     setScaffoldErr("");
-
-     if (!projectPath) {
-       setScaffoldErr("Open a folder first.");
-       return;
-     }
-
-     setActiveScaffold("vite");
-     try {
-       await invoke("scaffold_vite_react", {
-         parentPath: projectPath,
-         appName: "vite-react-app",
-       });
-     } catch (e) {
-       setScaffoldErr(String(e));
-     } finally {
-       setActiveScaffold("");
-     }
-   }
-
-  async function handleGenerateNextjs() {
+  async function handleGenerateTemplate(template) {
     if (activeScaffold) return;
 
     setScaffoldErr("");
@@ -236,11 +216,16 @@ export default function PreviewPanel({ projectPath }) {
       return;
     }
 
-    setActiveScaffold("nextjs");
+    if (!template?.scaffold?.command) {
+      setScaffoldErr("This template cannot be generated yet.");
+      return;
+    }
+
+    setActiveScaffold(template.id);
     try {
-      await invoke("scaffold_nextjs", {
+      await invoke(template.scaffold.command, {
         parentPath: projectPath,
-        appName: "nextjs-app",
+        appName: template.scaffold.appName,
       });
     } catch (e) {
       setScaffoldErr(String(e));
@@ -298,29 +283,21 @@ export default function PreviewPanel({ projectPath }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          <button
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-            disabled={
-              !projectPath || !isRunnerIdle || activeScaffold === "vite"
-            }
-            onClick={handleGenerateViteReact}
-            title="Generate a Vite + React app in the opened folder"
-          >
-            {activeScaffold === "vite"
-              ? "Generating..."
-              : "Generate Vite + React"}
-          </button>
-
-          <button
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
-            disabled={
-              !projectPath || !isRunnerIdle || activeScaffold === "nextjs"
-            }
-            onClick={handleGenerateNextjs}
-            title="Generate a Next.js app in the opened folder"
-          >
-            {activeScaffold === "nextjs" ? "Generating..." : "Generate Next.js"}
-          </button>
+          {scaffoldTemplates.map((template) => (
+            <button
+              key={template.id}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
+              disabled={
+                !projectPath || !isRunnerIdle || activeScaffold === template.id
+              }
+              onClick={() => handleGenerateTemplate(template)}
+              title={`Generate ${template.name} in the opened folder`}
+            >
+              {activeScaffold === template.id
+                ? "Generating..."
+                : `Generate ${template.name}`}
+            </button>
+          ))}
 
           {showInstallButton ? (
             <button
