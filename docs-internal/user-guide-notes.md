@@ -23,9 +23,11 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 User mental model:
 
 ```
+
 Open Folder → Explore files
 Preview → Focus on running app
-```
+
+````
 
 ---
 
@@ -39,7 +41,19 @@ The Preview Runner manages the runtime used to run the current project.
 
 The workflow depends on the **project type**.
 
-KForge automatically detects the project type when a folder is opened.
+KForge automatically inspects the opened folder and determines how it should be previewed.
+
+Detection currently works in two stages:
+
+```text
+Project structure → coarse project type
+package.json signals → framework identification when possible
+````
+
+This allows KForge to both:
+
+* decide the correct preview workflow
+* show a more human-readable project detection result when possible
 
 ---
 
@@ -71,6 +85,14 @@ style.css
 script.js
 ```
 
+When detected, KForge may display wording such as:
+
+```
+Static HTML/CSS/JS project detected
+```
+
+or a similar static-project message.
+
 ---
 
 ## Framework Projects
@@ -99,13 +121,20 @@ pnpm install
 pnpm dev
 ```
 
-Supported framework projects include:
+Currently recognized framework-oriented templates include:
 
 ```
-Vite
-React
+Vite + React
 Next.js
 ```
+
+If KForge can identify the framework from project signals, it may display a message such as:
+
+```
+Next.js project detected
+```
+
+If the framework cannot be identified precisely, KForge still falls back to the broader package-project workflow.
 
 Additional frameworks may be added in future versions.
 
@@ -118,8 +147,41 @@ Generate creates a **starter template project** inside the opened workspace fold
 Current templates supported:
 
 ```
-Generate Vite + React
-Generate Next.js
+Static HTML/CSS/JS
+Vite + React
+Next.js
+```
+
+Template generation is now driven by the **Template Registry**, which acts as the source of truth for available templates and their metadata.
+
+This allows KForge to grow template support without hardcoding generation logic everywhere in the UI.
+
+---
+
+## Static HTML/CSS/JS Template
+
+This template creates a simple non-package starter project.
+
+Typical files may include:
+
+```
+index.html
+style.css
+script.js
+```
+
+Characteristics:
+
+* no dependency install required
+* can be previewed immediately
+* suitable for simple websites and experiments
+
+Workflow:
+
+```
+Generate
+Preview
+Open
 ```
 
 ---
@@ -198,29 +260,27 @@ all operate on the same root.
 
 ---
 
-## Future Direction
+## Template Registry
 
-The current **Generate buttons are temporary**.
+Templates are defined through a **Template Registry**.
 
-In a future phase they will become a **Template Picker**.
-
-Example future interface:
-
-```
-Generate
-├ Static HTML site
-├ React (Vite)
-├ Next.js
-├ Vue
-└ Svelte
-```
-
-Templates will be driven by a **Template Registry** that defines:
+The registry provides:
 
 * template metadata
 * scaffold commands
-* preview behavior
-* installation requirements
+* preview compatibility
+* installation expectations
+* detection hints
+
+This helps KForge remain scalable as more templates are added later.
+
+Possible future additions may include:
+
+```
+Astro
+Vue + Vite
+Expo / React Native
+```
 
 ---
 
@@ -257,6 +317,15 @@ Framework project → pnpm dev
 ```
 
 Preview logs are streamed to the Preview Runner panel.
+
+KForge may also display a project detection summary before or during preview, such as:
+
+```
+Next.js project detected
+Vite + React project detected
+```
+
+This is intended to make the runtime feel framework-aware rather than generic.
 
 ---
 
@@ -310,3 +379,27 @@ all operate on the same folder.
 
 ---
 
+# Current User-Facing Preview Model
+
+Users do not need to think in implementation details, but current behavior can be understood as:
+
+```
+Open folder
+KForge detects project type
+KForge offers the correct workflow
+KForge identifies the framework when possible
+```
+
+Practical examples:
+
+```
+index.html only → preview immediately
+package.json project → install, then preview
+next dependency found → Next.js project detected
+vite + react found → Vite + React project detected
+```
+
+```
+
+
+```

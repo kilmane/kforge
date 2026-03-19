@@ -1,17 +1,20 @@
-# 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
+
+🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 **Location:**
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-**Last Updated:** March 18th, 2026
+**Last Updated:** March 19th, 2026
 
-**Phase:** 4.3.6 — Add Next.js template (full-stack runway)
-**Status:** Stable milestone reached
+**Phase:** 4.3.8 — Registry-aware project identification
+**Status:** Stable milestone ready for commit
 
 **Stable commit:**
 
 ```
-55efb06
+
+pending
+
 ```
 
 This file is the authoritative operational reference.
@@ -48,7 +51,9 @@ KForge is **chat-first**, not tool-first.
 AI execution lives in:
 
 ```
+
 src/App.js
+
 ```
 
 This file owns:
@@ -71,7 +76,9 @@ If AI behaves incorrectly → start here.
 There is exactly one message array:
 
 ```
+
 messages (owned by App.js)
+
 ```
 
 Everything renders from this.
@@ -79,7 +86,9 @@ Everything renders from this.
 Structure:
 
 ```
+
 id, role, content, ts, optional action metadata
+
 ```
 
 No duplicate message systems exist.
@@ -95,7 +104,9 @@ Two projections of the same message store.
 File:
 
 ```
+
 src/ai/panel/AiPanel.jsx
+
 ```
 
 Shows:
@@ -112,7 +123,9 @@ Shows:
 File:
 
 ```
+
 src/ai/panel/TranscriptPanel.jsx
+
 ```
 
 Full system log.
@@ -126,8 +139,10 @@ Contains:
 Architectural rule:
 
 ```
+
 Chat = filtered projection
 Transcript = complete system log
+
 ```
 
 ---
@@ -139,7 +154,9 @@ Transcript = complete system log
 File:
 
 ```
+
 src/layout/DockShell.jsx
+
 ```
 
 Supports two layout modes.
@@ -147,7 +164,9 @@ Supports two layout modes.
 ### Bottom Mode (default)
 
 ```
+
 dockMode = "bottom"
+
 ```
 
 Dock sits under main workspace.
@@ -157,7 +176,9 @@ Dock sits under main workspace.
 ### Focus Mode
 
 ```
+
 dockMode = "full"
+
 ```
 
 Dock replaces main layout.
@@ -173,7 +194,9 @@ Focus mode is a **surface promotion**, not a resized dock.
 File:
 
 ```
+
 src/ai/panel/AiPanel.jsx
+
 ```
 
 Handles:
@@ -191,7 +214,9 @@ Handles:
 File:
 
 ```
+
 src/ai/tools/toolRuntime.js
+
 ```
 
 Responsibilities:
@@ -204,10 +229,12 @@ Responsibilities:
 Runtime flow:
 
 ```
+
 detect tool
 → consent request
 → handler execution
 → append result
+
 ```
 
 ---
@@ -217,7 +244,9 @@ detect tool
 File:
 
 ```
+
 src/ai/tools/handlers/index.js
+
 ```
 
 Tools currently available:
@@ -231,10 +260,12 @@ Tools currently available:
 Filesystem authority:
 
 ```
+
 src/lib/fs.js
+
 ```
 
-App.js sets project root.
+App.js sets project root.  
 fs.js enforces safety.
 
 ---
@@ -246,19 +277,25 @@ Preview runner executes project development environments.
 Backend:
 
 ```
+
 src-tauri/src/preview.rs
+
 ```
 
 Frontend bridge:
 
 ```
+
 src/runtime/previewRunner.js
+
 ```
 
 UI surface:
 
 ```
+
 src/runtime/PreviewPanel.jsx
+
 ```
 
 ---
@@ -274,12 +311,16 @@ Preview runner provides:
 * URL detection
 * controlled process stop
 * preview log persistence
+* project-type detection
+* template identification when possible
 
 Typical commands executed:
 
 ```
+
 pnpm install
 pnpm dev
+
 ```
 
 ---
@@ -289,7 +330,9 @@ pnpm dev
 Uses:
 
 ```
+
 std::process::Command
+
 ```
 
 Tracks process PID.
@@ -297,38 +340,144 @@ Tracks process PID.
 Stop command:
 
 ```
+
 taskkill /PID <pid> /T /F
+
 ```
 
 Events emitted:
 
 ```
+
 kforge://preview/log
 kforge://preview/status
+
 ```
+
+Static preview uses an internal Rust HTTP server.
 
 ---
 
 ## Automatic Preview Detection
 
-Preview behavior is determined automatically based on project structure.
+Preview behavior is determined automatically in **two stages**.
 
-Detection rules:
+### Stage 1 — Coarse backend detection
+
+Rust determines the broad project type from project structure.
+
+Rules:
 
 ```
-package.json → dev server preview
-index.html → static preview server
+
+package.json → package project
+index.html → static project
+
 ```
 
-Static preview uses an internal Rust HTTP server.
+This is implemented by:
 
-Static sites require **no dependency install**.
+```
+
+preview_detect_kind()
+
+```
+
+Possible result:
+
+```
+
+package
+static
+
+```
+
+This stage determines preview behavior.
+
+---
+
+### Stage 2 — Registry-aware template identification
+
+After coarse detection, the frontend attempts to identify the actual framework template.
+
+Implemented in:
+
+```
+
+src/runtime/previewRunner.js
+
+```
+
+Flow:
+
+```
+
+preview_detect_kind()
+→ read package.json
+→ inspect dependencies/devDependencies
+→ match against Template Registry detection hints
+→ identify template when possible
+
+```
+
+Examples:
+
+```
+
+next → Next.js
+vite + react → Vite + React
+index.html without package.json → Static HTML/CSS/JS
+
+```
+
+Returned preview detection shape now includes:
+
+```
+
+{
+kind,
+compatibleTemplates,
+detectedTemplate
+}
+
+```
+
+Where:
+
+* `kind` is the coarse backend classification
+* `detectedTemplate` is the registry-based framework match when confidence is sufficient
+
+This keeps preview behavior simple while making the UI framework-aware.
+
+---
+
+## Preview UI Behavior
 
 UI adapts automatically:
 
 ```
+
 Static project → Preview → Open
 Package project → Install → Preview → Open
+
+```
+
+If a registry template is identified, the Preview panel shows a human-readable result such as:
+
+```
+
+Next.js project detected
+
+```
+
+Fallback remains available when only coarse detection is known.
+
+This replaces the older more technical wording:
+
+```
+
+Detected kind: package
+
 ```
 
 ---
@@ -338,32 +487,52 @@ Package project → Install → Preview → Open
 Backend:
 
 ```
+
 src-tauri/src/scaffold.rs
+
 ```
 
 Frontend trigger:
 
 ```
+
 PreviewPanel.jsx
+
 ```
 
 Current scaffold commands:
 
 ```
+
 invoke("scaffold_vite_react")
 invoke("scaffold_nextjs")
+
 ```
 
 ---
 
-## Current Templates (Phase 4.3.6)
+## Current Templates
+
+### Static HTML/CSS/JS
+
+Template registry supports a static template path for simple non-package projects.
+
+Characteristics:
+
+* no dependency install required
+* internal static server preview
+* suitable for plain HTML/CSS/JS sites
+
+---
 
 ### Vite + React
 
 Command:
 
 ```
+
 pnpm dlx create-vite@latest . --template react --no-interactive
+
 ```
 
 Characteristics:
@@ -379,7 +548,9 @@ Characteristics:
 Command:
 
 ```
+
 pnpm create next-app@latest . --yes
+
 ```
 
 Characteristics:
@@ -388,7 +559,7 @@ Characteristics:
 * installs dependencies during generation
 * creates a much larger dependency tree
 
-Generation therefore takes significantly longer than Vite templates.
+Generation therefore takes significantly longer than Vite templates.  
 This is expected behavior from `create-next-app`.
 
 ---
@@ -402,7 +573,34 @@ After Next.js scaffold completes:
 
 This is currently acceptable behavior.
 
-Future improvement may derive install readiness from project state (for example whether dependencies are already installed) rather than template type.
+Future improvement may derive install readiness from actual project state rather than template type.
+
+---
+
+## Template Registry (Critical Architectural Addition)
+
+KForge now has a structured template registry.
+
+This became the source of truth for template metadata.
+
+Registry responsibilities include:
+
+* template IDs
+* human labels
+* scaffold metadata
+* preview compatibility
+* install expectations
+* detection hints
+
+This removes the need for scattered framework checks in the UI.
+
+Framework awareness should be derived from registry metadata, not hardcoded special cases.
+
+This is the foundation for future template expansion such as:
+
+* Astro
+* Vue + Vite
+* Expo / React Native
 
 ---
 
@@ -411,10 +609,12 @@ Future improvement may derive install readiness from project state (for example 
 KForge enforces a **single workspace root**.
 
 ```
+
 workspace root
 == AI editing root
 == preview runtime root
 == explorer root
+
 ```
 
 Scaffold therefore runs **directly in the workspace folder**, not inside a nested directory.
@@ -422,18 +622,22 @@ Scaffold therefore runs **directly in the workspace folder**, not inside a neste
 Example result:
 
 ```
+
 workspace/
- ├ src/
- ├ package.json
- ├ vite.config.js
- └ index.html
+├ src/
+├ package.json
+├ vite.config.js
+└ index.html
+
 ```
 
 This prevents mismatches where:
 
 ```
+
 AI edits files
 but preview server runs elsewhere
+
 ```
 
 ---
@@ -443,6 +647,7 @@ but preview server runs elsewhere
 Canonical user workflow:
 
 ```
+
 Open folder
 Generate (optional)
 Install
@@ -450,17 +655,20 @@ Preview
 Open
 Stop
 Iterate
+
 ```
 
 AI editing workflow:
 
 ```
+
 Open folder
 Prompt AI
 AI writes files
 Install
 Preview
 Hot reload
+
 ```
 
 ---
@@ -502,7 +710,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.3.6**:
+As of **Phase 4.3.8**:
 
 * GPT surface stable
 * tool consent working
@@ -514,22 +722,30 @@ As of **Phase 4.3.6**:
 * static HTML preview implemented
 * automatic preview detection implemented
 * preview UX polished
-* **Next.js scaffold template implemented**
+* Next.js scaffold template implemented
+* Template Registry implemented
+* registry-aware project identification implemented
+* Preview UI wording improved to human-readable project detection
 
 Preview runner now supports:
 
 ```
+
 Framework dev servers
 Static HTML/CSS/JS sites
-```
-
-Preview detection rules:
+Registry-aware framework identification
 
 ```
-package.json → dev server preview
-index.html → static preview server
+
+Preview detection now works as:
+
 ```
 
-This is a **restore-grade checkpoint** for the AI editing + preview workflow.
+Stage 1: package.json / index.html → coarse project kind
+Stage 2: package.json dependency hints → template identification
 
+```
+
+This is a **restore-grade checkpoint** for the AI editing + preview workflow and establishes the architectural base for broader template expansion.
+```
 

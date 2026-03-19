@@ -1,10 +1,11 @@
+
 # 🗺 KForge Project Map
 
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v7
-**Updated:** 18/03/2026
+**Version:** v8
+**Updated:** 19/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -212,28 +213,86 @@ Capabilities:
 
 Preview behavior is determined automatically based on project structure.
 
-Detection rules:
+Detection occurs in **two stages**.
+
+### Stage 1 — Coarse Detection (Backend)
+
+Rust backend determines the general project type.
+
+Rules:
 
 ```
-package.json → package project preview
-index.html → static site preview
+package.json → package project
+index.html → static project
 ```
 
-Package projects run a dev server.
-
-Static projects run KForge's built-in static server.
-
-Detection is implemented in:
+Implemented in:
 
 ```
 preview_detect_kind()
 ```
 
-in:
+inside:
 
 ```
 src-tauri/src/preview.rs
 ```
+
+Result returned to frontend:
+
+```
+static
+package
+```
+
+---
+
+### Stage 2 — Template Identification (Frontend)
+
+After coarse detection, the frontend attempts to identify the **actual framework template**.
+
+Implemented in:
+
+```
+src/runtime/previewRunner.js
+```
+
+Process:
+
+```
+preview_detect_kind()
+        ↓
+read package.json
+        ↓
+inspect dependencies / devDependencies
+        ↓
+match against Template Registry hints
+        ↓
+identify framework template
+```
+
+Example detection signals:
+
+| Dependency       | Template     |
+| ---------------- | ------------ |
+| `next`           | Next.js      |
+| `vite` + `react` | Vite + React |
+| no package.json  | Static HTML  |
+
+The result returned to the UI includes:
+
+```
+{
+  kind,
+  compatibleTemplates,
+  detectedTemplate
+}
+```
+
+Where:
+
+* `kind` → coarse backend detection
+* `detectedTemplate` → registry-based framework identification
 
 ---
 
@@ -317,6 +376,7 @@ kforge://preview/status
 * preview_start
 * preview_stop
 * preview_get_status
+* previewDetectTemplates (framework-aware detection)
 
 Also subscribes to preview log/status events.
 
@@ -344,6 +404,7 @@ Additional UX responsibilities:
 * CLI hint filtering
 * preview log auto-scroll
 * preview workflow instructions
+* template-aware project detection
 
 UI adapts based on project type.
 
@@ -357,6 +418,18 @@ Preview → Open
 
 ```
 Install → Preview → Open
+```
+
+If a template is identified the UI shows:
+
+```
+Next.js project detected
+```
+
+Otherwise it falls back to:
+
+```
+Package project detected
 ```
 
 ---
@@ -452,28 +525,25 @@ This is acceptable for now but may be improved later by deriving install readine
 
 ## Future Direction — Template Registry
 
-Phase **4.3.7 — Template Registry** will replace the current dual-button generation UI.
+Phase **4.3.7 — Template Registry** introduced a structured template system.
 
-Future flow:
+Templates now define:
 
-```
-Generate
-│
-├ Static HTML site
-├ React (Vite)
-├ Next.js
-├ Vue
-└ Svelte
-```
-
-Templates will be defined in a **Template Registry** which provides:
-
-* template metadata
+* metadata
 * scaffold commands
-* preview behavior
-* install expectations
+* preview compatibility
+* detection hints
 
-This will allow KForge to support additional frameworks without hardcoding them into the UI.
+The registry allows KForge to support additional frameworks without hardcoding logic in the UI.
+
+Future templates may include:
+
+```
+Astro
+Vue
+Svelte
+Expo / React Native
+```
 
 ---
 
@@ -557,6 +627,7 @@ KForge architecture principles:
 * one filesystem bridge
 * preview runtime isolated from AI logic
 * UI projections separated from runtime state
+* template-aware project detection
 * single unified project root
 
 System workflow:
@@ -573,5 +644,4 @@ prompt
 → preview updates
 → user sees result instantly
 ```
-
 
