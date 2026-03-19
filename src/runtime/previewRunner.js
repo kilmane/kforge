@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { findTemplatesByDetectedKind } from "./templateRegistry";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+
+import { findTemplatesByDetectedKind, listTemplates } from "./templateRegistry";
 
 let previewLogBuffer = [];
 let previewStatusValue = "idle";
@@ -26,12 +28,10 @@ export function setPreviewStatusValue(status) {
 }
 
 export function onPreviewLog(cb) {
-  // cb({ kind, line })
   return listen("kforge://preview/log", (event) => cb(event.payload));
 }
 
 export function onPreviewStatus(cb) {
-  // cb({ status })
   return listen("kforge://preview/status", (event) => cb(event.payload));
 }
 
@@ -39,13 +39,77 @@ export async function previewDetectKind(projectPath) {
   return invoke("preview_detect_kind", { projectPath });
 }
 
+/**
+ * Safely parse JSON
+ */
+function safeParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Collect dependency names from package.json
+ */
+function collectDependencies(pkg) {
+  if (!pkg) return new Set();
+
+  const deps = {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+    ...pkg.peerDependencies,
+    ...pkg.optionalDependencies,
+  };
+
+  return new Set(Object.keys(deps || {}).map((d) => d.toLowerCase()));
+}
+
+/**
+ * Identify a template using registry hints
+ */
+function identifyTemplateFromDependencies(dependencies) {
+  const templates = listTemplates();
+
+  for (const template of templates) {
+    const hints = template?.detection?.hints || [];
+
+    for (const hint of hints) {
+      if (dependencies.has(String(hint).toLowerCase())) {
+        return template;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function previewDetectTemplates(projectPath) {
   const kind = await previewDetectKind(projectPath);
-  const templates = findTemplatesByDetectedKind(kind);
+
+  const compatibleTemplates = findTemplatesByDetectedKind(kind);
+
+  let detectedTemplate = null;
+
+  if (kind === "package") {
+    try {
+      const packagePath = `${projectPath}/package.json`;
+      const text = await readTextFile(packagePath);
+
+      const pkg = safeParse(text);
+      const dependencies = collectDependencies(pkg);
+
+      detectedTemplate = identifyTemplateFromDependencies(dependencies);
+    } catch {
+      // package.json missing or unreadable
+    }
+  }
 
   return {
     kind,
-    templates,
+    compatibleTemplates,
+    detectedTemplate,
   };
 }
 
