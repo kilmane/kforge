@@ -39,9 +39,6 @@ export async function previewDetectKind(projectPath) {
   return invoke("preview_detect_kind", { projectPath });
 }
 
-/**
- * Safely parse JSON
- */
 function safeParse(text) {
   try {
     return JSON.parse(text);
@@ -50,9 +47,6 @@ function safeParse(text) {
   }
 }
 
-/**
- * Collect dependency names from package.json
- */
 function collectDependencies(pkg) {
   if (!pkg) return new Set();
 
@@ -66,9 +60,6 @@ function collectDependencies(pkg) {
   return new Set(Object.keys(deps || {}).map((d) => d.toLowerCase()));
 }
 
-/**
- * Identify a template using registry hints
- */
 function identifyTemplateFromDependencies(dependencies) {
   const templates = listTemplates();
 
