@@ -6,14 +6,10 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
 Last Updated: March 20th, 2026
 
-Phase: 4.4 — Command Runner Panel
+Phase: 4.5 — Service Integration Layer (Foundation)
 Status: Stable milestone ready for commit
 
-Stable commit:
-
-```
-
-pending
+Stable commit: d1d30cc
 
 ```
 
@@ -434,11 +430,11 @@ No nested folder is created.
 
 ---
 
-## Templates (Phase 4.4)
+## Templates (Phase 4.5 baseline)
 
 ### Static HTML/CSS/JS
 
-New scaffold command:
+Scaffold command:
 
 ```
 
@@ -505,7 +501,7 @@ Characteristics:
 
 ---
 
-# 🖥 4d Command Runner (NEW — Phase 4.4)
+# 🖥 4d Command Runner
 
 Backend:
 
@@ -604,6 +600,239 @@ They **share the same panel space** and are never split side-by-side.
 
 ---
 
+# 🔌 4e Service Integration Layer (Foundation)
+
+Backend:
+
+```
+
+src-tauri/src/service.rs
+
+```
+
+Frontend bridge:
+
+```
+
+src/runtime/serviceRunner.js
+
+```
+
+Registry:
+
+```
+
+src/runtime/serviceRegistry.js
+
+```
+
+UI:
+
+```
+
+src/runtime/ServicePanel.jsx
+
+```
+
+Panel host:
+
+```
+
+src/ai/panel/AiPanel.jsx
+
+```
+
+Registered service command:
+
+```
+
+service_setup
+
+```
+
+---
+
+## Service Layer Purpose
+
+This phase introduces the **foundation for future external services**.
+
+It exists so later integrations such as:
+
+• Supabase  
+• Stripe  
+• OpenAI  
+• GitHub  
+• Vercel / Netlify style deploy providers  
+
+can plug into KForge through a shared architecture.
+
+This phase does **not** implement real integrations yet.
+
+---
+
+## Service Layer Responsibilities
+
+The new layer provides:
+
+• service metadata registry  
+• frontend runtime bridge  
+• service status/log event handling  
+• a UI surface for guided service setup  
+• backend placeholder command infrastructure  
+
+This is an architectural lane, not a fully active feature set.
+
+---
+
+## Service Registry
+
+File:
+
+```
+
+src/runtime/serviceRegistry.js
+
+```
+
+The registry defines service metadata.
+
+Current fields include:
+
+• `id`  
+• `name`  
+• `description`  
+• `status`  
+• `envVars`  
+• `setupCommand`  
+
+Current placeholder services:
+
+• Supabase  
+• Stripe  
+• OpenAI  
+
+Important architectural rule:
+
+```
+
+new service = registry entry + adapter implementation
+
+```
+
+rather than:
+
+```
+
+new service = new subsystem
+
+```
+
+---
+
+## Service Runtime Bridge
+
+File:
+
+```
+
+src/runtime/serviceRunner.js
+
+```
+
+Responsibilities:
+
+• invoke backend service setup  
+• subscribe to service log events  
+• subscribe to service status events  
+
+Events:
+
+```
+
+kforge://service/log
+kforge://service/status
+
+```
+
+This mirrors the same runtime pattern already used by Preview and Command Runner.
+
+---
+
+## Backend Placeholder
+
+File:
+
+```
+
+src-tauri/src/service.rs
+
+```
+
+Current backend behavior:
+
+• validate project path  
+• validate service id  
+• emit log events  
+• emit status events  
+• allow one service setup at a time  
+
+Current phase boundary:
+
+• no real external service connection  
+• no env file writing  
+• no account authentication  
+• no config generation  
+• no SDK installation  
+
+It is intentionally a **placeholder runtime lane**.
+
+---
+
+## Service UI Behavior
+
+`ServicePanel.jsx` shows the current known services and basic service metadata.
+
+Current UI responsibilities:
+
+• show service name and status  
+• show declared environment variables  
+• allow placeholder setup action for available services  
+• stream service logs into panel  
+• display current project/workspace path  
+
+The Services panel is designed to be:
+
+• minimal  
+• guided  
+• explicit  
+• non-dashboard-like  
+
+---
+
+## Runtime Panel Integration
+
+Preview, Terminal, and Services are now separate collapsible runtime panels inside `AiPanel.jsx`.
+
+Current behavior:
+
+```
+
+▶ Preview
+▶ Terminal
+▶ Services
+
+```
+
+Rules:
+
+• opening one closes the others  
+• they share the same panel area  
+• only one runtime surface is visible at a time  
+
+This preserves a focused right-side runtime workspace.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -633,6 +862,18 @@ Hot reload
 
 ```
 
+Service workflow foundation now exists for future phases:
+
+```
+
+Open folder
+Open Services
+Choose service
+Run guided setup
+Continue coding
+
+```
+
 ---
 
 # 🟢 6️⃣ Filesystem Guarantees
@@ -649,6 +890,8 @@ Explorer refreshes after:
 • AI file writes  
 • directory creation  
 • scaffold generation  
+
+Service setup phases in the future must also obey the same project-root rule.
 
 ---
 
@@ -667,12 +910,13 @@ Principles:
 • diagnostics optional  
 • human-readable errors first  
 • no hidden side effects  
+• guided integrations, not dashboard sprawl  
 
 ---
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.4**:
+As of **Phase 4.5**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -685,6 +929,10 @@ As of **Phase 4.4**:
 • preview detection refresh after scaffold implemented  
 • command runner panel implemented  
 • terminal command streaming operational  
+• service integration foundation implemented  
+• service registry operational  
+• service runtime placeholder wired into frontend and backend  
+• Services panel added to AI panel  
 
 Supported workflows now include:
 
@@ -695,13 +943,23 @@ Project scaffolding
 Dev server preview
 Static site preview
 In-app terminal commands
+Service integration foundation
 
 ```
 
-This milestone represents the **first complete local development loop inside KForge**.
+This milestone represents a **restore-grade architectural checkpoint**.
 
-A restore-grade checkpoint for the KForge runtime architecture.
+KForge now has four major extensibility/runtime lanes:
+
 ```
 
----
+Template Registry
+Service Registry
+Preview Runtime
+Command Runtime
+
+```
+
+Future phases such as GitHub integration, deploy pipeline work, and Supabase setup can now plug into this foundation instead of creating fresh subsystems.
+```
 

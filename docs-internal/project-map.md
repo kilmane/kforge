@@ -4,7 +4,7 @@
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v9
+**Version:** v10
 **Updated:** 20/03/2026
 
 Purpose: architectural topology & execution responsibility map.
@@ -716,7 +716,210 @@ This preserves a focused single-runtime surface while supporting both preview an
 
 ---
 
-# 3e Workspace Refresh Events
+# 3e Service Integration Layer (Foundation)
+
+Backend implementation:
+
+```text
+src-tauri/src/service.rs
+```
+
+Frontend bridge:
+
+```text
+src/runtime/serviceRunner.js
+```
+
+Registry:
+
+```text
+src/runtime/serviceRegistry.js
+```
+
+UI surface:
+
+```text
+src/runtime/ServicePanel.jsx
+```
+
+Panel integration:
+
+```text
+src/ai/panel/AiPanel.jsx
+```
+
+Registered Tauri command:
+
+```text
+service_setup
+```
+
+---
+
+## Responsibilities
+
+Service Integration Layer provides a shared architecture for future external integrations.
+
+This phase introduces the **foundation only**.
+
+Its job is to prevent future services from becoming one-off subsystems.
+
+Planned integration types include:
+
+* Supabase
+* Stripe
+* OpenAI
+* GitHub
+* deployment providers such as Vercel and Netlify
+
+---
+
+## Architectural Role
+
+The Service Layer sits alongside the other runtime systems:
+
+```text
+Template Registry
+Service Registry
+Preview Runtime
+Command Runtime
+```
+
+This means future integrations plug into an existing lane rather than introducing new architecture.
+
+The key design idea is:
+
+```text
+new service = registry entry + adapter implementation
+```
+
+not:
+
+```text
+new service = new subsystem
+```
+
+---
+
+## Service Registry
+
+`serviceRegistry.js` defines service metadata for supported or planned integrations.
+
+Current example fields include:
+
+* `id`
+* `name`
+* `description`
+* `status`
+* `envVars`
+* `setupCommand`
+
+Current placeholder entries include:
+
+* Supabase
+* Stripe
+* OpenAI
+
+The registry is the frontend source of truth for what services KForge knows about.
+
+---
+
+## Frontend Runtime Bridge
+
+`serviceRunner.js` provides the frontend runtime bridge.
+
+Responsibilities:
+
+* invoke service setup command
+* subscribe to service log events
+* subscribe to service status events
+
+Events used:
+
+```text
+kforge://service/log
+kforge://service/status
+```
+
+This mirrors the same architectural pattern already used by Preview and Command Runner.
+
+---
+
+## Backend Behavior
+
+`service.rs` currently provides a placeholder backend command:
+
+```text
+service_setup
+```
+
+Current behavior:
+
+* validates project path
+* validates service id
+* emits status events
+* emits log events
+* enforces one service setup at a time
+
+This phase does **not** yet perform real integration work.
+
+No external accounts are connected.
+No configuration files are generated.
+No environment variables are written.
+
+The backend currently exists to define the runtime lane and event contract.
+
+---
+
+## Service UI
+
+`ServicePanel.jsx` provides a simple in-app panel for service setup.
+
+Current UI responsibilities:
+
+* show known services
+* show status badges
+* show declared environment variables
+* trigger placeholder setup for available services
+* render service logs
+* display current workspace/project path
+
+Current design intent:
+
+* minimal
+* guided
+* explicit
+* not a DevOps dashboard
+
+Within `AiPanel.jsx`, Services is a separate collapsible section alongside Preview and Terminal.
+
+Behavior:
+
+* Services shares the same runtime panel area
+* opening Services closes Preview and Terminal
+* only one runtime surface is visible at a time
+
+This keeps the right-hand workspace tools focused and calm.
+
+---
+
+## Current Phase Boundary
+
+Phase 4.5 intentionally introduces architecture only.
+
+Not implemented yet:
+
+* real Supabase setup
+* real Stripe setup
+* real OpenAI setup
+* GitHub publishing
+* deploy pipeline actions
+
+Those future phases should mainly attach adapters to the Service Layer rather than inventing fresh UI/runtime systems.
+
+---
+
+# 3f Workspace Refresh Events
 
 Event emitted when filesystem changes occur:
 
@@ -796,8 +999,10 @@ KForge architecture principles:
 * one filesystem bridge
 * preview runtime isolated from AI logic
 * command runtime isolated from AI logic
+* service runtime isolated from AI logic
 * UI projections separated from runtime state
 * template-aware project detection
+* registry-driven extensibility
 * single unified project root
 
 System workflow:

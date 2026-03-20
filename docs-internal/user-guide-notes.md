@@ -1,6 +1,8 @@
 
 # User Guide Notes (development capture)
 
+Last Updated: March 20th, 2026
+
 Location:
 D:\kforge\docs-internal\user-guide-notes.md
 
@@ -397,15 +399,60 @@ dir
 
 ---
 
-# Preview and Terminal Panel Behavior
+# Services
 
-Preview and Terminal are separate collapsible panels that share the same runtime area.
+KForge also includes a **Services** panel as the foundation for future guided external integrations.
+
+Current purpose:
+
+* provide a shared place for future service connections
+* avoid one-off integration UIs and runtimes
+* prepare KForge for services such as Supabase, Stripe, OpenAI, GitHub, and deploy providers
+
+At this stage, the Services panel is **architectural groundwork**.
+
+It does **not** yet perform real service connection or setup.
+
+Current behavior:
+
+* displays known service entries
+* shows simple status badges
+* shows declared environment variable names
+* allows placeholder setup actions for available services
+* streams service log output into the panel
+
+Current visible placeholder services include:
+
+```text
+Supabase
+Stripe
+OpenAI
+```
+
+User mental model:
+
+```text
+Services = future guided setup for external infrastructure
+```
+
+Not:
+
+```text
+Services = full infrastructure dashboard
+```
+
+---
+
+# Preview, Terminal, and Services Panel Behavior
+
+Preview, Terminal, and Services are separate collapsible panels that share the same runtime area.
 
 Behavior:
 
 ```text
-Open Preview → Terminal closes
-Open Terminal → Preview closes
+Open Preview → Terminal closes, Services closes
+Open Terminal → Preview closes, Services closes
+Open Services → Preview closes, Terminal closes
 ```
 
 They are not shown side-by-side in split mode.
@@ -428,6 +475,7 @@ AI edits
 Preview runtime
 Filesystem tools
 Explorer tree
+Future service setup
 ```
 
 all operate on the same folder.
@@ -454,3 +502,32 @@ next dependency found → Next.js project detected
 vite + react found → Vite + React project detected
 ```
 
+---
+
+# Current User-Facing Services Model
+
+Users do not need to think in architecture, but the current Services behavior can be understood as:
+
+```text
+Open folder
+Open Services
+See available/planned integrations
+Trigger guided setup later as integrations are implemented
+```
+
+Practical examples for future intent:
+
+```text
+Connect Supabase
+Connect Stripe
+Connect OpenAI
+Publish to GitHub
+Deploy to Vercel / Netlify
+```
+
+For now, the panel exists to establish this workflow shape early without yet performing real integration work.
+
+```
+
+
+```
