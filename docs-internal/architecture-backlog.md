@@ -1,4 +1,3 @@
-D:\kforge\docs-internal\architecture-backlog.md
 
 # 🧱 Architecture Backlog
 
@@ -50,11 +49,9 @@ Phase **4.3.7 — Template Registry** replaced hardcoded scaffold buttons with a
 
 Current templates:
 
-
-Static HTML/CSS/JS
-Vite + React
-Next.js
-
+Static HTML/CSS/JS  
+Vite + React  
+Next.js  
 
 The **Generate menu now reads templates from the registry** rather than hardcoded UI logic.
 
@@ -71,21 +68,17 @@ Added: 2026-03-19
 
 KForge currently supports:
 
-
-Static HTML
-Vite + React
-Next.js
-
+Static HTML  
+Vite + React  
+Next.js  
 
 These cover a large portion of common web workflows.
 
 However, expanding templates will allow KForge to support:
 
-
-content sites
-alternative frontend frameworks
-mobile apps
-
+content sites  
+alternative frontend frameworks  
+mobile apps  
 
 without changing the core Preview Runner.
 
@@ -99,12 +92,10 @@ The Template Registry introduced in Phase 4.3.7 makes this expansion straightfor
 
 Best suited for:
 
-
-documentation
-blogs
-marketing sites
-content-heavy sites
-
+documentation  
+blogs  
+marketing sites  
+content-heavy sites  
 
 Reasons:
 
@@ -118,9 +109,7 @@ Reasons:
 
 Purpose:
 
-
 frontend alternative to React
-
 
 Benefits:
 
@@ -133,16 +122,12 @@ Benefits:
 
 Purpose:
 
-
 mobile application development
-
 
 Expo allows developers to build:
 
-
-iOS apps
-Android apps
-
+iOS apps  
+Android apps  
 
 using the **React ecosystem**, which aligns well with KForge’s current toolchain.
 
@@ -150,11 +135,13 @@ using the **React ecosystem**, which aligns well with KForge’s current toolcha
 
 ## Where
 
+```
 
 src/runtime/templateRegistry.js
 src/runtime/PreviewPanel.jsx
 src-tauri/src/scaffold.rs
 
+```
 
 ---
 
@@ -167,6 +154,7 @@ src-tauri/src/scaffold.rs
 
 Example registry entry:
 
+```
 
 {
 id: "astro",
@@ -174,6 +162,7 @@ name: "Astro",
 scaffold: "scaffold_astro"
 }
 
+```
 
 ---
 
@@ -190,6 +179,107 @@ scaffold: "scaffold_astro"
 * At least one additional template is added successfully.
 * Template registry expansion requires **no UI changes**.
 * Preview Runner can start and open each template correctly.
+
+---
+
+# Unified Service Integration Layer
+
+Status: Planned  
+Added: 2026-03-20  
+
+**Why**
+
+Future phases will introduce integrations such as:
+
+Supabase  
+Stripe  
+OpenAI services  
+other external APIs
+
+Without a shared integration architecture, each service risks becoming a **one-off custom integration**, leading to duplicated UI patterns and backend logic.
+
+Creating a unified integration layer allows KForge to support external services consistently and extend the platform without repeated engineering work.
+
+This pattern allows future services to **plug into the same runtime system** rather than requiring unique UI and backend implementations.
+
+---
+
+**Concept**
+
+Introduce a **Service Integration Registry** similar to the existing Template Registry.
+
+Instead of hardcoding integrations, each service would define metadata such as:
+
+service id  
+display name  
+required environment variables  
+setup instructions  
+optional client setup files  
+
+Example conceptual registry entry:
+
+```
+
+{
+id: "supabase",
+name: "Supabase",
+envVars: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
+clientSetup: "generate_supabase_client"
+}
+
+```
+
+This allows KForge to treat services as **configurable integrations** rather than custom features.
+
+---
+
+**Where**
+
+Possible future structure:
+
+```
+
+src/runtime/serviceRegistry.js
+src/runtime/ServicePanel.jsx
+src-tauri/src/service.rs
+
+```
+
+The service registry would define integrations while the runtime layer handles setup workflows.
+
+---
+
+**Plan**
+
+1) Create a service registry system similar to the Template Registry.
+2) Define metadata structure for integrations.
+3) Implement a simple UI surface for connecting services.
+4) Allow integrations to generate client setup code when needed.
+5) Support environment variable configuration.
+
+---
+
+**Benefits**
+
+* New services become **registry entries rather than new subsystems**
+* Consistent user workflow for integrations
+* Reduced duplicated logic
+* Easier future expansion
+
+---
+
+**Risks / gotchas**
+
+* Some services require authentication flows.
+* Environment variable handling must remain secure.
+* Avoid turning KForge into a full DevOps dashboard.
+
+---
+
+**Done when**
+
+* At least one integration (Supabase) works through the registry.
+* New integrations can be added without modifying core UI logic.
 
 ---
 
@@ -261,3 +351,7 @@ Status: Shelved
 Added: 2026-02-12
 
 (unchanged section)
+```
+
+---
+
