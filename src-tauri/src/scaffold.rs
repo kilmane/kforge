@@ -1,6 +1,8 @@
 // src-tauri/src/scaffold.rs
 use std::{
+    fs,
     io::{BufRead, BufReader},
+    path::Path,
     process::{Command, Stdio},
     thread,
 };
@@ -28,14 +30,26 @@ fn is_bad_app_name(name: &str) -> bool {
     name.contains('\\') || name.contains('/') || name.contains(':')
 }
 
-fn run_scaffold_blocking(
-    window: tauri::Window,
-    parent_path: String,
-    app_name: String,
-    command_label: &'static str,
-    command_args: &'static [&'static str],
-    failure_label: &'static str,
-) -> Result<String, String> {
+fn emit_preview_status(window: &tauri::Window, status: impl Into<String>) {
+    let _ = window.emit(
+        PREVIEW_STATUS_EVENT,
+        PreviewStatusPayload {
+            status: status.into(),
+        },
+    );
+}
+
+fn emit_preview_log(window: &tauri::Window, kind: &'static str, line: impl Into<String>) {
+    let _ = window.emit(
+        PREVIEW_LOG_EVENT,
+        PreviewLogPayload {
+            kind,
+            line: line.into(),
+        },
+    );
+}
+
+fn validate_scaffold_inputs(parent_path: &str, app_name: &str) -> Result<(String, String), String> {
     let parent_path = parent_path.trim().to_string();
     let app_name = app_name.trim().to_string();
 
@@ -51,19 +65,24 @@ fn run_scaffold_blocking(
         );
     }
 
-    let _ = window.emit(
-        PREVIEW_STATUS_EVENT,
-        PreviewStatusPayload {
-            status: "scaffold:starting".to_string(),
-        },
-    );
+    Ok((parent_path, app_name))
+}
 
-    let _ = window.emit(
-        PREVIEW_LOG_EVENT,
-        PreviewLogPayload {
-            kind: "stdout",
-            line: format!("scaffold: running {}", command_label),
-        },
+fn run_scaffold_blocking(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+    command_label: &'static str,
+    command_args: &'static [&'static str],
+    failure_label: &'static str,
+) -> Result<String, String> {
+    let (parent_path, _app_name) = validate_scaffold_inputs(&parent_path, &app_name)?;
+
+    emit_preview_status(&window, "scaffold:starting");
+    emit_preview_log(
+        &window,
+        "stdout",
+        format!("scaffold: running {}", command_label),
     );
 
     // Windows spawn fix
@@ -96,13 +115,7 @@ fn run_scaffold_blocking(
     let out_handle = thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines().flatten() {
-            let _ = win_out.emit(
-                PREVIEW_LOG_EVENT,
-                PreviewLogPayload {
-                    kind: "stdout",
-                    line,
-                },
-            );
+            emit_preview_log(&win_out, "stdout", line);
         }
     });
 
@@ -110,13 +123,7 @@ fn run_scaffold_blocking(
     let err_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().flatten() {
-            let _ = win_err.emit(
-                PREVIEW_LOG_EVENT,
-                PreviewLogPayload {
-                    kind: "stderr",
-                    line,
-                },
-            );
+            emit_preview_log(&win_err, "stderr", line);
         }
     });
 
@@ -137,37 +144,148 @@ fn run_scaffold_blocking(
 
     let generated_path = parent_path.clone();
 
-    let _ = window.emit(
-        PREVIEW_LOG_EVENT,
-        PreviewLogPayload {
-            kind: "stdout",
-            line: "Tip: In KForge use the Install → Preview buttons.".to_string(),
-        },
+    emit_preview_log(
+        &window,
+        "stdout",
+        "Tip: In KForge use the Install → Preview buttons.",
+    );
+    emit_preview_log(
+        &window,
+        "stdout",
+        format!("scaffold complete: {}", generated_path),
     );
 
-    let _ = window.emit(
-        PREVIEW_LOG_EVENT,
-        PreviewLogPayload {
-            kind: "stdout",
-            line: format!("scaffold complete: {}", generated_path),
-        },
-    );
-
-    let _ = window.emit(
-        PREVIEW_STATUS_EVENT,
-        PreviewStatusPayload {
-            status: "idle".to_string(),
-        },
-    );
-
-    let _ = window.emit(
-        PREVIEW_STATUS_EVENT,
-        PreviewStatusPayload {
-            status: format!("scaffold:done:{generated_path}"),
-        },
-    );
+    emit_preview_status(&window, "idle");
+    emit_preview_status(&window, format!("scaffold:done:{generated_path}"));
 
     Ok(generated_path)
+}
+
+fn run_static_html_scaffold_blocking(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+) -> Result<String, String> {
+    let (parent_path, app_name) = validate_scaffold_inputs(&parent_path, &app_name)?;
+    let parent = Path::new(&parent_path);
+
+    emit_preview_status(&window, "scaffold:starting");
+    emit_preview_log(&window, "stdout", "Generating Static HTML starter...");
+
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create target directory '{}': {}", parent_path, e))?;
+
+    let index_html = format!(
+        r#"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{}</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>{}</h1>
+      <p>Your static HTML project is ready.</p>
+      <button id="hello-btn">Click me</button>
+      <p id="output"></p>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
+"#,
+        app_name, app_name
+    );
+
+    let styles_css = r#"* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  line-height: 1.5;
+  color: #111827;
+  background: #f9fafb;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 20px;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 2rem;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+"#;
+
+    let script_js = r#"const button = document.getElementById("hello-btn");
+const output = document.getElementById("output");
+
+button?.addEventListener("click", () => {
+  if (output) {
+    output.textContent = "Hello from KForge static HTML.";
+  }
+});
+"#;
+
+    fs::write(parent.join("index.html"), index_html)
+        .map_err(|e| format!("Failed to write index.html: {}", e))?;
+    fs::write(parent.join("styles.css"), styles_css)
+        .map_err(|e| format!("Failed to write styles.css: {}", e))?;
+    fs::write(parent.join("script.js"), script_js)
+        .map_err(|e| format!("Failed to write script.js: {}", e))?;
+
+    let generated_path = parent_path.clone();
+
+    emit_preview_log(
+        &window,
+        "stdout",
+        "Created: index.html, styles.css, script.js",
+    );
+    emit_preview_log(
+        &window,
+        "stdout",
+        "Ready: Static HTML does not need Install. Click Preview, then Open.",
+    );
+    emit_preview_log(
+        &window,
+        "stdout",
+        format!("scaffold complete: {}", generated_path),
+    );
+
+    emit_preview_status(&window, "idle");
+    emit_preview_status(&window, format!("scaffold:done:{generated_path}"));
+
+    Ok(generated_path)
+}
+
+#[tauri::command]
+pub async fn scaffold_static_html(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_static_html_scaffold_blocking(window, parent_path, app_name)
+    })
+    .await
+    .map_err(|e| format!("Scaffold task join error: {}", e))?
 }
 
 #[tauri::command]

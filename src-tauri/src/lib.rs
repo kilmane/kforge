@@ -1,10 +1,13 @@
 // D:\kforge\src-tauri\src\lib.rs
 
+use std::sync::{Arc, Mutex};
+
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri_plugin_fs::FsExt;
 use tauri_plugin_shell::ShellExt;
 
 mod ai;
+mod command_runner;
 mod preview;
 mod scaffold;
 
@@ -29,6 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(preview::PreviewState::default())
+        .manage(Arc::new(Mutex::new(command_runner::CommandRunnerState::default())))
         // ✅ Required for opening URLs in the system browser
         .plugin(tauri_plugin_shell::init())
         // Native menu bar: Help -> docs
@@ -149,8 +153,10 @@ pub fn run() {
             preview::preview_install,
             preview::preview_start,
             preview::preview_stop,
-            // 🔧 Scaffold
-                        // ���� Scaffold
+            // 🖥 Command runner
+            command_runner::command_run,
+                        // 🔧 Scaffold
+            scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_nextjs,
         ])

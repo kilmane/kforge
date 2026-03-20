@@ -4,8 +4,8 @@
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v8
-**Updated:** 19/03/2026
+**Version:** v9
+**Updated:** 20/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -17,9 +17,9 @@ Purpose: architectural topology & execution responsibility map.
 
 File:
 
-```
+```text
 src/App.js
-```
+````
 
 Responsibilities:
 
@@ -43,13 +43,13 @@ App.js is also the **authority for the current project root**.
 
 Defined in:
 
-```
+```text
 src/App.js
 ```
 
 Structure:
 
-```
+```text
 messages = [{ id, role, content, ts, action?, actions? }]
 ```
 
@@ -65,7 +65,7 @@ There are **no duplicate message systems**.
 
 File:
 
-```
+```text
 src/ai/panel/AiPanel.jsx
 ```
 
@@ -84,7 +84,7 @@ Shows:
 
 File:
 
-```
+```text
 src/ai/panel/TranscriptPanel.jsx
 ```
 
@@ -107,7 +107,7 @@ Contains Retry + Clear controls.
 
 File:
 
-```
+```text
 src/ai/panel/AiPanel.jsx
 ```
 
@@ -124,7 +124,7 @@ Triggers runtime execution.
 
 File:
 
-```
+```text
 src/ai/tools/toolRuntime.js
 ```
 
@@ -136,7 +136,7 @@ Handles:
 
 Runtime flow:
 
-```
+```text
 detect tool
 → consent
 → handler execution
@@ -149,7 +149,7 @@ detect tool
 
 File:
 
-```
+```text
 src/ai/tools/handlers/index.js
 ```
 
@@ -163,7 +163,7 @@ Current tools:
 
 Filesystem layer:
 
-```
+```text
 src/lib/fs.js
 ```
 
@@ -175,19 +175,19 @@ Ensures project-root safety.
 
 Backend:
 
-```
+```text
 src-tauri/src/preview.rs
 ```
 
 Frontend bridge:
 
-```
+```text
 src/runtime/previewRunner.js
 ```
 
 UI surface:
 
-```
+```text
 src/runtime/PreviewPanel.jsx
 ```
 
@@ -206,6 +206,7 @@ Capabilities:
 * detect preview URL
 * stop processes
 * persist preview logs
+* detect compatible template types for the current project
 
 ---
 
@@ -221,26 +222,26 @@ Rust backend determines the general project type.
 
 Rules:
 
-```
+```text
 package.json → package project
 index.html → static project
 ```
 
 Implemented in:
 
-```
+```text
 preview_detect_kind()
 ```
 
 inside:
 
-```
+```text
 src-tauri/src/preview.rs
 ```
 
 Result returned to frontend:
 
-```
+```text
 static
 package
 ```
@@ -253,13 +254,13 @@ After coarse detection, the frontend attempts to identify the **actual framework
 
 Implemented in:
 
-```
+```text
 src/runtime/previewRunner.js
 ```
 
 Process:
 
-```
+```text
 preview_detect_kind()
         ↓
 read package.json
@@ -281,7 +282,7 @@ Example detection signals:
 
 The result returned to the UI includes:
 
-```
+```text
 {
   kind,
   compatibleTemplates,
@@ -300,7 +301,7 @@ Where:
 
 Commands executed:
 
-```
+```text
 pnpm install
 pnpm dev
 ```
@@ -318,7 +319,7 @@ Used for:
 
 If a folder contains:
 
-```
+```text
 index.html
 ```
 
@@ -326,7 +327,7 @@ KForge starts an internal static server.
 
 Example URL:
 
-```
+```text
 http://127.0.0.1:56566/
 ```
 
@@ -344,7 +345,7 @@ Features:
 
 Uses:
 
-```
+```text
 std::process::Command
 ```
 
@@ -352,7 +353,7 @@ Tracks child process PID.
 
 Stop uses:
 
-```
+```text
 taskkill /PID <pid> /T /F
 ```
 
@@ -360,7 +361,7 @@ Static preview uses an internal Rust HTTP server.
 
 Events emitted:
 
-```
+```text
 kforge://preview/log
 kforge://preview/status
 ```
@@ -405,30 +406,33 @@ Additional UX responsibilities:
 * preview log auto-scroll
 * preview workflow instructions
 * template-aware project detection
+* post-scaffold project re-detection
 
 UI adapts based on project type.
 
 ### Static projects
 
-```
+```text
 Preview → Open
 ```
 
+Install is hidden for static-only projects.
+
 ### Package projects
 
-```
+```text
 Install → Preview → Open
 ```
 
 If a template is identified the UI shows:
 
-```
+```text
 Next.js project detected
 ```
 
 Otherwise it falls back to:
 
-```
+```text
 Package project detected
 ```
 
@@ -438,21 +442,28 @@ Package project detected
 
 Backend implementation:
 
-```
+```text
 src-tauri/src/scaffold.rs
 ```
 
 Frontend trigger:
 
-```
-PreviewPanel.jsx
+```text
+src/runtime/PreviewPanel.jsx
 ```
 
-Commands currently used:
+Template registry:
 
+```text
+src/runtime/templateRegistry.js
 ```
-invoke("scaffold_vite_react")
-invoke("scaffold_nextjs")
+
+Registered Tauri commands:
+
+```text
+scaffold_static_html
+scaffold_vite_react
+scaffold_nextjs
 ```
 
 ---
@@ -463,7 +474,7 @@ Scaffold generates project templates directly in the workspace root.
 
 Example:
 
-```
+```text
 workspace/
 ├ src/
 ├ package.json
@@ -475,15 +486,35 @@ No nested folder is created.
 
 ---
 
-## Current Templates (Phase 4.3.6)
+## Current Templates (Phase 4.4 baseline)
 
-KForge currently supports two template generators.
+KForge currently supports three template generators.
+
+### Static HTML/CSS/JS
+
+Behavior:
+
+* generates files directly in the workspace root
+* no dependency install required
+* preview can run immediately
+
+Files created:
+
+```text
+index.html
+styles.css
+script.js
+```
+
+This template is registry-backed and appears again in the Generate menu.
+
+---
 
 ### Vite + React
 
 Command executed:
 
-```
+```text
 pnpm dlx create-vite@latest . --template react --no-interactive
 ```
 
@@ -498,7 +529,7 @@ Behavior:
 
 Command executed:
 
-```
+```text
 pnpm create next-app@latest . --yes
 ```
 
@@ -512,14 +543,43 @@ This is expected because `create-next-app` performs a full dependency install.
 
 ---
 
-## Important UX Note
+## Scaffold Logging
 
-After Next.js scaffold completes:
+Scaffold emits preview log and status events so generation appears in the existing Preview panel.
 
-* dependencies are already installed
-* Install button may still appear available
+Events emitted:
 
-This is acceptable for now but may be improved later by deriving install readiness from actual project state rather than template type.
+```text
+kforge://preview/log
+kforge://preview/status
+```
+
+Static HTML generation now uses short, immediate log messages suited to local file creation rather than package-manager scaffolding.
+
+Example flow:
+
+```text
+Generating Static HTML starter...
+Created: index.html, styles.css, script.js
+Ready: Static HTML does not need Install. Click Preview, then Open.
+scaffold complete: <path>
+```
+
+---
+
+## Important UX Notes
+
+After scaffold completes, PreviewPanel re-runs project detection so the UI reflects the new project shape immediately.
+
+This fixes the earlier stale-state issue where Static HTML generation could leave Install visible until a later refresh.
+
+Current intended behavior:
+
+* Static HTML generate → Install hidden
+* Vite generate → Install available
+* Next.js generate → Install may still appear available, though dependencies are typically already present
+
+The Next.js install-state nuance is acceptable for now.
 
 ---
 
@@ -533,12 +593,13 @@ Templates now define:
 * scaffold commands
 * preview compatibility
 * detection hints
+* install behavior
 
 The registry allows KForge to support additional frameworks without hardcoding logic in the UI.
 
 Future templates may include:
 
-```
+```text
 Astro
 Vue
 Svelte
@@ -547,17 +608,125 @@ Expo / React Native
 
 ---
 
-# 3d Workspace Refresh Events
+# 3d Command Runner Panel
+
+Backend implementation:
+
+```text
+src-tauri/src/command_runner.rs
+```
+
+Frontend bridge:
+
+```text
+src/runtime/commandRunner.js
+```
+
+UI surface:
+
+```text
+src/runtime/CommandRunnerPanel.jsx
+```
+
+Panel integration:
+
+```text
+src/ai/panel/AiPanel.jsx
+```
+
+---
+
+## Responsibilities
+
+Command Runner provides a simple in-app terminal surface for user-triggered commands inside the active workspace/project root.
+
+Capabilities:
+
+* run one command at a time
+* stream stdout/stderr logs to the frontend
+* expose run status to the UI
+* execute commands in the active project root
+* support shell built-ins on Windows
+
+---
+
+## Backend Behavior
+
+Command execution is rooted in the current workspace/project path.
+
+On Windows, commands are executed via:
+
+```text
+cmd /C <command>
+```
+
+This is important because shell built-ins such as:
+
+```text
+dir
+echo hello
+```
+
+do not work correctly when treated as standalone executables.
+
+Events emitted:
+
+```text
+kforge://command/log
+kforge://command/status
+```
+
+The backend currently enforces a simple single-command-at-a-time model.
+
+---
+
+## Frontend Behavior
+
+The frontend subscribes to command log/status events and renders a terminal-style log view plus command input.
+
+Current UX behavior:
+
+* input command
+* run command
+* stream logs into terminal panel
+* clear input after run
+* return focus to input after run
+
+Validated examples:
+
+```text
+node -v
+git status
+dir
+```
+
+---
+
+## Panel Layout Integration
+
+Within `AiPanel.jsx`, Preview and Terminal are separate collapsible sections.
+
+Behavior:
+
+* Preview and Terminal share the same panel area
+* opening one closes the other
+* they never appear split side-by-side in the same space
+
+This preserves a focused single-runtime surface while supporting both preview and command workflows.
+
+---
+
+# 3e Workspace Refresh Events
 
 Event emitted when filesystem changes occur:
 
-```
+```text
 kforge://workspace/refresh
 ```
 
 Handled in:
 
-```
+```text
 src/App.js
 ```
 
@@ -573,7 +742,7 @@ Explorer refreshes after:
 
 File:
 
-```
+```text
 src/lib/fs.js
 ```
 
@@ -595,7 +764,7 @@ DockShell controls layout.
 
 File:
 
-```
+```text
 src/layout/DockShell.jsx
 ```
 
@@ -603,13 +772,13 @@ Modes:
 
 ### Bottom Mode (default)
 
-```
+```text
 dockMode="bottom"
 ```
 
 ### Focus Mode
 
-```
+```text
 dockMode="full"
 ```
 
@@ -626,22 +795,23 @@ KForge architecture principles:
 * one tool runtime pipeline
 * one filesystem bridge
 * preview runtime isolated from AI logic
+* command runtime isolated from AI logic
 * UI projections separated from runtime state
 * template-aware project detection
 * single unified project root
 
 System workflow:
 
-```
-AI → filesystem edits → preview runtime → browser feedback
+```text
+AI → filesystem edits → runtime tools → browser feedback
 ```
 
 This architecture supports the **vibe coding loop**:
 
-```
+```text
 prompt
 → AI edits files
-→ preview updates
+→ preview or command feedback
 → user sees result instantly
 ```
 

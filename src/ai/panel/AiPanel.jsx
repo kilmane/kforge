@@ -7,9 +7,10 @@ import React, {
   useState,
 } from "react";
 import PreviewPanel from "../../runtime/PreviewPanel.jsx";
+import CommandRunnerPanel from "../../runtime/CommandRunnerPanel.jsx";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
-import TranscriptPanel from "./TranscriptPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
+import TranscriptPanel from "./TranscriptPanel.jsx";
 import PromptPanel from "./PromptPanel.jsx";
 import SystemPanel from "./SystemPanel.jsx";
 import ParametersPanel from "./ParametersPanel.jsx";
@@ -540,6 +541,7 @@ export default function AiPanel({
   // 🔧 Preview runner panel (dev-only runtime tool).
   // Collapsed by default to keep UI calm.
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   useEffect(() => {
     if (!isDevBuild) return;
@@ -1027,31 +1029,68 @@ export default function AiPanel({
           </div>
         </div>
         {isDevBuild && (
-          <div className="border-b border-zinc-800">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof setFocusMode === "function") {
-                  setFocusMode(true);
-                }
-                setPreviewOpen((v) => !v);
-              }}
-              className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-            >
-              <span className="font-medium">
-                {previewOpen ? "▼ Preview" : "▶ Preview"}
-              </span>
-              <span className="text-xs text-zinc-500">
-                {previewOpen ? "Hide runtime tools" : "Show runtime tools"}
-              </span>
-            </button>
+          <>
+            <div className="border-b border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof setFocusMode === "function") {
+                    setFocusMode(true);
+                  }
+                  setPreviewOpen((v) => {
+                    const next = !v;
+                    if (next) setTerminalOpen(false);
+                    return next;
+                  });
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+              >
+                <span className="font-medium">
+                  {previewOpen ? "▼ Preview" : "▶ Preview"}
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {previewOpen ? "Hide preview" : "Show preview"}
+                </span>
+              </button>
 
-            {previewOpen && (
-              <div className="p-3 border-t border-zinc-800">
-                <PreviewPanel projectPath={projectPath} />
-              </div>
-            )}
-          </div>
+              {previewOpen && (
+                <div className="p-3 border-t border-zinc-800">
+                  <PreviewPanel projectPath={projectPath} />
+                </div>
+              )}
+            </div>
+
+            <div className="border-b border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof setFocusMode === "function") {
+                    setFocusMode(true);
+                  }
+                  setTerminalOpen((v) => {
+                    const next = !v;
+                    if (next) setPreviewOpen(false);
+                    return next;
+                  });
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+              >
+                <span className="font-medium flex items-center gap-2">
+                  <span>{terminalOpen ? "▼" : "▶"}</span>
+                  <span>Terminal</span>
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {terminalOpen ? "Hide terminal" : "Show terminal"}
+                </span>
+              </button>
+
+              {terminalOpen && (
+                <div className="p-3 border-t border-zinc-800">
+                  <CommandRunnerPanel projectPath={projectPath} />
+                </div>
+              )}
+            </div>
+          </>
         )}
         {providerSwitchNote ? (
           <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">

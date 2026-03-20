@@ -4,7 +4,10 @@ export const TEMPLATE_REGISTRY = [
     name: "Static HTML/CSS/JS",
     description: "Simple static website",
     category: "static",
-    scaffold: null,
+    scaffold: {
+      command: "scaffold_static_html",
+      appName: "static-site",
+    },
     install: {
       required: false,
       installsDuringScaffold: false,

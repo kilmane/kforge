@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   appendPreviewLog,
@@ -55,6 +61,34 @@ export default function PreviewPanel({ projectPath }) {
 
   const scaffoldTemplates = useMemo(() => listScaffoldTemplates(), []);
 
+  const refreshProjectShape = useCallback(async () => {
+    if (!projectPath) {
+      setHasPackageJson(false);
+      setHasIndexHtml(false);
+      setDetectedKind("");
+      setCompatibleTemplates([]);
+      return;
+    }
+
+    try {
+      const result = await previewDetectTemplates(projectPath);
+      const kind = String(result?.kind || "");
+      const templates = Array.isArray(result?.templates)
+        ? result.templates
+        : [];
+
+      setHasPackageJson(kind === "package");
+      setHasIndexHtml(kind === "static");
+      setDetectedKind(kind);
+      setCompatibleTemplates(templates);
+    } catch {
+      setHasPackageJson(false);
+      setHasIndexHtml(false);
+      setDetectedKind("");
+      setCompatibleTemplates([]);
+    }
+  }, [projectPath]);
+
   useEffect(() => {
     setScaffoldErr("");
     setLastGeneratedTemplateId("");
@@ -77,46 +111,17 @@ export default function PreviewPanel({ projectPath }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function detectProjectShape() {
-      if (!projectPath) {
-        if (!cancelled) {
-          setHasPackageJson(false);
-          setHasIndexHtml(false);
-          setDetectedKind("");
-          setCompatibleTemplates([]);
-        }
-        return;
-      }
-
-      try {
-        const result = await previewDetectTemplates(projectPath);
-        const kind = String(result?.kind || "");
-        const templates = Array.isArray(result?.templates)
-          ? result.templates
-          : [];
-
-        if (!cancelled) {
-          setHasPackageJson(kind === "package");
-          setHasIndexHtml(kind === "static");
-          setDetectedKind(kind);
-          setCompatibleTemplates(templates);
-        }
-      } catch {
-        if (!cancelled) {
-          setHasPackageJson(false);
-          setHasIndexHtml(false);
-          setDetectedKind("");
-          setCompatibleTemplates([]);
-        }
-      }
+    async function run() {
+      if (cancelled) return;
+      await refreshProjectShape();
     }
 
-    detectProjectShape();
+    run();
 
     return () => {
       cancelled = true;
     };
-  }, [projectPath]);
+  }, [refreshProjectShape]);
 
   useEffect(() => {
     let unLog;
@@ -167,6 +172,8 @@ export default function PreviewPanel({ projectPath }) {
         setStatus(nextStatus);
 
         if (nextStatus.startsWith("scaffold:done:")) {
+          refreshProjectShape();
+
           try {
             window.dispatchEvent(new CustomEvent("kforge://workspace/refresh"));
           } catch {
@@ -199,7 +206,7 @@ export default function PreviewPanel({ projectPath }) {
         });
       }
     };
-  }, []);
+  }, [refreshProjectShape]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({
@@ -280,6 +287,7 @@ export default function PreviewPanel({ projectPath }) {
         appName: template.scaffold.appName,
       });
       setLastGeneratedTemplateId(template.id);
+      await refreshProjectShape();
     } catch (e) {
       setScaffoldErr(String(e));
     } finally {
@@ -310,25 +318,16 @@ export default function PreviewPanel({ projectPath }) {
                 {detectedTemplateLabel ? (
                   <>
                     <br />
-                    Detected:{" "}
                     <span className="text-zinc-200">
                       {detectedTemplateLabel}
-                    </span>
+                    </span>{" "}
+                    project detected
                   </>
                 ) : detectedKind ? (
                   <>
                     <br />
-                    Detected kind:{" "}
-                    <span className="text-zinc-200">{detectedKind}</span>
-                  </>
-                ) : null}
-                {compatibleTemplates.length > 1 ? (
-                  <>
-                    <br />
-                    Compatible templates:{" "}
-                    <span className="text-zinc-300">
-                      {compatibleTemplateNames}
-                    </span>
+                    <span className="text-zinc-200">{detectedKind}</span>{" "}
+                    project detected
                   </>
                 ) : null}
               </>
