@@ -10,13 +10,13 @@ mod ai;
 mod command_runner;
 mod preview;
 mod scaffold;
+mod service;
 
 /// Allow a user-selected directory to be used by the FS plugin.
 /// This updates the runtime FS scope (safer than broad wildcards).
 #[tauri::command]
 fn fs_allow_directory(app: tauri::AppHandle, path: String) -> Result<(), String> {
     app.fs_scope()
-        // true = recursive
         .allow_directory(path, true)
         .map_err(|e: tauri::Error| e.to_string())
 }
@@ -33,9 +33,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(preview::PreviewState::default())
         .manage(Arc::new(Mutex::new(command_runner::CommandRunnerState::default())))
-        // ✅ Required for opening URLs in the system browser
+        .manage(Arc::new(Mutex::new(service::ServiceRunnerState::default())))
         .plugin(tauri_plugin_shell::init())
-        // Native menu bar: Help -> docs
         .menu(|handle| {
             let help = Submenu::with_items(
                 handle,
@@ -135,27 +134,22 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            // Phase 2 command (keep)
             fs_allow_directory,
             open_url,
-            // Phase 3.1.0 AI Core commands
             ai::commands::ai_set_api_key,
             ai::commands::ai_clear_api_key,
             ai::commands::ai_has_api_key,
             ai::commands::ai_clear_api_key,
             ai::commands::ai_is_key_persisted,
             ai::commands::ai_generate,
-            // Phase 3.2 Ollama helper
             ai::commands::ai_ollama_list_models,
-            // 🔥 Preview runner
             preview::preview_detect_kind,
             preview::preview_get_status,
             preview::preview_install,
             preview::preview_start,
             preview::preview_stop,
-            // 🖥 Command runner
             command_runner::command_run,
-                        // 🔧 Scaffold
+            service::service_setup,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_nextjs,

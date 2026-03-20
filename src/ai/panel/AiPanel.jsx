@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import PreviewPanel from "../../runtime/PreviewPanel.jsx";
 import CommandRunnerPanel from "../../runtime/CommandRunnerPanel.jsx";
+import ServicePanel from "../../runtime/ServicePanel.jsx";
 import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
@@ -542,6 +543,7 @@ export default function AiPanel({
   // Collapsed by default to keep UI calm.
   const [previewOpen, setPreviewOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
 
   useEffect(() => {
     if (!isDevBuild) return;
@@ -1087,6 +1089,39 @@ export default function AiPanel({
               {terminalOpen && (
                 <div className="p-3 border-t border-zinc-800">
                   <CommandRunnerPanel projectPath={projectPath} />
+                </div>
+              )}
+            </div>
+            <div className="border-b border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof setFocusMode === "function") {
+                    setFocusMode(true);
+                  }
+                  setServicesOpen((v) => {
+                    const next = !v;
+                    if (next) {
+                      setPreviewOpen(false);
+                      setTerminalOpen(false);
+                    }
+                    return next;
+                  });
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+              >
+                <span className="font-medium flex items-center gap-2">
+                  <span>{servicesOpen ? "▼" : "▶"}</span>
+                  <span>Services</span>
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {servicesOpen ? "Hide services" : "Show services"}
+                </span>
+              </button>
+
+              {servicesOpen && (
+                <div className="p-3 border-t border-zinc-800">
+                  <ServicePanel projectPath={projectPath} />
                 </div>
               )}
             </div>
