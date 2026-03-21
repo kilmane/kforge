@@ -4,14 +4,14 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: March 20th, 2026
+Last Updated: March 21st, 2026
 
-Phase: 4.5 — Service Integration Layer (Foundation)
+Phase: 4.6 — GitHub Integration
 Status: Stable milestone ready for commit
 
-Stable commit: 04e7452
+Stable commit: <to be filled after commit>
 
-```
+---
 
 This file is the authoritative operational reference.
 
@@ -46,11 +46,7 @@ KForge is **chat-first**, not tool-first.
 
 AI execution lives in:
 
-```
-
 src/App.js
-
-```
 
 This file owns:
 
@@ -71,21 +67,13 @@ If AI behaves incorrectly → start here.
 
 There is exactly one message array:
 
-```
-
 messages (owned by App.js)
-
-```
 
 Everything renders from this.
 
 Structure:
 
-```
-
 id, role, content, ts, optional action metadata
-
-```
 
 No duplicate message systems exist.
 
@@ -99,11 +87,7 @@ Two projections of the same message store.
 
 File:
 
-```
-
 src/ai/panel/AiPanel.jsx
-
-```
 
 Shows:
 
@@ -118,11 +102,7 @@ Shows:
 
 File:
 
-```
-
 src/ai/panel/TranscriptPanel.jsx
-
-```
 
 Full system log.
 
@@ -134,12 +114,8 @@ Contains:
 
 Architectural rule:
 
-```
-
-Chat = filtered projection
+Chat = filtered projection  
 Transcript = complete system log
-
-```
 
 ---
 
@@ -149,21 +125,13 @@ Transcript = complete system log
 
 File:
 
-```
-
 src/layout/DockShell.jsx
-
-```
 
 Supports two layout modes.
 
 ### Bottom Mode (default)
 
-```
-
 dockMode = "bottom"
-
-```
 
 Dock sits under main workspace.
 
@@ -171,11 +139,7 @@ Dock sits under main workspace.
 
 ### Focus Mode
 
-```
-
 dockMode = "full"
-
-```
 
 Dock replaces main layout.
 
@@ -189,11 +153,7 @@ Focus mode is a **surface promotion**, not a resized dock.
 
 File:
 
-```
-
 src/ai/panel/AiPanel.jsx
-
-```
 
 Handles:
 
@@ -209,11 +169,7 @@ Handles:
 
 File:
 
-```
-
 src/ai/tools/toolRuntime.js
-
-```
 
 Responsibilities:
 
@@ -224,14 +180,10 @@ Responsibilities:
 
 Runtime flow:
 
-```
-
-detect tool
-→ consent request
-→ handler execution
+detect tool  
+→ consent request  
+→ handler execution  
 → append result
-
-```
 
 ---
 
@@ -239,11 +191,7 @@ detect tool
 
 File:
 
-```
-
 src/ai/tools/handlers/index.js
-
-```
 
 Tools currently available:
 
@@ -255,11 +203,7 @@ Tools currently available:
 
 Filesystem authority:
 
-```
-
 src/lib/fs.js
-
-```
 
 App.js sets project root.  
 fs.js enforces safety.
@@ -268,35 +212,17 @@ fs.js enforces safety.
 
 # 🟤 4b Preview Runtime
 
-Preview runner executes project development environments.
-
 Backend:
-
-```
 
 src-tauri/src/preview.rs
 
-```
-
 Frontend bridge:
-
-```
 
 src/runtime/previewRunner.js
 
-```
-
 UI surface:
 
-```
-
 src/runtime/PreviewPanel.jsx
-
-```
-
----
-
-## Preview Responsibilities
 
 Preview runner provides:
 
@@ -312,192 +238,33 @@ Preview runner provides:
 
 ---
 
-## Preview Detection
-
-Detection occurs in **two stages**.
-
-### Stage 1 — Coarse backend detection
-
-```
-
-package.json → package project
-index.html → static project
-
-```
-
-Implemented by:
-
-```
-
-preview_detect_kind()
-
-```
-
-Returns:
-
-```
-
-package
-static
-
-```
-
----
-
-### Stage 2 — Template identification
-
-Frontend inspects dependencies and matches against **Template Registry hints**.
-
-Examples:
-
-```
-
-next → Next.js
-vite + react → Vite + React
-index.html without package.json → Static HTML/CSS/JS
-
-```
-
-Detection result:
-
-```
-
-{
-kind,
-compatibleTemplates,
-detectedTemplate
-}
-
-```
-
----
-
 # 🧱 4c Scaffold System
 
 Backend:
 
-```
-
 src-tauri/src/scaffold.rs
-
-```
 
 Frontend trigger:
 
-```
-
 src/runtime/PreviewPanel.jsx
-
-```
 
 Registry:
 
-```
-
 src/runtime/templateRegistry.js
-
-```
 
 Registered scaffold commands:
 
-```
-
-scaffold_static_html
-scaffold_vite_react
+scaffold_static_html  
+scaffold_vite_react  
 scaffold_nextjs
 
-```
+Templates supported:
 
----
+• Static HTML  
+• Vite + React  
+• Next.js  
 
-## Scaffold Behavior
-
-Scaffolds generate **directly in the workspace root**.
-
-Example:
-
-```
-
-workspace/
-├ src/
-├ package.json
-├ vite.config.js
-└ index.html
-
-```
-
-No nested folder is created.
-
----
-
-## Templates (Phase 4.5 baseline)
-
-### Static HTML/CSS/JS
-
-Scaffold command:
-
-```
-
-scaffold_static_html
-
-```
-
-Creates:
-
-```
-
-index.html
-styles.css
-script.js
-
-```
-
-Characteristics:
-
-• no dependency install required  
-• preview works immediately  
-• install button hidden after generation  
-
-Example logs:
-
-```
-
-Generating Static HTML starter...
-Created: index.html, styles.css, script.js
-Ready: Static HTML does not need Install. Click Preview, then Open.
-scaffold complete: <path>
-
-```
-
----
-
-### Vite + React
-
-```
-
-pnpm dlx create-vite@latest . --template react --no-interactive
-
-```
-
-Characteristics:
-
-• lightweight scaffold  
-• dependencies installed via Install button  
-
----
-
-### Next.js
-
-```
-
-pnpm create next-app@latest . --yes
-
-```
-
-Characteristics:
-
-• heavier scaffold  
-• dependencies installed during generation  
+Scaffolds generate **directly into the workspace root**.
 
 ---
 
@@ -505,182 +272,71 @@ Characteristics:
 
 Backend:
 
-```
-
 src-tauri/src/command_runner.rs
 
-```
-
 Frontend bridge:
-
-```
 
 src/runtime/commandRunner.js
 
-```
-
 UI:
-
-```
 
 src/runtime/CommandRunnerPanel.jsx
 
-```
+Capabilities:
 
-Panel host:
-
-```
-
-src/ai/panel/AiPanel.jsx
-
-```
-
----
-
-## Command Runner Capabilities
-
-Provides a simple in-app terminal for the active project root.
-
-Features:
-
-• run commands inside workspace root  
+• run shell commands in project root  
 • stream stdout/stderr logs  
-• run one command at a time  
-• maintain command state  
-• emit terminal events to UI  
-
----
-
-## Windows Compatibility
-
-Commands execute via:
-
-```
+• one command at a time  
+• Windows compatibility using:
 
 cmd /C <command>
 
-```
+Events emitted:
 
-This enables shell built-ins such as:
-
-```
-
-dir
-echo hello
-
-```
-
----
-
-## Command Runner Events
-
-```
-
-kforge://command/log
+kforge://command/log  
 kforge://command/status
-
-```
-
----
-
-## UI Behavior
 
 Preview and Terminal panels are **mutually exclusive collapsibles**.
 
-```
-
-▶ Preview
-▶ Terminal
-
-```
-
-Opening one automatically closes the other.
-
-They **share the same panel space** and are never split side-by-side.
-
 ---
 
-# 🔌 4e Service Integration Layer (Foundation)
+# 🔌 4e Service Integration Layer
 
 Backend:
 
-```
-
 src-tauri/src/service.rs
-
-```
 
 Frontend bridge:
 
-```
-
 src/runtime/serviceRunner.js
-
-```
 
 Registry:
 
-```
-
 src/runtime/serviceRegistry.js
-
-```
 
 UI:
 
-```
-
 src/runtime/ServicePanel.jsx
-
-```
 
 Panel host:
 
-```
-
 src/ai/panel/AiPanel.jsx
 
-```
-
-Registered service command:
-
-```
+Registered command:
 
 service_setup
-
-```
 
 ---
 
 ## Service Layer Purpose
 
-This phase introduces the **foundation for future external services**.
+Provides a unified architecture for **external service integrations**.
 
-It exists so later integrations such as:
+Instead of building custom subsystems for each service, KForge now uses:
 
-• Supabase  
-• Stripe  
-• OpenAI  
-• GitHub  
-• Vercel / Netlify style deploy providers  
+registry entry + adapter implementation
 
-can plug into KForge through a shared architecture.
-
-This phase does **not** implement real integrations yet.
-
----
-
-## Service Layer Responsibilities
-
-The new layer provides:
-
-• service metadata registry  
-• frontend runtime bridge  
-• service status/log event handling  
-• a UI surface for guided service setup  
-• backend placeholder command infrastructure  
-
-This is an architectural lane, not a fully active feature set.
+This creates a consistent runtime lane for integrations.
 
 ---
 
@@ -688,148 +344,114 @@ This is an architectural lane, not a fully active feature set.
 
 File:
 
-```
-
 src/runtime/serviceRegistry.js
 
-```
+Current services:
 
-The registry defines service metadata.
-
-Current fields include:
-
-• `id`  
-• `name`  
-• `description`  
-• `status`  
-• `envVars`  
-• `setupCommand`  
-
-Current placeholder services:
-
+• GitHub  
 • Supabase  
 • Stripe  
 • OpenAI  
 
-Important architectural rule:
+Fields include:
 
-```
-
-new service = registry entry + adapter implementation
-
-```
-
-rather than:
-
-```
-
-new service = new subsystem
-
-```
+• id  
+• name  
+• description  
+• status  
+• envVars  
+• setupCommand  
 
 ---
 
-## Service Runtime Bridge
+# 🟣 GitHub Integration (Phase 4.6)
 
-File:
+Phase 4.6 introduces the **first real service adapter**.
 
-```
+The GitHub adapter allows a local project to be published directly to GitHub.
 
-src/runtime/serviceRunner.js
-
-```
-
-Responsibilities:
-
-• invoke backend service setup  
-• subscribe to service log events  
-• subscribe to service status events  
-
-Events:
-
-```
-
-kforge://service/log
-kforge://service/status
-
-```
-
-This mirrors the same runtime pattern already used by Preview and Command Runner.
-
----
-
-## Backend Placeholder
-
-File:
-
-```
+Backend implementation:
 
 src-tauri/src/service.rs
 
-```
+Frontend UI:
 
-Current backend behavior:
+src/runtime/ServicePanel.jsx
 
-• validate project path  
-• validate service id  
-• emit log events  
-• emit status events  
-• allow one service setup at a time  
+Runtime bridge:
 
-Current phase boundary:
-
-• no real external service connection  
-• no env file writing  
-• no account authentication  
-• no config generation  
-• no SDK installation  
-
-It is intentionally a **placeholder runtime lane**.
+src/runtime/serviceRunner.js
 
 ---
 
-## Service UI Behavior
+## GitHub Publish Workflow
 
-`ServicePanel.jsx` shows the current known services and basic service metadata.
+When the user clicks **Publish**:
 
-Current UI responsibilities:
+1. Validate workspace path  
+2. Ensure `git` is installed  
+3. Ensure `gh` (GitHub CLI) is installed  
+4. Verify authentication using:
 
-• show service name and status  
-• show declared environment variables  
-• allow placeholder setup action for available services  
-• stream service logs into panel  
-• display current project/workspace path  
+gh auth status
 
-The Services panel is designed to be:
+5. Initialize repository if needed:
 
-• minimal  
-• guided  
-• explicit  
-• non-dashboard-like  
+git init
+
+6. Stage project files:
+
+git add .
+
+7. Create initial commit:
+
+git commit -m "Initial commit from KForge"
+
+8. Ensure main branch:
+
+git branch -M main
+
+9. Create repository and push:
+
+gh repo create <repo-name> --public|--private --source . --remote origin --push
 
 ---
 
-## Runtime Panel Integration
+## Authentication Model
 
-Preview, Terminal, and Services are now separate collapsible runtime panels inside `AiPanel.jsx`.
+KForge does **not manage OAuth tokens directly**.
 
-Current behavior:
+Authentication is delegated to the GitHub CLI.
 
-```
+Requirements:
 
-▶ Preview
-▶ Terminal
-▶ Services
+• git installed  
+• GitHub CLI installed  
+• user authenticated via:
 
-```
+gh auth login
 
-Rules:
+This keeps KForge secure and avoids token storage.
 
-• opening one closes the others  
-• they share the same panel area  
-• only one runtime surface is visible at a time  
+---
 
-This preserves a focused right-side runtime workspace.
+## Service Panel Behavior
+
+Services panel now supports:
+
+• repository name input  
+• public/private visibility selection  
+• GitHub publish trigger  
+• live service log streaming  
+
+Service logs persist when:
+
+• collapsing / reopening Services
+
+Logs reset when:
+
+• workspace resets  
+• project root changes
 
 ---
 
@@ -837,42 +459,29 @@ This preserves a focused right-side runtime workspace.
 
 Canonical workflow:
 
-```
-
-Open folder
-Generate (optional)
-Install
-Preview
-Open
-Stop
+Open folder  
+Generate (optional)  
+Install  
+Preview  
+Open  
+Stop  
 Iterate
-
-```
 
 AI workflow:
 
-```
-
-Open folder
-Prompt AI
-AI edits files
-Install
-Preview
+Open folder  
+Prompt AI  
+AI edits files  
+Install  
+Preview  
 Hot reload
 
-```
+Service workflow:
 
-Service workflow foundation now exists for future phases:
-
-```
-
-Open folder
-Open Services
-Choose service
-Run guided setup
-Continue coding
-
-```
+Open folder  
+Open Services  
+Publish to GitHub  
+Continue development
 
 ---
 
@@ -891,7 +500,7 @@ Explorer refreshes after:
 • directory creation  
 • scaffold generation  
 
-Service setup phases in the future must also obey the same project-root rule.
+Service adapters must follow the same project-root restriction.
 
 ---
 
@@ -916,50 +525,61 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.5**:
+As of **Phase 4.6**:
 
 • AI surface stable  
 • filesystem tools validated  
 • preview runner stable  
-• static HTML preview working  
-• template registry operational  
-• registry-aware project detection implemented  
-• static scaffold restored and working  
-• install button logic corrected for static projects  
-• preview detection refresh after scaffold implemented  
-• command runner panel implemented  
-• terminal command streaming operational  
-• service integration foundation implemented  
-• service registry operational  
-• service runtime placeholder wired into frontend and backend  
-• Services panel added to AI panel  
+• scaffold system operational  
+• template registry working  
+• command runner operational  
+• service integration layer operational  
+• GitHub publishing implemented  
 
 Supported workflows now include:
 
-```
+AI editing  
+Project scaffolding  
+Dev server preview  
+Static site preview  
+In-app terminal commands  
+GitHub repository publishing
 
-AI editing
-Project scaffolding
-Dev server preview
-Static site preview
-In-app terminal commands
-Service integration foundation
+---
 
-```
+# 🏗 Extensibility Lanes
+
+KForge now has four extensibility/runtime systems:
+
+Template Registry  
+Service Registry  
+Preview Runtime  
+Command Runtime
+
+These lanes allow new capabilities to be added without redesigning the architecture.
+
+Future integrations will attach adapters rather than creating new subsystems.
+
+Planned adapters:
+
+• Supabase  
+• Stripe  
+• OpenAI  
+• Deploy providers (Vercel / Netlify)
+
+---
 
 This milestone represents a **restore-grade architectural checkpoint**.
 
-KForge now has four major extensibility/runtime lanes:
-
+Phase 4.6 proves the Service Integration Layer works with a real external platform (GitHub).
 ```
 
-Template Registry
-Service Registry
-Preview Runtime
-Command Runtime
+---
 
+After saving, run:
+
+```powershell
+git add docs-internal/PROJECT-SNAPSHOT.md
 ```
 
-Future phases such as GitHub integration, deploy pipeline work, and Supabase setup can now plug into this foundation instead of creating fresh subsystems.
-```
 

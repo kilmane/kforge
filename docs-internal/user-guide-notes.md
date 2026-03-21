@@ -1,7 +1,7 @@
 
 # User Guide Notes (development capture)
 
-Last Updated: March 20th, 2026
+Last Updated: March 21st, 2026
 
 Location:
 D:\kforge\docs-internal\user-guide-notes.md
@@ -401,29 +401,18 @@ dir
 
 # Services
 
-KForge also includes a **Services** panel as the foundation for future guided external integrations.
+KForge also includes a **Services** panel for guided external integrations.
 
 Current purpose:
 
-* provide a shared place for future service connections
+* provide a shared place for service connections
 * avoid one-off integration UIs and runtimes
-* prepare KForge for services such as Supabase, Stripe, OpenAI, GitHub, and deploy providers
+* support integrations such as Supabase, Stripe, OpenAI, GitHub, and deploy providers
 
-At this stage, the Services panel is **architectural groundwork**.
-
-It does **not** yet perform real service connection or setup.
-
-Current behavior:
-
-* displays known service entries
-* shows simple status badges
-* shows declared environment variable names
-* allows placeholder setup actions for available services
-* streams service log output into the panel
-
-Current visible placeholder services include:
+Current visible services include:
 
 ```text
+GitHub
 Supabase
 Stripe
 OpenAI
@@ -432,7 +421,7 @@ OpenAI
 User mental model:
 
 ```text
-Services = future guided setup for external infrastructure
+Services = guided setup for external infrastructure
 ```
 
 Not:
@@ -440,6 +429,98 @@ Not:
 ```text
 Services = full infrastructure dashboard
 ```
+
+---
+
+## GitHub Publishing
+
+KForge now supports **publishing a local project to GitHub** from the Services panel.
+
+Current workflow:
+
+```text
+Open folder
+Open Services
+Enter repository name
+Choose public/private
+Click Publish
+```
+
+KForge then attempts to:
+
+```text
+git init
+git add .
+git commit -m "Initial commit from KForge"
+git branch -M main
+gh repo create <repo-name> --public|--private --source . --remote origin --push
+```
+
+This workflow relies on the user already having:
+
+```text
+git
+GitHub CLI (gh)
+```
+
+installed and available in the system environment.
+
+The user must also be authenticated with GitHub CLI:
+
+```text
+gh auth login
+```
+
+KForge does not currently perform GitHub OAuth itself. It relies on the existing GitHub CLI login state.
+
+---
+
+## GitHub Service Panel Behavior
+
+Current GitHub UI includes:
+
+* repository name input
+* public/private visibility selector
+* Publish button
+* live service log output
+
+The service log allows the user to observe the publish process directly.
+
+Examples of messages the user may see:
+
+```text
+Preparing GitHub publish for repository 'my-project'
+Checking GitHub CLI authentication...
+Initializing git repository...
+Staging project files...
+Creating initial commit...
+Ensuring branch name is main...
+Creating public GitHub repository and pushing...
+GitHub publish complete.
+```
+
+If prerequisites are missing, KForge may show errors such as:
+
+```text
+GitHub CLI (gh) is not installed or not available in PATH
+```
+
+or other git / GitHub CLI related messages.
+
+---
+
+## Services Panel Persistence Behavior
+
+The Services panel preserves in-progress context across collapse/reopen behavior.
+
+Examples:
+
+* typed repository name remains visible after closing and reopening Services
+* service log remains visible after closing and reopening Services
+
+However, service state should reset when the workspace itself is reset or changed.
+
+This keeps the panel convenient without making it feel detached from the active project.
 
 ---
 
@@ -475,7 +556,7 @@ AI edits
 Preview runtime
 Filesystem tools
 Explorer tree
-Future service setup
+Service setup
 ```
 
 all operate on the same folder.
@@ -512,22 +593,24 @@ Users do not need to think in architecture, but the current Services behavior ca
 Open folder
 Open Services
 See available/planned integrations
-Trigger guided setup later as integrations are implemented
+Publish to GitHub now
+Use guided setup for other integrations later
 ```
 
-Practical examples for future intent:
+Practical examples:
 
 ```text
-Connect Supabase
-Connect Stripe
-Connect OpenAI
 Publish to GitHub
-Deploy to Vercel / Netlify
+Connect Supabase later
+Connect Stripe later
+Connect OpenAI later
+Deploy to Vercel / Netlify in future phases
 ```
 
-For now, the panel exists to establish this workflow shape early without yet performing real integration work.
+The Services panel now has one real integration implemented: **GitHub publishing**.
 
-```
+Other services still remain future guided integrations.
+
+````
 
 
-```

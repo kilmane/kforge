@@ -4,8 +4,8 @@
 **Location:**
 D:\kforge\docs-internal\project-map.md
 
-**Version:** v10
-**Updated:** 20/03/2026
+**Version:** v11
+**Updated:** 21/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -716,7 +716,7 @@ This preserves a focused single-runtime surface while supporting both preview an
 
 ---
 
-# 3e Service Integration Layer (Foundation)
+# 3e Service Integration Layer
 
 Backend implementation:
 
@@ -758,9 +758,7 @@ service_setup
 
 ## Responsibilities
 
-Service Integration Layer provides a shared architecture for future external integrations.
-
-This phase introduces the **foundation only**.
+Service Integration Layer provides a shared architecture for external integrations.
 
 Its job is to prevent future services from becoming one-off subsystems.
 
@@ -814,8 +812,9 @@ Current example fields include:
 * `envVars`
 * `setupCommand`
 
-Current placeholder entries include:
+Current entries include:
 
+* GitHub
 * Supabase
 * Stripe
 * OpenAI
@@ -831,6 +830,7 @@ The registry is the frontend source of truth for what services KForge knows abou
 Responsibilities:
 
 * invoke service setup command
+* pass structured setup options
 * subscribe to service log events
 * subscribe to service status events
 
@@ -847,7 +847,7 @@ This mirrors the same architectural pattern already used by Preview and Command 
 
 ## Backend Behavior
 
-`service.rs` currently provides a placeholder backend command:
+`service.rs` provides the backend command:
 
 ```text
 service_setup
@@ -857,17 +857,58 @@ Current behavior:
 
 * validates project path
 * validates service id
+* accepts structured setup options
 * emits status events
 * emits log events
 * enforces one service setup at a time
 
-This phase does **not** yet perform real integration work.
+GitHub is now the first real adapter attached to this runtime lane.
 
-No external accounts are connected.
-No configuration files are generated.
-No environment variables are written.
+---
 
-The backend currently exists to define the runtime lane and event contract.
+## GitHub Integration (Phase 4.6)
+
+Phase 4.6 introduces the first real Service Layer adapter: GitHub.
+
+This adapter allows KForge to publish a local project directly to a new GitHub repository.
+
+Workflow executed:
+
+```text
+git init
+git add .
+git commit -m "Initial commit from KForge"
+git branch -M main
+gh repo create <repo-name> --public|--private --source . --remote origin --push
+```
+
+The adapter relies on the GitHub CLI (`gh`) for authentication and repository creation.
+
+Requirements:
+
+* git installed
+* GitHub CLI installed
+* user authenticated via `gh auth login`
+
+KForge does not manage OAuth tokens directly. Authentication is delegated to the GitHub CLI.
+
+This keeps the integration simple and secure while avoiding token management inside KForge.
+
+The Service Panel provides a minimal UI for:
+
+* repository name
+* visibility (public/private)
+* publish trigger
+* service log output
+
+Service logs stream command output so users can observe the publishing process.
+
+This establishes the pattern for future adapters such as:
+
+* Supabase
+* Stripe
+* OpenAI
+* deployment providers (Vercel / Netlify)
 
 ---
 
@@ -880,9 +921,11 @@ Current UI responsibilities:
 * show known services
 * show status badges
 * show declared environment variables
-* trigger placeholder setup for available services
+* trigger service setup flows
 * render service logs
 * display current workspace/project path
+* persist logs and form state across panel collapse/reopen
+* clear persisted state when workspace resets or changes
 
 Current design intent:
 
@@ -905,14 +948,23 @@ This keeps the right-hand workspace tools focused and calm.
 
 ## Current Phase Boundary
 
-Phase 4.5 intentionally introduces architecture only.
+Phase 4.5 introduced the Service Integration Layer architecture.
 
-Not implemented yet:
+Phase 4.6 attaches the first real adapter: **GitHub publishing**.
 
-* real Supabase setup
-* real Stripe setup
-* real OpenAI setup
-* GitHub publishing
+Implemented:
+
+* GitHub repository publishing
+* git repository initialization
+* initial commit generation
+* GitHub repository creation via GitHub CLI
+* automatic push of the local project to GitHub
+
+Still not implemented:
+
+* Supabase setup
+* Stripe setup
+* OpenAI setup
 * deploy pipeline actions
 
 Those future phases should mainly attach adapters to the Service Layer rather than inventing fresh UI/runtime systems.
@@ -1018,5 +1070,7 @@ prompt
 → AI edits files
 → preview or command feedback
 → user sees result instantly
+```
+
 ```
 
