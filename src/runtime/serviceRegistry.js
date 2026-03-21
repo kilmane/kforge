@@ -1,5 +1,13 @@
 export const SERVICE_REGISTRY = [
   {
+    id: "github",
+    name: "GitHub",
+    description: "Publish this project to a GitHub repository.",
+    status: "available",
+    envVars: [],
+    setupCommand: "service_setup",
+  },
+  {
     id: "supabase",
     name: "Supabase",
     description: "Backend/database foundation for future KForge project setup.",

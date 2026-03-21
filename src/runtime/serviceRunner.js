@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 const SERVICE_LOG_EVENT = "kforge://service/log";
 const SERVICE_STATUS_EVENT = "kforge://service/status";
 
-export async function runServiceSetup(serviceId, projectPath) {
+export async function runServiceSetup(serviceId, projectPath, options = {}) {
   if (!serviceId || !String(serviceId).trim()) {
     throw new Error("Service id is required");
   }
@@ -16,6 +16,7 @@ export async function runServiceSetup(serviceId, projectPath) {
   return invoke("service_setup", {
     serviceId,
     projectPath,
+    options,
   });
 }
 

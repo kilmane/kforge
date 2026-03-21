@@ -1120,8 +1120,10 @@ export default function AiPanel({
               </button>
 
               {servicesOpen && (
-                <div className="p-3 border-t border-zinc-800">
-                  <ServicePanel projectPath={projectPath} />
+                <div className="border-t border-zinc-800 px-3 pb-3 pt-2">
+                  <div className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/30">
+                    <ServicePanel projectPath={projectPath} />
+                  </div>
                 </div>
               )}
             </div>

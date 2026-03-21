@@ -6,6 +6,22 @@ import {
   subscribeServiceStatus,
 } from "./serviceRunner";
 
+const persistedServicePanelState = {
+  logs: [],
+  activeServiceId: null,
+  serviceStatus: "idle",
+  busyServiceId: null,
+  githubRepoName: "",
+  githubVisibility: "public",
+};
+function resetPersistedServicePanelState() {
+  persistedServicePanelState.logs = [];
+  persistedServicePanelState.activeServiceId = null;
+  persistedServicePanelState.serviceStatus = "idle";
+  persistedServicePanelState.busyServiceId = null;
+  persistedServicePanelState.githubRepoName = "";
+  persistedServicePanelState.githubVisibility = "public";
+}
 function formatEnvVars(envVars) {
   if (!Array.isArray(envVars) || envVars.length === 0) {
     return "No environment variables declared yet.";
@@ -13,12 +29,57 @@ function formatEnvVars(envVars) {
   return envVars.join(", ");
 }
 
+function sanitizeRepoName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
 export default function ServicePanel({ projectPath }) {
-  const [logs, setLogs] = useState([]);
-  const [activeServiceId, setActiveServiceId] = useState(null);
-  const [serviceStatus, setServiceStatus] = useState("idle");
-  const [busyServiceId, setBusyServiceId] = useState(null);
+  const [logs, setLogs] = useState(persistedServicePanelState.logs);
+  const [activeServiceId, setActiveServiceId] = useState(
+    persistedServicePanelState.activeServiceId,
+  );
+  const [serviceStatus, setServiceStatus] = useState(
+    persistedServicePanelState.serviceStatus,
+  );
+  const [busyServiceId, setBusyServiceId] = useState(
+    persistedServicePanelState.busyServiceId,
+  );
+  const [githubRepoName, setGithubRepoName] = useState(
+    persistedServicePanelState.githubRepoName,
+  );
+  const [githubVisibility, setGithubVisibility] = useState(
+    persistedServicePanelState.githubVisibility,
+  );
   const logEndRef = useRef(null);
+  const lastProjectPathRef = useRef(
+    projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
+  );
+
+  useEffect(() => {
+    persistedServicePanelState.logs = logs;
+  }, [logs]);
+
+  useEffect(() => {
+    persistedServicePanelState.activeServiceId = activeServiceId;
+  }, [activeServiceId]);
+
+  useEffect(() => {
+    persistedServicePanelState.serviceStatus = serviceStatus;
+  }, [serviceStatus]);
+
+  useEffect(() => {
+    persistedServicePanelState.busyServiceId = busyServiceId;
+  }, [busyServiceId]);
+
+  useEffect(() => {
+    persistedServicePanelState.githubRepoName = githubRepoName;
+  }, [githubRepoName]);
+
+  useEffect(() => {
+    persistedServicePanelState.githubVisibility = githubVisibility;
+  }, [githubVisibility]);
 
   useEffect(() => {
     let unlistenLogs = null;
@@ -45,7 +106,10 @@ export default function ServicePanel({ projectPath }) {
 
         if (nextStatus.startsWith("running:")) {
           setBusyServiceId(nextStatus.replace("running:", ""));
-        } else if (nextStatus.startsWith("done:")) {
+        } else if (
+          nextStatus.startsWith("done:") ||
+          nextStatus.startsWith("error:")
+        ) {
           setBusyServiceId(null);
         }
       });
@@ -59,7 +123,42 @@ export default function ServicePanel({ projectPath }) {
       if (typeof unlistenStatus === "function") unlistenStatus();
     };
   }, []);
+  useEffect(() => {
+    const normalizedProjectPath =
+      projectPath && String(projectPath).trim()
+        ? String(projectPath).trim()
+        : "";
 
+    const previousProjectPath = lastProjectPathRef.current;
+
+    if (!normalizedProjectPath) {
+      resetPersistedServicePanelState();
+      setLogs([]);
+      setActiveServiceId(null);
+      setServiceStatus("idle");
+      setBusyServiceId(null);
+      setGithubRepoName("");
+      setGithubVisibility("public");
+      lastProjectPathRef.current = "";
+      return;
+    }
+
+    if (
+      previousProjectPath &&
+      normalizedProjectPath &&
+      previousProjectPath !== normalizedProjectPath
+    ) {
+      resetPersistedServicePanelState();
+      setLogs([]);
+      setActiveServiceId(null);
+      setServiceStatus("idle");
+      setBusyServiceId(null);
+      setGithubRepoName("");
+      setGithubVisibility("public");
+    }
+
+    lastProjectPathRef.current = normalizedProjectPath;
+  }, [projectPath]);
   useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ block: "end" });
@@ -81,19 +180,45 @@ export default function ServicePanel({ projectPath }) {
       return;
     }
 
+    let options = {};
+
+    if (service.id === "github") {
+      const repoName = sanitizeRepoName(githubRepoName);
+
+      if (!repoName) {
+        setLogs((prev) => [
+          ...prev,
+          {
+            kind: "error",
+            line: "GitHub repository name is required.",
+            ts: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      options = {
+        repoName,
+        visibility: githubVisibility === "private" ? "private" : "public",
+      };
+    }
+
     setActiveServiceId(service.id);
     setBusyServiceId(service.id);
     setLogs((prev) => [
       ...prev,
       {
         kind: "status",
-        line: `Queued ${service.name} setup...`,
+        line:
+          service.id === "github"
+            ? `Queued ${service.name} publish...`
+            : `Queued ${service.name} setup...`,
         ts: Date.now(),
       },
     ]);
 
     try {
-      await runServiceSetup(service.id, projectPath);
+      await runServiceSetup(service.id, projectPath, options);
     } catch (error) {
       setBusyServiceId(null);
       setLogs((prev) => [
@@ -134,6 +259,7 @@ export default function ServicePanel({ projectPath }) {
         {services.map((service) => {
           const isBusy = busyServiceId === service.id;
           const isPlanned = service.status === "planned";
+          const isGithub = service.id === "github";
 
           return (
             <div key={service.id} className="command-runner-item">
@@ -154,6 +280,73 @@ export default function ServicePanel({ projectPath }) {
                 <div className="command-runner-item__meta">
                   <strong>Env:</strong> {formatEnvVars(service.envVars)}
                 </div>
+
+                {isGithub ? (
+                  <div
+                    className="command-runner-item__meta"
+                    style={{
+                      display: "grid",
+                      gap: "8px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "grid",
+                        gap: "4px",
+                      }}
+                    >
+                      <span>
+                        <strong>Repository name</strong>
+                      </span>
+                      <input
+                        type="text"
+                        value={githubRepoName}
+                        onChange={(event) =>
+                          setGithubRepoName(event.target.value)
+                        }
+                        placeholder="my-kforge-project"
+                        disabled={isBusy}
+                        style={{
+                          background: "#ffffff",
+                          color: "#000000",
+                          WebkitTextFillColor: "#000000",
+                          caretColor: "#000000",
+                          paddingLeft: "12px",
+                          paddingRight: "10px",
+                        }}
+                      />
+                    </label>
+
+                    <label
+                      style={{
+                        display: "grid",
+                        gap: "4px",
+                      }}
+                    >
+                      <span>
+                        <strong>Visibility</strong>
+                      </span>
+                      <select
+                        value={githubVisibility}
+                        onChange={(event) =>
+                          setGithubVisibility(event.target.value)
+                        }
+                        disabled={isBusy}
+                        style={{
+                          background: "#ffffff",
+                          color: "#000000",
+                          WebkitTextFillColor: "#000000",
+                          paddingLeft: "12px",
+                          paddingRight: "10px",
+                        }}
+                      >
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
               </div>
 
               <div className="command-runner-item__actions">
@@ -165,10 +358,18 @@ export default function ServicePanel({ projectPath }) {
                   title={
                     isPlanned
                       ? "Planned for a future phase"
-                      : `Set up ${service.name}`
+                      : isGithub
+                        ? "Publish this project to GitHub"
+                        : `Set up ${service.name}`
                   }
                 >
-                  {isPlanned ? "Planned" : isBusy ? "Working..." : "Connect"}
+                  {isPlanned
+                    ? "Planned"
+                    : isBusy
+                      ? "Working..."
+                      : isGithub
+                        ? "Publish"
+                        : "Connect"}
                 </button>
               </div>
             </div>
