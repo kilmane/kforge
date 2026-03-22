@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SERVICE_REGISTRY } from "./serviceRegistry";
 import {
+  detectGithubRepo,
+  githubOpenRepo,
+  githubPull,
   runServiceSetup,
   subscribeServiceLogs,
   subscribeServiceStatus,
@@ -13,7 +16,9 @@ const persistedServicePanelState = {
   busyServiceId: null,
   githubRepoName: "",
   githubVisibility: "public",
+  githubRepoState: null,
 };
+
 function resetPersistedServicePanelState() {
   persistedServicePanelState.logs = [];
   persistedServicePanelState.activeServiceId = null;
@@ -21,7 +26,9 @@ function resetPersistedServicePanelState() {
   persistedServicePanelState.busyServiceId = null;
   persistedServicePanelState.githubRepoName = "";
   persistedServicePanelState.githubVisibility = "public";
+  persistedServicePanelState.githubRepoState = null;
 }
+
 function formatEnvVars(envVars) {
   if (!Array.isArray(envVars) || envVars.length === 0) {
     return "No environment variables declared yet.";
@@ -52,6 +59,9 @@ export default function ServicePanel({ projectPath }) {
   const [githubVisibility, setGithubVisibility] = useState(
     persistedServicePanelState.githubVisibility,
   );
+  const [githubRepoState, setGithubRepoState] = useState(
+    persistedServicePanelState.githubRepoState,
+  );
   const logEndRef = useRef(null);
   const lastProjectPathRef = useRef(
     projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
@@ -80,6 +90,10 @@ export default function ServicePanel({ projectPath }) {
   useEffect(() => {
     persistedServicePanelState.githubVisibility = githubVisibility;
   }, [githubVisibility]);
+
+  useEffect(() => {
+    persistedServicePanelState.githubRepoState = githubRepoState;
+  }, [githubRepoState]);
 
   useEffect(() => {
     let unlistenLogs = null;
@@ -123,6 +137,7 @@ export default function ServicePanel({ projectPath }) {
       if (typeof unlistenStatus === "function") unlistenStatus();
     };
   }, []);
+
   useEffect(() => {
     const normalizedProjectPath =
       projectPath && String(projectPath).trim()
@@ -139,6 +154,7 @@ export default function ServicePanel({ projectPath }) {
       setBusyServiceId(null);
       setGithubRepoName("");
       setGithubVisibility("public");
+      setGithubRepoState(null);
       lastProjectPathRef.current = "";
       return;
     }
@@ -155,10 +171,45 @@ export default function ServicePanel({ projectPath }) {
       setBusyServiceId(null);
       setGithubRepoName("");
       setGithubVisibility("public");
+      setGithubRepoState(null);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
   }, [projectPath]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGithubRepoState() {
+      const normalizedProjectPath =
+        projectPath && String(projectPath).trim()
+          ? String(projectPath).trim()
+          : "";
+
+      if (!normalizedProjectPath) {
+        setGithubRepoState(null);
+        return;
+      }
+
+      try {
+        const nextState = await detectGithubRepo(normalizedProjectPath);
+        if (!cancelled) {
+          setGithubRepoState(nextState);
+        }
+      } catch {
+        if (!cancelled) {
+          setGithubRepoState(null);
+        }
+      }
+    }
+
+    loadGithubRepoState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath, serviceStatus]);
+
   useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ block: "end" });
@@ -232,6 +283,68 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleGithubPull() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before using GitHub actions.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await githubPull(projectPath);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || String(error),
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
+  async function handleGithubOpenRepo() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before using GitHub actions.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await githubOpenRepo(projectPath);
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "status",
+          line: "Opened GitHub repository in browser.",
+          ts: Date.now(),
+        },
+      ]);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || String(error),
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
   return (
     <div className="command-runner-panel">
       <div className="command-runner-panel__header">
@@ -260,6 +373,11 @@ export default function ServicePanel({ projectPath }) {
           const isBusy = busyServiceId === service.id;
           const isPlanned = service.status === "planned";
           const isGithub = service.id === "github";
+          const canOpenGithubRepo =
+            isGithub &&
+            githubRepoState?.isRepo &&
+            githubRepoState?.hasRemote &&
+            !!githubRepoState?.remoteUrl;
 
           return (
             <div key={service.id} className="command-runner-item">
@@ -280,6 +398,33 @@ export default function ServicePanel({ projectPath }) {
                 <div className="command-runner-item__meta">
                   <strong>Env:</strong> {formatEnvVars(service.envVars)}
                 </div>
+
+                {isGithub && githubRepoState ? (
+                  <div
+                    className="command-runner-item__meta"
+                    style={{
+                      display: "grid",
+                      gap: "4px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    <div>
+                      <strong>Git repo:</strong>{" "}
+                      {githubRepoState.isRepo ? "Detected" : "Not detected"}
+                    </div>
+                    <div>
+                      <strong>Has commit:</strong>{" "}
+                      {githubRepoState.hasCommit ? "Yes" : "No"}
+                    </div>
+                    <div>
+                      <strong>Has remote:</strong>{" "}
+                      {githubRepoState.hasRemote ? "Yes" : "No"}
+                    </div>
+                    <div>
+                      <strong>Branch:</strong> {githubRepoState.branch || "—"}
+                    </div>
+                  </div>
+                ) : null}
 
                 {isGithub ? (
                   <div
@@ -349,7 +494,13 @@ export default function ServicePanel({ projectPath }) {
                 ) : null}
               </div>
 
-              <div className="command-runner-item__actions">
+              <div
+                className="command-runner-item__actions"
+                style={{
+                  display: "grid",
+                  gap: "8px",
+                }}
+              >
                 <button
                   type="button"
                   className="command-runner-runButton"
@@ -371,6 +522,30 @@ export default function ServicePanel({ projectPath }) {
                         ? "Publish"
                         : "Connect"}
                 </button>
+
+                {canOpenGithubRepo ? (
+                  <button
+                    type="button"
+                    className="command-runner-runButton"
+                    onClick={handleGithubPull}
+                    disabled={isBusy}
+                    title="Pull latest changes from origin"
+                  >
+                    Pull latest
+                  </button>
+                ) : null}
+
+                {canOpenGithubRepo ? (
+                  <button
+                    type="button"
+                    className="command-runner-runButton"
+                    onClick={handleGithubOpenRepo}
+                    disabled={isBusy}
+                    title="Open this repository on GitHub"
+                  >
+                    Open on GitHub
+                  </button>
+                ) : null}
               </div>
             </div>
           );

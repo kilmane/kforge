@@ -32,7 +32,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(preview::PreviewState::default())
-        .manage(Arc::new(Mutex::new(command_runner::CommandRunnerState::default())))
+        .manage(Arc::new(Mutex::new(
+            command_runner::CommandRunnerState::default(),
+        )))
         .manage(Arc::new(Mutex::new(service::ServiceRunnerState::default())))
         .plugin(tauri_plugin_shell::init())
         .menu(|handle| {
@@ -150,6 +152,9 @@ pub fn run() {
             preview::preview_stop,
             command_runner::command_run,
             service::service_setup,
+            service::github_detect_repo,
+            service::github_open_repo,
+            service::github_pull,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_nextjs,

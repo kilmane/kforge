@@ -1,9 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_shell::ShellExt;
 
 #[derive(Default)]
 pub struct ServiceRunnerState {
@@ -15,6 +16,16 @@ pub struct ServiceRunnerState {
 pub struct ServiceSetupOptions {
     pub repo_name: Option<String>,
     pub visibility: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubRepoState {
+    pub is_repo: bool,
+    pub has_commit: bool,
+    pub has_remote: bool,
+    pub remote_url: Option<String>,
+    pub branch: Option<String>,
 }
 
 fn emit_log(app: &AppHandle, kind: &str, line: &str) {
@@ -125,6 +136,66 @@ fn git_has_commits(project_dir: &PathBuf) -> bool {
 
 fn git_remote_exists(project_dir: &PathBuf, remote_name: &str) -> bool {
     run_command_status(project_dir, "git", &["remote", "get-url", remote_name]).unwrap_or(false)
+}
+
+fn git_remote_url(project_dir: &PathBuf, remote_name: &str) -> Option<String> {
+    Command::new("git")
+        .args(["remote", "get-url", remote_name])
+        .current_dir(project_dir)
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if value.is_empty() {
+                    None
+                } else {
+                    Some(value)
+                }
+            } else {
+                None
+            }
+        })
+}
+
+fn git_current_branch(project_dir: &PathBuf) -> Option<String> {
+    Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(project_dir)
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if value.is_empty() {
+                    None
+                } else {
+                    Some(value)
+                }
+            } else {
+                None
+            }
+        })
+}
+
+fn github_remote_to_web_url(remote_url: &str) -> Option<String> {
+    let trimmed = remote_url.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("https://github.com/") {
+        let repo = rest.trim_end_matches(".git");
+        return Some(format!("https://github.com/{}", repo));
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("git@github.com:") {
+        let repo = rest.trim_end_matches(".git");
+        return Some(format!("https://github.com/{}", repo));
+    }
+
+    None
 }
 
 fn normalized_visibility(value: Option<String>) -> String {
@@ -270,6 +341,80 @@ fn run_placeholder_setup(app: &AppHandle, label: &str, project_path: &str) {
         "Future phases will attach real adapters for config generation, env setup, and guided install steps.",
     );
     emit_log(app, "stdout", &format!("{} adapter slot is ready.", label));
+}
+
+#[tauri::command]
+pub fn github_detect_repo(project_path: String) -> Result<GithubRepoState, String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !git_dir_exists(&project_dir) {
+        return Ok(GithubRepoState {
+            is_repo: false,
+            has_commit: false,
+            has_remote: false,
+            remote_url: None,
+            branch: None,
+        });
+    }
+
+    let has_commit = git_has_commits(&project_dir);
+    let has_remote = git_remote_exists(&project_dir, "origin");
+
+    Ok(GithubRepoState {
+        is_repo: true,
+        has_commit,
+        has_remote,
+        remote_url: if has_remote {
+            git_remote_url(&project_dir, "origin")
+        } else {
+            None
+        },
+        branch: git_current_branch(&project_dir),
+    })
+}
+
+#[tauri::command]
+pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !git_dir_exists(&project_dir) {
+        return Err("This folder is not a git repository".to_string());
+    }
+
+    let remote_url = git_remote_url(&project_dir, "origin")
+        .ok_or_else(|| "No git remote named 'origin' was found".to_string())?;
+
+    let web_url = github_remote_to_web_url(&remote_url)
+        .ok_or_else(|| "Origin remote is not a supported GitHub URL".to_string())?;
+
+    app.shell()
+        .open(&web_url, None)
+        .map_err(|error| format!("Failed to open browser: {}", error))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn github_pull(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !command_exists(&project_dir, "git") {
+        return Err("Git is not installed or not available in PATH".to_string());
+    }
+
+    if !git_dir_exists(&project_dir) {
+        return Err("This folder is not a git repository".to_string());
+    }
+
+    if !git_remote_exists(&project_dir, "origin") {
+        return Err("No git remote named 'origin' was found".to_string());
+    }
+
+    emit_log(&app, "status", "Pulling latest changes from origin...");
+    run_command_capture(&app, &project_dir, "git", &["pull"])?;
+    emit_log(&app, "status", "Git pull complete.");
+
+    Ok(())
 }
 
 #[tauri::command]

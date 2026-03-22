@@ -20,6 +20,36 @@ export async function runServiceSetup(serviceId, projectPath, options = {}) {
   });
 }
 
+export async function detectGithubRepo(projectPath) {
+  if (!projectPath || !String(projectPath).trim()) {
+    throw new Error("Project path is required");
+  }
+
+  return invoke("github_detect_repo", {
+    projectPath,
+  });
+}
+
+export async function githubOpenRepo(projectPath) {
+  if (!projectPath || !String(projectPath).trim()) {
+    throw new Error("Project path is required");
+  }
+
+  return invoke("github_open_repo", {
+    projectPath,
+  });
+}
+
+export async function githubPull(projectPath) {
+  if (!projectPath || !String(projectPath).trim()) {
+    throw new Error("Project path is required");
+  }
+
+  return invoke("github_pull", {
+    projectPath,
+  });
+}
+
 export async function subscribeServiceLogs(onLog) {
   if (typeof onLog !== "function") {
     throw new Error("onLog callback is required");
