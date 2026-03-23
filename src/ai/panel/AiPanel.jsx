@@ -544,6 +544,18 @@ export default function AiPanel({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
+  const servicesSectionRef = useRef(null);
+  const servicesPanelScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (!servicesOpen) return;
+
+    requestAnimationFrame(() => {
+      if (servicesPanelScrollRef.current) {
+        servicesPanelScrollRef.current.scrollTop = 0;
+      }
+    });
+  }, [servicesOpen]);
 
   useEffect(() => {
     if (!isDevBuild) return;
@@ -1032,101 +1044,152 @@ export default function AiPanel({
         </div>
         {isDevBuild && (
           <>
-            <div className="border-b border-zinc-800">
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof setFocusMode === "function") {
-                    setFocusMode(true);
-                  }
-                  setPreviewOpen((v) => {
-                    const next = !v;
-                    if (next) setTerminalOpen(false);
-                    return next;
-                  });
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-              >
-                <span className="font-medium">
-                  {previewOpen ? "▼ Preview" : "▶ Preview"}
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {previewOpen ? "Hide preview" : "Show preview"}
-                </span>
-              </button>
+            {previewOpen ? (
+              <div className="border-b border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    setPreviewOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                >
+                  <span className="font-medium">▼ Preview</span>
+                  <span className="text-xs text-zinc-500">Hide preview</span>
+                </button>
 
-              {previewOpen && (
                 <div className="p-3 border-t border-zinc-800">
                   <PreviewPanel projectPath={projectPath} />
                 </div>
-              )}
-            </div>
+              </div>
+            ) : terminalOpen ? (
+              <div className="border-b border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    setTerminalOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                >
+                  <span className="font-medium flex items-center gap-2">
+                    <span>▼</span>
+                    <span>Terminal</span>
+                  </span>
+                  <span className="text-xs text-zinc-500">Hide terminal</span>
+                </button>
 
-            <div className="border-b border-zinc-800">
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof setFocusMode === "function") {
-                    setFocusMode(true);
-                  }
-                  setTerminalOpen((v) => {
-                    const next = !v;
-                    if (next) setPreviewOpen(false);
-                    return next;
-                  });
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-              >
-                <span className="font-medium flex items-center gap-2">
-                  <span>{terminalOpen ? "▼" : "▶"}</span>
-                  <span>Terminal</span>
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {terminalOpen ? "Hide terminal" : "Show terminal"}
-                </span>
-              </button>
-
-              {terminalOpen && (
                 <div className="p-3 border-t border-zinc-800">
                   <CommandRunnerPanel projectPath={projectPath} />
                 </div>
-              )}
-            </div>
-            <div className="border-b border-zinc-800">
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof setFocusMode === "function") {
-                    setFocusMode(true);
-                  }
-                  setServicesOpen((v) => {
-                    const next = !v;
-                    if (next) {
-                      setPreviewOpen(false);
-                      setTerminalOpen(false);
-                    }
-                    return next;
-                  });
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+              </div>
+            ) : servicesOpen ? (
+              <div
+                ref={servicesSectionRef}
+                className="border-b border-zinc-800"
               >
-                <span className="font-medium flex items-center gap-2">
-                  <span>{servicesOpen ? "▼" : "▶"}</span>
-                  <span>Services</span>
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {servicesOpen ? "Hide services" : "Show services"}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    setServicesOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                >
+                  <span className="font-medium flex items-center gap-2">
+                    <span>▼</span>
+                    <span>Services</span>
+                  </span>
+                  <span className="text-xs text-zinc-500">Hide services</span>
+                </button>
 
-              {servicesOpen && (
                 <div className="border-t border-zinc-800 px-3 pb-3 pt-2">
-                  <div className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/30">
+                  <div
+                    ref={servicesPanelScrollRef}
+                    className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/30"
+                  >
                     <ServicePanel projectPath={projectPath} />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="border-b border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof setFocusMode === "function") {
+                        setFocusMode(true);
+                      }
+                      setPreviewOpen(true);
+                      setTerminalOpen(false);
+                      setServicesOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                  >
+                    <span className="font-medium">▶ Preview</span>
+                    <span className="text-xs text-zinc-500">Show preview</span>
+                  </button>
+                </div>
+
+                <div className="border-b border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof setFocusMode === "function") {
+                        setFocusMode(true);
+                      }
+                      setTerminalOpen(true);
+                      setPreviewOpen(false);
+                      setServicesOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                  >
+                    <span className="font-medium flex items-center gap-2">
+                      <span>▶</span>
+                      <span>Terminal</span>
+                    </span>
+                    <span className="text-xs text-zinc-500">Show terminal</span>
+                  </button>
+                </div>
+
+                <div
+                  ref={servicesSectionRef}
+                  className="border-b border-zinc-800"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof setFocusMode === "function") {
+                        setFocusMode(true);
+                      }
+                      setServicesOpen(true);
+                      setPreviewOpen(false);
+                      setTerminalOpen(false);
+                      requestAnimationFrame(() => {
+                        servicesSectionRef.current?.scrollIntoView({
+                          block: "start",
+                          behavior: "auto",
+                        });
+                      });
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                  >
+                    <span className="font-medium flex items-center gap-2">
+                      <span>▶</span>
+                      <span>Services</span>
+                    </span>
+                    <span className="text-xs text-zinc-500">Show services</span>
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
         {providerSwitchNote ? (

@@ -50,6 +50,16 @@ export async function githubPull(projectPath) {
   });
 }
 
+export async function githubPush(projectPath) {
+  if (!projectPath || !String(projectPath).trim()) {
+    throw new Error("Project path is required");
+  }
+
+  return invoke("github_push", {
+    projectPath,
+  });
+}
+
 export async function subscribeServiceLogs(onLog) {
   if (typeof onLog !== "function") {
     throw new Error("onLog callback is required");

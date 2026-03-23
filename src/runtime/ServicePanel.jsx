@@ -4,10 +4,13 @@ import {
   detectGithubRepo,
   githubOpenRepo,
   githubPull,
+  githubPush,
   runServiceSetup,
   subscribeServiceLogs,
   subscribeServiceStatus,
 } from "./serviceRunner";
+
+const SERVICE_ACCENT = "#f4b942";
 
 const persistedServicePanelState = {
   logs: [],
@@ -40,6 +43,30 @@ function sanitizeRepoName(value) {
   return String(value || "")
     .trim()
     .replace(/\s+/g, "-");
+}
+
+function getServiceStatusTone(status) {
+  if (status === "available") {
+    return {
+      background: "rgba(245, 158, 11, 0.10)",
+      border: "1px solid rgba(245, 158, 11, 0.28)",
+      color: "#fcd34d",
+    };
+  }
+
+  if (status === "planned") {
+    return {
+      background: "rgba(113, 113, 122, 0.14)",
+      border: "1px solid rgba(113, 113, 122, 0.24)",
+      color: "#d4d4d8",
+    };
+  }
+
+  return {
+    background: "rgba(63, 63, 70, 0.16)",
+    border: "1px solid rgba(82, 82, 91, 0.24)",
+    color: "#e4e4e7",
+  };
 }
 
 export default function ServicePanel({ projectPath }) {
@@ -283,6 +310,33 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleGithubPush() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before using GitHub actions.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await githubPush(projectPath);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || String(error),
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
   async function handleGithubPull() {
     if (!projectPath || !String(projectPath).trim()) {
       setLogs((prev) => [
@@ -346,29 +400,133 @@ export default function ServicePanel({ projectPath }) {
   }
 
   return (
-    <div className="command-runner-panel">
-      <div className="command-runner-panel__header">
-        <div>
-          <div className="command-runner-panel__title">Services</div>
-          <div className="command-runner-panel__subtitle">
-            Foundation for guided external integrations.
+    <div
+      className="command-runner-panel"
+      style={{
+        padding: "16px 14px 14px",
+      }}
+    >
+      <div
+        className="command-runner-panel__header"
+        style={{
+          marginBottom: "14px",
+          paddingBottom: "10px",
+          borderBottom: "1px solid #27272a",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+            gap: "8px",
+          }}
+        >
+          <div
+            className="command-runner-panel__title"
+            style={{
+              fontSize: "16px",
+              fontWeight: 700,
+              lineHeight: 1.2,
+              color: "#fafafa",
+            }}
+          >
+            Services
+          </div>
+
+          <div
+            className="command-runner-panel__subtitle"
+            style={{
+              fontSize: "13px",
+              color: "#a1a1aa",
+            }}
+          >
+            — Connect your project to external tools.
           </div>
         </div>
       </div>
 
-      <div className="command-runner-panel__meta">
+      <div
+        className="command-runner-panel__meta"
+        style={{
+          display: "grid",
+          gap: "6px",
+          marginBottom: "14px",
+          padding: "10px 12px",
+          border: "1px solid #27272a",
+          borderRadius: "10px",
+          background: "rgba(24, 24, 27, 0.5)",
+        }}
+      >
         <div>
-          <strong>Project root:</strong>{" "}
+          <strong>Project:</strong>{" "}
           {projectPath && String(projectPath).trim()
             ? projectPath
             : "No folder open"}
         </div>
         <div>
-          <strong>Status:</strong> {serviceStatus}
+          <strong>State:</strong> {serviceStatus}
         </div>
       </div>
 
-      <div className="command-runner-list">
+      <div
+        className="command-runner-logs"
+        style={{
+          marginBottom: "16px",
+          border: "1px solid #27272a",
+          borderRadius: "10px",
+          background: "rgba(9, 9, 11, 0.45)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          className="command-runner-logs__title"
+          style={{
+            padding: "10px 12px",
+            borderBottom: "1px solid #27272a",
+            fontSize: "14px",
+            fontWeight: 700,
+            color: "#f4f4f5",
+            background: "rgba(24, 24, 27, 0.5)",
+          }}
+        >
+          Activity log
+          {activeServiceId ? ` — ${activeServiceId}` : ""}
+        </div>
+
+        <div
+          className="command-runner-logs__body"
+          style={{
+            padding: "10px 12px",
+            maxHeight: "180px",
+            overflow: "auto",
+          }}
+        >
+          {logs.length === 0 ? (
+            <div className="command-runner-logs__empty">
+              No service activity yet.
+            </div>
+          ) : (
+            logs.map((entry) => (
+              <div
+                key={`${entry.ts}-${entry.line}`}
+                className={`command-runner-log command-runner-log--${entry.kind}`}
+              >
+                {entry.line}
+              </div>
+            ))
+          )}
+          <div ref={logEndRef} />
+        </div>
+      </div>
+
+      <div
+        className="command-runner-list"
+        style={{
+          display: "grid",
+          gap: "14px",
+        }}
+      >
         {services.map((service) => {
           const isBusy = busyServiceId === service.id;
           const isPlanned = service.status === "planned";
@@ -378,19 +536,63 @@ export default function ServicePanel({ projectPath }) {
             githubRepoState?.isRepo &&
             githubRepoState?.hasRemote &&
             !!githubRepoState?.remoteUrl;
+          const tone = getServiceStatusTone(service.status);
 
           return (
-            <div key={service.id} className="command-runner-item">
-              <div className="command-runner-item__body">
-                <div className="command-runner-item__titleRow">
-                  <div className="command-runner-item__title">
-                    {service.name}
-                  </div>
-                  <div className="command-runner-item__badge">
-                    {service.status}
-                  </div>
+            <div
+              key={service.id}
+              className="command-runner-item"
+              style={{
+                border: "1px solid #27272a",
+                borderRadius: "10px",
+                background: "rgba(9, 9, 11, 0.45)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  padding: "10px 12px",
+                  borderBottom: "1px solid #27272a",
+                  background: "rgba(24, 24, 27, 0.45)",
+                }}
+              >
+                <div
+                  className="command-runner-item__title"
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: SERVICE_ACCENT,
+                  }}
+                >
+                  {service.name}
                 </div>
 
+                <div
+                  className="command-runner-item__badge"
+                  style={{
+                    padding: "3px 9px",
+                    borderRadius: "999px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    textTransform: "capitalize",
+                    ...tone,
+                  }}
+                >
+                  {service.status}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: "12px",
+                  padding: "12px",
+                }}
+              >
                 <div className="command-runner-item__description">
                   {service.description}
                 </div>
@@ -404,8 +606,11 @@ export default function ServicePanel({ projectPath }) {
                     className="command-runner-item__meta"
                     style={{
                       display: "grid",
-                      gap: "4px",
-                      marginTop: "10px",
+                      gap: "6px",
+                      padding: "10px 12px",
+                      border: "1px solid #27272a",
+                      borderRadius: "8px",
+                      background: "rgba(24, 24, 27, 0.35)",
                     }}
                   >
                     <div>
@@ -431,8 +636,11 @@ export default function ServicePanel({ projectPath }) {
                     className="command-runner-item__meta"
                     style={{
                       display: "grid",
-                      gap: "8px",
-                      marginTop: "10px",
+                      gap: "10px",
+                      padding: "10px 12px",
+                      border: "1px solid #27272a",
+                      borderRadius: "8px",
+                      background: "rgba(24, 24, 27, 0.35)",
                     }}
                   >
                     <label
@@ -492,89 +700,76 @@ export default function ServicePanel({ projectPath }) {
                     </label>
                   </div>
                 ) : null}
-              </div>
 
-              <div
-                className="command-runner-item__actions"
-                style={{
-                  display: "grid",
-                  gap: "8px",
-                }}
-              >
-                <button
-                  type="button"
-                  className="command-runner-runButton"
-                  onClick={() => handleSetup(service)}
-                  disabled={isBusy || isPlanned}
-                  title={
-                    isPlanned
-                      ? "Planned for a future phase"
-                      : isGithub
-                        ? "Publish this project to GitHub"
-                        : `Set up ${service.name}`
-                  }
+                <div
+                  className="command-runner-item__actions"
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                  }}
                 >
-                  {isPlanned
-                    ? "Planned"
-                    : isBusy
-                      ? "Working..."
-                      : isGithub
-                        ? "Publish"
-                        : "Connect"}
-                </button>
-
-                {canOpenGithubRepo ? (
                   <button
                     type="button"
                     className="command-runner-runButton"
-                    onClick={handleGithubPull}
-                    disabled={isBusy}
-                    title="Pull latest changes from origin"
+                    onClick={() => handleSetup(service)}
+                    disabled={isBusy || isPlanned}
+                    title={
+                      isPlanned
+                        ? "Planned for a future phase"
+                        : isGithub
+                          ? "Publish this project to GitHub"
+                          : `Set up ${service.name}`
+                    }
                   >
-                    Pull latest
+                    {isPlanned
+                      ? "Planned"
+                      : isBusy
+                        ? "Working..."
+                        : isGithub
+                          ? "Publish"
+                          : "Connect"}
                   </button>
-                ) : null}
 
-                {canOpenGithubRepo ? (
-                  <button
-                    type="button"
-                    className="command-runner-runButton"
-                    onClick={handleGithubOpenRepo}
-                    disabled={isBusy}
-                    title="Open this repository on GitHub"
-                  >
-                    Open on GitHub
-                  </button>
-                ) : null}
+                  {canOpenGithubRepo ? (
+                    <button
+                      type="button"
+                      className="command-runner-runButton"
+                      onClick={handleGithubPush}
+                      disabled={isBusy}
+                      title="Commit and push local changes to origin"
+                    >
+                      Push changes
+                    </button>
+                  ) : null}
+
+                  {canOpenGithubRepo ? (
+                    <button
+                      type="button"
+                      className="command-runner-runButton"
+                      onClick={handleGithubPull}
+                      disabled={isBusy}
+                      title="Pull latest changes from origin"
+                    >
+                      Pull latest
+                    </button>
+                  ) : null}
+
+                  {canOpenGithubRepo ? (
+                    <button
+                      type="button"
+                      className="command-runner-runButton"
+                      onClick={handleGithubOpenRepo}
+                      disabled={isBusy}
+                      title="Open this repository on GitHub"
+                    >
+                      Open on GitHub
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
-
-      <div className="command-runner-logs">
-        <div className="command-runner-logs__title">
-          Service log
-          {activeServiceId ? ` — ${activeServiceId}` : ""}
-        </div>
-
-        <div className="command-runner-logs__body">
-          {logs.length === 0 ? (
-            <div className="command-runner-logs__empty">
-              No service activity yet.
-            </div>
-          ) : (
-            logs.map((entry) => (
-              <div
-                key={`${entry.ts}-${entry.line}`}
-                className={`command-runner-log command-runner-log--${entry.kind}`}
-              >
-                {entry.line}
-              </div>
-            ))
-          )}
-          <div ref={logEndRef} />
-        </div>
       </div>
     </div>
   );
