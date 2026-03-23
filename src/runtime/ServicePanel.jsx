@@ -10,11 +10,52 @@ import {
   subscribeServiceStatus,
 } from "./serviceRunner";
 
-const SERVICE_ACCENT = "#f4b942";
+const DEFAULT_TASK_ID = "code";
+const DEFAULT_PROVIDER_ID = "github";
+
+const TASK_GROUPS = [
+  {
+    id: "code",
+    label: "Code",
+    providerIds: ["github"],
+  },
+  {
+    id: "deploy",
+    label: "Deploy",
+    providerIds: ["vercel", "netlify"],
+  },
+  {
+    id: "backend",
+    label: "Backend",
+    providerIds: ["supabase"],
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    providerIds: ["stripe"],
+  },
+];
+
+const FALLBACK_PROVIDER_REGISTRY = {
+  vercel: {
+    id: "vercel",
+    name: "Vercel",
+    status: "planned",
+    envVars: [],
+  },
+  netlify: {
+    id: "netlify",
+    name: "Netlify",
+    status: "planned",
+    envVars: [],
+  },
+};
 
 const persistedServicePanelState = {
   logs: [],
-  activeServiceId: null,
+  activeServiceId: DEFAULT_PROVIDER_ID,
+  activeTaskId: DEFAULT_TASK_ID,
+  activeProviderId: DEFAULT_PROVIDER_ID,
   serviceStatus: "idle",
   busyServiceId: null,
   githubRepoName: "",
@@ -24,7 +65,9 @@ const persistedServicePanelState = {
 
 function resetPersistedServicePanelState() {
   persistedServicePanelState.logs = [];
-  persistedServicePanelState.activeServiceId = null;
+  persistedServicePanelState.activeServiceId = DEFAULT_PROVIDER_ID;
+  persistedServicePanelState.activeTaskId = DEFAULT_TASK_ID;
+  persistedServicePanelState.activeProviderId = DEFAULT_PROVIDER_ID;
   persistedServicePanelState.serviceStatus = "idle";
   persistedServicePanelState.busyServiceId = null;
   persistedServicePanelState.githubRepoName = "";
@@ -45,34 +88,55 @@ function sanitizeRepoName(value) {
     .replace(/\s+/g, "-");
 }
 
-function getServiceStatusTone(status) {
-  if (status === "available") {
-    return {
-      background: "rgba(245, 158, 11, 0.10)",
-      border: "1px solid rgba(245, 158, 11, 0.28)",
-      color: "#fcd34d",
-    };
-  }
+function buildProviderMap() {
+  const map = new Map();
 
-  if (status === "planned") {
-    return {
-      background: "rgba(113, 113, 122, 0.14)",
-      border: "1px solid rgba(113, 113, 122, 0.24)",
-      color: "#d4d4d8",
-    };
-  }
+  SERVICE_REGISTRY.forEach((service) => {
+    map.set(service.id, service);
+  });
 
-  return {
-    background: "rgba(63, 63, 70, 0.16)",
-    border: "1px solid rgba(82, 82, 91, 0.24)",
-    color: "#e4e4e7",
-  };
+  Object.values(FALLBACK_PROVIDER_REGISTRY).forEach((service) => {
+    if (!map.has(service.id)) {
+      map.set(service.id, service);
+    }
+  });
+
+  return map;
+}
+
+function findTaskByProviderId(providerId) {
+  return (
+    TASK_GROUPS.find((task) => task.providerIds.includes(providerId)) ||
+    TASK_GROUPS[0]
+  );
+}
+
+function getFirstProviderIdForTask(taskId) {
+  return (
+    TASK_GROUPS.find((task) => task.id === taskId)?.providerIds?.[0] ||
+    DEFAULT_PROVIDER_ID
+  );
+}
+
+function getLogLabel(providerId) {
+  if (providerId === "github") return "GitHub";
+  if (providerId === "supabase") return "Supabase";
+  if (providerId === "stripe") return "Stripe";
+  if (providerId === "vercel") return "Vercel";
+  if (providerId === "netlify") return "Netlify";
+  return providerId || "service";
 }
 
 export default function ServicePanel({ projectPath }) {
   const [logs, setLogs] = useState(persistedServicePanelState.logs);
   const [activeServiceId, setActiveServiceId] = useState(
     persistedServicePanelState.activeServiceId,
+  );
+  const [activeTaskId, setActiveTaskId] = useState(
+    persistedServicePanelState.activeTaskId,
+  );
+  const [activeProviderId, setActiveProviderId] = useState(
+    persistedServicePanelState.activeProviderId,
   );
   const [serviceStatus, setServiceStatus] = useState(
     persistedServicePanelState.serviceStatus,
@@ -94,6 +158,12 @@ export default function ServicePanel({ projectPath }) {
     projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
   );
 
+  const providerMap = useMemo(() => buildProviderMap(), []);
+  const activeTask =
+    TASK_GROUPS.find((task) => task.id === activeTaskId) || TASK_GROUPS[0];
+  const activeProvider =
+    providerMap.get(activeProviderId) || providerMap.get(DEFAULT_PROVIDER_ID);
+
   useEffect(() => {
     persistedServicePanelState.logs = logs;
   }, [logs]);
@@ -101,6 +171,14 @@ export default function ServicePanel({ projectPath }) {
   useEffect(() => {
     persistedServicePanelState.activeServiceId = activeServiceId;
   }, [activeServiceId]);
+
+  useEffect(() => {
+    persistedServicePanelState.activeTaskId = activeTaskId;
+  }, [activeTaskId]);
+
+  useEffect(() => {
+    persistedServicePanelState.activeProviderId = activeProviderId;
+  }, [activeProviderId]);
 
   useEffect(() => {
     persistedServicePanelState.serviceStatus = serviceStatus;
@@ -146,7 +224,12 @@ export default function ServicePanel({ projectPath }) {
         setServiceStatus(nextStatus);
 
         if (nextStatus.startsWith("running:")) {
-          setBusyServiceId(nextStatus.replace("running:", ""));
+          const runningServiceId = nextStatus.replace("running:", "");
+          const nextTask = findTaskByProviderId(runningServiceId);
+          setBusyServiceId(runningServiceId);
+          setActiveServiceId(runningServiceId);
+          setActiveProviderId(runningServiceId);
+          setActiveTaskId(nextTask.id);
         } else if (
           nextStatus.startsWith("done:") ||
           nextStatus.startsWith("error:")
@@ -176,7 +259,9 @@ export default function ServicePanel({ projectPath }) {
     if (!normalizedProjectPath) {
       resetPersistedServicePanelState();
       setLogs([]);
-      setActiveServiceId(null);
+      setActiveServiceId(DEFAULT_PROVIDER_ID);
+      setActiveTaskId(DEFAULT_TASK_ID);
+      setActiveProviderId(DEFAULT_PROVIDER_ID);
       setServiceStatus("idle");
       setBusyServiceId(null);
       setGithubRepoName("");
@@ -193,7 +278,9 @@ export default function ServicePanel({ projectPath }) {
     ) {
       resetPersistedServicePanelState();
       setLogs([]);
-      setActiveServiceId(null);
+      setActiveServiceId(DEFAULT_PROVIDER_ID);
+      setActiveTaskId(DEFAULT_TASK_ID);
+      setActiveProviderId(DEFAULT_PROVIDER_ID);
       setServiceStatus("idle");
       setBusyServiceId(null);
       setGithubRepoName("");
@@ -243,7 +330,19 @@ export default function ServicePanel({ projectPath }) {
     }
   }, [logs]);
 
-  const services = useMemo(() => SERVICE_REGISTRY, []);
+  function selectTask(taskId) {
+    const nextProviderId = getFirstProviderIdForTask(taskId);
+    setActiveTaskId(taskId);
+    setActiveProviderId(nextProviderId);
+    setActiveServiceId(nextProviderId);
+  }
+
+  function selectProvider(providerId) {
+    const nextTask = findTaskByProviderId(providerId);
+    setActiveTaskId(nextTask.id);
+    setActiveProviderId(providerId);
+    setActiveServiceId(providerId);
+  }
 
   async function handleSetup(service) {
     if (!projectPath || !String(projectPath).trim()) {
@@ -282,6 +381,8 @@ export default function ServicePanel({ projectPath }) {
     }
 
     setActiveServiceId(service.id);
+    setActiveProviderId(service.id);
+    setActiveTaskId(findTaskByProviderId(service.id).id);
     setBusyServiceId(service.id);
     setLogs((prev) => [
       ...prev,
@@ -399,6 +500,15 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  const isGithub = activeProvider?.id === "github";
+  const isBusy = busyServiceId === activeProvider?.id;
+  const isPlanned = activeProvider?.status === "planned";
+  const canOpenGithubRepo =
+    isGithub &&
+    githubRepoState?.isRepo &&
+    githubRepoState?.hasRemote &&
+    !!githubRepoState?.remoteUrl;
+
   return (
     <div
       className="command-runner-panel"
@@ -416,33 +526,12 @@ export default function ServicePanel({ projectPath }) {
       >
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "baseline",
-            gap: "8px",
+            fontSize: "13px",
+            color: "#a1a1aa",
+            lineHeight: 1.4,
           }}
         >
-          <div
-            className="command-runner-panel__title"
-            style={{
-              fontSize: "16px",
-              fontWeight: 700,
-              lineHeight: 1.2,
-              color: "#fafafa",
-            }}
-          >
-            Services
-          </div>
-
-          <div
-            className="command-runner-panel__subtitle"
-            style={{
-              fontSize: "13px",
-              color: "#a1a1aa",
-            }}
-          >
-            — Connect your project to external tools.
-          </div>
+          Services — connect your project to external tools.
         </div>
       </div>
 
@@ -456,23 +545,100 @@ export default function ServicePanel({ projectPath }) {
           border: "1px solid #27272a",
           borderRadius: "10px",
           background: "rgba(24, 24, 27, 0.5)",
+          color: "#a1a1aa",
+          fontSize: "13px",
         }}
       >
         <div>
-          <strong>Project:</strong>{" "}
+          Project:{" "}
           {projectPath && String(projectPath).trim()
             ? projectPath
             : "No folder open"}
         </div>
-        <div>
-          <strong>State:</strong> {serviceStatus}
-        </div>
+        <div>State: {serviceStatus}</div>
       </div>
 
       <div
-        className="command-runner-logs"
+        className="service-task-tabs"
         style={{
-          marginBottom: "16px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px",
+          marginBottom: "12px",
+        }}
+      >
+        {TASK_GROUPS.map((task) => {
+          const isActiveTask = task.id === activeTaskId;
+
+          return (
+            <button
+              key={task.id}
+              type="button"
+              onClick={() => selectTask(task.id)}
+              style={{
+                padding: "7px 11px",
+                borderRadius: "999px",
+                border: isActiveTask
+                  ? "1px solid rgba(244, 185, 66, 0.45)"
+                  : "1px solid #27272a",
+                background: isActiveTask
+                  ? "rgba(244, 185, 66, 0.12)"
+                  : "rgba(24, 24, 27, 0.4)",
+                color: isActiveTask ? "#fde68a" : "#e4e4e7",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {task.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="service-provider-tabs"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px",
+          marginBottom: "14px",
+        }}
+      >
+        {activeTask.providerIds.map((providerId) => {
+          const provider = providerMap.get(providerId);
+          if (!provider) return null;
+          const isActiveProvider = provider.id === activeProviderId;
+
+          return (
+            <button
+              key={provider.id}
+              type="button"
+              onClick={() => selectProvider(provider.id)}
+              style={{
+                padding: "5px 10px",
+                borderRadius: "999px",
+                border: isActiveProvider
+                  ? "1px solid rgba(244, 185, 66, 0.4)"
+                  : "1px solid #3f3f46",
+                background: isActiveProvider
+                  ? "rgba(244, 185, 66, 0.10)"
+                  : "rgba(24, 24, 27, 0.35)",
+                color: isActiveProvider ? "#fde68a" : "#d4d4d8",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {provider.name}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="service-active-panel"
+        style={{
           border: "1px solid #27272a",
           borderRadius: "10px",
           background: "rgba(9, 9, 11, 0.45)",
@@ -480,296 +646,238 @@ export default function ServicePanel({ projectPath }) {
         }}
       >
         <div
-          className="command-runner-logs__title"
           style={{
-            padding: "10px 12px",
-            borderBottom: "1px solid #27272a",
-            fontSize: "14px",
-            fontWeight: 700,
-            color: "#f4f4f5",
-            background: "rgba(24, 24, 27, 0.5)",
+            display: "grid",
+            gap: "12px",
+            padding: "12px",
           }}
         >
-          Activity log
-          {activeServiceId ? ` — ${activeServiceId}` : ""}
-        </div>
+          <div
+            className="command-runner-item__meta"
+            style={{
+              fontSize: "13px",
+              color: "#d4d4d8",
+            }}
+          >
+            <span style={{ color: "#a1a1aa" }}>Env:</span>{" "}
+            {formatEnvVars(activeProvider?.envVars)}
+          </div>
 
-        <div
-          className="command-runner-logs__body"
-          style={{
-            padding: "10px 12px",
-            maxHeight: "180px",
-            overflow: "auto",
-          }}
-        >
-          {logs.length === 0 ? (
-            <div className="command-runner-logs__empty">
-              No service activity yet.
-            </div>
-          ) : (
-            logs.map((entry) => (
-              <div
-                key={`${entry.ts}-${entry.line}`}
-                className={`command-runner-log command-runner-log--${entry.kind}`}
-              >
-                {entry.line}
-              </div>
-            ))
-          )}
-          <div ref={logEndRef} />
-        </div>
-      </div>
-
-      <div
-        className="command-runner-list"
-        style={{
-          display: "grid",
-          gap: "14px",
-        }}
-      >
-        {services.map((service) => {
-          const isBusy = busyServiceId === service.id;
-          const isPlanned = service.status === "planned";
-          const isGithub = service.id === "github";
-          const canOpenGithubRepo =
-            isGithub &&
-            githubRepoState?.isRepo &&
-            githubRepoState?.hasRemote &&
-            !!githubRepoState?.remoteUrl;
-          const tone = getServiceStatusTone(service.status);
-
-          return (
+          {isGithub && githubRepoState ? (
             <div
-              key={service.id}
-              className="command-runner-item"
+              className="command-runner-item__meta"
               style={{
+                display: "grid",
+                gap: "6px",
+                padding: "10px 12px",
                 border: "1px solid #27272a",
-                borderRadius: "10px",
-                background: "rgba(9, 9, 11, 0.45)",
-                overflow: "hidden",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  padding: "10px 12px",
-                  borderBottom: "1px solid #27272a",
-                  background: "rgba(24, 24, 27, 0.45)",
-                }}
-              >
-                <div
-                  className="command-runner-item__title"
-                  style={{
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    color: SERVICE_ACCENT,
-                  }}
-                >
-                  {service.name}
-                </div>
-
-                <div
-                  className="command-runner-item__badge"
-                  style={{
-                    padding: "3px 9px",
-                    borderRadius: "999px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    textTransform: "capitalize",
-                    ...tone,
-                  }}
-                >
-                  {service.status}
-                </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Git repo:</span>{" "}
+                {githubRepoState.isRepo ? "Detected" : "Not detected"}
               </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: "12px",
-                  padding: "12px",
-                }}
-              >
-                <div className="command-runner-item__description">
-                  {service.description}
-                </div>
-
-                <div className="command-runner-item__meta">
-                  <strong>Env:</strong> {formatEnvVars(service.envVars)}
-                </div>
-
-                {isGithub && githubRepoState ? (
-                  <div
-                    className="command-runner-item__meta"
-                    style={{
-                      display: "grid",
-                      gap: "6px",
-                      padding: "10px 12px",
-                      border: "1px solid #27272a",
-                      borderRadius: "8px",
-                      background: "rgba(24, 24, 27, 0.35)",
-                    }}
-                  >
-                    <div>
-                      <strong>Git repo:</strong>{" "}
-                      {githubRepoState.isRepo ? "Detected" : "Not detected"}
-                    </div>
-                    <div>
-                      <strong>Has commit:</strong>{" "}
-                      {githubRepoState.hasCommit ? "Yes" : "No"}
-                    </div>
-                    <div>
-                      <strong>Has remote:</strong>{" "}
-                      {githubRepoState.hasRemote ? "Yes" : "No"}
-                    </div>
-                    <div>
-                      <strong>Branch:</strong> {githubRepoState.branch || "—"}
-                    </div>
-                  </div>
-                ) : null}
-
-                {isGithub ? (
-                  <div
-                    className="command-runner-item__meta"
-                    style={{
-                      display: "grid",
-                      gap: "10px",
-                      padding: "10px 12px",
-                      border: "1px solid #27272a",
-                      borderRadius: "8px",
-                      background: "rgba(24, 24, 27, 0.35)",
-                    }}
-                  >
-                    <label
-                      style={{
-                        display: "grid",
-                        gap: "4px",
-                      }}
-                    >
-                      <span>
-                        <strong>Repository name</strong>
-                      </span>
-                      <input
-                        type="text"
-                        value={githubRepoName}
-                        onChange={(event) =>
-                          setGithubRepoName(event.target.value)
-                        }
-                        placeholder="my-kforge-project"
-                        disabled={isBusy}
-                        style={{
-                          background: "#ffffff",
-                          color: "#000000",
-                          WebkitTextFillColor: "#000000",
-                          caretColor: "#000000",
-                          paddingLeft: "12px",
-                          paddingRight: "10px",
-                        }}
-                      />
-                    </label>
-
-                    <label
-                      style={{
-                        display: "grid",
-                        gap: "4px",
-                      }}
-                    >
-                      <span>
-                        <strong>Visibility</strong>
-                      </span>
-                      <select
-                        value={githubVisibility}
-                        onChange={(event) =>
-                          setGithubVisibility(event.target.value)
-                        }
-                        disabled={isBusy}
-                        style={{
-                          background: "#ffffff",
-                          color: "#000000",
-                          WebkitTextFillColor: "#000000",
-                          paddingLeft: "12px",
-                          paddingRight: "10px",
-                        }}
-                      >
-                        <option value="public">Public</option>
-                        <option value="private">Private</option>
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-
-                <div
-                  className="command-runner-item__actions"
-                  style={{
-                    display: "grid",
-                    gap: "8px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="command-runner-runButton"
-                    onClick={() => handleSetup(service)}
-                    disabled={isBusy || isPlanned}
-                    title={
-                      isPlanned
-                        ? "Planned for a future phase"
-                        : isGithub
-                          ? "Publish this project to GitHub"
-                          : `Set up ${service.name}`
-                    }
-                  >
-                    {isPlanned
-                      ? "Planned"
-                      : isBusy
-                        ? "Working..."
-                        : isGithub
-                          ? "Publish"
-                          : "Connect"}
-                  </button>
-
-                  {canOpenGithubRepo ? (
-                    <button
-                      type="button"
-                      className="command-runner-runButton"
-                      onClick={handleGithubPush}
-                      disabled={isBusy}
-                      title="Commit and push local changes to origin"
-                    >
-                      Push changes
-                    </button>
-                  ) : null}
-
-                  {canOpenGithubRepo ? (
-                    <button
-                      type="button"
-                      className="command-runner-runButton"
-                      onClick={handleGithubPull}
-                      disabled={isBusy}
-                      title="Pull latest changes from origin"
-                    >
-                      Pull latest
-                    </button>
-                  ) : null}
-
-                  {canOpenGithubRepo ? (
-                    <button
-                      type="button"
-                      className="command-runner-runButton"
-                      onClick={handleGithubOpenRepo}
-                      disabled={isBusy}
-                      title="Open this repository on GitHub"
-                    >
-                      Open on GitHub
-                    </button>
-                  ) : null}
-                </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Has commit:</span>{" "}
+                {githubRepoState.hasCommit ? "Yes" : "No"}
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Has remote:</span>{" "}
+                {githubRepoState.hasRemote ? "Yes" : "No"}
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Branch:</span>{" "}
+                {githubRepoState.branch || "—"}
               </div>
             </div>
-          );
-        })}
+          ) : null}
+
+          {isGithub ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "10px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+              }}
+            >
+              <label
+                style={{
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <span style={{ fontSize: "13px", color: "#a1a1aa" }}>
+                  Repository name
+                </span>
+                <input
+                  type="text"
+                  value={githubRepoName}
+                  onChange={(event) => setGithubRepoName(event.target.value)}
+                  placeholder="my-kforge-project"
+                  disabled={isBusy}
+                  style={{
+                    background: "#ffffff",
+                    color: "#000000",
+                    WebkitTextFillColor: "#000000",
+                    caretColor: "#000000",
+                    paddingLeft: "12px",
+                    paddingRight: "10px",
+                  }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <span style={{ fontSize: "13px", color: "#a1a1aa" }}>
+                  Visibility
+                </span>
+                <select
+                  value={githubVisibility}
+                  onChange={(event) => setGithubVisibility(event.target.value)}
+                  disabled={isBusy}
+                  style={{
+                    background: "#ffffff",
+                    color: "#000000",
+                    WebkitTextFillColor: "#000000",
+                    paddingLeft: "12px",
+                    paddingRight: "10px",
+                  }}
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          <div
+            className="command-runner-item__actions"
+            style={{
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            <button
+              type="button"
+              className="command-runner-runButton"
+              onClick={() => handleSetup(activeProvider)}
+              disabled={isBusy || isPlanned}
+              title={
+                isPlanned
+                  ? "Planned for a future phase"
+                  : isGithub
+                    ? "Publish this project to GitHub"
+                    : `Set up ${activeProvider?.name}`
+              }
+            >
+              {isPlanned
+                ? "Planned"
+                : isBusy
+                  ? "Working..."
+                  : isGithub
+                    ? "Publish"
+                    : "Connect"}
+            </button>
+
+            {canOpenGithubRepo ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleGithubPush}
+                disabled={isBusy}
+                title="Commit and push local changes to origin"
+              >
+                Push changes
+              </button>
+            ) : null}
+
+            {canOpenGithubRepo ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleGithubPull}
+                disabled={isBusy}
+                title="Pull latest changes from origin"
+              >
+                Pull latest
+              </button>
+            ) : null}
+
+            {canOpenGithubRepo ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleGithubOpenRepo}
+                disabled={isBusy}
+                title="Open this repository on GitHub"
+              >
+                Open on GitHub
+              </button>
+            ) : null}
+          </div>
+
+          <div
+            className="command-runner-logs"
+            style={{
+              border: "1px solid #27272a",
+              borderRadius: "10px",
+              background: "rgba(9, 9, 11, 0.35)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="command-runner-logs__title"
+              style={{
+                padding: "10px 12px",
+                borderBottom: "1px solid #27272a",
+                fontSize: "12px",
+                color: "#a1a1aa",
+                background: "rgba(24, 24, 27, 0.5)",
+              }}
+            >
+              Activity log — {getLogLabel(activeProvider?.id)}
+            </div>
+
+            <div
+              className="command-runner-logs__body"
+              style={{
+                padding: "10px 12px",
+                maxHeight: "180px",
+                overflow: "auto",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              {logs.length === 0 ? (
+                <div className="command-runner-logs__empty">
+                  No service activity yet.
+                </div>
+              ) : (
+                logs.map((entry) => (
+                  <div
+                    key={`${entry.ts}-${entry.line}`}
+                    className={`command-runner-log command-runner-log--${entry.kind}`}
+                  >
+                    {entry.line}
+                  </div>
+                ))
+              )}
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
