@@ -1,19 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-const SERVICE_LOG_EVENT = "kforge://service/log";
-const SERVICE_STATUS_EVENT = "kforge://service/status";
+const SERVICE_LOG_EVENT = "service-log";
+const SERVICE_STATUS_EVENT = "service-status";
 
 export async function runServiceSetup(serviceId, projectPath, options = {}) {
-  if (!serviceId || !String(serviceId).trim()) {
-    throw new Error("Service id is required");
-  }
-
+  if (!serviceId) throw new Error("serviceId is required");
   if (!projectPath || !String(projectPath).trim()) {
     throw new Error("Project path is required");
   }
 
-  return invoke("service_setup", {
+  return invoke("service_run_setup", {
     serviceId,
     projectPath,
     options,
@@ -60,6 +57,34 @@ export async function githubPush(projectPath) {
   });
 }
 
+/* -------------------------------------------------- */
+/* NEW — GitHub Clone (Phase 4.6 Part 4) */
+/* -------------------------------------------------- */
+
+export async function githubCloneIntoFolder({
+  repoUrl,
+  parentDir,
+  folderName,
+}) {
+  if (!repoUrl || !String(repoUrl).trim()) {
+    throw new Error("GitHub repository URL is required");
+  }
+
+  if (!parentDir || !String(parentDir).trim()) {
+    throw new Error("Destination folder is required");
+  }
+
+  return invoke("github_clone_repo", {
+    repoUrl: String(repoUrl).trim(),
+    parentDir: String(parentDir).trim(),
+    folderName: String(folderName || "").trim(),
+  });
+}
+
+/* -------------------------------------------------- */
+/* LOG + STATUS SUBSCRIPTIONS */
+/* -------------------------------------------------- */
+
 export async function subscribeServiceLogs(onLog) {
   if (typeof onLog !== "function") {
     throw new Error("onLog callback is required");
@@ -83,5 +108,3 @@ export async function subscribeServiceStatus(onStatus) {
 
   return unlisten;
 }
-
-export { SERVICE_LOG_EVENT, SERVICE_STATUS_EVENT };

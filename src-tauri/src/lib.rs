@@ -155,6 +155,7 @@ pub fn run() {
             service::github_detect_repo,
             service::github_open_repo,
             service::github_pull,
+            service::github_clone_repo,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_nextjs,

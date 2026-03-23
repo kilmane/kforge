@@ -416,7 +416,49 @@ pub fn github_pull(app: AppHandle, project_path: String) -> Result<(), String> {
 
     Ok(())
 }
+#[tauri::command]
+pub fn github_clone_repo(
+    app: tauri::AppHandle,
+    repo_url: String,
+    parent_dir: String,
+    folder_name: String,
+) -> Result<String, String> {
+    use std::path::Path;
+    use std::process::Command;
 
+    if repo_url.trim().is_empty() {
+        return Err("Repository URL is required".into());
+    }
+
+    if parent_dir.trim().is_empty() {
+        return Err("Destination folder is required".into());
+    }
+
+    let repo_name = if folder_name.trim().is_empty() {
+        repo_url
+            .split('/')
+            .last()
+            .unwrap_or("repo")
+            .replace(".git", "")
+    } else {
+        folder_name.trim().to_string()
+    };
+
+    let target_path = Path::new(&parent_dir).join(&repo_name);
+
+    let output = Command::new("git")
+        .arg("clone")
+        .arg(repo_url.trim())
+        .arg(&target_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(target_path.to_string_lossy().to_string())
+}
 #[tauri::command]
 pub fn service_setup(
     app: AppHandle,

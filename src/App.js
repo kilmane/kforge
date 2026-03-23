@@ -35,7 +35,7 @@ import {
 } from "./ai/client";
 import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
-
+import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import DockShell from "./layout/DockShell";
 
 function basename(p) {
@@ -924,68 +924,103 @@ export default function App() {
     setIncludeActiveFile(false);
   }, []);
   const handleNewProject = useCallback(async () => {
-    const name = window.prompt("Project name?");
-    if (!name) return;
+    const mode = window.prompt(
+      "New Project\n\nPress Enter for local project\nor type 2 to import from GitHub\n\n1 — Create local project\n2 — Import from GitHub",
+      "1",
+    );
+
+    if (!mode) return;
 
     let folder;
-    try {
-      folder = await createNewProject({ name });
-    } catch (err) {
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(`New project failed:\n\n${msg}`);
-      return; // keep current project state unchanged
+
+    if (mode.trim() === "2") {
+      const repoUrl = window.prompt(
+        "GitHub repository URL\n\nExample:\nhttps://github.com/user/repo",
+      );
+
+      if (!repoUrl) return;
+
+      const projectNameInput = window.prompt(
+        "Project folder name (leave blank to use repo name)",
+        "",
+      );
+
+      try {
+        const chosenParent = await pickDirectory({
+          directory: true,
+          multiple: false,
+          title: "Choose where to import the GitHub project",
+        });
+
+        const parent = Array.isArray(chosenParent)
+          ? (chosenParent[0] ?? null)
+          : chosenParent;
+
+        if (!parent) return;
+
+        const { githubCloneIntoFolder } =
+          await import("./runtime/serviceRunner");
+
+        folder = await githubCloneIntoFolder({
+          repoUrl,
+          parentDir: String(parent),
+          folderName: String(projectNameInput || "").trim(),
+        });
+      } catch (err) {
+        const msg = formatTauriError ? formatTauriError(err) : String(err);
+        setAiTestOutput(`GitHub import failed:\n\n${msg}`);
+        return;
+      }
+    } else {
+      const name = window.prompt("Project name?");
+      if (!name) return;
+
+      try {
+        folder = await createNewProject({ name });
+      } catch (err) {
+        const msg = formatTauriError ? formatTauriError(err) : String(err);
+        setAiTestOutput(`New project failed:\n\n${msg}`);
+        return;
+      }
     }
 
     if (!folder) return;
 
-    // Try to allow the chosen folder in scope (best-effort).
     try {
       await invoke("fs_allow_directory", { path: folder });
     } catch (err) {
       console.error("[kforge] Failed to allow folder in FS scope:", err);
-      // We do NOT return here; we still attempt to read the tree.
     }
 
-    // ✅ App.js is the authority: set root + load memory BEFORE reading tree
     try {
       setProjectRoot(folder);
       await loadProjectMemoryForCurrentRoot();
+
+      const nextTree = await readFolderTree(folder);
+      setProjectPath(folder);
+      setTree(nextTree);
+
+      setTabs([]);
+      setActiveFilePath(null);
+      setSaveStatus("");
+      setAiTestOutput("");
+      setIncludeActiveFile(false);
     } catch (err) {
-      console.error("[kforge] Failed to set root / load project memory:", err);
       const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(`New project failed (memory):\n${folder}\n\n${msg}`);
-      return; // keep current project state unchanged
+      setAiTestOutput(`Open project failed:\n\n${msg}`);
     }
-
-    // Read folder tree SAFELY — forbidden paths must not crash the UI.
-    let nextTree = null;
-    try {
-      nextTree = await readFolderTree(folder);
-    } catch (err) {
-      console.error("[kforge] Failed to read folder tree:", err);
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(
-        `New project created, but opening it failed:\n${folder}\n\n${msg}\n\n` +
-          `This usually means the folder is outside the allowed allow-read-dir scope.`,
-      );
-      return; // keep current project state unchanged
-    }
-
-    // Only commit UI state changes after we successfully read the tree
-    setProjectPath(folder);
-    setTabs([]);
-    setActiveFilePath(null);
-    setSaveStatus("");
-    setAiTestOutput("");
-    setIncludeActiveFile(false);
-
-    setTree(nextTree || []);
   }, [
-    invoke,
     createNewProject,
-    readFolderTree,
-    setProjectRoot,
+    formatTauriError,
     loadProjectMemoryForCurrentRoot,
+    readFolderTree,
+    setIncludeActiveFile,
+    setProjectPath,
+    setSaveStatus,
+    setTabs,
+    setTree,
+    setActiveFilePath,
+    setAiTestOutput,
   ]);
   const handleOpenFile = useCallback(
     async (path) => {
