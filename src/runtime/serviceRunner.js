@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-const SERVICE_LOG_EVENT = "service-log";
-const SERVICE_STATUS_EVENT = "service-status";
+const SERVICE_LOG_EVENT = "kforge://service/log";
+const SERVICE_STATUS_EVENT = "kforge://service/status";
 
 export async function runServiceSetup(serviceId, projectPath, options = {}) {
   if (!serviceId) throw new Error("serviceId is required");
@@ -10,7 +10,7 @@ export async function runServiceSetup(serviceId, projectPath, options = {}) {
     throw new Error("Project path is required");
   }
 
-  return invoke("service_run_setup", {
+  return invoke("service_setup", {
     serviceId,
     projectPath,
     options,
@@ -67,10 +67,6 @@ export async function openExternalUrl(url) {
   });
 }
 
-/* -------------------------------------------------- */
-/* NEW — GitHub Clone (Phase 4.6 Part 4) */
-/* -------------------------------------------------- */
-
 export async function githubCloneIntoFolder({
   repoUrl,
   parentDir,
@@ -90,10 +86,6 @@ export async function githubCloneIntoFolder({
     folderName: String(folderName || "").trim(),
   });
 }
-
-/* -------------------------------------------------- */
-/* LOG + STATUS SUBSCRIPTIONS */
-/* -------------------------------------------------- */
 
 export async function subscribeServiceLogs(onLog) {
   if (typeof onLog !== "function") {

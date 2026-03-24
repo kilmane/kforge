@@ -10,7 +10,8 @@ export const SERVICE_REGISTRY = [
   {
     id: "supabase",
     name: "Supabase",
-    description: "Backend/database foundation for future KForge project setup.",
+    description:
+      "Check this project for Supabase readiness and prepare env placeholders for backend connection.",
     status: "available",
     envVars: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
     setupCommand: "service_setup",

@@ -698,7 +698,31 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleOpenSupabase() {
+    try {
+      await openExternalUrl("https://supabase.com/dashboard");
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "status",
+          line: "Opened Supabase in browser.",
+          ts: Date.now(),
+        },
+      ]);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || "Could not open Supabase in browser.",
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
   const isGithub = activeProvider?.id === "github";
+  const isSupabase = activeProvider?.id === "supabase";
   const isDeploy = isDeployProvider(activeProvider?.id);
   const isBusy = busyServiceId === activeProvider?.id;
   const isPlanned = activeProvider?.status === "planned";
@@ -946,6 +970,43 @@ export default function ServicePanel({ projectPath }) {
             </div>
           ) : null}
 
+          {isSupabase ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "6px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Mode:</span> Guided backend
+                connection
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Checks:</span> Env
+                placeholders, Supabase package hints, local config signals
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Cloud:</span> SUPABASE_URL,
+                SUPABASE_ANON_KEY
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Local:</span>{" "}
+                supabase/config.toml if present
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                KForge will not replace the Supabase dashboard. It will guide
+                setup and scaffold safe env placeholders.
+              </div>
+            </div>
+          ) : null}
+
           {isGithub ? (
             <div
               className="command-runner-item__meta"
@@ -1028,6 +1089,30 @@ export default function ServicePanel({ projectPath }) {
                 title="Publish this project to GitHub"
               >
                 {isBusy ? "Working..." : "Publish"}
+              </button>
+            ) : null}
+
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => handleSetup(activeProvider)}
+                disabled={isBusy || isPlanned}
+                title="Inspect this project for Supabase readiness and prepare safe env placeholders"
+              >
+                {isBusy ? "Working..." : "Check Supabase readiness"}
+              </button>
+            ) : null}
+
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleOpenSupabase}
+                disabled={isBusy}
+                title="Open Supabase in browser"
+              >
+                Open Supabase
               </button>
             ) : null}
 
