@@ -57,6 +57,16 @@ export async function githubPush(projectPath) {
   });
 }
 
+export async function openExternalUrl(url) {
+  if (!url || !String(url).trim()) {
+    throw new Error("URL is required");
+  }
+
+  return invoke("open_url", {
+    url: String(url).trim(),
+  });
+}
+
 /* -------------------------------------------------- */
 /* NEW — GitHub Clone (Phase 4.6 Part 4) */
 /* -------------------------------------------------- */

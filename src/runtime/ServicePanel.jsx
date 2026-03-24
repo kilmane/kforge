@@ -5,6 +5,7 @@ import {
   githubOpenRepo,
   githubPull,
   githubPush,
+  openExternalUrl,
   runServiceSetup,
   subscribeServiceLogs,
   subscribeServiceStatus,
@@ -40,13 +41,17 @@ const FALLBACK_PROVIDER_REGISTRY = {
   vercel: {
     id: "vercel",
     name: "Vercel",
-    status: "planned",
+    description:
+      "Deploy this GitHub-connected project with guided Vercel setup.",
+    status: "available",
     envVars: [],
   },
   netlify: {
     id: "netlify",
     name: "Netlify",
-    status: "planned",
+    description:
+      "Deploy this GitHub-connected project with guided Netlify setup.",
+    status: "available",
     envVars: [],
   },
 };
@@ -125,6 +130,44 @@ function getLogLabel(providerId) {
   if (providerId === "vercel") return "Vercel";
   if (providerId === "netlify") return "Netlify";
   return providerId || "service";
+}
+
+function isDeployProvider(providerId) {
+  return providerId === "vercel" || providerId === "netlify";
+}
+
+function extractGithubRepoSlug(remoteUrl) {
+  const value = String(remoteUrl || "").trim();
+  if (!value) return null;
+
+  const sshMatch = value.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/i);
+  if (sshMatch?.[1]) {
+    return sshMatch[1];
+  }
+
+  const httpsMatch = value.match(
+    /^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/)?$/i,
+  );
+  if (httpsMatch?.[1]) {
+    return httpsMatch[1];
+  }
+
+  return null;
+}
+
+function buildGithubRepoUrl(repoSlug) {
+  if (!repoSlug) return null;
+  return `https://github.com/${repoSlug}`;
+}
+
+function buildVercelImportUrl(repoSlug) {
+  const repoUrl = buildGithubRepoUrl(repoSlug);
+  if (!repoUrl) return "https://vercel.com/new";
+  return `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repoUrl)}`;
+}
+
+function buildNetlifyImportUrl() {
+  return "https://app.netlify.com/start";
 }
 
 export default function ServicePanel({ projectPath }) {
@@ -500,7 +543,66 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleDeployOpen(providerId) {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before using deploy actions.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    const repoSlug = extractGithubRepoSlug(githubRepoState?.remoteUrl);
+    const providerName = providerId === "vercel" ? "Vercel" : "Netlify";
+
+    if (!repoSlug) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Connect this project to GitHub before deploying.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    const url =
+      providerId === "vercel"
+        ? buildVercelImportUrl(repoSlug)
+        : buildNetlifyImportUrl();
+
+    try {
+      await openExternalUrl(url);
+
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "status",
+          line:
+            providerId === "vercel"
+              ? `Opened Vercel import for ${repoSlug}.`
+              : `Opened Netlify import. Choose GitHub and select ${repoSlug}.`,
+          ts: Date.now(),
+        },
+      ]);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || `Could not open ${providerName} in browser.`,
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
   const isGithub = activeProvider?.id === "github";
+  const isDeploy = isDeployProvider(activeProvider?.id);
   const isBusy = busyServiceId === activeProvider?.id;
   const isPlanned = activeProvider?.status === "planned";
   const canOpenGithubRepo =
@@ -508,6 +610,13 @@ export default function ServicePanel({ projectPath }) {
     githubRepoState?.isRepo &&
     githubRepoState?.hasRemote &&
     !!githubRepoState?.remoteUrl;
+
+  const githubRepoSlug = extractGithubRepoSlug(githubRepoState?.remoteUrl);
+  const canDeployFromGithub =
+    isDeploy &&
+    githubRepoState?.isRepo &&
+    githubRepoState?.hasRemote &&
+    !!githubRepoSlug;
 
   return (
     <div
@@ -696,6 +805,39 @@ export default function ServicePanel({ projectPath }) {
             </div>
           ) : null}
 
+          {isDeploy ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "6px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <div>
+                <span style={{ color: "#a1a1aa" }}>GitHub repo:</span>{" "}
+                {githubRepoSlug ? githubRepoSlug : "GitHub connection required"}
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                {activeProvider?.id === "vercel"
+                  ? "Open Vercel import for this GitHub repo."
+                  : "Open Netlify and choose Import an existing project."}
+              </div>
+              {githubRepoState?.isRepo &&
+              githubRepoState?.hasRemote &&
+              !githubRepoState?.hasCommit ? (
+                <div style={{ color: "#fbbf24" }}>
+                  Push changes before deploying.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {isGithub ? (
             <div
               className="command-runner-item__meta"
@@ -769,27 +911,46 @@ export default function ServicePanel({ projectPath }) {
               gap: "8px",
             }}
           >
-            <button
-              type="button"
-              className="command-runner-runButton"
-              onClick={() => handleSetup(activeProvider)}
-              disabled={isBusy || isPlanned}
-              title={
-                isPlanned
-                  ? "Planned for a future phase"
-                  : isGithub
-                    ? "Publish this project to GitHub"
-                    : `Set up ${activeProvider?.name}`
-              }
-            >
-              {isPlanned
-                ? "Planned"
-                : isBusy
-                  ? "Working..."
-                  : isGithub
-                    ? "Publish"
-                    : "Connect"}
-            </button>
+            {isGithub ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => handleSetup(activeProvider)}
+                disabled={isBusy || isPlanned}
+                title="Publish this project to GitHub"
+              >
+                {isBusy ? "Working..." : "Publish"}
+              </button>
+            ) : null}
+
+            {canDeployFromGithub ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => handleDeployOpen(activeProvider.id)}
+                disabled={isBusy}
+                title={
+                  activeProvider?.id === "vercel"
+                    ? "Open Vercel import for this GitHub repository"
+                    : "Open Netlify import flow for this GitHub repository"
+                }
+              >
+                {activeProvider?.id === "vercel"
+                  ? "Deploy with Vercel"
+                  : "Deploy with Netlify"}
+              </button>
+            ) : null}
+
+            {isDeploy && !canDeployFromGithub ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                disabled
+                title="Publish or connect this project to GitHub first"
+              >
+                Connect GitHub first
+              </button>
+            ) : null}
 
             {canOpenGithubRepo ? (
               <button

@@ -1,15 +1,22 @@
 
+
+# Full File Replacement
+
+`D:\kforge\docs-internal\PROJECT-SNAPSHOT.md`
+
+```markdown
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: March 21st, 2026
+Last Updated: March 24th, 2026
 
-Phase: 4.6 — GitHub Integration
-Status: Stable milestone ready for commit
+Phase: 4.7 — Deploy Pipeline
+Status: Stable milestone ready to commit and tag
 
-Stable commit: <to be filled after commit>
+Recommended stable tag:
+phase-4.7-deploy-pipeline-stable
 
 ---
 
@@ -322,9 +329,14 @@ Panel host:
 
 src/ai/panel/AiPanel.jsx
 
-Registered command:
+Registered commands include:
 
-service_setup
+service_setup  
+github_detect_repo  
+github_open_repo  
+github_pull  
+github_clone_repo  
+open_url
 
 ---
 
@@ -353,6 +365,11 @@ Current services:
 • Stripe  
 • OpenAI  
 
+Deploy providers are currently represented through the task-first Services UI and fallback provider mapping in the Services panel:
+
+• Vercel  
+• Netlify  
+
 Fields include:
 
 • id  
@@ -366,9 +383,7 @@ Fields include:
 
 # 🟣 GitHub Integration (Phase 4.6)
 
-Phase 4.6 introduces the **first real service adapter**.
-
-The GitHub adapter allows a local project to be published directly to GitHub.
+Phase 4.6 introduced the **first real service adapter** and then expanded it into a broader GitHub workflow.
 
 Backend implementation:
 
@@ -381,6 +396,30 @@ src/runtime/ServicePanel.jsx
 Runtime bridge:
 
 src/runtime/serviceRunner.js
+
+---
+
+## GitHub Capabilities Now Implemented
+
+GitHub support now includes:
+
+• publish local project to a new GitHub repository  
+• detect whether current folder is already a Git repo  
+• detect whether a remote exists  
+• open current repository on GitHub in browser  
+• pull latest changes into an existing local repo  
+• push local changes to GitHub  
+• import an existing GitHub repository during New Project flow  
+
+This means KForge now supports **both directions**:
+
+### Local → GitHub
+
+Publish
+
+### GitHub → Local
+
+Import from GitHub
 
 ---
 
@@ -417,6 +456,70 @@ gh repo create <repo-name> --public|--private --source . --remote origin --push
 
 ---
 
+## GitHub Import Workflow (Phase 4.6 Part 4)
+
+KForge now supports importing an existing GitHub repository at project-creation time.
+
+This is effectively:
+
+git clone
+
+Current entry point:
+
+New Project flow
+
+Current UX:
+
+Type 1 or 2 then press Enter
+
+1 — Create local project  
+2 — Import from GitHub
+
+If the user chooses **2**:
+
+1. ask for GitHub repository URL  
+2. ask for optional folder name  
+3. ask where to place the project  
+4. run clone into selected parent folder  
+5. automatically open the cloned project in KForge  
+
+This is the correct workflow for bringing an existing GitHub project onto the local machine.
+
+---
+
+## GitHub Action Meanings (Important)
+
+These actions are intentionally different:
+
+### Publish
+
+Create a new GitHub repo from the current local project.
+
+### Push changes
+
+Send current local changes to an already connected GitHub repo.
+
+### Pull latest
+
+Bring the latest remote changes into the current local repo.
+
+### Open on GitHub
+
+Open the repository webpage in the browser.
+
+### Import from GitHub
+
+Clone a GitHub repo locally as a new project.
+
+This distinction is important:
+
+**Pull latest is not import.**  
+**Open on GitHub is not import.**
+
+Import only happens during the **New Project** flow in the current implementation.
+
+---
+
 ## Authentication Model
 
 KForge does **not manage OAuth tokens directly**.
@@ -439,9 +542,13 @@ This keeps KForge secure and avoids token storage.
 
 Services panel now supports:
 
+• task-based top-level grouping  
+• single-active-service display  
+• GitHub-focused action surface  
 • repository name input  
 • public/private visibility selection  
 • GitHub publish trigger  
+• push / pull / open actions  
 • live service log streaming  
 
 Service logs persist when:
@@ -452,6 +559,152 @@ Logs reset when:
 
 • workspace resets  
 • project root changes
+
+---
+
+## Service Panel UX Architecture (Phase 4.6 Part 3)
+
+The Services panel was significantly reworked in Phase 4.6 Part 3.
+
+Previous issue:
+
+• stacked services created clutter  
+• placeholder services competed with real services  
+• activity log risked becoming chaotic  
+
+Current architecture:
+
+• task-first tab grouping  
+• one active service visible at a time  
+• provider chips inside selected task  
+• activity log contained inside active service panel  
+• calmer, lower-noise visual hierarchy  
+
+Example grouping:
+
+• Code → GitHub  
+• Deploy → Vercel / Netlify  
+• Backend → Supabase  
+• Payments → Stripe  
+
+This architecture was introduced specifically to support scaling future integrations cleanly.
+
+---
+
+# 🚀 Deploy Pipeline (Phase 4.7)
+
+Phase 4.7 attached the next real service lane after GitHub:
+
+Deploy
+
+Current deploy providers:
+
+• Vercel  
+• Netlify  
+
+Deploy actions are intentionally lightweight.
+
+KForge does **not** try to become a hosting dashboard.
+
+Instead, KForge provides **guided deploy shortcuts** for GitHub-connected projects.
+
+---
+
+## Deploy Capabilities Now Implemented
+
+For a project that is already connected to GitHub, KForge now supports:
+
+• detect deploy readiness from current GitHub repo state  
+• show the current GitHub repository inside Deploy  
+• open Vercel import flow for the detected repository  
+• open Netlify start/import flow for the detected repository  
+• guide the user with deploy-specific log messages  
+• show a warning hint when deployment should wait for a push
+
+This creates the intended user path:
+
+Local project  
+→ Publish to GitHub  
+→ Push changes  
+→ Deploy via Vercel or Netlify
+
+---
+
+## Deploy UX Model
+
+Location:
+
+Services → Deploy
+
+Provider choices:
+
+• Vercel  
+• Netlify  
+
+Deploy surface behavior:
+
+• uses detected GitHub remote from the current project  
+• shows repo context directly in the panel  
+• blocks deploy action when GitHub is not connected  
+• opens the browser to the provider flow when deploy is available
+
+Current wording in the UI includes:
+
+• GitHub repo: <owner/repo>  
+• Deploy with Vercel  
+• Deploy with Netlify  
+• Connect GitHub first  
+• Push changes before deploying
+
+---
+
+## Vercel Flow
+
+When the current project has a valid GitHub remote, KForge opens:
+
+https://vercel.com/new/clone?repository-url=<github-repo-url>
+
+This allows the Vercel import flow to begin directly from the current repository.
+
+KForge logs a message such as:
+
+Opened Vercel import for <owner/repo>.
+
+---
+
+## Netlify Flow
+
+When the current project has a valid GitHub remote, KForge opens:
+
+https://app.netlify.com/start
+
+The user then selects GitHub and chooses the repository.
+
+KForge logs a message such as:
+
+Opened Netlify import. Choose GitHub and select <owner/repo>.
+
+---
+
+## Deploy Readiness Rule
+
+Deployment currently depends on GitHub connection.
+
+Minimum expected state:
+
+• current folder is a Git repo  
+• origin remote exists  
+• remote is a supported GitHub URL  
+
+If this is not true, the Deploy panel shows:
+
+Connect GitHub first
+
+If the project is connected but no commit history is present yet, the Deploy panel shows:
+
+Push changes before deploying
+
+This keeps deploy guidance calm and explicit.
 
 ---
 
@@ -481,6 +734,15 @@ Service workflow:
 Open folder  
 Open Services  
 Publish to GitHub  
+Push changes  
+Deploy via Vercel or Netlify  
+Continue development
+
+Import workflow:
+
+New Project  
+Choose local create or GitHub import  
+Open project automatically  
 Continue development
 
 ---
@@ -525,7 +787,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.6**:
+As of **Phase 4.7**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -534,7 +796,12 @@ As of **Phase 4.6**:
 • template registry working  
 • command runner operational  
 • service integration layer operational  
-• GitHub publishing implemented  
+• GitHub workflow implemented  
+• GitHub import implemented  
+• Services UX architecture stabilized  
+• Deploy pipeline implemented  
+• Vercel deploy shortcut working  
+• Netlify deploy shortcut working  
 
 Supported workflows now include:
 
@@ -543,7 +810,11 @@ Project scaffolding
 Dev server preview  
 Static site preview  
 In-app terminal commands  
-GitHub repository publishing
+GitHub repository publishing  
+GitHub repo push / pull / open  
+GitHub repository import during project creation  
+Deploy handoff to Vercel  
+Deploy handoff to Netlify
 
 ---
 
@@ -565,21 +836,34 @@ Planned adapters:
 • Supabase  
 • Stripe  
 • OpenAI  
-• Deploy providers (Vercel / Netlify)
+
+Possible future deploy improvements:
+
+• template-aware deploy guidance  
+• static vs SSR deploy recommendations  
+• framework-specific hints before browser handoff
 
 ---
 
-This milestone represents a **restore-grade architectural checkpoint**.
+# 🚢 Phase Boundary
 
-Phase 4.6 proves the Service Integration Layer works with a real external platform (GitHub).
+Phase 4.7 is now a stable milestone built on top of the completed Phase 4.6 GitHub workflow.
+
+What Phase 4.7 proves:
+
+• the Service Integration Layer works beyond GitHub  
+• grouped Services UI scales into multiple provider families  
+• deploy actions can remain lightweight and guided  
+• KForge can connect local project → GitHub → deploy platform without turning into a hosting dashboard
+
+Current stable journey:
+
+Local Project  
+→ GitHub  
+→ Vercel / Netlify
+
+This sets up the next major phase:
+
+Phase 4.8 — Supabase Integration (real full-stack)
 ```
-
----
-
-After saving, run:
-
-```powershell
-git add docs-internal/PROJECT-SNAPSHOT.md
-```
-
 

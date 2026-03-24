@@ -198,6 +198,30 @@ fn github_remote_to_web_url(remote_url: &str) -> Option<String> {
     None
 }
 
+fn github_repo_slug_from_remote(remote_url: &str) -> Option<String> {
+    let trimmed = remote_url.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("https://github.com/") {
+        let repo = rest.trim_end_matches(".git").trim_end_matches('/');
+        if !repo.is_empty() {
+            return Some(repo.to_string());
+        }
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("git@github.com:") {
+        let repo = rest.trim_end_matches(".git").trim_end_matches('/');
+        if !repo.is_empty() {
+            return Some(repo.to_string());
+        }
+    }
+
+    None
+}
+
 fn normalized_visibility(value: Option<String>) -> String {
     match value.unwrap_or_else(|| "public".to_string()).trim() {
         "private" => "private".to_string(),
@@ -395,6 +419,55 @@ pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub fn deploy_open_vercel(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !git_dir_exists(&project_dir) {
+        return Err("This folder is not a git repository".to_string());
+    }
+
+    let remote_url = git_remote_url(&project_dir, "origin")
+        .ok_or_else(|| "No git remote named 'origin' was found".to_string())?;
+
+    let repo_slug = github_repo_slug_from_remote(&remote_url)
+        .ok_or_else(|| "Origin remote is not a supported GitHub URL".to_string())?;
+
+    let web_url = format!(
+        "https://vercel.com/new/clone?repository-url=https://github.com/{}",
+        repo_slug
+    );
+
+    app.shell()
+        .open(&web_url, None)
+        .map_err(|error| format!("Failed to open browser: {}", error))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn deploy_open_netlify(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !git_dir_exists(&project_dir) {
+        return Err("This folder is not a git repository".to_string());
+    }
+
+    let remote_url = git_remote_url(&project_dir, "origin")
+        .ok_or_else(|| "No git remote named 'origin' was found".to_string())?;
+
+    let _repo_slug = github_repo_slug_from_remote(&remote_url)
+        .ok_or_else(|| "Origin remote is not a supported GitHub URL".to_string())?;
+
+    let web_url = "https://app.netlify.com/start";
+
+    app.shell()
+        .open(web_url, None)
+        .map_err(|error| format!("Failed to open browser: {}", error))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn github_pull(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;
 
@@ -416,6 +489,7 @@ pub fn github_pull(app: AppHandle, project_path: String) -> Result<(), String> {
 
     Ok(())
 }
+
 #[tauri::command]
 pub fn github_clone_repo(
     app: tauri::AppHandle,
@@ -457,8 +531,11 @@ pub fn github_clone_repo(
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
+    let _ = app;
+
     Ok(target_path.to_string_lossy().to_string())
 }
+
 #[tauri::command]
 pub fn service_setup(
     app: AppHandle,

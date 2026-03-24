@@ -156,6 +156,8 @@ pub fn run() {
             service::github_open_repo,
             service::github_pull,
             service::github_clone_repo,
+            service::deploy_open_vercel,
+            service::deploy_open_netlify,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_nextjs,
