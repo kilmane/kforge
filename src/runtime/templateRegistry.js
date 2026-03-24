@@ -1,3 +1,14 @@
+// Developer note:
+// When adding or changing template IDs, hints, or detection behavior here,
+// also review these files so deploy guidance stays in sync:
+//
+// - src/runtime/previewRunner.js
+// - src/runtime/PreviewPanel.jsx
+// - src/runtime/ServicePanel.jsx
+//
+// In particular, update deploy recommendation mapping in
+// getDeployProjectIdentity(...) inside ServicePanel.jsx.
+
 export const TEMPLATE_REGISTRY = [
   {
     id: "static-html",

@@ -2,7 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 
-import { findTemplatesByDetectedKind, listTemplates } from "./templateRegistry";
+import {
+  findTemplateByHint,
+  findTemplatesByDetectedKind,
+  listTemplates,
+} from "./templateRegistry";
 
 let previewLogBuffer = [];
 let previewStatusValue = "idle";
@@ -61,6 +65,18 @@ function collectDependencies(pkg) {
 }
 
 function identifyTemplateFromDependencies(dependencies) {
+  if (!dependencies || dependencies.size === 0) {
+    return null;
+  }
+
+  if (dependencies.has("next")) {
+    return findTemplateByHint("next");
+  }
+
+  if (dependencies.has("vite")) {
+    return findTemplateByHint("vite");
+  }
+
   const templates = listTemplates();
 
   for (const template of templates) {

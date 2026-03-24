@@ -1,8 +1,5 @@
 
-
-# Full File Replacement
-
-`D:\kforge\docs-internal\PROJECT-SNAPSHOT.md`
+### `docs-internal/PROJECT-SNAPSHOT.md`
 
 ```markdown
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
@@ -12,11 +9,11 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
 Last Updated: March 24th, 2026
 
-Phase: 4.7 — Deploy Pipeline
+Phase: 4.7 — Deploy Pipeline-2 (smart deploy)
 Status: Stable milestone ready to commit and tag
 
 Recommended stable tag:
-phase-4.7-deploy-pipeline-stable
+phase-4.7-deploy-pipeline-2-smart-deploy-stable
 
 ---
 
@@ -245,6 +242,45 @@ Preview runner provides:
 
 ---
 
+## Preview Detection Model
+
+Detection now works in two stages.
+
+### Stage 1 — coarse project kind
+
+Backend command:
+
+preview_detect_kind
+
+Current kinds include:
+
+• static  
+• package  
+
+### Stage 2 — registry-aware template identification
+
+Frontend logic:
+
+src/runtime/previewRunner.js
+
+Uses:
+
+• templateRegistry hints  
+• package.json dependency inspection  
+• compatible template lookup  
+
+Current recognized template identities include:
+
+• Static HTML  
+• Vite + React  
+• Next.js  
+
+Important implementation note:
+
+Next.js detection is explicitly prioritized ahead of generic React/Vite matching so that Next.js is not misidentified as Vite + React.
+
+---
+
 # 🧱 4c Scaffold System
 
 Backend:
@@ -272,6 +308,18 @@ Templates supported:
 • Next.js  
 
 Scaffolds generate **directly into the workspace root**.
+
+Developer reminder now exists in:
+
+src/runtime/templateRegistry.js
+
+When new templates are added, future maintainers are reminded to also review:
+
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
+
+so deploy guidance and detection remain in sync.
 
 ---
 
@@ -423,103 +471,6 @@ Import from GitHub
 
 ---
 
-## GitHub Publish Workflow
-
-When the user clicks **Publish**:
-
-1. Validate workspace path  
-2. Ensure `git` is installed  
-3. Ensure `gh` (GitHub CLI) is installed  
-4. Verify authentication using:
-
-gh auth status
-
-5. Initialize repository if needed:
-
-git init
-
-6. Stage project files:
-
-git add .
-
-7. Create initial commit:
-
-git commit -m "Initial commit from KForge"
-
-8. Ensure main branch:
-
-git branch -M main
-
-9. Create repository and push:
-
-gh repo create <repo-name> --public|--private --source . --remote origin --push
-
----
-
-## GitHub Import Workflow (Phase 4.6 Part 4)
-
-KForge now supports importing an existing GitHub repository at project-creation time.
-
-This is effectively:
-
-git clone
-
-Current entry point:
-
-New Project flow
-
-Current UX:
-
-Type 1 or 2 then press Enter
-
-1 — Create local project  
-2 — Import from GitHub
-
-If the user chooses **2**:
-
-1. ask for GitHub repository URL  
-2. ask for optional folder name  
-3. ask where to place the project  
-4. run clone into selected parent folder  
-5. automatically open the cloned project in KForge  
-
-This is the correct workflow for bringing an existing GitHub project onto the local machine.
-
----
-
-## GitHub Action Meanings (Important)
-
-These actions are intentionally different:
-
-### Publish
-
-Create a new GitHub repo from the current local project.
-
-### Push changes
-
-Send current local changes to an already connected GitHub repo.
-
-### Pull latest
-
-Bring the latest remote changes into the current local repo.
-
-### Open on GitHub
-
-Open the repository webpage in the browser.
-
-### Import from GitHub
-
-Clone a GitHub repo locally as a new project.
-
-This distinction is important:
-
-**Pull latest is not import.**  
-**Open on GitHub is not import.**
-
-Import only happens during the **New Project** flow in the current implementation.
-
----
-
 ## Authentication Model
 
 KForge does **not manage OAuth tokens directly**.
@@ -562,23 +513,7 @@ Logs reset when:
 
 ---
 
-## Service Panel UX Architecture (Phase 4.6 Part 3)
-
-The Services panel was significantly reworked in Phase 4.6 Part 3.
-
-Previous issue:
-
-• stacked services created clutter  
-• placeholder services competed with real services  
-• activity log risked becoming chaotic  
-
-Current architecture:
-
-• task-first tab grouping  
-• one active service visible at a time  
-• provider chips inside selected task  
-• activity log contained inside active service panel  
-• calmer, lower-noise visual hierarchy  
+## Service Panel UX Architecture
 
 Example grouping:
 
@@ -610,7 +545,7 @@ Instead, KForge provides **guided deploy shortcuts** for GitHub-connected projec
 
 ---
 
-## Deploy Capabilities Now Implemented
+## Deploy Capabilities Implemented
 
 For a project that is already connected to GitHub, KForge now supports:
 
@@ -630,81 +565,113 @@ Local project
 
 ---
 
-## Deploy UX Model
+# 🚀 4.7b Deploy Pipeline-2 (Smart Deploy)
+
+Phase 4.7b adds **template-aware deploy guidance**.
+
+This is guidance only.
+
+It does **not** introduce:
+
+• provider lock-in  
+• advanced hosting dashboards  
+• build setting editors  
+• environment config panels  
+
+Instead, Services → Deploy now reads already-known project identity and shows calmer, smarter wording.
+
+---
+
+## Smart Deploy Source of Truth
+
+Project identity is shared from the existing preview detection path.
+
+Primary files:
+
+• src/runtime/templateRegistry.js  
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
+
+This keeps deploy guidance aligned with preview/template detection instead of creating duplicate framework detection logic inside Services.
+
+---
+
+## Smart Deploy Behaviors
+
+Current mappings:
+
+### Static HTML
+
+Project type:
+Static HTML
+
+Recommendation:
+Good fit: Netlify or Vercel
+
+Hint text:
+Good fit for static sites.
+
+### Vite + React
+
+Project type:
+Vite + React
+
+Recommendation:
+Good fit: Netlify or Vercel
+
+Hint text:
+Good fit for this project.
+
+### Next.js
+
+Project type:
+Next.js
+
+Recommendation:
+Recommended: Vercel
+
+Provider-specific hints:
+
+• Vercel → Recommended for Next.js projects.  
+• Netlify → Next.js usually fits best on Vercel.  
+
+This preserves user choice while still giving clearer guidance.
+
+---
+
+## Smart Deploy UX Surface
 
 Location:
 
-Services → Deploy
+Services → Deploy → Vercel / Netlify
 
-Provider choices:
+Deploy panel now shows:
 
-• Vercel  
-• Netlify  
+• Project type: <detected template label>  
+• Recommendation: <provider guidance>  
+• GitHub repo: <owner/repo> or GitHub connection required  
+• provider-specific hint text  
 
-Deploy surface behavior:
-
-• uses detected GitHub remote from the current project  
-• shows repo context directly in the panel  
-• blocks deploy action when GitHub is not connected  
-• opens the browser to the provider flow when deploy is available
-
-Current wording in the UI includes:
-
-• GitHub repo: <owner/repo>  
-• Deploy with Vercel  
-• Deploy with Netlify  
-• Connect GitHub first  
-• Push changes before deploying
+This keeps the deploy panel more context-aware without increasing complexity.
 
 ---
 
-## Vercel Flow
+## Smart Deploy Safety / Fallback Behavior
 
-When the current project has a valid GitHub remote, KForge opens:
+If project identity is not recognized cleanly, deploy guidance stays calm.
 
-https://vercel.com/new/clone?repository-url=<github-repo-url>
+Fallback wording remains:
 
-This allows the Vercel import flow to begin directly from the current repository.
+Recommendation: Good fit: Netlify or Vercel
 
-KForge logs a message such as:
+This avoids noisy warnings for end users.
 
-Opened Vercel import for <owner/repo>.
+Developer-facing reminder is handled in:
 
----
+src/runtime/templateRegistry.js
 
-## Netlify Flow
-
-When the current project has a valid GitHub remote, KForge opens:
-
-https://app.netlify.com/start
-
-The user then selects GitHub and chooses the repository.
-
-KForge logs a message such as:
-
-Opened Netlify import. Choose GitHub and select <owner/repo>.
-
----
-
-## Deploy Readiness Rule
-
-Deployment currently depends on GitHub connection.
-
-Minimum expected state:
-
-• current folder is a Git repo  
-• origin remote exists  
-• remote is a supported GitHub URL  
-
-If this is not true, the Deploy panel shows:
-
-Connect GitHub first
-
-If the project is connected but no commit history is present yet, the Deploy panel shows:
-
-Push changes before deploying
-
-This keeps deploy guidance calm and explicit.
+so future template additions prompt maintainers to review deploy recommendation mapping.
 
 ---
 
@@ -787,7 +754,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.7**:
+As of **Phase 4.7 Deploy Pipeline-2**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -802,6 +769,8 @@ As of **Phase 4.7**:
 • Deploy pipeline implemented  
 • Vercel deploy shortcut working  
 • Netlify deploy shortcut working  
+• template-aware deploy guidance working  
+• Next.js deploy recommendation working  
 
 Supported workflows now include:
 
@@ -814,7 +783,8 @@ GitHub repository publishing
 GitHub repo push / pull / open  
 GitHub repository import during project creation  
 Deploy handoff to Vercel  
-Deploy handoff to Netlify
+Deploy handoff to Netlify  
+Template-aware deploy recommendation inside Services
 
 ---
 
@@ -839,27 +809,28 @@ Planned adapters:
 
 Possible future deploy improvements:
 
-• template-aware deploy guidance  
-• static vs SSR deploy recommendations  
-• framework-specific hints before browser handoff
+• richer static vs SSR guidance  
+• additional framework mappings  
+• framework-specific deploy tips before browser handoff
 
 ---
 
 # 🚢 Phase Boundary
 
-Phase 4.7 is now a stable milestone built on top of the completed Phase 4.6 GitHub workflow.
+Phase 4.7 Deploy Pipeline-2 is now a stable milestone built on top of the completed Phase 4.7 deploy workflow.
 
-What Phase 4.7 proves:
+What this phase proves:
 
-• the Service Integration Layer works beyond GitHub  
-• grouped Services UI scales into multiple provider families  
-• deploy actions can remain lightweight and guided  
-• KForge can connect local project → GitHub → deploy platform without turning into a hosting dashboard
+• deploy guidance can be template-aware without becoming noisy  
+• Services can reuse existing preview/template identity cleanly  
+• Next.js can receive stronger provider guidance than generic frontend apps  
+• KForge can feel smarter without becoming a hosting dashboard
 
 Current stable journey:
 
 Local Project  
 → GitHub  
+→ Smart Deploy Guidance  
 → Vercel / Netlify
 
 This sets up the next major phase:
@@ -867,3 +838,4 @@ This sets up the next major phase:
 Phase 4.8 — Supabase Integration (real full-stack)
 ```
 
+---

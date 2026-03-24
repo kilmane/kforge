@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { previewDetectTemplates } from "./previewRunner";
 import { SERVICE_REGISTRY } from "./serviceRegistry";
 import {
   detectGithubRepo,
@@ -170,6 +171,51 @@ function buildNetlifyImportUrl() {
   return "https://app.netlify.com/start";
 }
 
+function getDeployProjectIdentity(detectedTemplate, detectedKind) {
+  if (detectedTemplate?.id === "nextjs") {
+    return {
+      label: "Next.js",
+      recommendation: "Recommended: Vercel",
+      vercelHint: "Recommended for Next.js projects.",
+      netlifyHint: "Next.js usually fits best on Vercel.",
+    };
+  }
+
+  if (detectedTemplate?.id === "vite-react") {
+    return {
+      label: "Vite + React",
+      recommendation: "Good fit: Netlify or Vercel",
+      vercelHint: "Good fit for this project.",
+      netlifyHint: "Good fit for this project.",
+    };
+  }
+
+  if (detectedTemplate?.id === "static-html" || detectedKind === "static") {
+    return {
+      label: "Static HTML",
+      recommendation: "Good fit: Netlify or Vercel",
+      vercelHint: "Good fit for static sites.",
+      netlifyHint: "Good fit for static sites.",
+    };
+  }
+
+  if (detectedKind === "package") {
+    return {
+      label: "Package-based app",
+      recommendation: "Good fit: Netlify or Vercel",
+      vercelHint: "Deploy guidance is based on detected project files.",
+      netlifyHint: "Deploy guidance is based on detected project files.",
+    };
+  }
+
+  return {
+    label: "",
+    recommendation: "Good fit: Netlify or Vercel",
+    vercelHint: "Deploy this GitHub-connected project with Vercel.",
+    netlifyHint: "Deploy this GitHub-connected project with Netlify.",
+  };
+}
+
 export default function ServicePanel({ projectPath }) {
   const [logs, setLogs] = useState(persistedServicePanelState.logs);
   const [activeServiceId, setActiveServiceId] = useState(
@@ -196,6 +242,8 @@ export default function ServicePanel({ projectPath }) {
   const [githubRepoState, setGithubRepoState] = useState(
     persistedServicePanelState.githubRepoState,
   );
+  const [detectedProjectKind, setDetectedProjectKind] = useState("");
+  const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
   const logEndRef = useRef(null);
   const lastProjectPathRef = useRef(
     projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
@@ -206,6 +254,13 @@ export default function ServicePanel({ projectPath }) {
     TASK_GROUPS.find((task) => task.id === activeTaskId) || TASK_GROUPS[0];
   const activeProvider =
     providerMap.get(activeProviderId) || providerMap.get(DEFAULT_PROVIDER_ID);
+
+  const deployProjectIdentity = useMemo(() => {
+    return getDeployProjectIdentity(
+      detectedProjectTemplate,
+      detectedProjectKind,
+    );
+  }, [detectedProjectKind, detectedProjectTemplate]);
 
   useEffect(() => {
     persistedServicePanelState.logs = logs;
@@ -310,6 +365,8 @@ export default function ServicePanel({ projectPath }) {
       setGithubRepoName("");
       setGithubVisibility("public");
       setGithubRepoState(null);
+      setDetectedProjectKind("");
+      setDetectedProjectTemplate(null);
       lastProjectPathRef.current = "";
       return;
     }
@@ -329,6 +386,8 @@ export default function ServicePanel({ projectPath }) {
       setGithubRepoName("");
       setGithubVisibility("public");
       setGithubRepoState(null);
+      setDetectedProjectKind("");
+      setDetectedProjectTemplate(null);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
@@ -366,6 +425,43 @@ export default function ServicePanel({ projectPath }) {
       cancelled = true;
     };
   }, [projectPath, serviceStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjectIdentity() {
+      const normalizedProjectPath =
+        projectPath && String(projectPath).trim()
+          ? String(projectPath).trim()
+          : "";
+
+      if (!normalizedProjectPath) {
+        setDetectedProjectKind("");
+        setDetectedProjectTemplate(null);
+        return;
+      }
+
+      try {
+        const result = await previewDetectTemplates(normalizedProjectPath);
+
+        if (!cancelled) {
+          setDetectedProjectKind(String(result?.kind || ""));
+          setDetectedProjectTemplate(result?.detectedTemplate || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setDetectedProjectKind("");
+          setDetectedProjectTemplate(null);
+        }
+      }
+    }
+
+    loadProjectIdentity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
 
   useEffect(() => {
     if (logEndRef.current) {
@@ -601,6 +697,7 @@ export default function ServicePanel({ projectPath }) {
       ]);
     }
   }
+
   const isGithub = activeProvider?.id === "github";
   const isDeploy = isDeployProvider(activeProvider?.id);
   const isBusy = busyServiceId === activeProvider?.id;
@@ -617,6 +714,11 @@ export default function ServicePanel({ projectPath }) {
     githubRepoState?.isRepo &&
     githubRepoState?.hasRemote &&
     !!githubRepoSlug;
+
+  const activeDeployHint =
+    activeProvider?.id === "vercel"
+      ? deployProjectIdentity.vercelHint
+      : deployProjectIdentity.netlifyHint;
 
   return (
     <div
@@ -819,15 +921,21 @@ export default function ServicePanel({ projectPath }) {
                 color: "#d4d4d8",
               }}
             >
+              {deployProjectIdentity.label ? (
+                <div>
+                  <span style={{ color: "#a1a1aa" }}>Project type:</span>{" "}
+                  {deployProjectIdentity.label}
+                </div>
+              ) : null}
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Recommendation:</span>{" "}
+                {deployProjectIdentity.recommendation}
+              </div>
               <div>
                 <span style={{ color: "#a1a1aa" }}>GitHub repo:</span>{" "}
                 {githubRepoSlug ? githubRepoSlug : "GitHub connection required"}
               </div>
-              <div style={{ color: "#a1a1aa" }}>
-                {activeProvider?.id === "vercel"
-                  ? "Open Vercel import for this GitHub repo."
-                  : "Open Netlify and choose Import an existing project."}
-              </div>
+              <div style={{ color: "#a1a1aa" }}>{activeDeployHint}</div>
               {githubRepoState?.isRepo &&
               githubRepoState?.hasRemote &&
               !githubRepoState?.hasCommit ? (

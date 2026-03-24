@@ -1,8 +1,5 @@
 
-
-# Full File Replacement
-
-`D:\kforge\docs-internal\user-guide-notes.md`
+### `docs-internal/user-guide-notes.md`
 
 ```markdown
 # User Guide Notes (development capture)
@@ -30,12 +27,8 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-```
-
-Open Folder → Explore files
+Open Folder → Explore files  
 Preview → Focus on running app
-
-```
 
 ---
 
@@ -53,12 +46,8 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-```
-
-Project structure → coarse project type
+Project structure → coarse project type  
 package.json signals → framework identification when possible
-
-```
 
 This allows KForge to both:
 
@@ -71,35 +60,23 @@ This allows KForge to both:
 
 If a project contains:
 
-```
-
 index.html
-
-```
 
 KForge automatically runs a **static preview server**.
 
 Workflow:
 
-```
-
-Open Folder
-Preview
+Open Folder  
+Preview  
 Open
-
-```
 
 No dependency installation is required.
 
 Example static project:
 
-```
-
-index.html
-styles.css
+index.html  
+styles.css  
 script.js
-
-```
 
 For static-only projects the **Install** step is skipped.
 
@@ -111,40 +88,24 @@ Framework projects use a **development server**.
 
 Typical indicator:
 
-```
-
 package.json
-
-```
 
 Workflow:
 
-```
-
-Open Folder
-Install
-Preview
+Open Folder  
+Install  
+Preview  
 Open
-
-```
 
 Typical commands executed:
 
-```
-
-pnpm install
+pnpm install  
 pnpm dev
-
-```
 
 Currently recognized framework templates include:
 
-```
-
-Vite + React
+Vite + React  
 Next.js
-
-```
 
 ---
 
@@ -154,13 +115,9 @@ Generate creates a **starter template project** inside the opened workspace fold
 
 Current templates supported:
 
-```
-
-Static HTML/CSS/JS
-Vite + React
+Static HTML/CSS/JS  
+Vite + React  
 Next.js
-
-```
 
 Template generation is driven by the **Template Registry**.
 
@@ -170,23 +127,15 @@ Template generation is driven by the **Template Registry**.
 
 Creates a simple project:
 
-```
-
-index.html
-styles.css
+index.html  
+styles.css  
 script.js
-
-```
 
 Workflow:
 
-```
-
-Generate
-Preview
+Generate  
+Preview  
 Open
-
-```
 
 No dependency installation required.
 
@@ -196,11 +145,7 @@ No dependency installation required.
 
 Command executed:
 
-```
-
 pnpm dlx create-vite@latest . --template react --no-interactive
-
-```
 
 Dependencies are installed later using **Install**.
 
@@ -210,11 +155,7 @@ Dependencies are installed later using **Install**.
 
 Command executed:
 
-```
-
 pnpm create next-app@latest . --yes
-
-```
 
 Next.js installs dependencies during generation.
 
@@ -228,11 +169,7 @@ Install installs project dependencies.
 
 Command used:
 
-```
-
 pnpm install
-
-```
 
 Not required for static projects.
 
@@ -242,12 +179,8 @@ Not required for static projects.
 
 Preview starts the project runtime.
 
-```
-
-Static → internal static server
+Static → internal static server  
 Framework → pnpm dev
-
-```
 
 Preview logs stream into the Preview Runner panel.
 
@@ -259,472 +192,165 @@ Open launches the running preview in the browser.
 
 Example URLs:
 
-```
-
-[http://localhost:5173](http://localhost:5173)
-[http://127.0.0.1:56566/](http://127.0.0.1:56566/)
-
-```
-
----
-
-# Stop
-
-Stops the running preview server.
-
----
-
-# Clear
-
-Clears preview logs.
-
----
-
-# Terminal
-
-KForge includes a **Terminal panel**.
-
-Runs commands in the active project root.
-
-Examples:
-
-```
-
-node -v
-git status
-dir
-
-```
+http://localhost:3000  
+http://127.0.0.1:4173
 
 ---
 
 # Services
 
-KForge includes a **Services panel** for connecting projects to external tools.
+The Services panel is a guided integration surface for project-connected tasks.
 
-Mental model:
+Current groups:
 
-```
+* Code
+* Deploy
+* Backend
+* Payments
 
-Services = guided infrastructure setup
+Current providers visible in development include:
 
-```
+* GitHub
+* Vercel
+* Netlify
+* Supabase
+* Stripe
 
-Not a full DevOps dashboard.
+The panel is task-first and only shows one active provider at a time.
 
----
-
-# Services Panel Layout
-
-Services are grouped by **task**.
-
-```
-
-Code
-Deploy
-Backend
-Payments
-
-```
-
-Example structure:
-
-```
-
-Code → GitHub
-Deploy → Vercel / Netlify
-Backend → Supabase
-Payments → Stripe
-
-```
-
-Only **one service panel is visible at a time**.
+This keeps the surface calmer as integrations expand.
 
 ---
 
-# GitHub Integration
+# GitHub in Services
 
-GitHub is currently the first fully implemented service.
+GitHub currently supports:
 
-Capabilities:
+* Publish
+* Push changes
+* Pull latest
+* Open on GitHub
 
-```
+GitHub state shown in the panel includes:
 
-Publish repository
-Push changes
-Pull latest
-Open on GitHub
-Import repository
+* whether a git repo is detected
+* whether a commit exists
+* whether a remote exists
+* current branch
 
-```
-
----
-
-# GitHub Publishing
-
-Used when a project exists locally and should be published to GitHub.
-
-Workflow:
-
-```
-
-Open folder
-Services → Code → GitHub
-Enter repository name
-Choose visibility
-Click Publish
-
-```
-
-KForge runs:
-
-```
-
-git init
-git add .
-git commit
-git branch -M main
-gh repo create
-git push
-
-```
-
-Requirements:
-
-```
-
-git installed
-GitHub CLI (gh)
-gh auth login
-
-```
+Publishing requires a project folder to be open.
 
 ---
 
-# GitHub Service Actions
+# Deploy in Services
 
-### Publish
+Deploy currently supports:
 
-Create a new GitHub repository from the local project.
+* Vercel
+* Netlify
 
-```
+Deploy actions are lightweight handoffs to provider flows in the browser.
 
-Local → GitHub
+KForge does not expose advanced hosting dashboards inside the app.
 
-```
+The deploy workflow is intended to feel like:
 
----
-
-### Push changes
-
-Upload local commits.
-
-```
-
-Computer → GitHub
-
-```
+Local project  
+→ GitHub  
+→ Deploy
 
 ---
 
-### Pull latest
+## Deploy Preconditions
 
-Download remote changes.
+Deploy requires the current project to already be connected to GitHub.
 
-```
+If GitHub is not connected, the deploy action is blocked and the panel tells the user to connect GitHub first.
 
-GitHub → Local project
+If the repository exists but changes have not yet been pushed, the panel may show:
 
-```
-
----
-
-### Open on GitHub
-
-Opens the repository webpage.
+Push changes before deploying.
 
 ---
 
-# Import From GitHub
+## Smart Deploy Guidance
 
-Used when the project does **not yet exist locally**.
+Deploy guidance is now aware of the detected project type.
 
-Workflow:
+Current examples:
 
-```
+### Static HTML
 
-New Project
-Select Import from GitHub
-Paste repo URL
-Choose location
-Project opens automatically
+Project type:
+Static HTML
 
-```
+Recommendation:
+Good fit: Netlify or Vercel
 
----
+### Vite + React
 
-# Deploying a Project
+Project type:
+Vite + React
 
-KForge now supports **guided deployment entry points**.
+Recommendation:
+Good fit: Netlify or Vercel
 
-Location:
+### Next.js
 
-```
-
-Services → Deploy
-
-```
-
-Available providers:
-
-```
-
-Vercel
-Netlify
-
-```
-
-Deployment requires the project to already be connected to GitHub.
-
-Typical workflow:
-
-```
-
-Create or open project
-Publish to GitHub
-Push changes
-Services → Deploy
-Choose provider
-
-```
-
-KForge opens the provider import page.
-
----
-
-## Deploy with Vercel
-
-When selecting **Deploy → Vercel**, KForge opens:
-
-```
-
-[https://vercel.com/new/clone](https://vercel.com/new/clone)
-
-```
-
-The GitHub repository is pre-selected.
-
-Typical steps on Vercel:
-
-```
-
-Confirm repo
-Choose framework preset
-Click Deploy
-
-```
-
-Vercel automatically detects frameworks such as:
-
-```
-
+Project type:
 Next.js
-Vite
-React
 
-```
+Recommendation:
+Recommended: Vercel
 
----
+This is guidance, not a restriction.
 
-## Deploy with Netlify
-
-When selecting **Deploy → Netlify**, KForge opens:
-
-```
-
-[https://app.netlify.com/start](https://app.netlify.com/start)
-
-```
-
-Typical steps:
-
-```
-
-Import existing project
-Choose GitHub
-Select repository
-Deploy
-
-```
+Users can still choose either provider.
 
 ---
 
-## Push Before Deploying
+## Provider Hint Style
 
-If the repository exists but **has no commits yet**, KForge shows a hint:
+Deploy hint text stays short and calm.
 
-```
+Examples:
 
-Push changes before deploying
+* Good fit for static sites.
+* Good fit for this project.
+* Recommended for Next.js projects.
+* Next.js usually fits best on Vercel.
 
-```
-
-This ensures the deploy platform has code available.
-
----
-
-# Services Panel Persistence
-
-The Services panel remembers temporary state such as:
-
-```
-
-repository name input
-service logs
-active service tab
-
-```
-
-State resets when the workspace changes.
-
----
-
-# Panel Behavior
-
-Preview, Terminal, and Services share the runtime area.
-
-Only one is visible at a time.
-
-```
-
-Open Preview → others close
-Open Terminal → others close
-Open Services → others close
-
-```
+This keeps KForge helpful without turning the deploy surface into a hosting tutorial.
 
 ---
 
 # New Project
 
-Two creation paths exist.
+New Project supports both:
 
-### Create Local Project
+* create a local project
+* import from GitHub
 
-```
-
-New Project
-Enter name
-Choose location
-
-```
+Import from GitHub clones the selected repository into the chosen parent folder and opens it automatically in KForge.
 
 ---
 
-### Import From GitHub
+# User-Facing Design Principles Captured So Far
 
+KForge should feel:
+
+* calm
+* explicit
+* guided
+* low-noise
+* project-aware
+
+KForge should avoid:
+
+* hidden actions
+* noisy debug-heavy surfaces
+* overwhelming dashboards
+* provider-specific complexity walls
 ```
 
-New Project
-Choose Import
-Paste repo URL
-
-```
-
----
-
-# Tip
-
-If preview does not update:
-
-```
-
-Ensure preview is running
-Ensure files are inside the opened project folder
-
-```
-
-KForge uses a **single project root** for:
-
-```
-
-AI edits
-Preview
-Filesystem tools
-Explorer
-Services
-
-```
-
----
-
-# Current User Mental Model
-
-Preview:
-
-```
-
-Open folder
-Preview
-Open browser
-
-```
-
-Services:
-
-```
-
-Open folder
-Services
-Choose task
-Run guided action
-
-```
-
-GitHub:
-
-```
-
-Started locally → Publish
-Already connected → Push / Pull
-Need browser → Open on GitHub
-Have remote repo → Import
-
-```
-
-Deploy:
-
-```
-
-Publish to GitHub
-Push code
-Services → Deploy
-Choose Vercel or Netlify
-
-```
-
----
-
-# User Guide Direction
-
-These notes will become the **first official KForge user guide**.
-
-Major sections likely needed:
-
-```
-
-Project creation
-Template generation
-Preview workflow
-Terminal usage
-Services panel
-GitHub workflows
-Deployment workflows
-
-```
-
-This document currently acts as the **source material for that guide**.
-```
-
----
 

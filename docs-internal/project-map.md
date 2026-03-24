@@ -1,21 +1,14 @@
 
-
-# Full File Replacement
-
-`D:\kforge\docs-internal\project-map.md`
+### `docs-internal/project-map.md`
 
 ```markdown
 # 🗺 KForge Project Map
 
 Location:
 
-```
-
 D:\kforge\docs-internal\project-map.md
 
-```
-
-Version: v13  
+Version: v14  
 Updated: 24/03/2026
 
 Purpose: architectural topology & execution responsibility map.
@@ -28,11 +21,7 @@ Purpose: architectural topology & execution responsibility map.
 
 File:
 
-```
-
 src/App.js
-
-```
 
 Responsibilities:
 
@@ -56,19 +45,11 @@ App.js is also the **authority for the current project root**.
 
 Defined in:
 
-```
-
 src/App.js
-
-```
 
 Structure:
 
-```
-
 messages = [{ id, role, content, ts, action?, actions? }]
-
-```
 
 Everything renders from this.
 
@@ -82,11 +63,7 @@ There are **no duplicate message systems**.
 
 File:
 
-```
-
 src/ai/panel/AiPanel.jsx
-
-```
 
 Filtered projection of message store.
 
@@ -103,11 +80,7 @@ Shows:
 
 File:
 
-```
-
 src/ai/panel/TranscriptPanel.jsx
-
-```
 
 Full system log.
 
@@ -128,11 +101,7 @@ Contains Retry + Clear controls.
 
 File:
 
-```
-
 src/ai/panel/AiPanel.jsx
-
-```
 
 Detects:
 
@@ -147,11 +116,7 @@ Triggers runtime execution.
 
 File:
 
-```
-
 src/ai/tools/toolRuntime.js
-
-```
 
 Handles:
 
@@ -161,14 +126,10 @@ Handles:
 
 Runtime flow:
 
-```
-
 detect tool
 → consent
 → handler execution
 → result appended
-
-```
 
 ---
 
@@ -176,11 +137,7 @@ detect tool
 
 File:
 
-```
-
 src/ai/tools/handlers/index.js
-
-```
 
 Current tools:
 
@@ -192,11 +149,7 @@ Current tools:
 
 Filesystem layer:
 
-```
-
 src/lib/fs.js
-
-```
 
 Ensures project-root safety.
 
@@ -206,27 +159,15 @@ Ensures project-root safety.
 
 Backend:
 
-```
-
 src-tauri/src/preview.rs
-
-```
 
 Frontend bridge:
 
-```
-
 src/runtime/previewRunner.js
-
-```
 
 UI surface:
 
-```
-
 src/runtime/PreviewPanel.jsx
-
-```
 
 ---
 
@@ -244,6 +185,7 @@ Capabilities:
 * stop processes
 * persist preview logs
 * detect compatible template types for the current project
+* identify a more specific template when dependency signals allow it
 
 ---
 
@@ -257,545 +199,343 @@ Detection occurs in **two stages**.
 
 Rust backend determines the general project type.
 
-Rules:
+Primary command:
 
-```
+preview_detect_kind
 
-package.json → package project
-index.html → static project
+Current coarse kinds include:
 
-```
-
-Implemented in:
-
-```
-
-preview_detect_kind()
-
-```
-
-inside:
-
-```
-
-src-tauri/src/preview.rs
-
-```
-
----
+* static
+* package
 
 ### Stage 2 — Template Identification (Frontend)
 
-Implemented in:
-
-```
+File:
 
 src/runtime/previewRunner.js
 
-```
+The frontend then refines that result using the template registry.
 
-Process:
+Key helpers:
 
-```
+* findTemplatesByDetectedKind(...)
+* identifyTemplateFromDependencies(...)
 
-preview_detect_kind()
-↓
-read package.json
-↓
-inspect dependencies
-↓
-match Template Registry hints
-↓
-identify framework
+Dependency hints from package.json are used to detect a specific template when possible.
 
-```
+Current recognized template identities:
 
-Example detection:
+* Static HTML
+* Vite + React
+* Next.js
 
-| Dependency | Template |
-|------------|----------|
-| next | Next.js |
-| vite + react | Vite + React |
-| none | Static |
+Important rule:
+
+Next.js matching is prioritized before broader React/Vite hint matches so that a Next.js project is not misclassified as Vite + React.
 
 ---
 
-# 3d Command Runner Panel
+# 3c Template Registry / Scaffold System
 
-Backend:
+Registry file:
 
-```
+src/runtime/templateRegistry.js
 
-src-tauri/src/command_runner.rs
+Backend scaffold implementation:
 
-```
+src-tauri/src/scaffold.rs
 
-Frontend bridge:
+Frontend trigger surface:
 
-```
+src/runtime/PreviewPanel.jsx
 
-src/runtime/commandRunner.js
+Current scaffold commands:
 
-```
+* scaffold_static_html
+* scaffold_vite_react
+* scaffold_nextjs
 
-UI:
+Current template IDs:
 
-```
+* static-html
+* vite-react
+* nextjs
 
-src/runtime/CommandRunnerPanel.jsx
+Current template responsibilities include:
 
-```
+* scaffold command metadata
+* install behavior
+* preview strategy
+* detection hints
+* compatible project kind mapping
 
-Capabilities:
+Developer note exists at the top of templateRegistry.js.
 
-* run commands
-* stream logs
-* execute in project root
-* support shell built-ins
+When adding new templates, maintainers are reminded to also review:
 
----
+* src/runtime/previewRunner.js
+* src/runtime/PreviewPanel.jsx
+* src/runtime/ServicePanel.jsx
 
-# 3e Service Integration Layer
-
-Backend:
-
-```
-
-src-tauri/src/service.rs
-
-```
-
-Frontend runtime:
-
-```
-
-src/runtime/serviceRunner.js
-
-```
-
-Registry:
-
-```
-
-src/runtime/serviceRegistry.js
-
-```
-
-UI:
-
-```
-
-src/runtime/ServicePanel.jsx
-
-```
-
-Panel integration:
-
-```
-
-src/ai/panel/AiPanel.jsx
-
-```
+This is specifically to keep preview detection and deploy guidance aligned.
 
 ---
 
-## Architectural Role
-
-The Service Layer provides a unified runtime for external integrations.
-
-It prevents future integrations from becoming one-off subsystems.
-
-Future services include:
-
-```
-
-Supabase
-Stripe
-OpenAI
-GitHub
-Netlify
-Vercel
-
-```
-
-Architecture principle:
-
-```
-
-new service = registry entry + adapter
-
-```
-
-not
-
-```
-
-new service = new subsystem
-
-```
-
----
-
-# Service Panel Architecture (Phase 4.6)
-
-The Services UI was redesigned in Phase **4.6 Part 3**.
-
-The previous stacked layout was replaced with a **single-active-service tab architecture**.
-
-Example structure:
-
-```
-
-Services
-
-[ Code / GitHub ] [ Deploy ] [ Backend ] [ Payments ]
-
-```
-
-Only **one service panel is visible at a time**.
-
-This prevents UI clutter as integrations grow.
-
-Benefits:
-
-* focused workspace
-* scalable architecture
-* avoids “wall of services”
-* prepares for deployment integrations
-
----
-
-# GitHub Integration (Phase 4.6)
-
-GitHub is the first full service adapter.
-
-Capabilities implemented:
-
-```
-
-Publish repository
-Push changes
-Pull latest
-Open on GitHub
-Import repository (clone)
-
-```
-
-These actions correspond to standard Git operations.
-
-| Action | Git Operation |
-|------|----------------|
-| Publish | initialize + create GitHub repo |
-| Push | git push |
-| Pull latest | git pull |
-| Open on GitHub | open repo webpage |
-| Import | git clone |
-
----
-
-## GitHub Publishing
-
-Workflow:
-
-```
-
-git init
-git add .
-git commit
-git branch -M main
-gh repo create
-git push
-
-```
-
-Requires:
-
-```
-
-git installed
-GitHub CLI installed
-gh auth login
-
-```
-
-Authentication is handled by **GitHub CLI**, not KForge.
-
----
-
-## GitHub Import (Phase 4.6 Part 4)
-
-A GitHub repository can now be imported directly during project creation.
-
-Location:
-
-```
-
-New Project flow
-
-```
-
-User flow:
-
-```
-
-New Project
-
-Type 1 or 2
-
-1 — Create local project
-2 — Import from GitHub
-
-```
-
-If option **2** is chosen:
-
-```
-
-GitHub repository URL
-→ choose parent folder
-→ git clone executed
-→ project opens automatically
-
-```
-
-This allows existing GitHub projects to be opened directly in KForge.
-
----
-
-# Deploy Pipeline (Phase 4.7)
-
-KForge now supports **guided deployment entry points**.
-
-Location:
-
-```
-
-Services → Deploy
-
-```
-
-Available providers:
-
-```
-
-Vercel
-Netlify
-
-```
-
-Workflow:
-
-```
-
-Local project
-→ Publish to GitHub
-→ Services → Deploy
-→ Choose Vercel or Netlify
-
-```
-
-KForge opens the provider import flow for the detected GitHub repository.
-
-Example:
-
-```
-
-Vercel
-[https://vercel.com/new/clone?repository-url=](https://vercel.com/new/clone?repository-url=)<repo>
-
-```
-```
-
-Netlify
-[https://app.netlify.com/start](https://app.netlify.com/start)
-
-```
-
-KForge intentionally avoids full DevOps dashboards and instead provides **guided deployment shortcuts**.
-
----
-
-## Service UI Actions
-
-GitHub service actions operate **only on the currently open project**.
-
-Example:
-
-```
-
-Pull latest
-
-```
-
-means:
-
-```
-
-Update current local repo from GitHub
-
-```
-
-It does **not clone new projects**.
-
-Clone/import happens only during **New Project creation**.
-
----
-
-# Service Logging
-
-Services emit events:
-
-```
-
-kforge://service/log
-kforge://service/status
-
-```
-
-Logs are streamed into the Services panel.
-
-This matches the same architecture used by:
-
-```
-
-Preview
-Command Runner
-
-```
-
----
-
-# 3f Workspace Refresh Events
-
-Event:
-
-```
-
-kforge://workspace/refresh
-
-```
-
-Handled in:
-
-```
-
-src/App.js
-
-```
-
-Explorer refreshes after:
-
-* AI file writes
-* scaffold generation
-* folder creation
-* service operations
-
----
-
-# 4 Filesystem Layer
+# 3d Preview Surface
 
 File:
 
-```
-
-src/lib/fs.js
-
-```
+src/runtime/PreviewPanel.jsx
 
 Responsibilities:
 
-* path safety
-* project root enforcement
-* file read/write
-* folder tree building
-* project memory integration
+* show preview state
+* show detected project identity
+* expose Generate / Install / Preview / Stop / Open / Clear actions
+* show compatible template information when useful
+* refresh project shape after scaffold completion
 
-Filesystem operations are restricted to the **active project root**.
+PreviewPanel consumes the shared detection result returned by:
+
+previewDetectTemplates(...)
+
+Returned shape includes:
+
+* kind
+* compatibleTemplates
+* detectedTemplate
 
 ---
 
-# 5 Layout Architecture
+# 4 Command Runner Architecture
 
-DockShell controls layout.
+Backend:
 
-File:
+src-tauri/src/command_runner.rs
 
-```
+Frontend bridge:
+
+src/runtime/commandRunner.js
+
+UI surface:
+
+src/runtime/CommandRunnerPanel.jsx
+
+Capabilities:
+
+* run shell commands inside project root
+* stream stdout/stderr
+* one command at a time
+* Windows support via cmd /C
+
+Events:
+
+* kforge://command/log
+* kforge://command/status
+
+Preview and Terminal are mutually exclusive collapsibles.
+
+---
+
+# 5 Service Integration Layer
+
+Backend:
+
+src-tauri/src/service.rs
+
+Frontend bridge:
+
+src/runtime/serviceRunner.js
+
+Registry:
+
+src/runtime/serviceRegistry.js
+
+UI:
+
+src/runtime/ServicePanel.jsx
+
+Purpose:
+
+Unified architecture for external service integrations.
+
+Pattern:
+
+registry entry + adapter implementation
+
+---
+
+## Current Service Families
+
+### Code
+
+* GitHub
+
+### Deploy
+
+* Vercel
+* Netlify
+
+### Backend
+
+* Supabase
+
+### Payments
+
+* Stripe
+
+OpenAI remains registered in the service layer for future integration work.
+
+---
+
+## Current GitHub Actions
+
+Exposed through Services and supporting flows:
+
+* publish local repo
+* detect repo state
+* open on GitHub
+* pull latest
+* push changes
+* clone/import through New Project flow
+
+---
+
+## Current Deploy Actions
+
+Exposed through Services → Deploy:
+
+* open Vercel import URL for current GitHub repo
+* open Netlify start/import flow
+* block deploy when GitHub is not connected
+* show repo-aware deploy hints
+
+---
+
+# 5b Smart Deploy Guidance
+
+Primary file:
+
+src/runtime/ServicePanel.jsx
+
+ServicePanel now consumes shared project identity from:
+
+previewDetectTemplates(...)
+
+This avoids duplicate framework detection logic inside Services.
+
+Key mapping helper:
+
+getDeployProjectIdentity(...)
+
+Current smart deploy mappings:
+
+* static-html / static → Good fit: Netlify or Vercel
+* vite-react → Good fit: Netlify or Vercel
+* nextjs → Recommended: Vercel
+
+Provider-specific hints are also supported.
+
+Examples:
+
+* Vercel + Next.js → Recommended for Next.js projects.
+* Netlify + Next.js → Next.js usually fits best on Vercel.
+
+Fallback behavior remains calm:
+
+* Recommendation: Good fit: Netlify or Vercel
+
+This fallback is user-facing.
+
+Developer maintenance reminder is registry-facing, not user-facing.
+
+---
+
+# 6 Layout / Dock Architecture
+
+Dock shell file:
 
 src/layout/DockShell.jsx
 
-```
-
 Modes:
 
-### Bottom Mode
+* bottom
+* full
 
-```
+Meaning:
 
-dockMode="bottom"
+* bottom = dock below workspace
+* full = focus mode replaces main layout
 
-```
-
-### Focus Mode
-
-```
-
-dockMode="full"
-
-```
-
-Focus mode promotes the dock to the main surface.
+Focus mode is a surface promotion, not a resized dock.
 
 ---
 
-# Architectural Summary
+# 7 Operational Flow Map
 
-KForge architecture principles:
+## Standard Local Development
 
-* one canonical message store
-* one AI execution authority
-* one tool runtime pipeline
-* one filesystem bridge
-* preview runtime isolated from AI logic
-* command runtime isolated from AI logic
-* service runtime isolated from AI logic
-* UI projections separated from runtime state
-* registry-driven extensibility
-* unified project root authority
+Open folder
+→ Generate optional template
+→ Install
+→ Preview
+→ Open
+→ Iterate
 
----
+## AI Editing Loop
 
-# Runtime Architecture Overview
-
-```
-
-AI Runtime
-│
-▼
-Filesystem Layer
-│
-▼
-Runtime Tools
-├ Preview Runtime
-├ Command Runner
-└ Service Integration Layer
-
-```
-
----
-
-# Development Loop
-
-KForge supports the **vibe-coding workflow**:
-
-```
-
-prompt
+Open folder
+→ prompt AI
 → AI edits files
-→ preview / command feedback
-→ user sees result instantly
+→ preview / install / rerun
 
+## GitHub Flow
+
+Open folder
+→ Services
+→ Publish
+→ Push changes
+→ Open on GitHub or Pull latest
+
+## Deploy Flow
+
+Open folder
+→ Services
+→ Deploy
+→ choose Vercel or Netlify
+→ follow provider browser flow
+
+## Smart Deploy Flow
+
+Open folder
+→ project identity detected through preview pipeline
+→ Services → Deploy
+→ recommendation shown based on template/project type
+→ provider opened in browser
+
+---
+
+# 8 Stable Milestone Summary
+
+Current stable milestone includes:
+
+* AI message architecture
+* safe filesystem tools
+* preview runtime
+* scaffold templates
+* command runner
+* service integration layer
+* GitHub workflow
+* GitHub import
+* deploy shortcuts
+* smart deploy guidance
+
+This project map should be updated whenever:
+
+* execution authority moves
+* registry responsibilities change
+* a new runtime lane appears
+* deploy recommendation mappings expand
 ```
-```
 
-
+---

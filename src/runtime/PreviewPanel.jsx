@@ -58,6 +58,7 @@ export default function PreviewPanel({ projectPath }) {
   const [hasIndexHtml, setHasIndexHtml] = useState(false);
   const [detectedKind, setDetectedKind] = useState("");
   const [compatibleTemplates, setCompatibleTemplates] = useState([]);
+  const [detectedTemplate, setDetectedTemplate] = useState(null);
 
   const scaffoldTemplates = useMemo(() => listScaffoldTemplates(), []);
 
@@ -67,25 +68,28 @@ export default function PreviewPanel({ projectPath }) {
       setHasIndexHtml(false);
       setDetectedKind("");
       setCompatibleTemplates([]);
+      setDetectedTemplate(null);
       return;
     }
 
     try {
       const result = await previewDetectTemplates(projectPath);
       const kind = String(result?.kind || "");
-      const templates = Array.isArray(result?.templates)
-        ? result.templates
+      const templates = Array.isArray(result?.compatibleTemplates)
+        ? result.compatibleTemplates
         : [];
 
       setHasPackageJson(kind === "package");
       setHasIndexHtml(kind === "static");
       setDetectedKind(kind);
       setCompatibleTemplates(templates);
+      setDetectedTemplate(result?.detectedTemplate || null);
     } catch {
       setHasPackageJson(false);
       setHasIndexHtml(false);
       setDetectedKind("");
       setCompatibleTemplates([]);
+      setDetectedTemplate(null);
     }
   }, [projectPath]);
 
@@ -228,11 +232,16 @@ export default function PreviewPanel({ projectPath }) {
   const showInstallButton = !isStaticOnlyProject;
 
   const detectedTemplateLabel = useMemo(() => {
+    if (detectedTemplate?.name) {
+      return detectedTemplate.name;
+    }
+
     if (compatibleTemplates.length === 1) {
       return compatibleTemplates[0]?.name || "";
     }
+
     return "";
-  }, [compatibleTemplates]);
+  }, [compatibleTemplates, detectedTemplate]);
 
   const compatibleTemplateNames = useMemo(() => {
     return compatibleTemplates
@@ -328,6 +337,14 @@ export default function PreviewPanel({ projectPath }) {
                     <br />
                     <span className="text-zinc-200">{detectedKind}</span>{" "}
                     project detected
+                  </>
+                ) : null}
+                {!detectedTemplateLabel && compatibleTemplateNames ? (
+                  <>
+                    <br />
+                    <span className="text-zinc-400">
+                      Compatible templates: {compatibleTemplateNames}
+                    </span>
                   </>
                 ) : null}
               </>
