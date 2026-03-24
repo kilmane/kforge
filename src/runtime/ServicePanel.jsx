@@ -887,16 +887,48 @@ export default function ServicePanel({ projectPath }) {
             padding: "12px",
           }}
         >
-          <div
-            className="command-runner-item__meta"
-            style={{
-              fontSize: "13px",
-              color: "#d4d4d8",
-            }}
-          >
-            <span style={{ color: "#a1a1aa" }}>Env:</span>{" "}
-            {formatEnvVars(activeProvider?.envVars)}
-          </div>
+          {isSupabase ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "8px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <div>Connect this project to a Supabase database.</div>
+              <div style={{ color: "#a1a1aa" }}>
+                KForge helps you prepare the connection values your app needs.
+              </div>
+              <div>
+                <span style={{ color: "#a1a1aa" }}>Required variables:</span>{" "}
+                {formatEnvVars(activeProvider?.envVars)}
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                These values come from your Supabase project dashboard.
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                If you run Supabase locally, KForge will also detect a local
+                Supabase configuration.
+              </div>
+            </div>
+          ) : (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <span style={{ color: "#a1a1aa" }}>Env:</span>{" "}
+              {formatEnvVars(activeProvider?.envVars)}
+            </div>
+          )}
 
           {isGithub && githubRepoState ? (
             <div
@@ -967,43 +999,6 @@ export default function ServicePanel({ projectPath }) {
                   Push changes before deploying.
                 </div>
               ) : null}
-            </div>
-          ) : null}
-
-          {isSupabase ? (
-            <div
-              className="command-runner-item__meta"
-              style={{
-                display: "grid",
-                gap: "6px",
-                padding: "10px 12px",
-                border: "1px solid #27272a",
-                borderRadius: "8px",
-                background: "rgba(24, 24, 27, 0.35)",
-                fontSize: "13px",
-                color: "#d4d4d8",
-              }}
-            >
-              <div>
-                <span style={{ color: "#a1a1aa" }}>Mode:</span> Guided backend
-                connection
-              </div>
-              <div>
-                <span style={{ color: "#a1a1aa" }}>Checks:</span> Env
-                placeholders, Supabase package hints, local config signals
-              </div>
-              <div>
-                <span style={{ color: "#a1a1aa" }}>Cloud:</span> SUPABASE_URL,
-                SUPABASE_ANON_KEY
-              </div>
-              <div>
-                <span style={{ color: "#a1a1aa" }}>Local:</span>{" "}
-                supabase/config.toml if present
-              </div>
-              <div style={{ color: "#a1a1aa" }}>
-                KForge will not replace the Supabase dashboard. It will guide
-                setup and scaffold safe env placeholders.
-              </div>
             </div>
           ) : null}
 
@@ -1098,9 +1093,9 @@ export default function ServicePanel({ projectPath }) {
                 className="command-runner-runButton"
                 onClick={() => handleSetup(activeProvider)}
                 disabled={isBusy || isPlanned}
-                title="Inspect this project for Supabase readiness and prepare safe env placeholders"
+                title="Check this project and prepare the Supabase connection setup"
               >
-                {isBusy ? "Working..." : "Check Supabase readiness"}
+                {isBusy ? "Working..." : "Check Supabase setup"}
               </button>
             ) : null}
 
@@ -1110,7 +1105,7 @@ export default function ServicePanel({ projectPath }) {
                 className="command-runner-runButton"
                 onClick={handleOpenSupabase}
                 disabled={isBusy}
-                title="Open Supabase in browser"
+                title="Open your Supabase dashboard"
               >
                 Open Supabase
               </button>

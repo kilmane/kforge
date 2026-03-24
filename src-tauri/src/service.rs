@@ -297,11 +297,7 @@ fn ensure_supabase_env_example(project_dir: &PathBuf) -> Result<bool, String> {
 }
 
 fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), String> {
-    emit_log(
-        app,
-        "status",
-        "Inspecting project for Supabase readiness...",
-    );
+    emit_log(app, "status", "Checking this project for Supabase setup...");
 
     let env_paths = vec![
         project_dir.join(".env"),
@@ -350,9 +346,9 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         app,
         "stdout",
         &format!(
-            "Env files: {}",
+            "Environment files: {}",
             if existing_env_files.is_empty() {
-                "none detected".to_string()
+                "none found".to_string()
             } else {
                 existing_env_files.join(", ")
             }
@@ -364,7 +360,7 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         "stdout",
         &format!(
             "SUPABASE_URL: {}",
-            if has_supabase_url { "found" } else { "missing" }
+            if has_supabase_url { "set" } else { "not set" }
         ),
     );
 
@@ -374,9 +370,9 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         &format!(
             "SUPABASE_ANON_KEY: {}",
             if has_supabase_anon_key {
-                "found"
+                "set"
             } else {
-                "missing"
+                "not set"
             }
         ),
     );
@@ -385,13 +381,13 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         app,
         "stdout",
         &format!(
-            "Supabase local config: {}",
+            "Local Supabase config: {}",
             if supabase_config_exists {
-                "detected (supabase/config.toml)"
+                "found (supabase/config.toml)"
             } else if supabase_dir_exists {
-                "supabase folder detected, but config.toml is missing"
+                "supabase folder found, but config.toml is missing"
             } else {
-                "not detected"
+                "not found"
             }
         ),
     );
@@ -400,11 +396,11 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         app,
         "stdout",
         &format!(
-            "Supabase JS client: {}",
+            "Supabase client library: {}",
             if has_supabase_js {
-                "detected in package.json"
+                "found in package.json"
             } else if package_json_exists {
-                "not detected in package.json"
+                "not found in package.json"
             } else {
                 "package.json not found"
             }
@@ -415,7 +411,7 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         emit_log(
             app,
             "stdout",
-            "Created .env.example with Supabase cloud/local placeholders.",
+            "Created .env.example with Supabase connection variables.",
         );
     } else {
         emit_log(
@@ -429,13 +425,13 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         emit_log(
             app,
             "stdout",
-            "Local Supabase path looks supported. Typical local URL is http://127.0.0.1:54321",
+            "Local Supabase setup looks available. Typical local URL: http://127.0.0.1:54321",
         );
     } else {
         emit_log(
             app,
             "stdout",
-            "Cloud-only setup is fine. Local Supabase can be added later with a supabase/config.toml project.",
+            "Cloud Supabase setup is fine. You can add local Supabase later if needed.",
         );
     }
 
@@ -443,13 +439,13 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         emit_log(
             app,
             "status",
-            "Supabase env readiness looks good. Next step: wire these values into your app client.",
+            "Supabase setup looks good. Next step: add these values to your app.",
         );
     } else {
         emit_log(
             app,
             "status",
-            "Supabase env readiness is incomplete. Fill in SUPABASE_URL and SUPABASE_ANON_KEY.",
+            "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file.",
         );
     }
 
