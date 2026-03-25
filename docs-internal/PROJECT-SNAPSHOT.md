@@ -1,5 +1,8 @@
 
-### `docs-internal/PROJECT-SNAPSHOT.md`
+docs-internal/PROJECT-SNAPSHOT.md
+```
+
+This advances the snapshot from **Phase 4.7b** to **Phase 4.8.1**, and records the Supabase adapter, `.env` assist, and docs work cleanly.
 
 ```markdown
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
@@ -7,13 +10,13 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: March 24th, 2026
+Last Updated: March 25th, 2026
 
-Phase: 4.7 — Deploy Pipeline-2 (smart deploy)
+Phase: 4.8.1 — Supabase UX Assist + Docs
 Status: Stable milestone ready to commit and tag
 
 Recommended stable tag:
-phase-4.7-deploy-pipeline-2-smart-deploy-stable
+phase-4.8-supabase-integration-stable
 
 ---
 
@@ -384,6 +387,7 @@ github_detect_repo
 github_open_repo  
 github_pull  
 github_clone_repo  
+supabase_create_env_file  
 open_url
 
 ---
@@ -675,6 +679,87 @@ so future template additions prompt maintainers to review deploy recommendation 
 
 ---
 
+# 🟩 4.8 Supabase Integration (real full-stack)
+
+Phase 4.8 introduced the **first backend-oriented service adapter**:
+
+Supabase
+
+This is the first service integration focused on project backend connection setup rather than code hosting or deploy handoff.
+
+Primary implementation:
+
+src-tauri/src/service.rs
+
+Primary UI:
+
+src/runtime/ServicePanel.jsx
+
+---
+
+## Supabase Capabilities Implemented
+
+The Supabase adapter now supports:
+
+• readiness inspection for current project setup  
+• environment file detection  
+• detection of `SUPABASE_URL`  
+• detection of `SUPABASE_ANON_KEY`  
+• local Supabase configuration detection via `supabase/config.toml`  
+• Supabase client library detection in `package.json`  
+• `.env.example` generation when missing  
+• browser handoff to Supabase dashboard
+
+This gives the user a first real guided path for backend connection setup.
+
+---
+
+# 🟩 4.8.1 Supabase UX Assist + Docs
+
+Phase 4.8.1 finishes the first Supabase pass with beginner-facing polish and documentation support.
+
+This phase improves the onboarding path without turning KForge into a backend dashboard.
+
+---
+
+## Supabase UX Capabilities Added
+
+Additional capabilities now include:
+
+• Create `.env` file from `.env.example`  
+• calmer beginner-friendly wording in Services → Backend → Supabase  
+• clearer explanation of connection values inside the panel  
+• user guide notes for Supabase flow  
+• project map + snapshot updates for Supabase architecture
+
+New command added:
+
+supabase_create_env_file
+
+This command creates `.env` by copying `.env.example` when `.env` does not already exist.
+
+If `.env` already exists, KForge leaves it unchanged.
+
+---
+
+## Supabase User Flow Now Supported
+
+Current intended path:
+
+Open folder  
+→ Services  
+→ Backend → Supabase  
+→ Check Supabase setup  
+→ Create `.env` file if needed  
+→ Open Supabase  
+→ copy `SUPABASE_URL` and `SUPABASE_ANON_KEY`  
+→ paste values into `.env`  
+→ connect frontend client
+
+This gives KForge a beginner-friendly backend setup lane for the first time.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -703,6 +788,7 @@ Open Services
 Publish to GitHub  
 Push changes  
 Deploy via Vercel or Netlify  
+Configure Supabase if needed  
 Continue development
 
 Import workflow:
@@ -754,7 +840,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.7 Deploy Pipeline-2**:
+As of **Phase 4.8.1 Supabase UX Assist + Docs**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -771,6 +857,12 @@ As of **Phase 4.7 Deploy Pipeline-2**:
 • Netlify deploy shortcut working  
 • template-aware deploy guidance working  
 • Next.js deploy recommendation working  
+• Supabase adapter implemented  
+• Supabase setup inspection working  
+• `.env.example` generation working  
+• `.env` creation assist working  
+• Supabase beginner UX wording improved  
+• Supabase documentation captured
 
 Supported workflows now include:
 
@@ -784,7 +876,9 @@ GitHub repo push / pull / open
 GitHub repository import during project creation  
 Deploy handoff to Vercel  
 Deploy handoff to Netlify  
-Template-aware deploy recommendation inside Services
+Template-aware deploy recommendation inside Services  
+Supabase setup inspection  
+Supabase environment file preparation
 
 ---
 
@@ -803,39 +897,43 @@ Future integrations will attach adapters rather than creating new subsystems.
 
 Planned adapters:
 
-• Supabase  
 • Stripe  
 • OpenAI  
 
-Possible future deploy improvements:
+Possible future backend improvements:
 
-• richer static vs SSR guidance  
-• additional framework mappings  
-• framework-specific deploy tips before browser handoff
+• environment variable manager  
+• template-aware backend scaffolding  
+• Stripe adapter  
+• OpenAI adapter  
+• richer Supabase code generation guidance
 
 ---
 
 # 🚢 Phase Boundary
 
-Phase 4.7 Deploy Pipeline-2 is now a stable milestone built on top of the completed Phase 4.7 deploy workflow.
+Phase 4.8.1 completes the first stable Supabase integration pass built on top of the service integration architecture.
 
 What this phase proves:
 
-• deploy guidance can be template-aware without becoming noisy  
-• Services can reuse existing preview/template identity cleanly  
-• Next.js can receive stronger provider guidance than generic frontend apps  
-• KForge can feel smarter without becoming a hosting dashboard
+• the Services layer can support backend integrations, not just code hosting and deploy  
+• beginner setup assistance can be added without turning KForge into a dashboard-heavy surface  
+• `.env.example` and `.env` helpers fit naturally into the service lane  
+• KForge can guide backend configuration with calm, simple wording
 
 Current stable journey:
 
 Local Project  
 → GitHub  
 → Smart Deploy Guidance  
-→ Vercel / Netlify
+→ Vercel / Netlify  
+→ Supabase setup assist
 
-This sets up the next major phase:
+This sets up the next major integration lanes:
 
-Phase 4.8 — Supabase Integration (real full-stack)
+Stripe adapter  
+OpenAI adapter  
+Environment variable manager  
+Template-aware backend scaffolding
 ```
 
----

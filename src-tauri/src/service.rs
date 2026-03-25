@@ -296,6 +296,24 @@ fn ensure_supabase_env_example(project_dir: &PathBuf) -> Result<bool, String> {
     Ok(true)
 }
 
+fn ensure_env_file_from_example(project_dir: &PathBuf) -> Result<bool, String> {
+    let env_path = project_dir.join(".env");
+    let env_example_path = project_dir.join(".env.example");
+
+    if env_path.exists() {
+        return Ok(false);
+    }
+
+    if !env_example_path.exists() {
+        ensure_supabase_env_example(project_dir)?;
+    }
+
+    fs::copy(&env_example_path, &env_path)
+        .map_err(|error| format!("Failed to create .env from .env.example: {}", error))?;
+
+    Ok(true)
+}
+
 fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), String> {
     emit_log(app, "status", "Checking this project for Supabase setup...");
 
@@ -614,7 +632,30 @@ pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), Stri
 
     Ok(())
 }
+#[tauri::command]
+pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
 
+    let created = ensure_env_file_from_example(&project_dir)?;
+
+    if created {
+        emit_log(&app, "stdout", "Created .env file from .env.example");
+        emit_log(
+            &app,
+            "status",
+            ".env file is ready. Add your Supabase connection values next.",
+        );
+    } else {
+        emit_log(&app, "stdout", ".env already exists. No changes made.");
+        emit_log(
+            &app,
+            "status",
+            ".env already exists. Update it with your Supabase connection values if needed.",
+        );
+    }
+
+    Ok(())
+}
 #[tauri::command]
 pub fn deploy_open_vercel(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { previewDetectTemplates } from "./previewRunner";
 import { SERVICE_REGISTRY } from "./serviceRegistry";
 import {
@@ -721,6 +722,35 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleCreateSupabaseEnvFile() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before creating a .env file.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await invoke("supabase_create_env_file", {
+        projectPath,
+      });
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || "Could not create .env file.",
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
   const isGithub = activeProvider?.id === "github";
   const isSupabase = activeProvider?.id === "supabase";
   const isDeploy = isDeployProvider(activeProvider?.id);
@@ -903,17 +933,25 @@ export default function ServicePanel({ projectPath }) {
             >
               <div>Connect this project to a Supabase database.</div>
               <div style={{ color: "#a1a1aa" }}>
-                KForge helps you prepare the connection values your app needs.
+                KForge helps you check your project setup and prepare the
+                connection values your app needs.
               </div>
               <div>
-                <span style={{ color: "#a1a1aa" }}>Required variables:</span>{" "}
+                <span style={{ color: "#a1a1aa" }}>Connection values:</span>{" "}
                 {formatEnvVars(activeProvider?.envVars)}
               </div>
               <div style={{ color: "#a1a1aa" }}>
-                These values come from your Supabase project dashboard.
+                SUPABASE_URL is your Supabase project address.
               </div>
               <div style={{ color: "#a1a1aa" }}>
-                If you run Supabase locally, KForge will also detect a local
+                SUPABASE_ANON_KEY is the public key your frontend uses to talk
+                to Supabase.
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                These values come from your Supabase dashboard.
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                If you run Supabase locally, KForge will also check for a local
                 Supabase configuration.
               </div>
             </div>
@@ -1096,6 +1134,18 @@ export default function ServicePanel({ projectPath }) {
                 title="Check this project and prepare the Supabase connection setup"
               >
                 {isBusy ? "Working..." : "Check Supabase setup"}
+              </button>
+            ) : null}
+
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateSupabaseEnvFile}
+                disabled={isBusy}
+                title="Create a .env file from .env.example"
+              >
+                Create .env file
               </button>
             ) : null}
 

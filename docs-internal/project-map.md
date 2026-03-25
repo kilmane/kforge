@@ -1,5 +1,10 @@
 
-### `docs-internal/project-map.md`
+docs-internal/project-map.md
+```
+
+This version **adds the Supabase adapter documentation** under the Service Integration Layer without disturbing your existing structure.
+
+---
 
 ```markdown
 # 🗺 KForge Project Map
@@ -8,8 +13,8 @@ Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: v14  
-Updated: 24/03/2026
+Version: v15  
+Updated: 25/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -126,9 +131,9 @@ Handles:
 
 Runtime flow:
 
-detect tool
-→ consent
-→ handler execution
+detect tool  
+→ consent  
+→ handler execution  
 → result appended
 
 ---
@@ -388,27 +393,111 @@ OpenAI remains registered in the service layer for future integration work.
 
 ---
 
-## Current GitHub Actions
+# 5a Supabase Adapter
 
-Exposed through Services and supporting flows:
+The Supabase adapter is the **first backend service integration** attached to the Services layer.
 
-* publish local repo
-* detect repo state
-* open on GitHub
-* pull latest
-* push changes
-* clone/import through New Project flow
+Primary implementation:
+
+src-tauri/src/service.rs
+
+Primary UI surface:
+
+src/runtime/ServicePanel.jsx
+
+Purpose:
+
+Provide a beginner-friendly connection workflow for Supabase-backed projects.
 
 ---
 
-## Current Deploy Actions
+## Supabase Adapter Responsibilities
 
-Exposed through Services → Deploy:
+The adapter currently performs **project inspection and setup assistance**.
 
-* open Vercel import URL for current GitHub repo
-* open Netlify start/import flow
-* block deploy when GitHub is not connected
-* show repo-aware deploy hints
+Capabilities include:
+
+* Supabase readiness inspection
+* environment variable detection
+* `.env.example` generation
+* `.env` creation helper
+* local Supabase config detection
+* Supabase client library detection
+* guided log output for the user
+
+---
+
+## Supabase Detection Signals
+
+The adapter checks for the following indicators:
+
+Environment files:
+
+* `.env`
+* `.env.local`
+* `.env.development`
+* `.env.example`
+
+Environment variables:
+
+* `SUPABASE_URL`
+* `SUPABASE_ANON_KEY`
+
+Local Supabase project:
+
+* `supabase/config.toml`
+
+Supabase client library:
+
+* `@supabase/supabase-js`
+* `supabase` dependency in `package.json`
+
+---
+
+## Supabase Environment Helper
+
+If `.env.example` does not exist:
+
+KForge creates a **template file** containing:
+
+```
+
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
+```
+
+The user can then run:
+
+Create `.env file`
+
+This copies:
+
+```
+
+.env.example → .env
+
+```
+
+If `.env` already exists, the operation is skipped.
+
+---
+
+## Supabase Dashboard Access
+
+The Supabase panel also includes a quick link:
+
+Open Supabase
+
+This opens:
+
+```
+
+[https://supabase.com/dashboard](https://supabase.com/dashboard)
+
+```
+
+This allows the user to easily copy connection values.
 
 ---
 
@@ -475,43 +564,53 @@ Focus mode is a surface promotion, not a resized dock.
 
 ## Standard Local Development
 
-Open folder
-→ Generate optional template
-→ Install
-→ Preview
-→ Open
+Open folder  
+→ Generate optional template  
+→ Install  
+→ Preview  
+→ Open  
 → Iterate
 
 ## AI Editing Loop
 
-Open folder
-→ prompt AI
-→ AI edits files
+Open folder  
+→ prompt AI  
+→ AI edits files  
 → preview / install / rerun
 
 ## GitHub Flow
 
-Open folder
-→ Services
-→ Publish
-→ Push changes
+Open folder  
+→ Services  
+→ Publish  
+→ Push changes  
 → Open on GitHub or Pull latest
 
 ## Deploy Flow
 
-Open folder
-→ Services
-→ Deploy
-→ choose Vercel or Netlify
+Open folder  
+→ Services  
+→ Deploy  
+→ choose Vercel or Netlify  
 → follow provider browser flow
 
 ## Smart Deploy Flow
 
-Open folder
-→ project identity detected through preview pipeline
-→ Services → Deploy
-→ recommendation shown based on template/project type
+Open folder  
+→ project identity detected through preview pipeline  
+→ Services → Deploy  
+→ recommendation shown based on template/project type  
 → provider opened in browser
+
+## Backend Flow (Supabase)
+
+Open folder  
+→ Services  
+→ Backend → Supabase  
+→ Check Supabase setup  
+→ Create `.env` if needed  
+→ Add connection values  
+→ connect frontend client
 
 ---
 
@@ -529,6 +628,7 @@ Current stable milestone includes:
 * GitHub import
 * deploy shortcuts
 * smart deploy guidance
+* Supabase backend integration
 
 This project map should be updated whenever:
 
@@ -539,3 +639,4 @@ This project map should be updated whenever:
 ```
 
 ---
+

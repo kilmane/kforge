@@ -1,10 +1,7 @@
 
-### `docs-internal/user-guide-notes.md`
-
-```markdown
 # User Guide Notes (development capture)
 
-Last Updated: March 24th, 2026
+Last Updated: March 25th, 2026
 
 Location:
 D:\kforge\docs-internal\user-guide-notes.md
@@ -324,6 +321,156 @@ This keeps KForge helpful without turning the deploy surface into a hosting tuto
 
 ---
 
+# Services → Backend → Supabase
+
+Supabase is a backend platform that can provide a hosted database, authentication, storage, and API services for your project.
+
+In KForge, the Supabase panel is designed to help a beginner connect a project without having to remember every file and value manually.
+
+The current Supabase workflow is:
+
+Open Folder  
+Services  
+Backend  
+Supabase
+
+From there, KForge can help with setup checks and basic project preparation.
+
+---
+
+## What the Supabase check looks for
+
+When the user runs:
+
+Check Supabase setup
+
+KForge checks the current project for common Supabase connection signs.
+
+Current checks include:
+
+* environment files such as `.env`, `.env.local`, `.env.development`, and `.env.example`
+* `SUPABASE_URL`
+* `SUPABASE_ANON_KEY`
+* local Supabase config at `supabase/config.toml`
+* Supabase client library presence in `package.json`
+
+This gives the user a quick picture of whether the project already has connection values and whether local Supabase has been set up.
+
+---
+
+## What SUPABASE_URL means
+
+`SUPABASE_URL` is the address of your Supabase project.
+
+For a cloud project it usually looks similar to:
+
+`https://your-project.supabase.co`
+
+For a local Supabase setup it often looks similar to:
+
+`http://127.0.0.1:54321`
+
+This is the address your app uses when it connects to Supabase.
+
+---
+
+## What SUPABASE_ANON_KEY means
+
+`SUPABASE_ANON_KEY` is the public API key your frontend uses to talk to Supabase.
+
+It is usually copied from the Supabase project dashboard.
+
+This key is used by the client app together with `SUPABASE_URL` so the frontend knows:
+
+* where Supabase is
+* how to connect to it
+
+---
+
+## Cloud Supabase and Local Supabase
+
+KForge supports both mental models:
+
+### Cloud Supabase
+
+This is the hosted Supabase project you manage in the Supabase dashboard.
+
+Typical flow:
+
+Create Supabase project  
+Copy project URL  
+Copy anon key  
+Add them to your project  
+Connect your frontend client
+
+### Local Supabase
+
+This is a local development setup that usually includes a `supabase` folder and a `supabase/config.toml` file.
+
+KForge currently checks whether that local configuration appears to exist.
+
+This helps the user understand whether the project is using:
+
+* hosted cloud Supabase
+* local Supabase development
+* or neither yet
+
+---
+
+## .env.example and .env help
+
+KForge can now help with both of these files.
+
+### .env.example
+
+If `.env.example` does not exist, KForge can create one with Supabase connection variable placeholders.
+
+This gives the project a clear template for required values.
+
+### Create .env file
+
+The Supabase panel also includes:
+
+Create .env file
+
+If `.env` does not already exist, KForge copies `.env.example` to `.env`.
+
+If `.env` already exists, KForge leaves it unchanged and reports that no changes were made.
+
+This reduces friction for beginners who may not be comfortable creating and copying environment files manually.
+
+---
+
+## Beginner connection flow
+
+A beginner-friendly flow is now:
+
+1. Open the project in KForge
+2. Open Services → Backend → Supabase
+3. Click **Check Supabase setup**
+4. If needed, click **Create .env file**
+5. Open the Supabase dashboard
+6. Copy `SUPABASE_URL`
+7. Copy `SUPABASE_ANON_KEY`
+8. Paste both values into `.env`
+9. Connect the frontend client in project code
+
+This keeps the process visible and guided.
+
+---
+
+## Supabase dashboard link
+
+The Supabase panel includes:
+
+Open Supabase
+
+This opens the Supabase dashboard in the browser.
+
+The purpose is to give the user a quick path to the place where project connection values are usually copied from.
+
+---
+
 # New Project
 
 New Project supports both:
@@ -352,5 +499,4 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 ```
-
 
