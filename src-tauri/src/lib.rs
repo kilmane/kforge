@@ -155,6 +155,8 @@ pub fn run() {
             service::github_detect_repo,
             service::github_open_repo,
             service::supabase_create_env_file,
+            service::supabase_install_client,
+            service::supabase_create_client_file,
             service::github_pull,
             service::github_clone_repo,
             service::deploy_open_vercel,

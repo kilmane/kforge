@@ -1,8 +1,4 @@
 
-docs-internal/PROJECT-SNAPSHOT.md
-```
-
-```markdown
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
@@ -10,11 +6,11 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
 Last Updated: March 25th, 2026
 
-Phase: 4.8.1 — Supabase UX Assist + Docs
+Phase: 4.8.2 — Guided Supabase Actions
 Status: Stable milestone ready to commit and tag
 
 Recommended stable tag:
-phase-4.8-supabase-integration-stable
+phase-4.8.2-guided-supabase-actions-stable
 
 ---
 
@@ -386,6 +382,8 @@ github_open_repo
 github_pull  
 github_clone_repo  
 supabase_create_env_file  
+supabase_install_client  
+supabase_create_client_file  
 open_url
 
 ---
@@ -714,15 +712,15 @@ This gives the user a first real guided path for backend connection setup.
 
 # 🟩 4.8.1 Supabase UX Assist + Docs
 
-Phase 4.8.1 finishes the first Supabase pass with beginner-facing polish and documentation support.
+Phase 4.8.1 finished the first Supabase pass with beginner-facing polish and documentation support.
 
-This phase improves the onboarding path without turning KForge into a backend dashboard.
+This phase improved the onboarding path without turning KForge into a backend dashboard.
 
 ---
 
 ## Supabase UX Capabilities Added
 
-Additional capabilities now include:
+Additional capabilities added in 4.8.1 include:
 
 • Create `.env` file from `.env.example`  
 • calmer beginner-friendly wording in Services → Backend → Supabase  
@@ -730,7 +728,7 @@ Additional capabilities now include:
 • user guide notes for Supabase flow  
 • project map + snapshot updates for Supabase architecture
 
-New command added:
+Command added:
 
 supabase_create_env_file
 
@@ -740,21 +738,74 @@ If `.env` already exists, KForge leaves it unchanged.
 
 ---
 
+# 🟩 4.8.2 Guided Supabase Actions
+
+Phase 4.8.2 upgrades the Supabase lane from a mostly diagnostic checker into a **guided setup assistant**.
+
+This phase exists specifically to remove ambiguity for beginners and vibe coders.
+
+Primary files:
+
+• src-tauri/src/service.rs  
+• src-tauri/src/lib.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
+
+---
+
+## Supabase Capabilities Added in 4.8.2
+
+The Supabase adapter now also supports:
+
+• improved final success wording after readiness check  
+• detection of `VITE_SUPABASE_URL`  
+• detection of `VITE_SUPABASE_ANON_KEY`  
+• clearer Vite-aware guidance in the Supabase panel  
+• guided install action for `@supabase/supabase-js`  
+• guided creation of `src/lib/supabase.js`  
+• detection of an existing Supabase helper file  
+• non-destructive helper generation behavior
+
+New commands added:
+
+supabase_install_client  
+supabase_create_client_file
+
+---
+
+## Supabase Helper File Behavior
+
+KForge can now generate:
+
+src/lib/supabase.js
+
+Typical helper logic:
+
+• imports `createClient` from `@supabase/supabase-js`  
+• reads `VITE_SUPABASE_URL` or `SUPABASE_URL`  
+• reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`  
+• exports a reusable `supabase` client
+
+If a helper file already exists, KForge logs that no changes were made and leaves the file untouched.
+
+---
+
 ## Supabase User Flow Now Supported
 
-Current intended path:
+Current intended Supabase path:
 
 Open folder  
 → Services  
 → Backend → Supabase  
 → Check Supabase setup  
 → Create `.env` file if needed  
-→ Open Supabase  
-→ copy `SUPABASE_URL` and `SUPABASE_ANON_KEY`  
-→ paste values into `.env`  
-→ connect frontend client
+→ Add connection values  
+→ Install Supabase client  
+→ Create Supabase client file  
+→ import Supabase client into application code
 
-This gives KForge a beginner-friendly backend setup lane for the first time.
+This is the first time KForge supports a **backend integration lane with guided setup actions**, not just diagnostics.
 
 ---
 
@@ -838,7 +889,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.8.1 Supabase UX Assist + Docs**:
+As of **Phase 4.8.2 Guided Supabase Actions**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -860,6 +911,9 @@ As of **Phase 4.8.1 Supabase UX Assist + Docs**:
 • `.env.example` generation working  
 • `.env` creation assist working  
 • Supabase beginner UX wording improved  
+• Vite-aware Supabase env guidance working  
+• Supabase client install action working  
+• Supabase helper file creation working  
 • Supabase documentation captured
 
 Supported workflows now include:
@@ -876,7 +930,9 @@ Deploy handoff to Vercel
 Deploy handoff to Netlify  
 Template-aware deploy recommendation inside Services  
 Supabase setup inspection  
-Supabase environment file preparation
+Supabase environment file preparation  
+Supabase client install guidance  
+Supabase helper file generation
 
 ---
 
@@ -904,20 +960,21 @@ Possible future backend improvements:
 • template-aware backend scaffolding  
 • Stripe adapter  
 • OpenAI adapter  
-• richer Supabase code generation guidance
+• richer Supabase code generation guidance  
+• lightweight Supabase connection test action
 
 ---
 
 # 🚢 Phase Boundary
 
-Phase 4.8.1 completes the first stable Supabase integration pass built on top of the service integration architecture.
+Phase 4.8.2 completes the first **guided Supabase action** milestone built on top of the service integration architecture.
 
 What this phase proves:
 
 • the Services layer can support backend integrations, not just code hosting and deploy  
-• beginner setup assistance can be added without turning KForge into a dashboard-heavy surface  
-• `.env.example` and `.env` helpers fit naturally into the service lane  
-• KForge can guide backend configuration with calm, simple wording
+• beginner setup assistance can be extended from diagnostics into guided actions  
+• `.env.example`, `.env`, package installation, and helper-file generation all fit naturally into the service lane  
+• KForge can reduce technical ambiguity without turning integrations into dashboard-heavy workflows
 
 Current stable journey:
 
@@ -925,7 +982,7 @@ Local Project
 → GitHub  
 → Smart Deploy Guidance  
 → Vercel / Netlify  
-→ Supabase setup assist
+→ Supabase guided setup
 
 This sets up the next major integration lanes:
 
@@ -934,4 +991,5 @@ OpenAI adapter
 Environment variable manager  
 Template-aware backend scaffolding
 ```
+
 

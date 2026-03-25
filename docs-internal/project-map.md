@@ -2,14 +2,25 @@
 docs-internal/project-map.md
 ```
 
+This version includes the **Phase 4.8.2 Supabase guided actions architecture**:
 
+* Supabase client installation
+* Supabase helper file generation
+* Vite environment variable support
+* Guided workflow responsibilities
+
+Nothing removed — only expanded and clarified.
+
+---
+
+```markdown
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: v15  
+Version: v16  
 Updated: 25/03/2026
 
 Purpose: architectural topology & execution responsibility map.
@@ -409,7 +420,7 @@ Provide a beginner-friendly connection workflow for Supabase-backed projects.
 
 ## Supabase Adapter Responsibilities
 
-The adapter currently performs **project inspection and setup assistance**.
+The adapter now performs **both inspection and guided setup actions**.
 
 Capabilities include:
 
@@ -417,15 +428,17 @@ Capabilities include:
 * environment variable detection
 * `.env.example` generation
 * `.env` creation helper
-* local Supabase config detection
 * Supabase client library detection
+* Supabase client installation helper
+* Supabase client helper file generation
+* local Supabase config detection
 * guided log output for the user
 
 ---
 
 ## Supabase Detection Signals
 
-The adapter checks for the following indicators:
+The adapter checks for the following indicators.
 
 Environment files:
 
@@ -438,6 +451,8 @@ Environment variables:
 
 * `SUPABASE_URL`
 * `SUPABASE_ANON_KEY`
+* `VITE_SUPABASE_URL`
+* `VITE_SUPABASE_ANON_KEY`
 
 Local Supabase project:
 
@@ -447,6 +462,10 @@ Supabase client library:
 
 * `@supabase/supabase-js`
 * `supabase` dependency in `package.json`
+
+Supabase helper client file:
+
+* `src/lib/supabase.js`
 
 ---
 
@@ -460,6 +479,8 @@ KForge creates a **template file** containing:
 
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 
 ```
 
@@ -469,13 +490,46 @@ Create `.env file`
 
 This copies:
 
-```
-
 .env.example → .env
 
-```
-
 If `.env` already exists, the operation is skipped.
+
+---
+
+## Supabase Client Installation
+
+KForge provides a guided action:
+
+Install Supabase client
+
+Command executed:
+
+pnpm add @supabase/supabase-js
+
+This installs the official Supabase JavaScript client library.
+
+---
+
+## Supabase Client Helper File
+
+KForge can also generate a **Supabase client helper file**.
+
+Typical generated location:
+
+src/lib/supabase.js
+
+Purpose:
+
+Provide a simple reusable Supabase connection wrapper for frontend code.
+
+Typical structure:
+
+createClient(
+  import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY
+)
+
+If the helper file already exists, KForge leaves it unchanged.
 
 ---
 
@@ -487,11 +541,7 @@ Open Supabase
 
 This opens:
 
-```
-
-[https://supabase.com/dashboard](https://supabase.com/dashboard)
-
-```
+https://supabase.com/dashboard
 
 This allows the user to easily copy connection values.
 
@@ -606,7 +656,9 @@ Open folder
 → Check Supabase setup  
 → Create `.env` if needed  
 → Add connection values  
-→ connect frontend client
+→ Install Supabase client  
+→ Create Supabase helper file  
+→ import client in application code
 
 ---
 
@@ -625,6 +677,7 @@ Current stable milestone includes:
 * deploy shortcuts
 * smart deploy guidance
 * Supabase backend integration
+* guided Supabase setup actions
 
 This project map should be updated whenever:
 
@@ -635,4 +688,5 @@ This project map should be updated whenever:
 ```
 
 ---
+
 

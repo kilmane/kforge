@@ -11,9 +11,14 @@ export const SERVICE_REGISTRY = [
     id: "supabase",
     name: "Supabase",
     description:
-      "Check this project for Supabase readiness and prepare env placeholders for backend connection.",
+      "Check Supabase readiness, guide next steps, and help create the files your app needs to connect.",
     status: "available",
-    envVars: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
+    envVars: [
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_ANON_KEY",
+    ],
     setupCommand: "service_setup",
   },
   {

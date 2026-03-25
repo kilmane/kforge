@@ -280,12 +280,20 @@ fn ensure_supabase_env_example(project_dir: &PathBuf) -> Result<bool, String> {
         "# SUPABASE_URL=https://your-project.supabase.co",
         "# SUPABASE_ANON_KEY=your-anon-key",
         "#",
+        "# Vite frontend example:",
+        "# VITE_SUPABASE_URL=https://your-project.supabase.co",
+        "# VITE_SUPABASE_ANON_KEY=your-anon-key",
+        "#",
         "# Local example:",
         "# SUPABASE_URL=http://127.0.0.1:54321",
         "# SUPABASE_ANON_KEY=your-local-anon-key",
         "",
         "SUPABASE_URL=",
         "SUPABASE_ANON_KEY=",
+        "",
+        "# If this project uses Vite, frontend code will usually read:",
+        "VITE_SUPABASE_URL=",
+        "VITE_SUPABASE_ANON_KEY=",
         "",
     ]
     .join("\n");
@@ -312,6 +320,48 @@ fn ensure_env_file_from_example(project_dir: &PathBuf) -> Result<bool, String> {
         .map_err(|error| format!("Failed to create .env from .env.example: {}", error))?;
 
     Ok(true)
+}
+
+fn supabase_helper_file_candidates(project_dir: &PathBuf) -> Vec<PathBuf> {
+    vec![
+        project_dir.join("src").join("lib").join("supabase.js"),
+        project_dir.join("src").join("lib").join("supabase.ts"),
+    ]
+}
+
+fn existing_supabase_helper_file(project_dir: &PathBuf) -> Option<PathBuf> {
+    supabase_helper_file_candidates(project_dir)
+        .into_iter()
+        .find(|path| path.exists())
+}
+
+fn create_supabase_helper_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    if let Some(existing) = existing_supabase_helper_file(project_dir) {
+        return Ok(existing);
+    }
+
+    let helper_path = project_dir.join("src").join("lib").join("supabase.js");
+
+    if let Some(parent) = helper_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create helper folder: {}", error))?;
+    }
+
+    let content = r#"import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
+
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+"#;
+
+    fs::write(&helper_path, content)
+        .map_err(|error| format!("Failed to write Supabase helper file: {}", error))?;
+
+    Ok(helper_path)
 }
 
 fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), String> {
@@ -342,6 +392,18 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         .iter()
         .any(|path| file_contains_token(path, "SUPABASE_ANON_KEY"));
 
+    let has_vite_supabase_url = env_paths
+        .iter()
+        .any(|path| file_contains_token(path, "VITE_SUPABASE_URL"));
+
+    let has_vite_supabase_anon_key = env_paths
+        .iter()
+        .any(|path| file_contains_token(path, "VITE_SUPABASE_ANON_KEY"));
+
+    let has_backend_env_pair = has_supabase_url && has_supabase_anon_key;
+    let has_vite_env_pair = has_vite_supabase_url && has_vite_supabase_anon_key;
+    let has_any_complete_env_pair = has_backend_env_pair || has_vite_env_pair;
+
     let supabase_dir_exists = project_dir.join("supabase").exists();
     let supabase_config_exists = project_dir.join("supabase").join("config.toml").exists();
 
@@ -358,6 +420,7 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         false
     };
 
+    let existing_helper_file = existing_supabase_helper_file(project_dir);
     let created_env_example = ensure_supabase_env_example(project_dir)?;
 
     emit_log(
@@ -399,6 +462,32 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         app,
         "stdout",
         &format!(
+            "VITE_SUPABASE_URL: {}",
+            if has_vite_supabase_url {
+                "set"
+            } else {
+                "not set"
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
+            "VITE_SUPABASE_ANON_KEY: {}",
+            if has_vite_supabase_anon_key {
+                "set"
+            } else {
+                "not set"
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
             "Local Supabase config: {}",
             if supabase_config_exists {
                 "found (supabase/config.toml)"
@@ -421,6 +510,23 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
                 "not found in package.json"
             } else {
                 "package.json not found"
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
+            "Supabase helper file: {}",
+            if let Some(path) = existing_helper_file.as_ref() {
+                path.strip_prefix(project_dir)
+                    .ok()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("found")
+                    .to_string()
+            } else {
+                "not found".to_string()
             }
         ),
     );
@@ -453,17 +559,39 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         );
     }
 
-    if has_supabase_url && has_supabase_anon_key {
+    emit_log(
+        app,
+        "stdout",
+        "If this project uses Vite, frontend code will usually read VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+    );
+
+    if has_any_complete_env_pair {
         emit_log(
             app,
             "status",
-            "Supabase setup looks good. Next step: add these values to your app.",
+            "Supabase configuration looks good. Your app can now connect using these values. Next steps may include installing the Supabase client and adding a Supabase helper file to your project.",
         );
+
+        if !has_supabase_js {
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Install Supabase client.",
+            );
+        }
+
+        if existing_helper_file.is_none() {
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Create Supabase client file.",
+            );
+        }
     } else {
         emit_log(
             app,
             "status",
-            "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file.",
+            "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
         );
     }
 
@@ -632,6 +760,7 @@ pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), Stri
 
     Ok(())
 }
+
 #[tauri::command]
 pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;
@@ -656,6 +785,83 @@ pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn supabase_install_client(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !project_dir.join("package.json").exists() {
+        return Err("package.json not found in this project".to_string());
+    }
+
+    if !command_exists(&project_dir, "pnpm") {
+        return Err("pnpm is not installed or not available in PATH".to_string());
+    }
+
+    emit_log(&app, "status", "Installing Supabase client...");
+    run_command_capture(
+        &app,
+        &project_dir,
+        "pnpm",
+        &["add", "@supabase/supabase-js"],
+    )?;
+    emit_log(
+        &app,
+        "status",
+        "Supabase client install complete. Re-run the Supabase check to confirm it was found.",
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if let Some(existing) = existing_supabase_helper_file(&project_dir) {
+        let display_path = existing
+            .strip_prefix(&project_dir)
+            .ok()
+            .and_then(|p| p.to_str())
+            .unwrap_or("src/lib/supabase.js");
+
+        emit_log(
+            &app,
+            "stdout",
+            &format!(
+                "Supabase helper already exists at {}. No changes made.",
+                display_path
+            ),
+        );
+        emit_log(
+            &app,
+            "status",
+            "Supabase helper file already exists. Leaving it unchanged.",
+        );
+        return Ok(());
+    }
+
+    let created_path = create_supabase_helper_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/lib/supabase.js");
+
+    emit_log(
+        &app,
+        "stdout",
+        &format!("Created Supabase helper file at {}", display_path),
+    );
+    emit_log(
+        &app,
+        "status",
+        "Supabase helper file is ready. You can now import it into your app code.",
+    );
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn deploy_open_vercel(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;

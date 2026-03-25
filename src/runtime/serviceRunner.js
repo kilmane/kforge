@@ -4,56 +4,63 @@ import { listen } from "@tauri-apps/api/event";
 const SERVICE_LOG_EVENT = "kforge://service/log";
 const SERVICE_STATUS_EVENT = "kforge://service/status";
 
-export async function runServiceSetup(serviceId, projectPath, options = {}) {
-  if (!serviceId) throw new Error("serviceId is required");
+function requireProjectPath(projectPath) {
   if (!projectPath || !String(projectPath).trim()) {
     throw new Error("Project path is required");
   }
 
+  return String(projectPath).trim();
+}
+
+export async function runServiceSetup(serviceId, projectPath, options = {}) {
+  if (!serviceId) throw new Error("serviceId is required");
+
   return invoke("service_setup", {
     serviceId,
-    projectPath,
+    projectPath: requireProjectPath(projectPath),
     options,
   });
 }
 
 export async function detectGithubRepo(projectPath) {
-  if (!projectPath || !String(projectPath).trim()) {
-    throw new Error("Project path is required");
-  }
-
   return invoke("github_detect_repo", {
-    projectPath,
+    projectPath: requireProjectPath(projectPath),
   });
 }
 
 export async function githubOpenRepo(projectPath) {
-  if (!projectPath || !String(projectPath).trim()) {
-    throw new Error("Project path is required");
-  }
-
   return invoke("github_open_repo", {
-    projectPath,
+    projectPath: requireProjectPath(projectPath),
   });
 }
 
 export async function githubPull(projectPath) {
-  if (!projectPath || !String(projectPath).trim()) {
-    throw new Error("Project path is required");
-  }
-
   return invoke("github_pull", {
-    projectPath,
+    projectPath: requireProjectPath(projectPath),
   });
 }
 
 export async function githubPush(projectPath) {
-  if (!projectPath || !String(projectPath).trim()) {
-    throw new Error("Project path is required");
-  }
-
   return invoke("github_push", {
-    projectPath,
+    projectPath: requireProjectPath(projectPath),
+  });
+}
+
+export async function supabaseCreateEnvFile(projectPath) {
+  return invoke("supabase_create_env_file", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
+
+export async function supabaseInstallClient(projectPath) {
+  return invoke("supabase_install_client", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
+
+export async function supabaseCreateClientFile(projectPath) {
+  return invoke("supabase_create_client_file", {
+    projectPath: requireProjectPath(projectPath),
   });
 }
 

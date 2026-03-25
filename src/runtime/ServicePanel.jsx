@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { previewDetectTemplates } from "./previewRunner";
 import { SERVICE_REGISTRY } from "./serviceRegistry";
 import {
@@ -11,6 +10,9 @@ import {
   runServiceSetup,
   subscribeServiceLogs,
   subscribeServiceStatus,
+  supabaseCreateClientFile,
+  supabaseCreateEnvFile,
+  supabaseInstallClient,
 } from "./serviceRunner";
 
 const DEFAULT_TASK_ID = "code";
@@ -736,15 +738,67 @@ export default function ServicePanel({ projectPath }) {
     }
 
     try {
-      await invoke("supabase_create_env_file", {
-        projectPath,
-      });
+      await supabaseCreateEnvFile(projectPath);
     } catch (error) {
       setLogs((prev) => [
         ...prev,
         {
           kind: "error",
           line: error?.message || "Could not create .env file.",
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
+  async function handleInstallSupabaseClient() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before installing the Supabase client.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await supabaseInstallClient(projectPath);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || "Could not install the Supabase client.",
+          ts: Date.now(),
+        },
+      ]);
+    }
+  }
+
+  async function handleCreateSupabaseClientFile() {
+    if (!projectPath || !String(projectPath).trim()) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: "Open a project folder before creating a Supabase client file.",
+          ts: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    try {
+      await supabaseCreateClientFile(projectPath);
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          kind: "error",
+          line: error?.message || "Could not create the Supabase client file.",
           ts: Date.now(),
         },
       ]);
@@ -933,8 +987,8 @@ export default function ServicePanel({ projectPath }) {
             >
               <div>Connect this project to a Supabase database.</div>
               <div style={{ color: "#a1a1aa" }}>
-                KForge helps you check your project setup and prepare the
-                connection values your app needs.
+                KForge helps you check your project setup and complete the next
+                connection steps without guessing.
               </div>
               <div>
                 <span style={{ color: "#a1a1aa" }}>Connection values:</span>{" "}
@@ -948,7 +1002,13 @@ export default function ServicePanel({ projectPath }) {
                 to Supabase.
               </div>
               <div style={{ color: "#a1a1aa" }}>
-                These values come from your Supabase dashboard.
+                If this project uses Vite, frontend code will usually read
+                VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+              </div>
+              <div style={{ color: "#a1a1aa" }}>
+                After your env file is ready, the next common steps are: install
+                the Supabase client and create a small helper file such as
+                src/lib/supabase.js.
               </div>
               <div style={{ color: "#a1a1aa" }}>
                 If you run Supabase locally, KForge will also check for a local
@@ -1146,6 +1206,30 @@ export default function ServicePanel({ projectPath }) {
                 title="Create a .env file from .env.example"
               >
                 Create .env file
+              </button>
+            ) : null}
+
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleInstallSupabaseClient}
+                disabled={isBusy}
+                title="Install @supabase/supabase-js with pnpm"
+              >
+                Install Supabase client
+              </button>
+            ) : null}
+
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateSupabaseClientFile}
+                disabled={isBusy}
+                title="Create src/lib/supabase.js"
+              >
+                Create Supabase client file
               </button>
             ) : null}
 

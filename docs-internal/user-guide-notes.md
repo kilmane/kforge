@@ -278,26 +278,26 @@ Current examples:
 
 ### Static HTML
 
-Project type:
+Project type:  
 Static HTML
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
 ### Vite + React
 
-Project type:
+Project type:  
 Vite + React
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
 ### Next.js
 
-Project type:
+Project type:  
 Next.js
 
-Recommendation:
+Recommendation:  
 Recommended: Vercel
 
 This is guidance, not a restriction.
@@ -334,140 +334,188 @@ Services
 Backend  
 Supabase
 
-From there, KForge can help with setup checks and basic project preparation.
+From there, KForge provides **guided setup assistance**.
 
 ---
 
-## What the Supabase check looks for
+# Supabase Setup Assistant
+
+The Supabase panel now acts as a **guided checklist**.
+
+Instead of only reporting diagnostics, KForge helps users complete the next steps required to connect their app.
+
+Typical actions available:
+
+* Check Supabase setup
+* Create `.env` file
+* Install Supabase client
+* Create Supabase client helper file
+* Open Supabase dashboard
+
+---
+
+# What the Supabase check looks for
 
 When the user runs:
 
-Check Supabase setup
+**Check Supabase setup**
 
 KForge checks the current project for common Supabase connection signs.
 
 Current checks include:
 
-* environment files such as `.env`, `.env.local`, `.env.development`, and `.env.example`
+* environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
 * `SUPABASE_URL`
 * `SUPABASE_ANON_KEY`
+* `VITE_SUPABASE_URL`
+* `VITE_SUPABASE_ANON_KEY`
 * local Supabase config at `supabase/config.toml`
 * Supabase client library presence in `package.json`
+* existence of a helper file such as `src/lib/supabase.js`
 
-This gives the user a quick picture of whether the project already has connection values and whether local Supabase has been set up.
+This gives the user a quick picture of whether the project is ready to connect.
 
 ---
 
-## What SUPABASE_URL means
+# Supabase Environment Variables
+
+## SUPABASE_URL
 
 `SUPABASE_URL` is the address of your Supabase project.
 
-For a cloud project it usually looks similar to:
+Cloud example:
 
-`https://your-project.supabase.co`
+https://your-project.supabase.co
 
-For a local Supabase setup it often looks similar to:
+Local example:
 
-`http://127.0.0.1:54321`
-
-This is the address your app uses when it connects to Supabase.
+http://127.0.0.1:54321
 
 ---
 
-## What SUPABASE_ANON_KEY means
+## SUPABASE_ANON_KEY
 
 `SUPABASE_ANON_KEY` is the public API key your frontend uses to talk to Supabase.
 
-It is usually copied from the Supabase project dashboard.
-
-This key is used by the client app together with `SUPABASE_URL` so the frontend knows:
-
-* where Supabase is
-* how to connect to it
+This key is normally copied from the Supabase dashboard.
 
 ---
 
-## Cloud Supabase and Local Supabase
+## VITE_SUPABASE variables
 
-KForge supports both mental models:
+For **Vite-based frontend projects**, browser code usually reads:
 
-### Cloud Supabase
+```
 
-This is the hosted Supabase project you manage in the Supabase dashboard.
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
 
-Typical flow:
+```
 
-Create Supabase project  
-Copy project URL  
-Copy anon key  
-Add them to your project  
-Connect your frontend client
+These are environment variables exposed to the browser by Vite.
 
-### Local Supabase
-
-This is a local development setup that usually includes a `supabase` folder and a `supabase/config.toml` file.
-
-KForge currently checks whether that local configuration appears to exist.
-
-This helps the user understand whether the project is using:
-
-* hosted cloud Supabase
-* local Supabase development
-* or neither yet
+KForge now checks for these as well.
 
 ---
 
-## .env.example and .env help
+# .env.example and .env help
 
-KForge can now help with both of these files.
+KForge helps with both files.
 
 ### .env.example
 
-If `.env.example` does not exist, KForge can create one with Supabase connection variable placeholders.
-
-This gives the project a clear template for required values.
+If `.env.example` does not exist, KForge can generate one containing Supabase connection placeholders.
 
 ### Create .env file
 
-The Supabase panel also includes:
+The panel includes:
 
-Create .env file
+Create `.env` file
 
-If `.env` does not already exist, KForge copies `.env.example` to `.env`.
+If `.env` does not exist, KForge copies `.env.example` to `.env`.
 
-If `.env` already exists, KForge leaves it unchanged and reports that no changes were made.
+If `.env` already exists, KForge leaves it unchanged.
 
-This reduces friction for beginners who may not be comfortable creating and copying environment files manually.
+This removes a common beginner friction point.
 
 ---
 
-## Beginner connection flow
+# Install Supabase client
 
-A beginner-friendly flow is now:
+The panel includes:
+
+**Install Supabase client**
+
+This runs:
+
+pnpm add @supabase/supabase-js
+
+This installs the official Supabase JavaScript client used by frontend applications.
+
+---
+
+# Create Supabase client file
+
+The panel also includes:
+
+**Create Supabase client file**
+
+This generates a helper file such as:
+
+```
+
+src/lib/supabase.js
+
+```
+
+Example content:
+
+```
+
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl =
+import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
+
+const supabaseAnonKey =
+import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+```
+
+If the file already exists, KForge leaves it unchanged.
+
+---
+
+# Beginner Supabase Flow
+
+A beginner-friendly connection flow is now:
 
 1. Open the project in KForge
-2. Open Services → Backend → Supabase
+2. Services → Backend → Supabase
 3. Click **Check Supabase setup**
-4. If needed, click **Create .env file**
-5. Open the Supabase dashboard
-6. Copy `SUPABASE_URL`
-7. Copy `SUPABASE_ANON_KEY`
-8. Paste both values into `.env`
-9. Connect the frontend client in project code
-
-This keeps the process visible and guided.
+4. Click **Create .env file** if needed
+5. Copy connection values from Supabase
+6. Paste values into `.env`
+7. Click **Install Supabase client**
+8. Click **Create Supabase client file**
+9. Import the client into your app code
 
 ---
 
-## Supabase dashboard link
+# Supabase Dashboard
 
-The Supabase panel includes:
+The panel includes:
 
 Open Supabase
 
 This opens the Supabase dashboard in the browser.
 
-The purpose is to give the user a quick path to the place where project connection values are usually copied from.
+This is where users normally copy:
+
+* project URL
+* anon key
 
 ---
 
@@ -499,4 +547,6 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 ```
+
+---
 
