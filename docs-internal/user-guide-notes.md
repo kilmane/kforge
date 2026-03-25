@@ -1,4 +1,5 @@
 
+
 # User Guide Notes (development capture)
 
 Last Updated: March 25th, 2026
@@ -338,9 +339,35 @@ From there, KForge provides **guided setup assistance**.
 
 ---
 
+# Supabase Panel Layout
+
+The Supabase panel is intentionally split into two layers:
+
+### Compact top guidance
+
+The top of the panel stays short and direct.
+
+It tells the user to start with:
+
+**"Check Supabase setup"**
+
+This keeps the first step obvious and reduces visual noise.
+
+### Expandable extra help
+
+Additional explanation is available through a:
+
+**More info**
+
+toggle.
+
+This allows beginners to open extra guidance when needed without forcing dense text into the main panel all the time.
+
+---
+
 # Supabase Setup Assistant
 
-The Supabase panel now acts as a **guided checklist**.
+The Supabase panel acts as a **guided checklist**.
 
 Instead of only reporting diagnostics, KForge helps users complete the next steps required to connect their app.
 
@@ -349,8 +376,8 @@ Typical actions available:
 * Check Supabase setup
 * Create `.env` file
 * Install Supabase client
-* Create Supabase client helper file
-* Open Supabase dashboard
+* Create Supabase client file
+* Open Supabase
 
 ---
 
@@ -365,13 +392,19 @@ KForge checks the current project for common Supabase connection signs.
 Current checks include:
 
 * environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
-* `SUPABASE_URL`
-* `SUPABASE_ANON_KEY`
-* `VITE_SUPABASE_URL`
-* `VITE_SUPABASE_ANON_KEY`
+* whether `SUPABASE_URL` has a value
+* whether `SUPABASE_ANON_KEY` has a value
+* whether `VITE_SUPABASE_URL` has a value
+* whether `VITE_SUPABASE_ANON_KEY` has a value
 * local Supabase config at `supabase/config.toml`
 * Supabase client library presence in `package.json`
-* existence of a helper file such as `src/lib/supabase.js`
+* existence of a client file such as `src/lib/supabase.js`
+
+Empty entries such as:
+
+`SUPABASE_URL=`
+
+are treated as **not set**.
 
 This gives the user a quick picture of whether the project is ready to connect.
 
@@ -414,7 +447,7 @@ VITE_SUPABASE_ANON_KEY
 
 These are environment variables exposed to the browser by Vite.
 
-KForge now checks for these as well.
+KForge checks for these as well.
 
 ---
 
@@ -430,7 +463,7 @@ If `.env.example` does not exist, KForge can generate one containing Supabase co
 
 The panel includes:
 
-Create `.env` file
+**Create `.env` file**
 
 If `.env` does not exist, KForge copies `.env.example` to `.env`.
 
@@ -452,6 +485,10 @@ pnpm add @supabase/supabase-js
 
 This installs the official Supabase JavaScript client used by frontend applications.
 
+KForge now runs this through a shell path that works more reliably on Windows.
+
+If installation fails, the log now shows clearer command output.
+
 ---
 
 # Create Supabase client file
@@ -460,7 +497,7 @@ The panel also includes:
 
 **Create Supabase client file**
 
-This generates a helper file such as:
+This generates a client file such as:
 
 ```
 
@@ -486,6 +523,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 If the file already exists, KForge leaves it unchanged.
 
+Terminology is now kept consistent as **Supabase client file**.
+
 ---
 
 # Beginner Supabase Flow
@@ -501,6 +540,28 @@ A beginner-friendly connection flow is now:
 7. Click **Install Supabase client**
 8. Click **Create Supabase client file**
 9. Import the client into your app code
+
+---
+
+# Supabase Activity Log
+
+The Supabase activity log is now structured for readability.
+
+Behavior:
+
+* each action starts a new visible log section
+* sections are separated visually
+* action labels inside quotes are highlighted
+* the newest action block is easier to locate
+
+This helps users distinguish between:
+
+* **Check Supabase setup**
+* **Create .env file**
+* **Install Supabase client**
+* **Create Supabase client file**
+
+without losing context inside one long stream of text.
 
 ---
 
@@ -548,5 +609,4 @@ KForge should avoid:
 * provider-specific complexity walls
 ```
 
----
 

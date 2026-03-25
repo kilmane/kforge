@@ -219,6 +219,31 @@ function getDeployProjectIdentity(detectedTemplate, detectedKind) {
   };
 }
 
+function renderHighlightedActionText(text) {
+  const value = String(text || "");
+  const parts = value.split(/("[^"]+")/g);
+
+  return parts.map((part, index) => {
+    const isQuotedAction = /^"[^"]+"$/.test(part);
+
+    if (!isQuotedAction) {
+      return <React.Fragment key={index}>{part}</React.Fragment>;
+    }
+
+    return (
+      <span
+        key={index}
+        style={{
+          color: "#f4b942",
+          fontWeight: 600,
+        }}
+      >
+        {part}
+      </span>
+    );
+  });
+}
+
 export default function ServicePanel({ projectPath }) {
   const [logs, setLogs] = useState(persistedServicePanelState.logs);
   const [activeServiceId, setActiveServiceId] = useState(
@@ -247,6 +272,7 @@ export default function ServicePanel({ projectPath }) {
   );
   const [detectedProjectKind, setDetectedProjectKind] = useState("");
   const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
+  const [showSupabaseMoreInfo, setShowSupabaseMoreInfo] = useState(false);
   const logEndRef = useRef(null);
   const lastProjectPathRef = useRef(
     projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
@@ -314,7 +340,7 @@ export default function ServicePanel({ projectPath }) {
           {
             kind: payload?.kind || "stdout",
             line: payload?.line || "",
-            ts: Date.now(),
+            ts: Date.now() + Math.random(),
           },
         ]);
       });
@@ -370,6 +396,7 @@ export default function ServicePanel({ projectPath }) {
       setGithubRepoState(null);
       setDetectedProjectKind("");
       setDetectedProjectTemplate(null);
+      setShowSupabaseMoreInfo(false);
       lastProjectPathRef.current = "";
       return;
     }
@@ -391,6 +418,7 @@ export default function ServicePanel({ projectPath }) {
       setGithubRepoState(null);
       setDetectedProjectKind("");
       setDetectedProjectTemplate(null);
+      setShowSupabaseMoreInfo(false);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
@@ -472,6 +500,37 @@ export default function ServicePanel({ projectPath }) {
     }
   }, [logs]);
 
+  function appendLog(kind, line) {
+    setLogs((prev) => [
+      ...prev,
+      {
+        kind,
+        line,
+        ts: Date.now() + Math.random(),
+      },
+    ]);
+  }
+
+  function appendLogSection(title) {
+    setLogs((prev) => [
+      ...prev,
+      ...(prev.length > 0
+        ? [
+            {
+              kind: "separator",
+              line: "────────────────────────────────────────",
+              ts: Date.now() + Math.random(),
+            },
+          ]
+        : []),
+      {
+        kind: "section",
+        line: title,
+        ts: Date.now() + Math.random(),
+      },
+    ]);
+  }
+
   function selectTask(taskId) {
     const nextProviderId = getFirstProviderIdForTask(taskId);
     setActiveTaskId(taskId);
@@ -488,14 +547,7 @@ export default function ServicePanel({ projectPath }) {
 
   async function handleSetup(service) {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before using Services.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before using Services.");
       return;
     }
 
@@ -505,14 +557,7 @@ export default function ServicePanel({ projectPath }) {
       const repoName = sanitizeRepoName(githubRepoName);
 
       if (!repoName) {
-        setLogs((prev) => [
-          ...prev,
-          {
-            kind: "error",
-            line: "GitHub repository name is required.",
-            ts: Date.now(),
-          },
-        ]);
+        appendLog("error", "GitHub repository name is required.");
         return;
       }
 
@@ -522,136 +567,83 @@ export default function ServicePanel({ projectPath }) {
       };
     }
 
+    const sectionTitle =
+      service.id === "github"
+        ? "GitHub — Publish"
+        : service.id === "supabase"
+          ? "Supabase — Check setup"
+          : `${service.name} — Run`;
+
+    appendLogSection(sectionTitle);
+
     setActiveServiceId(service.id);
     setActiveProviderId(service.id);
     setActiveTaskId(findTaskByProviderId(service.id).id);
     setBusyServiceId(service.id);
-    setLogs((prev) => [
-      ...prev,
-      {
-        kind: "status",
-        line:
-          service.id === "github"
-            ? `Queued ${service.name} publish...`
-            : `Queued ${service.name} setup...`,
-        ts: Date.now(),
-      },
-    ]);
+    appendLog(
+      "status",
+      service.id === "github"
+        ? `Queued ${service.name} publish...`
+        : `Queued ${service.name} setup...`,
+    );
 
     try {
       await runServiceSetup(service.id, projectPath, options);
     } catch (error) {
       setBusyServiceId(null);
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || String(error),
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", error?.message || String(error));
     }
   }
 
   async function handleGithubPush() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before using GitHub actions.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before using GitHub actions.");
       return;
     }
+
+    appendLogSection("GitHub — Push changes");
 
     try {
       await githubPush(projectPath);
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || String(error),
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", error?.message || String(error));
     }
   }
 
   async function handleGithubPull() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before using GitHub actions.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before using GitHub actions.");
       return;
     }
+
+    appendLogSection("GitHub — Pull latest");
 
     try {
       await githubPull(projectPath);
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || String(error),
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", error?.message || String(error));
     }
   }
 
   async function handleGithubOpenRepo() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before using GitHub actions.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before using GitHub actions.");
       return;
     }
 
+    appendLogSection("GitHub — Open repository");
+
     try {
       await githubOpenRepo(projectPath);
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "status",
-          line: "Opened GitHub repository in browser.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("status", "Opened GitHub repository in browser.");
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || String(error),
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", error?.message || String(error));
     }
   }
 
   async function handleDeployOpen(providerId) {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before using deploy actions.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before using deploy actions.");
       return;
     }
 
@@ -659,16 +651,15 @@ export default function ServicePanel({ projectPath }) {
     const providerName = providerId === "vercel" ? "Vercel" : "Netlify";
 
     if (!repoSlug) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Connect this project to GitHub before deploying.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Connect this project to GitHub before deploying.");
       return;
     }
+
+    appendLogSection(
+      providerId === "vercel"
+        ? "Deploy — Open Vercel"
+        : "Deploy — Open Netlify",
+    );
 
     const url =
       providerId === "vercel"
@@ -678,130 +669,89 @@ export default function ServicePanel({ projectPath }) {
     try {
       await openExternalUrl(url);
 
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "status",
-          line:
-            providerId === "vercel"
-              ? `Opened Vercel import for ${repoSlug}.`
-              : `Opened Netlify import. Choose GitHub and select ${repoSlug}.`,
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "status",
+        providerId === "vercel"
+          ? `Opened Vercel import for ${repoSlug}.`
+          : `Opened Netlify import. Choose GitHub and select ${repoSlug}.`,
+      );
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || `Could not open ${providerName} in browser.`,
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        error?.message || `Could not open ${providerName} in browser.`,
+      );
     }
   }
 
   async function handleOpenSupabase() {
+    appendLogSection("Supabase — Open dashboard");
+
     try {
       await openExternalUrl("https://supabase.com/dashboard");
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "status",
-          line: "Opened Supabase in browser.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("status", "Opened Supabase in browser.");
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || "Could not open Supabase in browser.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        error?.message || "Could not open Supabase in browser.",
+      );
     }
   }
 
   async function handleCreateSupabaseEnvFile() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before creating a .env file.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", "Open a project folder before creating a .env file.");
       return;
     }
+
+    appendLogSection("Supabase — Create .env file");
 
     try {
       await supabaseCreateEnvFile(projectPath);
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || "Could not create .env file.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog("error", error?.message || "Could not create .env file.");
     }
   }
 
   async function handleInstallSupabaseClient() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before installing the Supabase client.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        "Open a project folder before installing the Supabase client.",
+      );
       return;
     }
+
+    appendLogSection("Supabase — Install Supabase client");
 
     try {
       await supabaseInstallClient(projectPath);
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || "Could not install the Supabase client.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        error?.message ||
+          "Could not install the Supabase client. Check the log output above for more detail.",
+      );
     }
   }
 
   async function handleCreateSupabaseClientFile() {
     if (!projectPath || !String(projectPath).trim()) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: "Open a project folder before creating a Supabase client file.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        "Open a project folder before creating a Supabase client file.",
+      );
       return;
     }
+
+    appendLogSection("Supabase — Create Supabase client file");
 
     try {
       await supabaseCreateClientFile(projectPath);
     } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          kind: "error",
-          line: error?.message || "Could not create the Supabase client file.",
-          ts: Date.now(),
-        },
-      ]);
+      appendLog(
+        "error",
+        error?.message || "Could not create the Supabase client file.",
+      );
     }
   }
 
@@ -986,34 +936,69 @@ export default function ServicePanel({ projectPath }) {
               }}
             >
               <div>Connect this project to a Supabase database.</div>
+
               <div style={{ color: "#a1a1aa" }}>
-                KForge helps you check your project setup and complete the next
-                connection steps without guessing.
+                Start by clicking{" "}
+                <span style={{ color: "#f4b942", fontWeight: 600 }}>
+                  "Check Supabase setup"
+                </span>
+                .
               </div>
+
               <div>
-                <span style={{ color: "#a1a1aa" }}>Connection values:</span>{" "}
-                {formatEnvVars(activeProvider?.envVars)}
+                <button
+                  type="button"
+                  onClick={() => setShowSupabaseMoreInfo((prev) => !prev)}
+                  style={{
+                    border: "1px solid #3f3f46",
+                    background: "rgba(24, 24, 27, 0.35)",
+                    color: "#d4d4d8",
+                    borderRadius: "999px",
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    width: "fit-content",
+                  }}
+                >
+                  {showSupabaseMoreInfo ? "Hide details" : "More info"}
+                </button>
               </div>
-              <div style={{ color: "#a1a1aa" }}>
-                SUPABASE_URL is your Supabase project address.
-              </div>
-              <div style={{ color: "#a1a1aa" }}>
-                SUPABASE_ANON_KEY is the public key your frontend uses to talk
-                to Supabase.
-              </div>
-              <div style={{ color: "#a1a1aa" }}>
-                If this project uses Vite, frontend code will usually read
-                VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
-              </div>
-              <div style={{ color: "#a1a1aa" }}>
-                After your env file is ready, the next common steps are: install
-                the Supabase client and create a small helper file such as
-                src/lib/supabase.js.
-              </div>
-              <div style={{ color: "#a1a1aa" }}>
-                If you run Supabase locally, KForge will also check for a local
-                Supabase configuration.
-              </div>
+
+              {showSupabaseMoreInfo ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                    paddingTop: "4px",
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "#a1a1aa" }}>Connection values:</span>{" "}
+                    {formatEnvVars(activeProvider?.envVars)}
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    SUPABASE_URL is your Supabase project address.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    SUPABASE_ANON_KEY is the public key your frontend uses to
+                    talk to Supabase.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    If this project uses Vite, frontend code will usually read
+                    VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    After your env file is ready, the next common steps are:
+                    install the Supabase client and create a Supabase client
+                    file such as src/lib/supabase.js.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    If you run Supabase locally, KForge will also check for a
+                    local Supabase configuration.
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div
@@ -1337,7 +1322,7 @@ export default function ServicePanel({ projectPath }) {
               className="command-runner-logs__body"
               style={{
                 padding: "10px 12px",
-                maxHeight: "180px",
+                maxHeight: "220px",
                 overflow: "auto",
                 fontSize: "13px",
                 color: "#d4d4d8",
@@ -1348,14 +1333,35 @@ export default function ServicePanel({ projectPath }) {
                   No service activity yet.
                 </div>
               ) : (
-                logs.map((entry) => (
-                  <div
-                    key={`${entry.ts}-${entry.line}`}
-                    className={`command-runner-log command-runner-log--${entry.kind}`}
-                  >
-                    {entry.line}
-                  </div>
-                ))
+                logs.map((entry) => {
+                  const isSection = entry.kind === "section";
+                  const isSeparator = entry.kind === "separator";
+
+                  return (
+                    <div
+                      key={`${entry.ts}-${entry.line}`}
+                      className={`command-runner-log command-runner-log--${entry.kind}`}
+                      style={{
+                        marginBottom: isSeparator ? "8px" : "6px",
+                        color: isSection
+                          ? "#fde68a"
+                          : isSeparator
+                            ? "#52525b"
+                            : entry.kind === "error"
+                              ? "#fca5a5"
+                              : entry.kind === "status"
+                                ? "#93c5fd"
+                                : "#d4d4d8",
+                        fontWeight: isSection ? 700 : 400,
+                        letterSpacing: isSeparator ? "0.02em" : "normal",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {renderHighlightedActionText(entry.line)}
+                    </div>
+                  );
+                })
               )}
               <div ref={logEndRef} />
             </div>

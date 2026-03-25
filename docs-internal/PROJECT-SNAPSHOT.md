@@ -6,11 +6,11 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
 Last Updated: March 25th, 2026
 
-Phase: 4.8.2 — Guided Supabase Actions
+Phase: 4.8.3 — Supabase Polish
 Status: Stable milestone ready to commit and tag
 
 Recommended stable tag:
-phase-4.8.2-guided-supabase-actions-stable
+phase-4.8.3-supabase-polish-stable
 
 ---
 
@@ -740,7 +740,7 @@ If `.env` already exists, KForge leaves it unchanged.
 
 # 🟩 4.8.2 Guided Supabase Actions
 
-Phase 4.8.2 upgrades the Supabase lane from a mostly diagnostic checker into a **guided setup assistant**.
+Phase 4.8.2 upgraded the Supabase lane from a mostly diagnostic checker into a **guided setup assistant**.
 
 This phase exists specifically to remove ambiguity for beginners and vibe coders.
 
@@ -756,7 +756,7 @@ Primary files:
 
 ## Supabase Capabilities Added in 4.8.2
 
-The Supabase adapter now also supports:
+The Supabase adapter also supports:
 
 • improved final success wording after readiness check  
 • detection of `VITE_SUPABASE_URL`  
@@ -764,8 +764,8 @@ The Supabase adapter now also supports:
 • clearer Vite-aware guidance in the Supabase panel  
 • guided install action for `@supabase/supabase-js`  
 • guided creation of `src/lib/supabase.js`  
-• detection of an existing Supabase helper file  
-• non-destructive helper generation behavior
+• detection of an existing Supabase client file  
+• non-destructive client-file generation behavior
 
 New commands added:
 
@@ -774,38 +774,128 @@ supabase_create_client_file
 
 ---
 
-## Supabase Helper File Behavior
+## Supabase Client File Behavior
 
-KForge can now generate:
+KForge can generate:
 
 src/lib/supabase.js
 
-Typical helper logic:
+Typical client-file logic:
 
 • imports `createClient` from `@supabase/supabase-js`  
 • reads `VITE_SUPABASE_URL` or `SUPABASE_URL`  
 • reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`  
 • exports a reusable `supabase` client
 
-If a helper file already exists, KForge logs that no changes were made and leaves the file untouched.
+If a client file already exists, KForge logs that no changes were made and leaves the file untouched.
 
 ---
 
-## Supabase User Flow Now Supported
+# 🟩 4.8.3 Supabase Polish
+
+Phase 4.8.3 polished the guided Supabase lane based on real testing in a fresh Vite + React workspace.
+
+This phase focused on reducing ambiguity, improving Windows reliability, and making the Supabase panel feel calmer and more readable for beginners and vibe coders.
+
+Primary files:
+
+• src-tauri/src/service.rs  
+• src/runtime/ServicePanel.jsx  
+• docs-internal/user-guide-notes.md  
+• docs-internal/project-map.md  
+• docs-internal/PROJECT-SNAPSHOT.md
+
+---
+
+## Supabase Capabilities Added in 4.8.3
+
+The Supabase adapter and panel now also support:
+
+• environment-variable checks that treat empty values as **not set**  
+• clearer next-step guidance after each Supabase action  
+• Windows-safe package installation for `pnpm add @supabase/supabase-js` using shell execution  
+• clearer install failure feedback with surfaced command output  
+• consistent terminology: **Supabase client file**  
+• compact top-of-panel guidance with a **More info** toggle  
+• activity log grouping into visible sections  
+• quoted action labels highlighted inside the log  
+• cleaner log readability across repeated setup actions
+
+---
+
+## Windows Install Reliability
+
+The Supabase install action now runs through a shell path instead of depending only on direct process lookup.
+
+Current behavior:
+
+• Windows uses a shell execution path compatible with GUI runtime conditions  
+• install output is streamed into the Services log  
+• if installation fails, the user sees clearer package-manager output in the log  
+
+This fixes the real test failure where the button could fail on Windows even though `pnpm add @supabase/supabase-js` worked in the internal terminal.
+
+---
+
+## Supabase Panel UX Shape
+
+Services → Backend → Supabase now has a calmer structure:
+
+### Compact first-step guidance
+
+The top card emphasizes the first step:
+
+"Check Supabase setup"
+
+This keeps the panel focused on action rather than training text.
+
+### Expandable extra help
+
+Additional explanation is available behind:
+
+More info
+
+This reduces clutter while still giving beginners optional help when they want it.
+
+---
+
+## Supabase Activity Log Behavior
+
+The Services log for Supabase is now easier to scan.
+
+Current behavior:
+
+• each user action begins a new visible log section  
+• log sections are separated visually  
+• action names in quotes are highlighted  
+• repeated actions are easier to distinguish from older output  
+
+Examples of highlighted action labels:
+
+• "Check Supabase setup"  
+• "Create .env file"  
+• "Install Supabase client"  
+• "Create Supabase client file"  
+
+This keeps the beginner guidance readable without needing a separate wizard UI.
+
+---
+
+## Supabase Guided Flow Now Supported
 
 Current intended Supabase path:
 
 Open folder  
 → Services  
 → Backend → Supabase  
-→ Check Supabase setup  
-→ Create `.env` file if needed  
+→ "Check Supabase setup"  
+→ "Create .env file" if needed  
 → Add connection values  
-→ Install Supabase client  
-→ Create Supabase client file  
+→ "Install Supabase client"  
+→ "Create Supabase client file"  
 → import Supabase client into application code
 
-This is the first time KForge supports a **backend integration lane with guided setup actions**, not just diagnostics.
+This now behaves more like a guided checklist than a raw diagnostic surface.
 
 ---
 
@@ -889,7 +979,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.8.2 Guided Supabase Actions**:
+As of **Phase 4.8.3 Supabase Polish**:
 
 • AI surface stable  
 • filesystem tools validated  
@@ -913,7 +1003,11 @@ As of **Phase 4.8.2 Guided Supabase Actions**:
 • Supabase beginner UX wording improved  
 • Vite-aware Supabase env guidance working  
 • Supabase client install action working  
-• Supabase helper file creation working  
+• Windows-safe Supabase install execution working  
+• Supabase client file creation working  
+• Supabase log grouping working  
+• Supabase quoted action highlighting working  
+• compact Supabase guidance card working  
 • Supabase documentation captured
 
 Supported workflows now include:
@@ -932,7 +1026,8 @@ Template-aware deploy recommendation inside Services
 Supabase setup inspection  
 Supabase environment file preparation  
 Supabase client install guidance  
-Supabase helper file generation
+Supabase client file generation  
+Supabase beginner-friendly guided setup
 
 ---
 
@@ -967,14 +1062,15 @@ Possible future backend improvements:
 
 # 🚢 Phase Boundary
 
-Phase 4.8.2 completes the first **guided Supabase action** milestone built on top of the service integration architecture.
+Phase 4.8.3 completes the **Supabase polish** pass on top of the guided action architecture.
 
 What this phase proves:
 
 • the Services layer can support backend integrations, not just code hosting and deploy  
-• beginner setup assistance can be extended from diagnostics into guided actions  
-• `.env.example`, `.env`, package installation, and helper-file generation all fit naturally into the service lane  
-• KForge can reduce technical ambiguity without turning integrations into dashboard-heavy workflows
+• guided backend setup can be made calmer and clearer through UX polish, not only through new features  
+• Windows package-install reliability matters for real desktop workflows  
+• structured logs and compact first-step guidance materially improve usability for beginners  
+• backend integrations can stay explicit and low-noise without turning into dashboard-heavy workflows
 
 Current stable journey:
 
@@ -991,5 +1087,4 @@ OpenAI adapter
 Environment variable manager  
 Template-aware backend scaffolding
 ```
-
 
