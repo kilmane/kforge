@@ -2,11 +2,7 @@
 docs-internal/project-map.md
 ```
 
-This version **adds the Supabase adapter documentation** under the Service Integration Layer without disturbing your existing structure.
 
----
-
-```markdown
 # 🗺 KForge Project Map
 
 Location:

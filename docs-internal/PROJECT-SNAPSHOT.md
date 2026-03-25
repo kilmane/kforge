@@ -2,8 +2,6 @@
 docs-internal/PROJECT-SNAPSHOT.md
 ```
 
-This advances the snapshot from **Phase 4.7b** to **Phase 4.8.1**, and records the Supabase adapter, `.env` assist, and docs work cleanly.
-
 ```markdown
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
