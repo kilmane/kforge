@@ -414,6 +414,8 @@ Typical project URL:
 
 Connection values are copied from the Supabase dashboard.
 
+---
+
 ### Local Supabase
 
 Local development may use:
@@ -421,6 +423,37 @@ Local development may use:
 [http://127.0.0.1:54321](http://127.0.0.1:54321)
 
 If a local Supabase project is detected, KForge recognizes the configuration automatically.
+
+---
+
+## Starting a Local Supabase Stack
+
+Local Supabase projects are usually created with the **Supabase CLI**.
+
+To start the local development stack, run:
+
+```
+npx supabase start
+```
+
+This command launches the local Supabase services using Docker.
+
+When the stack starts, the CLI prints important connection values such as:
+
+* API URL
+* Studio URL
+* Database connection string
+* anon public key
+
+Example output:
+
+```
+API URL: http://127.0.0.1:54321
+Studio URL: http://127.0.0.1:54323
+anon key: eyJhbGciOiJIUzI1NiIs...
+```
+
+These values are what your application should place into the `.env` file.
 
 ---
 
@@ -444,7 +477,13 @@ Local example:
 
 Public API key used by frontend applications.
 
-This key is copied from the Supabase dashboard.
+For cloud projects this key is copied from the Supabase dashboard.
+
+For local projects the key is printed when running:
+
+```
+npx supabase start
+```
 
 ---
 
@@ -501,15 +540,17 @@ src/lib/supabase.js
 
 Example:
 
+```javascript
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl =
-import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
+  import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
 
 const supabaseAnonKey =
-import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
+  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+```
 
 If the file already exists, KForge leaves it unchanged.
 
@@ -572,5 +613,4 @@ KForge should avoid:
 * provider-specific complexity walls
 
 ---
-
 
