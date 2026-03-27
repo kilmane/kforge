@@ -477,7 +477,60 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     Ok(client_path)
 }
+fn has_supabase_client_dependency(project_dir: &PathBuf) -> bool {
+    let package_json_path = project_dir.join("package.json");
 
+    if !package_json_path.exists() {
+        return false;
+    }
+
+    read_text_file_if_exists(&package_json_path)
+        .map(|content| {
+            content.contains("@supabase/supabase-js") || content.contains("\"supabase\"")
+        })
+        .unwrap_or(false)
+}
+
+fn supabase_example_file_path(project_dir: &PathBuf) -> PathBuf {
+    project_dir
+        .join("src")
+        .join("examples")
+        .join("supabaseExample.js")
+}
+
+fn create_supabase_example_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    let example_path = supabase_example_file_path(project_dir);
+
+    if example_path.exists() {
+        return Ok(example_path);
+    }
+
+    if let Some(parent) = example_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create examples folder: {}", error))?;
+    }
+
+    let content = r#"import { supabase } from "../lib/supabase";
+
+export async function loadExampleData() {
+  const { data, error } = await supabase
+    .from("your_table")
+    .select("*");
+
+  if (error) {
+    console.error("Supabase query failed:", error);
+    return [];
+  }
+
+  return data;
+}
+"#;
+
+    fs::write(&example_path, content)
+        .map_err(|error| format!("Failed to write Supabase example file: {}", error))?;
+
+    Ok(example_path)
+}
 fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), String> {
     emit_log(app, "status", "Checking this project for Supabase setup...");
 
@@ -517,16 +570,7 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
 
     let package_json_path = project_dir.join("package.json");
     let package_json_exists = package_json_path.exists();
-
-    let has_supabase_js = if package_json_exists {
-        read_text_file_if_exists(&package_json_path)
-            .map(|content| {
-                content.contains("@supabase/supabase-js") || content.contains("\"supabase\"")
-            })
-            .unwrap_or(false)
-    } else {
-        false
-    };
+    let has_supabase_js = has_supabase_client_dependency(project_dir);
 
     let existing_client_file = existing_supabase_client_file(project_dir);
 
@@ -1030,7 +1074,135 @@ pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Resu
 
     Ok(())
 }
+#[tauri::command]
+pub fn supabase_quick_connect(app: AppHandle, project_path: String) -> Result<(), String> {
+    emit_status(&app, "running:supabase");
 
+    let result = (|| -> Result<(), String> {
+        let project_dir = validate_project_path(&project_path)?;
+
+        emit_log(&app, "status", "Running Supabase quick connect...");
+        emit_log(&app, "stdout", "Checking project setup...");
+
+        run_supabase_setup(&app, &project_dir)?;
+
+        let env_created = ensure_env_file_from_example(&project_dir)?;
+        if env_created {
+            emit_log(&app, "stdout", ".env file ready");
+        } else {
+            emit_log(&app, "stdout", ".env file already exists");
+        }
+
+        if !project_dir.join("package.json").exists() {
+            return Err("package.json not found in this project".to_string());
+        }
+
+        if has_supabase_client_dependency(&project_dir) {
+            emit_log(&app, "stdout", "Supabase client library already installed");
+        } else {
+            if !shell_command_exists(&project_dir, "pnpm") {
+                return Err(
+                    "pnpm could not be found from KForge. Install pnpm globally or restart KForge after making pnpm available in your PATH."
+                        .to_string(),
+                );
+            }
+
+            emit_log(&app, "status", "Installing Supabase client...");
+            emit_log(
+                &app,
+                "stdout",
+                "KForge is running the package install through a shell so it works more reliably on Windows.",
+            );
+
+            match run_shell_command_capture(&app, &project_dir, "pnpm add @supabase/supabase-js") {
+                Ok(_) => emit_log(&app, "stdout", "Supabase client library installed"),
+                Err(error) => {
+                    emit_log(
+                        &app,
+                        "stderr",
+                        "Supabase client install failed. Read the command output above for the exact package manager message.",
+                    );
+                    return Err(format!("Could not install the Supabase client. {}", error));
+                }
+            }
+        }
+
+        if let Some(existing) = existing_supabase_client_file(&project_dir) {
+            let display_path = existing
+                .strip_prefix(&project_dir)
+                .ok()
+                .and_then(|p| p.to_str())
+                .unwrap_or("src/lib/supabase.js");
+
+            emit_log(
+                &app,
+                "stdout",
+                &format!("Supabase client file already exists at {}", display_path),
+            );
+        } else {
+            let created_path = create_supabase_client_file(&project_dir)?;
+            let display_path = created_path
+                .strip_prefix(&project_dir)
+                .ok()
+                .and_then(|p| p.to_str())
+                .unwrap_or("src/lib/supabase.js");
+
+            emit_log(
+                &app,
+                "stdout",
+                &format!("Supabase client file ready at {}", display_path),
+            );
+        }
+
+        let example_path = supabase_example_file_path(&project_dir);
+        if example_path.exists() {
+            let display_path = example_path
+                .strip_prefix(&project_dir)
+                .ok()
+                .and_then(|p| p.to_str())
+                .unwrap_or("src/examples/supabaseExample.js");
+
+            emit_log(
+                &app,
+                "stdout",
+                &format!("Supabase example query already exists at {}", display_path),
+            );
+        } else {
+            let created_path = create_supabase_example_file(&project_dir)?;
+            let display_path = created_path
+                .strip_prefix(&project_dir)
+                .ok()
+                .and_then(|p| p.to_str())
+                .unwrap_or("src/examples/supabaseExample.js");
+
+            emit_log(
+                &app,
+                "stdout",
+                &format!("Generated example query at {}", display_path),
+            );
+        }
+
+        emit_log(&app, "status", "Supabase quick connect completed.");
+        emit_log(
+            &app,
+            "stdout",
+            "Next step: open your Supabase project dashboard, copy the Project URL and anon public key, then paste them into this project's .env file.",
+        );
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            emit_status(&app, "done:supabase");
+            Ok(())
+        }
+        Err(error) => {
+            emit_log(&app, "error", &error);
+            emit_status(&app, "error:supabase");
+            Err(error)
+        }
+    }
+}
 #[tauri::command]
 pub fn deploy_open_vercel(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;

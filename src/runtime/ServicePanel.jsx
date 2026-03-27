@@ -13,6 +13,7 @@ import {
   supabaseCreateClientFile,
   supabaseCreateEnvFile,
   supabaseInstallClient,
+  supabaseQuickConnect,
 } from "./serviceRunner";
 
 const DEFAULT_TASK_ID = "code";
@@ -243,7 +244,15 @@ function renderHighlightedActionText(text) {
     );
   });
 }
+function formatLogTimestamp(value) {
+  const date = new Date(value);
 
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+
+  return `${hh}:${mm}:${ss}`;
+}
 export default function ServicePanel({ projectPath }) {
   const [logs, setLogs] = useState(persistedServicePanelState.logs);
   const [activeServiceId, setActiveServiceId] = useState(
@@ -696,7 +705,27 @@ export default function ServicePanel({ projectPath }) {
       );
     }
   }
+  async function handleSupabaseQuickConnect() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before running Supabase Quick Connect.",
+      );
+      return;
+    }
 
+    appendLogSection("Supabase — Quick Connect");
+
+    try {
+      await supabaseQuickConnect(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message ||
+          "Could not complete Supabase Quick Connect. Check the log output above for more detail.",
+      );
+    }
+  }
   async function handleCreateSupabaseEnvFile() {
     if (!projectPath || !String(projectPath).trim()) {
       appendLog("error", "Open a project folder before creating a .env file.");
@@ -940,9 +969,13 @@ export default function ServicePanel({ projectPath }) {
               <div style={{ color: "#a1a1aa" }}>
                 Start by clicking{" "}
                 <span style={{ color: "#f4b942", fontWeight: 600 }}>
+                  "Quick Connect Supabase"
+                </span>{" "}
+                for the beginner-friendly path, or use{" "}
+                <span style={{ color: "#f4b942", fontWeight: 600 }}>
                   "Check Supabase setup"
-                </span>
-                .
+                </span>{" "}
+                if you want to go step by step.
               </div>
 
               <div>
@@ -1174,6 +1207,17 @@ export default function ServicePanel({ projectPath }) {
               <button
                 type="button"
                 className="command-runner-runButton"
+                onClick={handleSupabaseQuickConnect}
+                disabled={isBusy || isPlanned}
+                title="Run the full Supabase setup flow automatically"
+              >
+                {isBusy ? "Working..." : "Quick Connect Supabase"}
+              </button>
+            ) : null}
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
                 onClick={() => handleSetup(activeProvider)}
                 disabled={isBusy || isPlanned}
                 title="Check this project and prepare the Supabase connection setup"
@@ -1181,7 +1225,6 @@ export default function ServicePanel({ projectPath }) {
                 {isBusy ? "Working..." : "Check Supabase setup"}
               </button>
             ) : null}
-
             {isSupabase ? (
               <button
                 type="button"
@@ -1193,7 +1236,6 @@ export default function ServicePanel({ projectPath }) {
                 Create .env file
               </button>
             ) : null}
-
             {isSupabase ? (
               <button
                 type="button"
@@ -1205,7 +1247,6 @@ export default function ServicePanel({ projectPath }) {
                 Install Supabase client
               </button>
             ) : null}
-
             {isSupabase ? (
               <button
                 type="button"
@@ -1217,7 +1258,6 @@ export default function ServicePanel({ projectPath }) {
                 Create Supabase client file
               </button>
             ) : null}
-
             {isSupabase ? (
               <button
                 type="button"
@@ -1229,7 +1269,6 @@ export default function ServicePanel({ projectPath }) {
                 Open Supabase
               </button>
             ) : null}
-
             {canDeployFromGithub ? (
               <button
                 type="button"
@@ -1247,7 +1286,6 @@ export default function ServicePanel({ projectPath }) {
                   : "Deploy with Netlify"}
               </button>
             ) : null}
-
             {isDeploy && !canDeployFromGithub ? (
               <button
                 type="button"
@@ -1258,7 +1296,6 @@ export default function ServicePanel({ projectPath }) {
                 Connect GitHub first
               </button>
             ) : null}
-
             {canOpenGithubRepo ? (
               <button
                 type="button"
@@ -1270,7 +1307,6 @@ export default function ServicePanel({ projectPath }) {
                 Push changes
               </button>
             ) : null}
-
             {canOpenGithubRepo ? (
               <button
                 type="button"
@@ -1282,7 +1318,6 @@ export default function ServicePanel({ projectPath }) {
                 Pull latest
               </button>
             ) : null}
-
             {canOpenGithubRepo ? (
               <button
                 type="button"
@@ -1342,6 +1377,10 @@ export default function ServicePanel({ projectPath }) {
                       key={`${entry.ts}-${entry.line}`}
                       className={`command-runner-log command-runner-log--${entry.kind}`}
                       style={{
+                        display: "grid",
+                        gridTemplateColumns: isSeparator ? "1fr" : "72px 1fr",
+                        gap: "10px",
+                        alignItems: "start",
                         marginBottom: isSeparator ? "8px" : "6px",
                         color: isSection
                           ? "#fde68a"
@@ -1358,7 +1397,20 @@ export default function ServicePanel({ projectPath }) {
                         wordBreak: "break-word",
                       }}
                     >
-                      {renderHighlightedActionText(entry.line)}
+                      {isSeparator ? null : (
+                        <div
+                          style={{
+                            color: "#71717a",
+                            fontSize: "11px",
+                            fontVariantNumeric: "tabular-nums",
+                            paddingTop: isSection ? "1px" : "0",
+                          }}
+                        >
+                          {formatLogTimestamp(entry.ts)}
+                        </div>
+                      )}
+
+                      <div>{renderHighlightedActionText(entry.line)}</div>
                     </div>
                   );
                 })

@@ -1,26 +1,11 @@
 
-docs-internal/project-map.md
-```
-
-This version includes the **Phase 4.8.2 Supabase guided actions architecture**:
-
-* Supabase client installation
-* Supabase helper file generation
-* Vite environment variable support
-* Guided workflow responsibilities
-
-Nothing removed — only expanded and clarified.
-
----
-
-```markdown
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: v16  
+Version: v17  
 Updated: 25/03/2026
 
 Purpose: architectural topology & execution responsibility map.
@@ -426,13 +411,15 @@ Capabilities include:
 
 * Supabase readiness inspection
 * environment variable detection
+* detection of empty versus non-empty env values
 * `.env.example` generation
 * `.env` creation helper
 * Supabase client library detection
 * Supabase client installation helper
-* Supabase client helper file generation
+* Supabase client file generation
 * local Supabase config detection
 * guided log output for the user
+* browser handoff to Supabase dashboard
 
 ---
 
@@ -454,6 +441,14 @@ Environment variables:
 * `VITE_SUPABASE_URL`
 * `VITE_SUPABASE_ANON_KEY`
 
+Important detection rule:
+
+Empty values such as:
+
+`SUPABASE_URL=`
+
+are treated as **not set**.
+
 Local Supabase project:
 
 * `supabase/config.toml`
@@ -463,9 +458,10 @@ Supabase client library:
 * `@supabase/supabase-js`
 * `supabase` dependency in `package.json`
 
-Supabase helper client file:
+Supabase client file candidates:
 
 * `src/lib/supabase.js`
+* `src/lib/supabase.ts`
 
 ---
 
@@ -508,11 +504,19 @@ pnpm add @supabase/supabase-js
 
 This installs the official Supabase JavaScript client library.
 
+In Phase 4.8.3 this action was hardened for desktop Windows use by running through a shell execution path rather than depending only on direct binary lookup.
+
+Current behavior also includes:
+
+* streamed install logs
+* surfaced package-manager output on failure
+* clearer next-step guidance after install
+
 ---
 
-## Supabase Client Helper File
+## Supabase Client File
 
-KForge can also generate a **Supabase client helper file**.
+KForge can also generate a **Supabase client file**.
 
 Typical generated location:
 
@@ -529,7 +533,59 @@ createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY
 )
 
-If the helper file already exists, KForge leaves it unchanged.
+If the client file already exists, KForge leaves it unchanged.
+
+Terminology is intentionally standardized as:
+
+**Supabase client file**
+
+---
+
+## Supabase Panel UX Shape
+
+The Supabase panel is intentionally split into two layers.
+
+### Compact first-step guidance
+
+The top of the panel emphasizes the first action:
+
+"Check Supabase setup"
+
+This keeps the panel calm and reduces noise.
+
+### Expandable extra help
+
+Additional explanation is available via a:
+
+More info
+
+toggle.
+
+This keeps the default panel compact while still supporting beginners.
+
+---
+
+## Supabase Activity Log
+
+The Supabase activity log is structured for readability.
+
+Current behavior:
+
+* each user action begins a new visible log section
+* log sections are separated visually
+* quoted action labels are highlighted
+* repeated Supabase actions are easier to distinguish from older output
+
+Examples of highlighted actions:
+
+* "Check Supabase setup"
+* "Create .env file"
+* "Install Supabase client"
+* "Create Supabase client file"
+
+This is handled inside:
+
+src/runtime/ServicePanel.jsx
 
 ---
 
@@ -653,11 +709,11 @@ Open folder
 Open folder  
 → Services  
 → Backend → Supabase  
-→ Check Supabase setup  
-→ Create `.env` if needed  
+→ "Check Supabase setup"  
+→ "Create .env file" if needed  
 → Add connection values  
-→ Install Supabase client  
-→ Create Supabase helper file  
+→ "Install Supabase client"  
+→ "Create Supabase client file"  
 → import client in application code
 
 ---
@@ -678,6 +734,7 @@ Current stable milestone includes:
 * smart deploy guidance
 * Supabase backend integration
 * guided Supabase setup actions
+* Supabase polish for calmer UX and clearer log flow
 
 This project map should be updated whenever:
 
@@ -686,7 +743,5 @@ This project map should be updated whenever:
 * a new runtime lane appears
 * deploy recommendation mappings expand
 ```
-
----
 
 

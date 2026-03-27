@@ -63,7 +63,11 @@ export async function supabaseCreateClientFile(projectPath) {
     projectPath: requireProjectPath(projectPath),
   });
 }
-
+export async function supabaseQuickConnect(projectPath) {
+  return invoke("supabase_quick_connect", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
 export async function openExternalUrl(url) {
   if (!url || !String(url).trim()) {
     throw new Error("URL is required");
