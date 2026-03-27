@@ -62,7 +62,7 @@ const FALLBACK_PROVIDER_REGISTRY = {
 };
 
 const persistedServicePanelState = {
-  logs: [],
+  logsByService: {},
   activeServiceId: DEFAULT_PROVIDER_ID,
   activeTaskId: DEFAULT_TASK_ID,
   activeProviderId: DEFAULT_PROVIDER_ID,
@@ -74,7 +74,7 @@ const persistedServicePanelState = {
 };
 
 function resetPersistedServicePanelState() {
-  persistedServicePanelState.logs = [];
+  persistedServicePanelState.logsByService = {};
   persistedServicePanelState.activeServiceId = DEFAULT_PROVIDER_ID;
   persistedServicePanelState.activeTaskId = DEFAULT_TASK_ID;
   persistedServicePanelState.activeProviderId = DEFAULT_PROVIDER_ID;
@@ -254,7 +254,9 @@ function formatLogTimestamp(value) {
   return `${hh}:${mm}:${ss}`;
 }
 export default function ServicePanel({ projectPath }) {
-  const [logs, setLogs] = useState(persistedServicePanelState.logs);
+  const [logsByService, setLogsByService] = useState(
+    persistedServicePanelState.logsByService,
+  );
   const [activeServiceId, setActiveServiceId] = useState(
     persistedServicePanelState.activeServiceId,
   );
@@ -292,6 +294,7 @@ export default function ServicePanel({ projectPath }) {
     TASK_GROUPS.find((task) => task.id === activeTaskId) || TASK_GROUPS[0];
   const activeProvider =
     providerMap.get(activeProviderId) || providerMap.get(DEFAULT_PROVIDER_ID);
+  const activeLogs = logsByService[activeProviderId] || [];
 
   const deployProjectIdentity = useMemo(() => {
     return getDeployProjectIdentity(
@@ -301,8 +304,8 @@ export default function ServicePanel({ projectPath }) {
   }, [detectedProjectKind, detectedProjectTemplate]);
 
   useEffect(() => {
-    persistedServicePanelState.logs = logs;
-  }, [logs]);
+    persistedServicePanelState.logsByService = logsByService;
+  }, [logsByService]);
 
   useEffect(() => {
     persistedServicePanelState.activeServiceId = activeServiceId;
@@ -344,14 +347,20 @@ export default function ServicePanel({ projectPath }) {
     async function bind() {
       unlistenLogs = await subscribeServiceLogs((payload) => {
         if (cancelled) return;
-        setLogs((prev) => [
-          ...prev,
-          {
-            kind: payload?.kind || "stdout",
-            line: payload?.line || "",
-            ts: Date.now() + Math.random(),
-          },
-        ]);
+        setLogsByService((prev) => {
+          const targetServiceId = activeProviderId || DEFAULT_PROVIDER_ID;
+          return {
+            ...prev,
+            [targetServiceId]: [
+              ...(prev[targetServiceId] || []),
+              {
+                kind: payload?.kind || "stdout",
+                line: payload?.line || "",
+                ts: Date.now() + Math.random(),
+              },
+            ],
+          };
+        });
       });
 
       unlistenStatus = await subscribeServiceStatus((payload) => {
@@ -392,43 +401,43 @@ export default function ServicePanel({ projectPath }) {
 
     const previousProjectPath = lastProjectPathRef.current;
 
-    if (!normalizedProjectPath) {
-      resetPersistedServicePanelState();
-      setLogs([]);
-      setActiveServiceId(DEFAULT_PROVIDER_ID);
-      setActiveTaskId(DEFAULT_TASK_ID);
-      setActiveProviderId(DEFAULT_PROVIDER_ID);
-      setServiceStatus("idle");
-      setBusyServiceId(null);
-      setGithubRepoName("");
-      setGithubVisibility("public");
-      setGithubRepoState(null);
-      setDetectedProjectKind("");
-      setDetectedProjectTemplate(null);
-      setShowSupabaseMoreInfo(false);
-      lastProjectPathRef.current = "";
-      return;
-    }
+      if (!normalizedProjectPath) {
+        resetPersistedServicePanelState();
+        setLogsByService({});
+        setActiveServiceId(DEFAULT_PROVIDER_ID);
+        setActiveTaskId(DEFAULT_TASK_ID);
+        setActiveProviderId(DEFAULT_PROVIDER_ID);
+        setServiceStatus("idle");
+        setBusyServiceId(null);
+        setGithubRepoName("");
+        setGithubVisibility("public");
+        setGithubRepoState(null);
+        setDetectedProjectKind("");
+        setDetectedProjectTemplate(null);
+        setShowSupabaseMoreInfo(false);
+        lastProjectPathRef.current = "";
+        return;
+      }
 
-    if (
-      previousProjectPath &&
-      normalizedProjectPath &&
-      previousProjectPath !== normalizedProjectPath
-    ) {
-      resetPersistedServicePanelState();
-      setLogs([]);
-      setActiveServiceId(DEFAULT_PROVIDER_ID);
-      setActiveTaskId(DEFAULT_TASK_ID);
-      setActiveProviderId(DEFAULT_PROVIDER_ID);
-      setServiceStatus("idle");
-      setBusyServiceId(null);
-      setGithubRepoName("");
-      setGithubVisibility("public");
-      setGithubRepoState(null);
-      setDetectedProjectKind("");
-      setDetectedProjectTemplate(null);
-      setShowSupabaseMoreInfo(false);
-    }
+      if (
+        previousProjectPath &&
+        normalizedProjectPath &&
+        previousProjectPath !== normalizedProjectPath
+      ) {
+        resetPersistedServicePanelState();
+        setLogsByService({});
+        setActiveServiceId(DEFAULT_PROVIDER_ID);
+        setActiveTaskId(DEFAULT_TASK_ID);
+        setActiveProviderId(DEFAULT_PROVIDER_ID);
+        setServiceStatus("idle");
+        setBusyServiceId(null);
+        setGithubRepoName("");
+        setGithubVisibility("public");
+        setGithubRepoState(null);
+        setDetectedProjectKind("");
+        setDetectedProjectTemplate(null);
+        setShowSupabaseMoreInfo(false);
+      }
 
     lastProjectPathRef.current = normalizedProjectPath;
   }, [projectPath]);
@@ -503,41 +512,55 @@ export default function ServicePanel({ projectPath }) {
     };
   }, [projectPath]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ block: "end" });
     }
-  }, [logs]);
+  }, [activeLogs]);
 
   function appendLog(kind, line) {
-    setLogs((prev) => [
+    const targetServiceId = activeProviderId || DEFAULT_PROVIDER_ID;
+
+    setLogsByService((prev) => ({
       ...prev,
-      {
-        kind,
-        line,
-        ts: Date.now() + Math.random(),
-      },
-    ]);
+      [targetServiceId]: [
+        ...(prev[targetServiceId] || []),
+        {
+          kind,
+          line,
+          ts: Date.now() + Math.random(),
+        },
+      ],
+    }));
   }
 
   function appendLogSection(title) {
-    setLogs((prev) => [
-      ...prev,
-      ...(prev.length > 0
-        ? [
-            {
-              kind: "separator",
-              line: "────────────────────────────────────────",
-              ts: Date.now() + Math.random(),
-            },
-          ]
-        : []),
-      {
-        kind: "section",
-        line: title,
-        ts: Date.now() + Math.random(),
-      },
-    ]);
+    const targetServiceId = activeProviderId || DEFAULT_PROVIDER_ID;
+
+    setLogsByService((prev) => {
+      const existingLogs = prev[targetServiceId] || [];
+
+      return {
+        ...prev,
+        [targetServiceId]: [
+          ...existingLogs,
+          ...(existingLogs.length > 0
+            ? [
+                {
+                  kind: "separator",
+                  line: "────────────────────────────────────────",
+                  ts: Date.now() + Math.random(),
+                },
+              ]
+            : []),
+          {
+            kind: "section",
+            line: title,
+            ts: Date.now() + Math.random(),
+          },
+        ],
+      };
+    });
   }
 
   function selectTask(taskId) {
@@ -1362,13 +1385,12 @@ export default function ServicePanel({ projectPath }) {
                 fontSize: "13px",
                 color: "#d4d4d8",
               }}
-            >
-              {logs.length === 0 ? (
+            >              {activeLogs.length === 0 ? (
                 <div className="command-runner-logs__empty">
                   No service activity yet.
                 </div>
               ) : (
-                logs.map((entry) => {
+                activeLogs.map((entry) => {
                   const isSection = entry.kind === "section";
                   const isSeparator = entry.kind === "separator";
 
