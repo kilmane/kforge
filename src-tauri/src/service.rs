@@ -702,10 +702,21 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
     }
 
     if supabase_config_exists {
+        emit_log(app, "stdout", "Local Supabase config detected.");
         emit_log(
             app,
             "stdout",
-            "Local Supabase setup looks available. Typical local URL: http://127.0.0.1:54321",
+            "Typical local Project URL: http://127.0.0.1:54321",
+        );
+        emit_log(
+            app,
+            "stdout",
+            "Local Studio is usually available at: http://127.0.0.1:54323",
+        );
+        emit_log(
+            app,
+            "stdout",
+            "If this app should connect to the local stack, use the values reported by `supabase start`.",
         );
     } else {
         emit_log(
@@ -722,25 +733,46 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
     );
 
     if !env_file_exists {
-        emit_log(
-            app,
-            "status",
-            "Supabase setup is not complete yet. Start by creating a .env file, then add your Supabase connection values.",
-        );
-        emit_log(
-            app,
-            "stdout",
-            "Next suggested action: Click \"Create .env file\". This creates the local env file where this project will store its Supabase connection values.",
-        );
+        if supabase_config_exists {
+            emit_log(
+                app,
+                "status",
+                "Local Supabase config was found. Start by creating a .env file, then add the local connection values this app should use.",
+            );
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Click \"Create .env file\". Then add the local Project URL and local publishable/public key from your running local Supabase stack.",
+            );
+        } else {
+            emit_log(
+                app,
+                "status",
+                "Supabase setup is not complete yet. Start by creating a .env file, then add your Supabase connection values.",
+            );
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Click \"Create .env file\". This creates the local env file where this project will store its Supabase connection values.",
+            );
+        }
         return Ok(());
     }
 
     if !has_any_complete_env_pair {
-        emit_log(
-            app,
-            "status",
-            "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
-        );
+        if supabase_config_exists {
+            emit_log(
+                app,
+                "status",
+                "Local Supabase config was found, but this app still needs connection values in .env. Add the local Project URL and local publishable/public key. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+            );
+        } else {
+            emit_log(
+                app,
+                "status",
+                "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+            );
+        }
 
         if !has_supabase_js {
             emit_log(
@@ -759,11 +791,19 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
         return Ok(());
     }
 
-    emit_log(
-        app,
-        "status",
-        "Supabase configuration looks good. Your project has connection values ready. The next steps are to make sure the Supabase client library is installed and the Supabase client file exists.",
-    );
+    if supabase_config_exists {
+        emit_log(
+            app,
+            "status",
+            "Local Supabase connection values look available for this project. The next steps are to make sure the Supabase client library is installed and the Supabase client file exists.",
+        );
+    } else {
+        emit_log(
+            app,
+            "status",
+            "Supabase configuration looks good. Your project has connection values ready. The next steps are to make sure the Supabase client library is installed and the Supabase client file exists.",
+        );
+    }
 
     if !has_supabase_js {
         emit_log(
@@ -950,16 +990,25 @@ pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), Stri
 #[tauri::command]
 pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;
+    let supabase_config_exists = project_dir.join("supabase").join("config.toml").exists();
 
     let created = ensure_env_file_from_example(&project_dir)?;
 
     if created {
         emit_log(&app, "stdout", "Created .env file from .env.example");
-        emit_log(
-            &app,
-            "status",
-            ".env file is ready. Next, add your Supabase connection values.",
-        );
+        if supabase_config_exists {
+            emit_log(
+                &app,
+                "status",
+                ".env file is ready. Next, add the local Supabase connection values this app should use.",
+            );
+        } else {
+            emit_log(
+                &app,
+                "status",
+                ".env file is ready. Next, add your Supabase connection values.",
+            );
+        }
         emit_log(
             &app,
             "stdout",
@@ -967,11 +1016,19 @@ pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<
         );
     } else {
         emit_log(&app, "stdout", ".env already exists. No changes made.");
-        emit_log(
-            &app,
-            "status",
-            ".env already exists. Update it with your Supabase connection values if needed.",
-        );
+        if supabase_config_exists {
+            emit_log(
+                &app,
+                "status",
+                ".env already exists. Update it with the local Supabase connection values if needed.",
+            );
+        } else {
+            emit_log(
+                &app,
+                "status",
+                ".env already exists. Update it with your Supabase connection values if needed.",
+            );
+        }
         emit_log(
             &app,
             "stdout",
@@ -1080,6 +1137,7 @@ pub fn supabase_quick_connect(app: AppHandle, project_path: String) -> Result<()
 
     let result = (|| -> Result<(), String> {
         let project_dir = validate_project_path(&project_path)?;
+        let supabase_config_exists = project_dir.join("supabase").join("config.toml").exists();
 
         emit_log(&app, "status", "Running Supabase quick connect...");
         emit_log(&app, "stdout", "Checking project setup...");
@@ -1183,11 +1241,19 @@ pub fn supabase_quick_connect(app: AppHandle, project_path: String) -> Result<()
         }
 
         emit_log(&app, "status", "Supabase quick connect completed.");
-        emit_log(
-            &app,
-            "stdout",
-            "Next step: open your Supabase project dashboard, copy the Project URL and anon public key, then paste them into this project's .env file.",
-        );
+        if supabase_config_exists {
+            emit_log(
+                &app,
+                "stdout",
+                "Next step: if this app should use your local Supabase stack, add the local Project URL and local publishable/public key to this project's .env file. Use the values reported by `supabase start`.",
+            );
+        } else {
+            emit_log(
+                &app,
+                "stdout",
+                "Next step: open your Supabase project dashboard, copy the Project URL and anon public key, then paste them into this project's .env file.",
+            );
+        }
         Ok(())
     })();
 
