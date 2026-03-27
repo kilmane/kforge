@@ -2,7 +2,7 @@
 
 # User Guide Notes (development capture)
 
-Last Updated: March 25th, 2026
+Last Updated: March 27th, 2026
 
 Location:
 D:\kforge\docs-internal\user-guide-notes.md
@@ -25,7 +25,7 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-Open Folder → Explore files  
+Open Folder → Explore files
 Preview → Focus on running app
 
 ---
@@ -44,7 +44,7 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-Project structure → coarse project type  
+Project structure → coarse project type
 package.json signals → framework identification when possible
 
 This allows KForge to both:
@@ -64,16 +64,16 @@ KForge automatically runs a **static preview server**.
 
 Workflow:
 
-Open Folder  
-Preview  
+Open Folder
+Preview
 Open
 
 No dependency installation is required.
 
 Example static project:
 
-index.html  
-styles.css  
+index.html
+styles.css
 script.js
 
 For static-only projects the **Install** step is skipped.
@@ -90,19 +90,19 @@ package.json
 
 Workflow:
 
-Open Folder  
-Install  
-Preview  
+Open Folder
+Install
+Preview
 Open
 
 Typical commands executed:
 
-pnpm install  
+pnpm install
 pnpm dev
 
 Currently recognized framework templates include:
 
-Vite + React  
+Vite + React
 Next.js
 
 ---
@@ -113,8 +113,8 @@ Generate creates a **starter template project** inside the opened workspace fold
 
 Current templates supported:
 
-Static HTML/CSS/JS  
-Vite + React  
+Static HTML/CSS/JS
+Vite + React
 Next.js
 
 Template generation is driven by the **Template Registry**.
@@ -125,14 +125,14 @@ Template generation is driven by the **Template Registry**.
 
 Creates a simple project:
 
-index.html  
-styles.css  
+index.html
+styles.css
 script.js
 
 Workflow:
 
-Generate  
-Preview  
+Generate
+Preview
 Open
 
 No dependency installation required.
@@ -177,7 +177,7 @@ Not required for static projects.
 
 Preview starts the project runtime.
 
-Static → internal static server  
+Static → internal static server
 Framework → pnpm dev
 
 Preview logs stream into the Preview Runner panel.
@@ -190,8 +190,8 @@ Open launches the running preview in the browser.
 
 Example URLs:
 
-http://localhost:3000  
-http://127.0.0.1:4173
+[http://localhost:3000](http://localhost:3000)
+[http://127.0.0.1:4173](http://127.0.0.1:4173)
 
 ---
 
@@ -217,6 +217,26 @@ Current providers visible in development include:
 The panel is task-first and only shows one active provider at a time.
 
 This keeps the surface calmer as integrations expand.
+
+---
+
+# Services Activity Logs
+
+Each service now maintains **its own activity history**.
+
+Example:
+
+Services → GitHub
+Shows only GitHub activity.
+
+Services → Supabase
+Shows only Supabase activity.
+
+Switching between providers does **not mix logs**.
+
+Returning to a service restores its previous log history.
+
+This behavior was introduced in **Phase 4.9.1 — ServicePanel log isolation**.
 
 ---
 
@@ -253,8 +273,8 @@ KForge does not expose advanced hosting dashboards inside the app.
 
 The deploy workflow is intended to feel like:
 
-Local project  
-→ GitHub  
+Local project
+→ GitHub
 → Deploy
 
 ---
@@ -279,26 +299,26 @@ Current examples:
 
 ### Static HTML
 
-Project type:  
+Project type:
 Static HTML
 
-Recommendation:  
+Recommendation:
 Good fit: Netlify or Vercel
 
 ### Vite + React
 
-Project type:  
+Project type:
 Vite + React
 
-Recommendation:  
+Recommendation:
 Good fit: Netlify or Vercel
 
 ### Next.js
 
-Project type:  
+Project type:
 Next.js
 
-Recommendation:  
+Recommendation:
 Recommended: Vercel
 
 This is guidance, not a restriction.
@@ -307,61 +327,42 @@ Users can still choose either provider.
 
 ---
 
-## Provider Hint Style
-
-Deploy hint text stays short and calm.
-
-Examples:
-
-* Good fit for static sites.
-* Good fit for this project.
-* Recommended for Next.js projects.
-* Next.js usually fits best on Vercel.
-
-This keeps KForge helpful without turning the deploy surface into a hosting tutorial.
-
----
-
 # Services → Backend → Supabase
 
-Supabase is a backend platform that can provide a hosted database, authentication, storage, and API services for your project.
+Supabase provides:
 
-In KForge, the Supabase panel is designed to help a beginner connect a project without having to remember every file and value manually.
+* hosted database
+* authentication
+* storage
+* API services
 
-The current Supabase workflow is:
+KForge helps connect a project to Supabase through **guided setup assistance**.
 
-Open Folder  
-Services  
-Backend  
+Workflow:
+
+Open Folder
+Services
+Backend
 Supabase
-
-From there, KForge provides **guided setup assistance**.
 
 ---
 
-# Supabase Panel Layout
+# Supabase Quick Connect
 
-The Supabase panel is intentionally split into two layers:
+KForge now includes **Supabase Quick Connect**.
 
-### Compact top guidance
+Quick Connect performs a guided setup check and helps prepare the project for Supabase usage.
 
-The top of the panel stays short and direct.
+Quick Connect verifies:
 
-It tells the user to start with:
+* environment variables
+* Supabase client library
+* Supabase configuration
+* client file presence
 
-**"Check Supabase setup"**
+If issues are detected, the panel suggests the next step required.
 
-This keeps the first step obvious and reduces visual noise.
-
-### Expandable extra help
-
-Additional explanation is available through a:
-
-**More info**
-
-toggle.
-
-This allows beginners to open extra guidance when needed without forcing dense text into the main panel all the time.
+This allows beginners to connect Supabase **without remembering the full setup process**.
 
 ---
 
@@ -369,44 +370,57 @@ This allows beginners to open extra guidance when needed without forcing dense t
 
 The Supabase panel acts as a **guided checklist**.
 
-Instead of only reporting diagnostics, KForge helps users complete the next steps required to connect their app.
-
 Typical actions available:
 
+* Quick Connect
 * Check Supabase setup
 * Create `.env` file
 * Install Supabase client
 * Create Supabase client file
-* Open Supabase
+* Open Supabase dashboard
 
 ---
 
 # What the Supabase check looks for
 
-When the user runs:
-
-**Check Supabase setup**
-
-KForge checks the current project for common Supabase connection signs.
-
-Current checks include:
+When Quick Connect or **Check Supabase setup** runs, KForge inspects the project for:
 
 * environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
 * whether `SUPABASE_URL` has a value
 * whether `SUPABASE_ANON_KEY` has a value
 * whether `VITE_SUPABASE_URL` has a value
 * whether `VITE_SUPABASE_ANON_KEY` has a value
-* local Supabase config at `supabase/config.toml`
+* local Supabase configuration (`supabase/config.toml`)
 * Supabase client library presence in `package.json`
 * existence of a client file such as `src/lib/supabase.js`
 
-Empty entries such as:
+Empty values such as:
 
-`SUPABASE_URL=`
+SUPABASE_URL=
 
-are treated as **not set**.
+are treated as **not configured**.
 
-This gives the user a quick picture of whether the project is ready to connect.
+---
+
+# Cloud vs Local Supabase
+
+KForge supports both:
+
+### Cloud Supabase
+
+Typical project URL:
+
+[https://your-project.supabase.co](https://your-project.supabase.co)
+
+Connection values are copied from the Supabase dashboard.
+
+### Local Supabase
+
+Local development may use:
+
+[http://127.0.0.1:54321](http://127.0.0.1:54321)
+
+If a local Supabase project is detected, KForge recognizes the configuration automatically.
 
 ---
 
@@ -414,40 +428,36 @@ This gives the user a quick picture of whether the project is ready to connect.
 
 ## SUPABASE_URL
 
-`SUPABASE_URL` is the address of your Supabase project.
+The address of the Supabase project.
 
 Cloud example:
 
-https://your-project.supabase.co
+[https://your-project.supabase.co](https://your-project.supabase.co)
 
 Local example:
 
-http://127.0.0.1:54321
+[http://127.0.0.1:54321](http://127.0.0.1:54321)
 
 ---
 
 ## SUPABASE_ANON_KEY
 
-`SUPABASE_ANON_KEY` is the public API key your frontend uses to talk to Supabase.
+Public API key used by frontend applications.
 
-This key is normally copied from the Supabase dashboard.
+This key is copied from the Supabase dashboard.
 
 ---
 
 ## VITE_SUPABASE variables
 
-For **Vite-based frontend projects**, browser code usually reads:
-
-```
+Vite-based frontend apps typically use:
 
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 
-```
+These variables are exposed to the browser by Vite.
 
-These are environment variables exposed to the browser by Vite.
-
-KForge checks for these as well.
+KForge checks for both naming styles.
 
 ---
 
@@ -457,19 +467,15 @@ KForge helps with both files.
 
 ### .env.example
 
-If `.env.example` does not exist, KForge can generate one containing Supabase connection placeholders.
+If `.env.example` does not exist, KForge can generate one with Supabase placeholders.
 
-### Create .env file
+### Create `.env` file
 
-The panel includes:
+If `.env` does not exist:
 
-**Create `.env` file**
+KForge copies `.env.example` → `.env`.
 
-If `.env` does not exist, KForge copies `.env.example` to `.env`.
-
-If `.env` already exists, KForge leaves it unchanged.
-
-This removes a common beginner friction point.
+If `.env` already exists, it is not overwritten.
 
 ---
 
@@ -477,37 +483,23 @@ This removes a common beginner friction point.
 
 The panel includes:
 
-**Install Supabase client**
+Install Supabase client
 
 This runs:
 
 pnpm add @supabase/supabase-js
 
-This installs the official Supabase JavaScript client used by frontend applications.
-
-KForge now runs this through a shell path that works more reliably on Windows.
-
-If installation fails, the log now shows clearer command output.
+The installation is executed through a shell path designed to work reliably on Windows.
 
 ---
 
 # Create Supabase client file
 
-The panel also includes:
-
-**Create Supabase client file**
-
-This generates a client file such as:
-
-```
+The panel can generate a client file:
 
 src/lib/supabase.js
 
-```
-
-Example content:
-
-```
+Example:
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -519,49 +511,22 @@ import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-```
-
 If the file already exists, KForge leaves it unchanged.
-
-Terminology is now kept consistent as **Supabase client file**.
-
----
-
-# Beginner Supabase Flow
-
-A beginner-friendly connection flow is now:
-
-1. Open the project in KForge
-2. Services → Backend → Supabase
-3. Click **Check Supabase setup**
-4. Click **Create .env file** if needed
-5. Copy connection values from Supabase
-6. Paste values into `.env`
-7. Click **Install Supabase client**
-8. Click **Create Supabase client file**
-9. Import the client into your app code
 
 ---
 
 # Supabase Activity Log
 
-The Supabase activity log is now structured for readability.
+Supabase actions write to the **Supabase service log**.
 
-Behavior:
+Log behavior:
 
-* each action starts a new visible log section
+* actions start a visible log section
 * sections are separated visually
-* action labels inside quotes are highlighted
-* the newest action block is easier to locate
+* timestamps are included
+* commands are easier to distinguish
 
-This helps users distinguish between:
-
-* **Check Supabase setup**
-* **Create .env file**
-* **Install Supabase client**
-* **Create Supabase client file**
-
-without losing context inside one long stream of text.
+This improves readability when running multiple setup actions.
 
 ---
 
@@ -571,9 +536,7 @@ The panel includes:
 
 Open Supabase
 
-This opens the Supabase dashboard in the browser.
-
-This is where users normally copy:
+This opens the Supabase dashboard where users normally copy:
 
 * project URL
 * anon key
@@ -582,10 +545,10 @@ This is where users normally copy:
 
 # New Project
 
-New Project supports both:
+New Project supports:
 
-* create a local project
-* import from GitHub
+* creating a local project
+* importing from GitHub
 
 Import from GitHub clones the selected repository into the chosen parent folder and opens it automatically in KForge.
 
@@ -607,6 +570,7 @@ KForge should avoid:
 * noisy debug-heavy surfaces
 * overwhelming dashboards
 * provider-specific complexity walls
-```
+
+---
 
 

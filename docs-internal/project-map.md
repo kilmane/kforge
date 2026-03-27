@@ -1,12 +1,13 @@
 
+
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: v17  
-Updated: 25/03/2026
+Version: v18
+Updated: 27/03/2026
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -123,9 +124,9 @@ Handles:
 
 Runtime flow:
 
-detect tool  
-→ consent  
-→ handler execution  
+detect tool
+→ consent
+→ handler execution
 → result appended
 
 ---
@@ -385,6 +386,62 @@ OpenAI remains registered in the service layer for future integration work.
 
 ---
 
+## ServicePanel Responsibilities
+
+Primary file:
+
+src/runtime/ServicePanel.jsx
+
+ServicePanel currently owns:
+
+* task-grouped service selection
+* active provider selection
+* provider-aware action rendering
+* provider-specific activity logs
+* persisted service-panel UI state
+* GitHub action surface
+* deploy guidance surface
+* Supabase guided setup surface
+
+The panel is task-first, but runtime behavior is provider-aware.
+
+---
+
+## ServicePanel Log Model
+
+As of Phase 4.9.1, ServicePanel log persistence is **provider-keyed** rather than using one shared array.
+
+Conceptual structure:
+
+```javascript
+{
+  github: [],
+  supabase: [],
+  stripe: [],
+}
+```
+
+This state is persisted as:
+
+logsByService
+
+This replaced the earlier shared:
+
+logs
+
+Result:
+
+* each provider has its own activity history
+* switching providers does not mix logs
+* returning to a provider restores that provider's earlier log history
+
+Logs still reset when:
+
+* workspace resets
+* project root changes
+
+---
+
 # 5a Supabase Adapter
 
 The Supabase adapter is the **first backend service integration** attached to the Services layer.
@@ -405,11 +462,12 @@ Provide a beginner-friendly connection workflow for Supabase-backed projects.
 
 ## Supabase Adapter Responsibilities
 
-The adapter now performs **both inspection and guided setup actions**.
+The adapter now performs **inspection, quick-connect guidance, and guided setup actions**.
 
 Capabilities include:
 
 * Supabase readiness inspection
+* Quick Connect entry action
 * environment variable detection
 * detection of empty versus non-empty env values
 * `.env.example` generation
@@ -456,12 +514,62 @@ Local Supabase project:
 Supabase client library:
 
 * `@supabase/supabase-js`
-* `supabase` dependency in `package.json`
+* Supabase dependency signals in `package.json`
 
 Supabase client file candidates:
 
 * `src/lib/supabase.js`
 * `src/lib/supabase.ts`
+
+---
+
+## Supabase Quick Connect
+
+Phase 4.9 adds a faster guided entry point:
+
+Quick Connect
+
+Command:
+
+supabase_quick_connect
+
+Purpose:
+
+Let the user start from:
+
+I want Supabase
+→ inspect current setup
+→ guide the next required step
+
+This reduces setup friction for beginners and vibe coders.
+
+Quick Connect is layered on top of the existing Supabase checks and actions rather than replacing them.
+
+---
+
+## Cloud and Local Supabase Coverage
+
+The Supabase lane supports both:
+
+### Cloud Supabase
+
+Typical connection sources:
+
+* project URL from Supabase dashboard
+* anon key from Supabase dashboard
+
+Typical URL shape:
+
+* `https://your-project.supabase.co`
+
+### Local Supabase
+
+Typical detection signals:
+
+* `supabase/config.toml`
+* local URL such as `http://127.0.0.1:54321`
+
+This keeps the backend lane useful for both hosted and local workflows.
 
 ---
 
@@ -472,17 +580,15 @@ If `.env.example` does not exist:
 KForge creates a **template file** containing:
 
 ```
-
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
-
 ```
 
 The user can then run:
 
-Create `.env file`
+Create `.env` file
 
 This copies:
 
@@ -529,8 +635,8 @@ Provide a simple reusable Supabase connection wrapper for frontend code.
 Typical structure:
 
 createClient(
-  import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY
+import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL,
+import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY
 )
 
 If the client file already exists, KForge leaves it unchanged.
@@ -547,11 +653,11 @@ The Supabase panel is intentionally split into two layers.
 
 ### Compact first-step guidance
 
-The top of the panel emphasizes the first action:
+The panel emphasizes a clear first action:
 
 "Check Supabase setup"
 
-This keeps the panel calm and reduces noise.
+Quick Connect is available as the faster guided route for users who want a more streamlined setup pass.
 
 ### Expandable extra help
 
@@ -567,12 +673,15 @@ This keeps the default panel compact while still supporting beginners.
 
 ## Supabase Activity Log
 
-The Supabase activity log is structured for readability.
+Supabase activity is rendered inside the Supabase provider log in:
+
+src/runtime/ServicePanel.jsx
 
 Current behavior:
 
 * each user action begins a new visible log section
 * log sections are separated visually
+* timestamps are included
 * quoted action labels are highlighted
 * repeated Supabase actions are easier to distinguish from older output
 
@@ -582,10 +691,9 @@ Examples of highlighted actions:
 * "Create .env file"
 * "Install Supabase client"
 * "Create Supabase client file"
+* "Supabase Quick Connect"
 
-This is handled inside:
-
-src/runtime/ServicePanel.jsx
+This keeps the flow readable without requiring a wizard UI.
 
 ---
 
@@ -597,19 +705,43 @@ Open Supabase
 
 This opens:
 
-https://supabase.com/dashboard
+[https://supabase.com/dashboard](https://supabase.com/dashboard)
 
 This allows the user to easily copy connection values.
 
 ---
 
-# 5b Smart Deploy Guidance
+# 5b GitHub Adapter
+
+Primary implementation:
+
+src-tauri/src/service.rs
+
+Primary UI surface:
+
+src/runtime/ServicePanel.jsx
+
+GitHub capabilities include:
+
+* detect whether current folder is already a Git repo
+* detect whether a remote exists
+* publish local project to a new GitHub repository
+* open current repository on GitHub in browser
+* pull latest changes into an existing local repo
+* push local changes to GitHub
+* support GitHub import during New Project flow
+
+Authentication is delegated to GitHub CLI rather than managed directly by KForge.
+
+---
+
+# 5c Smart Deploy Guidance
 
 Primary file:
 
 src/runtime/ServicePanel.jsx
 
-ServicePanel now consumes shared project identity from:
+ServicePanel consumes shared project identity from:
 
 previewDetectTemplates(...)
 
@@ -666,55 +798,63 @@ Focus mode is a surface promotion, not a resized dock.
 
 ## Standard Local Development
 
-Open folder  
-→ Generate optional template  
-→ Install  
-→ Preview  
-→ Open  
+Open folder
+→ Generate optional template
+→ Install
+→ Preview
+→ Open
 → Iterate
 
 ## AI Editing Loop
 
-Open folder  
-→ prompt AI  
-→ AI edits files  
+Open folder
+→ prompt AI
+→ AI edits files
 → preview / install / rerun
 
 ## GitHub Flow
 
-Open folder  
-→ Services  
-→ Publish  
-→ Push changes  
+Open folder
+→ Services
+→ Publish
+→ Push changes
 → Open on GitHub or Pull latest
 
 ## Deploy Flow
 
-Open folder  
-→ Services  
-→ Deploy  
-→ choose Vercel or Netlify  
+Open folder
+→ Services
+→ Deploy
+→ choose Vercel or Netlify
 → follow provider browser flow
 
 ## Smart Deploy Flow
 
-Open folder  
-→ project identity detected through preview pipeline  
-→ Services → Deploy  
-→ recommendation shown based on template/project type  
+Open folder
+→ project identity detected through preview pipeline
+→ Services → Deploy
+→ recommendation shown based on template/project type
 → provider opened in browser
 
 ## Backend Flow (Supabase)
 
-Open folder  
-→ Services  
-→ Backend → Supabase  
-→ "Check Supabase setup"  
-→ "Create .env file" if needed  
-→ Add connection values  
-→ "Install Supabase client"  
-→ "Create Supabase client file"  
+Open folder
+→ Services
+→ Backend → Supabase
+→ Quick Connect or "Check Supabase setup"
+→ "Create .env file" if needed
+→ Add connection values
+→ "Install Supabase client"
+→ "Create Supabase client file"
 → import client in application code
+
+## Service Log Flow
+
+Open folder
+→ use a provider inside Services
+→ logs append to that provider only
+→ switch providers without log mixing
+→ return to provider and see earlier provider history
 
 ---
 
@@ -734,7 +874,9 @@ Current stable milestone includes:
 * smart deploy guidance
 * Supabase backend integration
 * guided Supabase setup actions
+* Supabase Quick Connect
 * Supabase polish for calmer UX and clearer log flow
+* per-service Services log isolation
 
 This project map should be updated whenever:
 
@@ -742,6 +884,6 @@ This project map should be updated whenever:
 * registry responsibilities change
 * a new runtime lane appears
 * deploy recommendation mappings expand
-```
+* ServicePanel persistence structure changes
 
 
