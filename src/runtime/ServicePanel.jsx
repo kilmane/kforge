@@ -285,6 +285,10 @@ export default function ServicePanel({ projectPath }) {
   const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
   const [showSupabaseMoreInfo, setShowSupabaseMoreInfo] = useState(false);
   const logEndRef = useRef(null);
+  const activeProviderIdRef = useRef(
+    persistedServicePanelState.activeProviderId || DEFAULT_PROVIDER_ID,
+  );
+  const busyServiceIdRef = useRef(persistedServicePanelState.busyServiceId);
   const lastProjectPathRef = useRef(
     projectPath && String(projectPath).trim() ? String(projectPath).trim() : "",
   );
@@ -318,7 +322,13 @@ export default function ServicePanel({ projectPath }) {
   useEffect(() => {
     persistedServicePanelState.activeProviderId = activeProviderId;
   }, [activeProviderId]);
+  useEffect(() => {
+    activeProviderIdRef.current = activeProviderId;
+  }, [activeProviderId]);
 
+  useEffect(() => {
+    busyServiceIdRef.current = busyServiceId;
+  }, [busyServiceId]);
   useEffect(() => {
     persistedServicePanelState.serviceStatus = serviceStatus;
   }, [serviceStatus]);
@@ -348,7 +358,10 @@ export default function ServicePanel({ projectPath }) {
       unlistenLogs = await subscribeServiceLogs((payload) => {
         if (cancelled) return;
         setLogsByService((prev) => {
-          const targetServiceId = activeProviderId || DEFAULT_PROVIDER_ID;
+          const targetServiceId =
+            busyServiceIdRef.current ||
+            activeProviderIdRef.current ||
+            DEFAULT_PROVIDER_ID;
           return {
             ...prev,
             [targetServiceId]: [
@@ -401,43 +414,43 @@ export default function ServicePanel({ projectPath }) {
 
     const previousProjectPath = lastProjectPathRef.current;
 
-      if (!normalizedProjectPath) {
-        resetPersistedServicePanelState();
-        setLogsByService({});
-        setActiveServiceId(DEFAULT_PROVIDER_ID);
-        setActiveTaskId(DEFAULT_TASK_ID);
-        setActiveProviderId(DEFAULT_PROVIDER_ID);
-        setServiceStatus("idle");
-        setBusyServiceId(null);
-        setGithubRepoName("");
-        setGithubVisibility("public");
-        setGithubRepoState(null);
-        setDetectedProjectKind("");
-        setDetectedProjectTemplate(null);
-        setShowSupabaseMoreInfo(false);
-        lastProjectPathRef.current = "";
-        return;
-      }
+    if (!normalizedProjectPath) {
+      resetPersistedServicePanelState();
+      setLogsByService({});
+      setActiveServiceId(DEFAULT_PROVIDER_ID);
+      setActiveTaskId(DEFAULT_TASK_ID);
+      setActiveProviderId(DEFAULT_PROVIDER_ID);
+      setServiceStatus("idle");
+      setBusyServiceId(null);
+      setGithubRepoName("");
+      setGithubVisibility("public");
+      setGithubRepoState(null);
+      setDetectedProjectKind("");
+      setDetectedProjectTemplate(null);
+      setShowSupabaseMoreInfo(false);
+      lastProjectPathRef.current = "";
+      return;
+    }
 
-      if (
-        previousProjectPath &&
-        normalizedProjectPath &&
-        previousProjectPath !== normalizedProjectPath
-      ) {
-        resetPersistedServicePanelState();
-        setLogsByService({});
-        setActiveServiceId(DEFAULT_PROVIDER_ID);
-        setActiveTaskId(DEFAULT_TASK_ID);
-        setActiveProviderId(DEFAULT_PROVIDER_ID);
-        setServiceStatus("idle");
-        setBusyServiceId(null);
-        setGithubRepoName("");
-        setGithubVisibility("public");
-        setGithubRepoState(null);
-        setDetectedProjectKind("");
-        setDetectedProjectTemplate(null);
-        setShowSupabaseMoreInfo(false);
-      }
+    if (
+      previousProjectPath &&
+      normalizedProjectPath &&
+      previousProjectPath !== normalizedProjectPath
+    ) {
+      resetPersistedServicePanelState();
+      setLogsByService({});
+      setActiveServiceId(DEFAULT_PROVIDER_ID);
+      setActiveTaskId(DEFAULT_TASK_ID);
+      setActiveProviderId(DEFAULT_PROVIDER_ID);
+      setServiceStatus("idle");
+      setBusyServiceId(null);
+      setGithubRepoName("");
+      setGithubVisibility("public");
+      setGithubRepoState(null);
+      setDetectedProjectKind("");
+      setDetectedProjectTemplate(null);
+      setShowSupabaseMoreInfo(false);
+    }
 
     lastProjectPathRef.current = normalizedProjectPath;
   }, [projectPath]);
@@ -512,14 +525,17 @@ export default function ServicePanel({ projectPath }) {
     };
   }, [projectPath]);
 
-    useEffect(() => {
+  useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ block: "end" });
     }
   }, [activeLogs]);
 
   function appendLog(kind, line) {
-    const targetServiceId = activeProviderId || DEFAULT_PROVIDER_ID;
+    const targetServiceId =
+      busyServiceIdRef.current ||
+      activeProviderIdRef.current ||
+      DEFAULT_PROVIDER_ID;
 
     setLogsByService((prev) => ({
       ...prev,
@@ -1385,7 +1401,9 @@ export default function ServicePanel({ projectPath }) {
                 fontSize: "13px",
                 color: "#d4d4d8",
               }}
-            >              {activeLogs.length === 0 ? (
+            >
+              {" "}
+              {activeLogs.length === 0 ? (
                 <div className="command-runner-logs__empty">
                   No service activity yet.
                 </div>
