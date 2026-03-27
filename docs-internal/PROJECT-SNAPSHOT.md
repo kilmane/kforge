@@ -1210,6 +1210,124 @@ Possible future backend improvements:
 
 ---
 
+# ⚓ Captain’s Law — Safe Editing Workflow
+
+These workflow rules exist to keep development **fast, safe, and predictable** across all ships.
+
+They apply to all future phases unless explicitly overridden.
+
+---
+
+## 1 — Locate Before Editing
+
+Always locate the relevant code first using:
+
+```
+rg -n "<search phrase>" <path>
+```
+
+Never edit based on memory or assumptions.
+
+---
+
+## 2 — Inspect Live Code Blocks
+
+Before modifying a file, inspect the current code block using:
+
+PowerShell example:
+
+```
+Get-Content <file> | Select-Object -Skip <line> -First <count>
+```
+
+This prevents accidental edits against outdated assumptions.
+
+---
+
+## 3 — Prefer Full File Replacement (When Safe)
+
+If a file is small enough to review comfortably:
+
+Replace the **entire file**.
+
+Advantages:
+
+* fewer merge mistakes
+* clearer changes
+* easier verification
+
+Large files should use **precise block replacement instead**.
+
+---
+
+## 4 — Replace Exact Blocks Only
+
+When partial edits are required:
+
+1. extract the exact current block
+2. modify only that block
+3. paste the corrected block back
+
+Never guess surrounding code.
+
+---
+
+## 5 — Verify Immediately
+
+After every edit, verify changes using:
+
+```
+rg -n "<keyword>" <file>
+```
+
+Confirm the expected code is present and old code is gone.
+
+---
+
+## 6 — Commit Frequently
+
+Stable progress should be committed regularly:
+
+```
+git add .
+git commit -m "<phase description>"
+git push
+```
+
+---
+
+## 7 — Create Restore Points
+
+When reaching a stable milestone, create a tag:
+
+```
+git tag <milestone-tag>
+git push origin <milestone-tag>
+```
+
+This creates a reliable rollback point.
+
+---
+
+## 8 — One Step At A Time
+
+Development proceeds **incrementally**.
+
+Rules:
+
+* no jumping ahead
+* verify each change
+* test before continuing
+
+This discipline keeps KForge stable even during rapid iteration.
+
+---
+
+End of Captain’s Law.
+
+
+---
+
 # 🚢 Phase Boundary
 
 Phase 4.9 introduced **Supabase Quick Connect** and improved the usability of guided backend onboarding.
