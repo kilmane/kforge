@@ -1880,6 +1880,7 @@ export default function App() {
       setAiTemperature={setAiTemperature}
       aiMaxTokens={aiMaxTokens}
       setAiMaxTokens={setAiMaxTokens}
+      runAi={runAi}
       handleSendChat={handleSendChat}
       handleAiTest={handleAiTest}
       guardrailText={guardrailText}

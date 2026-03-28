@@ -21,6 +21,8 @@ import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
 import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
+import { runAgent } from "../agent/agentRunner.js";
+import { getToolSchemas } from "../tools/toolSchema.js";
 
 /**
  * ✅ Global caches to prevent repeated tool prompts when AiPanel is collapsed/re-opened.
@@ -274,7 +276,104 @@ function buildToolBatchDoneMessage(calls) {
   const total = Array.isArray(calls) ? calls.length : 0;
   return `Done — applied ${total} project ${total === 1 ? "change" : "changes"}.`;
 }
+function buildAgentConversationInput(messages, tools, maxTurns = 20) {
+  const relevant = (Array.isArray(messages) ? messages : [])
+    .filter((m) => {
+      const role = String(m?.role || "").trim();
+      return role === "user" || role === "assistant" || role === "system";
+    })
+    .slice(-Math.max(1, maxTurns));
 
+  const toolLines = (Array.isArray(tools) ? tools : []).map((tool) => {
+    const name = String(tool?.name || "").trim();
+    const description = String(tool?.description || "").trim();
+    return `- ${name}: ${description}`;
+  });
+
+  const transcriptLines = relevant
+    .map((m) => {
+      const role = String(m?.role || "").trim();
+      const label =
+        role === "user"
+          ? "User"
+          : role === "assistant"
+            ? "Assistant"
+            : "System";
+      const content =
+        role === "assistant"
+          ? stripToolBlocksForChat(String(m?.content || ""))
+          : String(m?.content || "");
+      return `${label}: ${content.trim()}`;
+    })
+    .filter(Boolean);
+
+  return (
+    `You are continuing an in-progress KForge conversation.\n\n` +
+    `Available tools:\n${toolLines.join("\n")}\n\n` +
+    `Rules:\n` +
+    `- If you need a tool, request exactly one tool call.\n` +
+    `- Prefer a single tool call at a time.\n` +
+    `- If no more tools are needed, provide the final assistant answer.\n` +
+    `- Do not repeat the full prior conversation unnecessarily.\n` +
+    `- You are inspecting an existing workspace unless the user explicitly asks you to create files or folders.\n` +
+    `- Do NOT create files or directories unless the user explicitly asks for them.\n` +
+    `- When inspecting a workspace, start with the list_dir tool on "." unless the conversation already contains a directory listing.\n` +
+    `- If a tool already returned the requested information, DO NOT call the same tool again.\n` +
+    `- Instead, summarize the tool result for the user.\n` +
+    `- Only call another tool if new information is required.\n` +
+    `- If the directory listing is already available, explain the project structure based on that result.\n` +
+    `- If you need a tool, output ONLY a tool request in the exact fenced format.\n` +
+    `- Do NOT describe the tool call in plain English.\n` +
+    `- Do NOT write list_dir(path) or read_file(path).\n` +
+    `- Return only a single tool block when requesting a tool, like:\n` +
+    `\`\`\`tool\n{ "name": "list_dir", "args": { "path": "." } }\n\`\`\`\n\n` +
+    `Conversation so far:\n${transcriptLines.join("\n")}\n\n` +
+    `Continue from the latest state.`
+  );
+}
+
+function normalizeAgentToolCall(call, activeFilePath) {
+  if (!call || typeof call !== "object") return null;
+
+  const name = String(call.name || "").trim();
+  const args = { ...(call.args || {}) };
+
+  if (!name || !ALLOWED_MODEL_TOOLS.has(name)) return null;
+
+  if (name === "search_in_file") {
+    if (!args.path && activeFilePath) args.path = activeFilePath;
+    const q = String(args.query || "").trim();
+    if (!q) return null;
+    if (!args.path) return null;
+  }
+
+  return { name, args };
+}
+
+function extractSingleAgentToolCall(text, activeFilePath) {
+  const raw = String(text || "");
+  if (!raw.trim()) return null;
+
+  const xmlCalls = extractXmlToolCalls(raw);
+  if (xmlCalls.length > 0) {
+    return normalizeAgentToolCall(xmlCalls[0], activeFilePath);
+  }
+
+  const blocks = extractFencedBlocks(raw);
+  for (const block of blocks) {
+    const parsed = safeParseToolRequestJson(block.payload);
+    if (!parsed) continue;
+    const normalized = normalizeAgentToolCall(parsed, activeFilePath);
+    if (normalized) return normalized;
+  }
+
+  const bare = tryParseBareToolJson(raw);
+  if (bare) {
+    return normalizeAgentToolCall(bare, activeFilePath);
+  }
+
+  return null;
+}
 /**
  * Parse XML-ish tool calls.
  */
@@ -503,6 +602,7 @@ export default function AiPanel({
   setAiMaxTokens,
 
   // actions
+  runAi,
   handleSendChat,
   handleAiTest,
   guardrailText,
@@ -944,6 +1044,83 @@ export default function AiPanel({
           }
 
           appendMessage("assistant", buildToolBatchDoneMessage(batchCalls));
+
+          if (typeof runAi === "function") {
+            try {
+              const toolSchemas = getToolSchemas();
+
+              const agentResult = await runAgent({
+                prompt: "",
+                messages: (Array.isArray(messages) ? messages : []).map(
+                  (m) => ({
+                    role: String(m?.role || "system"),
+                    content: String(m?.content || ""),
+                  }),
+                ),
+                tools: toolSchemas,
+                callModel: async ({ messages: workingMessages }) => {
+                  const input = buildAgentConversationInput(
+                    workingMessages,
+                    toolSchemas,
+                    CHAT_CONTEXT_TURNS,
+                  );
+
+                  const r = await runAi({ input });
+                  if (!r?.ok) {
+                    throw new Error(
+                      String(r?.error || "Agent continuation failed"),
+                    );
+                  }
+
+                  const output = String(r.output || "");
+                  const toolCall = extractSingleAgentToolCall(
+                    output,
+                    activeTab?.path || "",
+                  );
+                  const cleaned = stripToolBlocksForChat(output);
+
+                  if (toolCall) {
+                    return {
+                      toolCall,
+                      text: cleaned,
+                    };
+                  }
+
+                  return {
+                    text: cleaned || output,
+                  };
+                },
+                executeTool: async (toolCall) => {
+                  const toolName = String(toolCall?.name || "").trim();
+                  const args = toolCall?.args || {};
+                  return await runTool({ toolName, args });
+                },
+                appendTranscript: () => {},
+                appendToolResult: () => {},
+                maxSteps: 6,
+              });
+
+              const finalText = String(agentResult?.text || "").trim();
+              if (finalText) {
+                appendMessage("assistant", finalText);
+              } else if (
+                agentResult?.stopReason &&
+                agentResult.stopReason !== "final_text"
+              ) {
+                appendMessage(
+                  "system",
+                  `Agent loop stopped: ${agentResult.stopReason}`,
+                );
+              }
+            } catch (err) {
+              appendMessage(
+                "system",
+                `[agent] Continuation failed: ${String(
+                  err?.message || err || "Unknown error",
+                )}`,
+              );
+            }
+          }
         }
       } finally {
         toolBatchRunningRef.current = false;
@@ -951,7 +1128,7 @@ export default function AiPanel({
     };
 
     processAssistantToolCalls();
-  }, [messages, activeTab, appendMessage, runTool]);
+  }, [messages, activeTab, appendMessage, runTool, runAi, CHAT_CONTEXT_TURNS]);
 
   const handleRequestToolOk = useCallback(() => {
     if (!activeTab?.path) {
