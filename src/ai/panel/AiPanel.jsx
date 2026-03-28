@@ -213,6 +213,63 @@ function tryParseBareToolJson(text) {
   if (!(trimmed.startsWith("{") && trimmed.endsWith("}"))) return null;
   return safeParseToolRequestJson(trimmed);
 }
+function tryParseNaturalLanguageToolCall(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+
+  const patterns = [
+    {
+      name: "list_dir",
+      re: /\blist_dir\s*\(\s*([^)]+?)\s*\)/i,
+      mapArgs: (m) => ({ path: String(m[1] || "").trim() }),
+    },
+    {
+      name: "read_file",
+      re: /\bread_file\s*\(\s*([^)]+?)\s*\)/i,
+      mapArgs: (m) => ({ path: String(m[1] || "").trim() }),
+    },
+    {
+      name: "write_file",
+      re: /\bwrite_file\s*\(\s*([^)]+?)\s*\)/i,
+      mapArgs: (m) => ({ path: String(m[1] || "").trim() }),
+    },
+    {
+      name: "mkdir",
+      re: /\bmkdir\s*\(\s*([^)]+?)\s*\)/i,
+      mapArgs: (m) => ({ path: String(m[1] || "").trim() }),
+    },
+    {
+      name: "search_in_file",
+      re: /\bsearch_in_file\s*\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)/i,
+      mapArgs: (m) => ({
+        path: String(m[1] || "").trim(),
+        query: String(m[2] || "").trim(),
+      }),
+    },
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern.re);
+    if (!match) continue;
+
+    const args = pattern.mapArgs(match);
+
+    // Remove wrapping quotes if the model added them
+    Object.keys(args).forEach((key) => {
+      const value = String(args[key] || "").trim();
+      args[key] = value.replace(/^["'`](.*)["'`]$/, "$1").trim();
+    });
+
+    if (!ALLOWED_MODEL_TOOLS.has(pattern.name)) return null;
+
+    return {
+      name: pattern.name,
+      args,
+    };
+  }
+
+  return null;
+}
 function stripToolBlocksForChat(text) {
   let s = String(text || "");
 
@@ -322,6 +379,10 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- Instead, summarize the tool result for the user.\n` +
     `- Only call another tool if new information is required.\n` +
     `- If the directory listing is already available, explain the project structure based on that result.\n` +
+    `- For workspace inspection tasks, use at most 3 tool calls before answering.\n` +
+    `- Prefer this order for inspection: list_dir("."), then optionally read_file("package.json") or read_file("README.md"), then answer.\n` +
+    `- Do NOT inspect subdirectories like node_modules unless the user explicitly asks.\n` +
+    `- Do NOT read more files once you have enough information to summarize the project.\n` +
     `- If you need a tool, output ONLY a tool request in the exact fenced format.\n` +
     `- Do NOT describe the tool call in plain English.\n` +
     `- Do NOT write list_dir(path) or read_file(path).\n` +
@@ -370,6 +431,11 @@ function extractSingleAgentToolCall(text, activeFilePath) {
   const bare = tryParseBareToolJson(raw);
   if (bare) {
     return normalizeAgentToolCall(bare, activeFilePath);
+  }
+
+  const natural = tryParseNaturalLanguageToolCall(raw);
+  if (natural) {
+    return normalizeAgentToolCall(natural, activeFilePath);
   }
 
   return null;

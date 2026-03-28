@@ -64,7 +64,12 @@ function buildToolResultMessage(result) {
 
   return `Tool result:\n${rendered}`;
 }
-
+function buildToolCallKey(toolCall) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const name = String(toolCall.name || "").trim();
+  const args = toolCall.args ?? {};
+  return `${name}::${JSON.stringify(args)}`;
+}
 /**
  * Runs a tool-calling loop until the model returns final text
  * or maxSteps is reached.
@@ -100,7 +105,7 @@ export async function runAgent({
   }
 
   const workingMessages = Array.isArray(messages) ? [...messages] : [];
-
+  const seenToolCalls = new Set();
   if (prompt && String(prompt).trim()) {
     workingMessages.push({
       role: "user",
@@ -118,7 +123,23 @@ export async function runAgent({
 
     const rawToolCall = getRawToolCall(response);
     const normalizedToolCall = normalizeToolCall(rawToolCall);
+    if (normalizedToolCall) {
+      const callKey = buildToolCallKey(normalizedToolCall);
 
+      if (callKey && seenToolCalls.has(callKey)) {
+        return {
+          ok: false,
+          text: "",
+          steps: step,
+          messages: workingMessages,
+          stopReason: "duplicate_tool_call",
+        };
+      }
+
+      if (callKey) {
+        seenToolCalls.add(callKey);
+      }
+    }
     if (normalizedToolCall) {
       const toolLabel = normalizedToolCall.name || "unknown_tool";
 
