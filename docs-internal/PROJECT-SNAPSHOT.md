@@ -1,5 +1,3 @@
-
-
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
@@ -12,8 +10,8 @@ Status: **Stable milestone committed**
 
 Stable restore tags now available:
 
-* `phase-4.10-agent-loop-stable`
-* `phase-4.10.1-agent-hardening-stable`
+- `phase-4.10-agent-loop-stable`
+- `phase-4.10.1-agent-hardening-stable`
 
 ---
 
@@ -1538,9 +1536,9 @@ Replace the **entire file**.
 
 Advantages:
 
-* fewer merge mistakes
-* clearer changes
-* easier verification
+- fewer merge mistakes
+- clearer changes
+- easier verification
 
 Large files should use **precise block replacement instead**.
 
@@ -1601,9 +1599,9 @@ Development proceeds **incrementally**.
 
 Rules:
 
-* no jumping ahead
-* verify each change
-* test before continuing
+- no jumping ahead
+- verify each change
+- test before continuing
 
 This discipline keeps KForge stable even during rapid iteration.
 
@@ -1645,7 +1643,71 @@ Local Project
 
 This sets up the next major integration lanes:
 
-Stripe adapter
-OpenAI adapter
-Environment variable manager
-Template-aware backend scaffolding
+Phase 5.0 — Intent-Driven Backend Setup
+
+Allow users to request backend capabilities by intent rather than by provider.
+
+Examples:
+
+"I need login"
+"I need a database"
+"I need file storage"
+
+KForge interprets the request and recommends an appropriate backend integration.
+
+---
+
+Phase 5.1 — Stripe Adapter
+
+Guided Stripe setup and example payment flow.
+
+The adapter will assist with:
+
+• installing Stripe SDK
+• environment variable setup
+• example payment workflow
+• developer-friendly usage examples
+
+---
+
+Phase 5.2 — OpenAI Adapter
+
+Guided OpenAI SDK setup and example usage.
+
+The adapter will assist with:
+
+• installing the OpenAI SDK
+• environment variable setup
+• example API calls
+• framework-aware usage guidance
+
+---
+
+Phase 5.3 — Supabase Developer Assist
+
+Enhance Supabase developer ergonomics after setup.
+
+Capabilities may include:
+
+• generating example queries
+• CRUD helper examples
+• detecting existing Supabase client files
+• framework-aware usage examples
+
+This phase improves developer productivity once Supabase is already connected.
+
+---
+
+Phase 5.4 — Future Template Expansion
+
+Current templates remain sufficient:
+
+• Static HTML
+• Vite + React
+• Next.js
+
+Possible future template:
+
+• Expo React Native (mobile app template)
+
+Template expansion will continue to use the registry-driven scaffold system introduced earlier.
