@@ -37,7 +37,7 @@ import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import DockShell from "./layout/DockShell";
-
+import { resolveIntent } from "./ai/intent/intentResolver.js";
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -1554,8 +1554,8 @@ export default function App() {
         return;
       }
 
-      if (providerSwitchNote) setProviderSwitchNote("");
-
+      const nextIntentRecommendation = resolveIntent(draft);
+      setServiceIntentRecommendation(nextIntentRecommendation);
       // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
       let fileSnapshot = null;
       if (includeActiveFile) {
@@ -1813,7 +1813,9 @@ export default function App() {
    */
   // Focus Mode (v1) — reclaim space for chat
   const [focusMode, setFocusMode] = useState(false);
-
+  // Phase 5.0 — intent-driven backend recommendation
+  const [serviceIntentRecommendation, setServiceIntentRecommendation] =
+    useState(null);
   const toggleFocusMode = useCallback(() => {
     setFocusMode((v) => !v);
   }, []);
@@ -1827,6 +1829,7 @@ export default function App() {
       setAiPanelWide={() => {}}
       setAiPanelOpen={setAiPanelOpen}
       setFocusMode={setFocusMode}
+      serviceIntentRecommendation={serviceIntentRecommendation}
       providerMeta={providerMeta}
       providerReady={providerReady}
       disabledExplainer={disabledExplainer}
