@@ -253,7 +253,7 @@ function formatLogTimestamp(value) {
 
   return `${hh}:${mm}:${ss}`;
 }
-export default function ServicePanel({ projectPath, intentRecommendation }) {
+export default function ServicePanel({ projectPath }) {
   const [logsByService, setLogsByService] = useState(
     persistedServicePanelState.logsByService,
   );
@@ -322,13 +322,13 @@ export default function ServicePanel({ projectPath, intentRecommendation }) {
   useEffect(() => {
     persistedServicePanelState.activeProviderId = activeProviderId;
   }, [activeProviderId]);
-    useEffect(() => {
-      activeProviderIdRef.current = activeProviderId;
-    }, [activeProviderId]);
+  useEffect(() => {
+    activeProviderIdRef.current = activeProviderId;
+  }, [activeProviderId]);
 
-    useEffect(() => {
-      busyServiceIdRef.current = busyServiceId;
-    }, [busyServiceId]);
+  useEffect(() => {
+    busyServiceIdRef.current = busyServiceId;
+  }, [busyServiceId]);
   useEffect(() => {
     persistedServicePanelState.serviceStatus = serviceStatus;
   }, [serviceStatus]);
@@ -454,18 +454,6 @@ export default function ServicePanel({ projectPath, intentRecommendation }) {
 
     lastProjectPathRef.current = normalizedProjectPath;
   }, [projectPath]);
-
-  useEffect(() => {
-    const nextProviderId = String(
-      intentRecommendation?.providerId || "",
-    ).trim();
-    if (!nextProviderId) return;
-
-    const nextTask = findTaskByProviderId(nextProviderId);
-    setActiveTaskId(nextTask.id);
-    setActiveProviderId(nextProviderId);
-    setActiveServiceId(nextProviderId);
-  }, [intentRecommendation]);
 
   useEffect(() => {
     let cancelled = false;

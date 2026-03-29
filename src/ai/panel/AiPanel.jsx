@@ -591,7 +591,7 @@ export default function AiPanel({
   setAiPanelWide,
   setAiPanelOpen,
   setFocusMode,
-  serviceIntentRecommendation,
+
   // provider header surface
   providerMeta,
   providerReady,
@@ -719,24 +719,7 @@ export default function AiPanel({
       }
     });
   }, [servicesOpen]);
-  useEffect(() => {
-    if (!serviceIntentRecommendation?.providerId) return;
 
-    if (typeof setFocusMode === "function") {
-      setFocusMode(true);
-    }
-
-    setServicesOpen(true);
-    setPreviewOpen(false);
-    setTerminalOpen(false);
-
-    requestAnimationFrame(() => {
-      servicesSectionRef.current?.scrollIntoView({
-        block: "start",
-        behavior: "auto",
-      });
-    });
-  }, [serviceIntentRecommendation, setFocusMode]);
   useEffect(() => {
     if (!isDevBuild) return;
 
@@ -1405,10 +1388,7 @@ export default function AiPanel({
                     ref={servicesPanelScrollRef}
                     className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/30"
                   >
-                    <ServicePanel
-                      projectPath={projectPath}
-                      intentRecommendation={serviceIntentRecommendation}
-                    />
+                    <ServicePanel projectPath={projectPath} />
                   </div>
                 </div>
               </div>
