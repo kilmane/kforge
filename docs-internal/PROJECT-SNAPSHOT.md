@@ -5,13 +5,15 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: March 27th, 2026
+Last Updated: **March 29th, 2026**
 
-Phase: 4.9.1 — Log Isolation Polish
-Status: Stable polish milestone committed
+Phase: **4.10.1 — Agent Hardening**
+Status: **Stable milestone committed**
 
-Stable restore tag carried forward from previous stable milestone:
-phase-4.9-supabase-quick-connect-stable
+Stable restore tags now available:
+
+* `phase-4.10-agent-loop-stable`
+* `phase-4.10.1-agent-hardening-stable`
 
 ---
 
@@ -46,7 +48,7 @@ KForge is **chat-first**, not tool-first.
 
 ## 🧠 Execution Authority
 
-AI execution lives in:
+AI execution still lives primarily in:
 
 src/App.js
 
@@ -161,9 +163,11 @@ Handles:
 
 • tool payload parsing
 • JSON/XML tool formats
+• natural-language fallback parsing for weaker models
 • deduplication
 • consent gating
 • execution dispatch
+• agent continuation handoff
 
 ---
 
@@ -189,6 +193,28 @@ detect tool
 
 ---
 
+## Tool Schemas
+
+File:
+
+src/ai/tools/toolSchema.js
+
+Responsibilities:
+
+• exposes model-facing tool descriptions
+• defines available tool names and parameters
+• keeps model-visible tool inventory aligned with real handlers
+
+Current model-visible tools:
+
+• read_file
+• list_dir
+• search_in_file
+• write_file
+• mkdir
+
+---
+
 ## Tool Handlers
 
 File:
@@ -209,6 +235,65 @@ src/lib/fs.js
 
 App.js sets project root.
 fs.js enforces safety.
+
+---
+
+## Agent Loop
+
+Files:
+
+src/ai/agent/agentRunner.js
+src/ai/panel/AiPanel.jsx
+
+Phase 4.10 introduced a real **tool-calling agent loop**.
+
+Core flow:
+
+model
+→ tool request
+→ consent/runtime execution
+→ tool result fed back to model
+→ continued reasoning
+→ final answer
+
+This loop sits **above** the existing tool runtime and does **not bypass** it.
+
+Important rule:
+
+All tool execution still flows through:
+
+src/ai/tools/toolRuntime.js
+
+This preserves explicit consent behavior and transcript visibility.
+
+---
+
+## Agent Loop Hardening
+
+Phase 4.10.1 added hardening for weaker and more inconsistent models.
+
+Improvements include:
+
+• duplicate tool-call detection
+• prevention of repeated identical tool executions
+• support for natural-language tool-call recovery such as `list_dir(.)`
+• bounded inspection guidance for workspace-analysis tasks
+• write tools no longer treated as safe automatic actions
+• local tool-result injection so the continuation model sees fresh results immediately
+• calmer transcript behavior during duplicate suppression
+
+Read-only tools that may auto-run:
+
+• read_file
+• list_dir
+• search_in_file
+
+Write tools now require consent:
+
+• write_file
+• mkdir
+
+This change was made specifically because weaker models could otherwise attempt unwanted file creation during inspection flows.
 
 ---
 
@@ -1045,6 +1130,187 @@ This matches the mental model users expect from professional integration tooling
 
 ---
 
+# 🟪 4.10 Tool-Calling Agent Loop
+
+Phase 4.10 introduced a real **tool-calling agent loop** to the AI surface.
+
+This is a major AI-runtime milestone.
+
+Primary files:
+
+• src/ai/agent/agentRunner.js
+• src/ai/tools/toolSchema.js
+• src/ai/tools/toolRuntime.js
+• src/ai/tools/handlers/index.js
+• src/ai/panel/AiPanel.jsx
+• src/App.js
+
+---
+
+## 4.10 Purpose
+
+Before 4.10, AI responses could request tools, but the system behavior was closer to:
+
+single response
+→ detect tool text
+→ execute tool
+→ stop
+
+After 4.10, the runtime supports:
+
+model
+→ tool request
+→ tool execution
+→ tool result returned to model
+→ continued reasoning
+→ final answer
+
+This gives KForge a real **agent-style reasoning loop** while preserving the existing consent model.
+
+---
+
+## 4.10 Architectural Rule
+
+The agent loop sits **above** the existing tool runtime.
+
+It does **not** replace or bypass:
+
+src/ai/tools/toolRuntime.js
+
+This means:
+
+• consent gating remains authoritative
+• tool execution still routes through the existing runtime pipeline
+• handler dispatch still flows through `src/ai/tools/handlers/index.js`
+• transcript-visible tool execution remains intact
+
+---
+
+## 4.10 Agent Loop Shape
+
+Core loop now behaves conceptually like:
+
+assistant
+→ request tool
+→ tool executes
+→ result appended
+→ model continues
+→ final answer returned
+
+This is the foundational runtime pattern used by modern coding agents.
+
+---
+
+## 4.10 Tool Schema Layer
+
+A separate schema layer now exists for model-visible tool definitions:
+
+src/ai/tools/toolSchema.js
+
+This keeps the model-facing tool inventory aligned with the actual handler registry.
+
+Current exposed tools include:
+
+• read_file
+• list_dir
+• search_in_file
+• write_file
+• mkdir
+
+---
+
+## 4.10 UI / Transcript Behavior
+
+The AI panel now supports:
+
+• structured tool-call detection
+• continued reasoning after tools run
+• calm chat projection
+• full transcript visibility
+• agent-loop integration without replacing the existing message store
+
+This keeps the user-facing experience aligned with KForge’s low-noise philosophy.
+
+---
+
+# 🟪 4.10.1 Agent Hardening
+
+Phase 4.10.1 hardened the new agent runtime based on real testing, especially with weaker or less structured models.
+
+Primary files:
+
+• src/ai/agent/agentRunner.js
+• src/ai/panel/AiPanel.jsx
+
+---
+
+## 4.10.1 Problems Addressed
+
+Real testing surfaced several model/runtime edge cases:
+
+• weaker models describing tool calls in plain English
+• duplicate tool requests
+• repeated workspace exploration
+• accidental file-creation attempts during inspection
+• stale tool-result context during continuation
+• transcript duplication / loop-noise polish issues
+
+4.10.1 focused on stabilizing these behaviors without redesigning the architecture.
+
+---
+
+## 4.10.1 Hardening Added
+
+The agent runtime now includes:
+
+• duplicate tool-call detection inside the agent loop
+• seeding duplicate protection with already-executed batch tool calls
+• natural-language fallback parsing for tool patterns such as `list_dir(.)`
+• explicit inspection-budget rules for workspace-analysis tasks
+• continuation prompts that discourage repeated exploration
+• local injection of freshly executed tool results into continuation context
+• suppression of duplicate-loop noise in transcript
+
+This made weaker-model behavior much more usable in real inspection flows.
+
+---
+
+## 4.10.1 Safety Tightening
+
+A critical safety correction was made:
+
+write tools are no longer treated as safe automatic tools.
+
+Safe automatic tools are now read-only:
+
+• read_file
+• list_dir
+• search_in_file
+
+Write tools now require explicit consent:
+
+• write_file
+• mkdir
+
+This prevents weaker models from creating files automatically during inspection or explanation tasks.
+
+---
+
+## 4.10.1 Current Weak-Model Reality
+
+Weaker models such as Groq / Llama-family variants can still be valuable, but they require stronger steering.
+
+Current KForge hardening now helps these models by:
+
+• recovering simple function-style tool requests
+• reducing runaway workspace exploration
+• preventing silent write execution
+• allowing read-only inspection flows to complete successfully more often
+
+Best tool-driving reliability still comes from stronger models such as OpenAI or Claude.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -1065,6 +1331,15 @@ AI edits files
 Install
 Preview
 Hot reload
+
+Agent workflow:
+
+Open folder
+Prompt AI
+AI requests tools
+Tools execute through consent/runtime
+AI continues reasoning
+AI returns final answer
 
 Service workflow:
 
@@ -1125,7 +1400,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.9.1 Log Isolation Polish**:
+As of **Phase 4.10.1 Agent Hardening**:
 
 • AI surface stable
 • filesystem tools validated
@@ -1156,7 +1431,14 @@ As of **Phase 4.9.1 Log Isolation Polish**:
 • compact Supabase guidance card working
 • Supabase Quick Connect working
 • per-service Services log isolation working
+• tool schema layer working
+• tool-calling agent loop working
+• duplicate tool-call protection working
+• weak-model fallback parsing working
+• write-tool consent tightening working
+• stale tool-result continuation fix working
 • Supabase documentation captured
+• agent runtime documentation captured
 
 Supported workflows now include:
 
@@ -1178,17 +1460,20 @@ Supabase client install guidance
 Supabase client file generation
 Supabase beginner-friendly guided setup
 Per-service persistent activity logs in Services
+Tool-based AI inspection and reasoning
+Agent-style read/inspect/explain loops
 
 ---
 
 # 🏗 Extensibility Lanes
 
-KForge now has four extensibility/runtime systems:
+KForge now has five extensibility/runtime systems:
 
 Template Registry
 Service Registry
 Preview Runtime
 Command Runtime
+Agent Runtime
 
 These lanes allow new capabilities to be added without redesigning the architecture.
 
@@ -1207,6 +1492,7 @@ Possible future backend improvements:
 • OpenAI adapter
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
+• richer model-routing between fast chat models and stronger tool-driving models
 
 ---
 
@@ -1222,7 +1508,7 @@ They apply to all future phases unless explicitly overridden.
 
 Always locate the relevant code first using:
 
-```
+```text
 rg -n "<search phrase>" <path>
 ```
 
@@ -1236,7 +1522,7 @@ Before modifying a file, inspect the current code block using:
 
 PowerShell example:
 
-```
+```text
 Get-Content <file> | Select-Object -Skip <line> -First <count>
 ```
 
@@ -1276,7 +1562,7 @@ Never guess surrounding code.
 
 After every edit, verify changes using:
 
-```
+```text
 rg -n "<keyword>" <file>
 ```
 
@@ -1288,7 +1574,7 @@ Confirm the expected code is present and old code is gone.
 
 Stable progress should be committed regularly:
 
-```
+```text
 git add .
 git commit -m "<phase description>"
 git push
@@ -1300,7 +1586,7 @@ git push
 
 When reaching a stable milestone, create a tag:
 
-```
+```text
 git tag <milestone-tag>
 git push origin <milestone-tag>
 ```
@@ -1325,7 +1611,6 @@ This discipline keeps KForge stable even during rapid iteration.
 
 End of Captain’s Law.
 
-
 ---
 
 # 🚢 Phase Boundary
@@ -1334,6 +1619,10 @@ Phase 4.9 introduced **Supabase Quick Connect** and improved the usability of gu
 
 Phase 4.9.1 then polished the Services experience by isolating activity logs per provider.
 
+Phase 4.10 then introduced the first real **tool-calling agent loop**.
+
+Phase 4.10.1 hardened that loop based on real model behavior, especially for weaker models.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -1341,6 +1630,8 @@ What this now proves:
 • structured logs materially improve usability
 • per-service history matters once multiple integrations live in one panel
 • backend integrations can remain explicit, calm, and low-noise without turning into dashboard-heavy workflows
+• KForge can support real agent-style reasoning without sacrificing consent-gated tooling
+• weaker models can be made more usable with targeted runtime hardening
 
 Current stable journey:
 
@@ -1350,6 +1641,7 @@ Local Project
 → Vercel / Netlify
 → Supabase Quick Connect
 → guided Supabase setup
+→ AI tool-calling agent workflow
 
 This sets up the next major integration lanes:
 
@@ -1357,5 +1649,3 @@ Stripe adapter
 OpenAI adapter
 Environment variable manager
 Template-aware backend scaffolding
-
-

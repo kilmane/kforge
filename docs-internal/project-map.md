@@ -1,13 +1,12 @@
 
-
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: v18
-Updated: 27/03/2026
+Version: **v19**
+Updated: **29/03/2026**
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -47,7 +46,9 @@ src/App.js
 
 Structure:
 
+```
 messages = [{ id, role, content, ts, action?, actions? }]
+```
 
 Everything renders from this.
 
@@ -105,6 +106,8 @@ Detects:
 
 * JSON tool payloads
 * XML tool payloads
+* fenced tool blocks
+* natural-language tool calls (fallback for weaker models)
 
 Triggers runtime execution.
 
@@ -121,13 +124,37 @@ Handles:
 * consent gating
 * lifecycle events
 * result formatting
+* transcript logging
+* error handling
 
 Runtime flow:
 
+```
 detect tool
 → consent
 → handler execution
 → result appended
+```
+
+---
+
+## Tool Schemas (Model Interface)
+
+File:
+
+src/ai/tools/toolSchema.js
+
+Defines the **model-visible tool interface**.
+
+Responsibilities:
+
+* tool names
+* tool descriptions
+* parameter shapes
+
+Purpose:
+
+Ensure the model receives a **clean and controlled tool inventory**.
 
 ---
 
@@ -153,7 +180,110 @@ Ensures project-root safety.
 
 ---
 
-# 3b Preview Runner (Dev Runtime)
+# 3a Agent Runtime (Phase 4.10)
+
+Files:
+
+src/ai/agent/agentRunner.js
+src/ai/panel/AiPanel.jsx
+
+Phase 4.10 introduced a **tool-calling agent loop**.
+
+The runtime now supports **multi-step reasoning with tools**.
+
+Execution flow:
+
+```
+assistant reasoning
+→ tool request
+→ runtime executes tool
+→ result returned to model
+→ model continues reasoning
+→ final response
+```
+
+Important rule:
+
+The agent loop **does not bypass the existing runtime**.
+
+All tool execution still flows through:
+
+src/ai/tools/toolRuntime.js
+
+This preserves:
+
+* consent gating
+* transcript visibility
+* tool safety guarantees
+
+---
+
+## Agent Runner
+
+File:
+
+src/ai/agent/agentRunner.js
+
+Responsibilities:
+
+* execute the multi-step tool loop
+* prevent infinite loops
+* detect duplicate tool calls
+* normalize tool-call payloads
+* stop when a final answer is produced
+
+Loop safety mechanisms include:
+
+* duplicate tool-call detection
+* step limits
+* stop reasons
+
+Example stop reasons:
+
+* `final_text`
+* `duplicate_tool_call`
+* `max_steps_reached`
+
+---
+
+# 3b Agent Hardening (Phase 4.10.1)
+
+Phase 4.10.1 improved reliability when using **weaker or less structured models**.
+
+Primary files:
+
+src/ai/panel/AiPanel.jsx
+src/ai/agent/agentRunner.js
+
+Improvements include:
+
+* natural-language tool-call fallback parsing
+* duplicate tool-call suppression
+* injection of tool results into continuation prompts
+* prevention of runaway directory exploration
+* stricter consent handling for write operations
+* transcript noise reduction
+
+---
+
+## Tool Safety Model
+
+Read-only tools may run automatically:
+
+* read_file
+* list_dir
+* search_in_file
+
+Write tools require consent:
+
+* write_file
+* mkdir
+
+This prevents weaker models from modifying files unintentionally.
+
+---
+
+# 3c Preview Runner (Dev Runtime)
 
 Backend:
 
@@ -206,6 +336,8 @@ Current coarse kinds include:
 * static
 * package
 
+---
+
 ### Stage 2 — Template Identification (Frontend)
 
 File:
@@ -233,7 +365,7 @@ Next.js matching is prioritized before broader React/Vite hint matches so that a
 
 ---
 
-# 3c Template Registry / Scaffold System
+# 3d Template Registry / Scaffold System
 
 Registry file:
 
@@ -259,27 +391,17 @@ Current template IDs:
 * vite-react
 * nextjs
 
-Current template responsibilities include:
+Template responsibilities include:
 
-* scaffold command metadata
+* scaffold metadata
 * install behavior
 * preview strategy
 * detection hints
 * compatible project kind mapping
 
-Developer note exists at the top of templateRegistry.js.
-
-When adding new templates, maintainers are reminded to also review:
-
-* src/runtime/previewRunner.js
-* src/runtime/PreviewPanel.jsx
-* src/runtime/ServicePanel.jsx
-
-This is specifically to keep preview detection and deploy guidance aligned.
-
 ---
 
-# 3d Preview Surface
+# 3e Preview Surface
 
 File:
 
@@ -290,10 +412,10 @@ Responsibilities:
 * show preview state
 * show detected project identity
 * expose Generate / Install / Preview / Stop / Open / Clear actions
-* show compatible template information when useful
+* show compatible template information
 * refresh project shape after scaffold completion
 
-PreviewPanel consumes the shared detection result returned by:
+PreviewPanel consumes detection results returned by:
 
 previewDetectTemplates(...)
 
@@ -359,7 +481,10 @@ Unified architecture for external service integrations.
 
 Pattern:
 
-registry entry + adapter implementation
+```
+registry entry
++ adapter implementation
+```
 
 ---
 
@@ -392,50 +517,46 @@ Primary file:
 
 src/runtime/ServicePanel.jsx
 
-ServicePanel currently owns:
+Responsibilities:
 
 * task-grouped service selection
 * active provider selection
 * provider-aware action rendering
 * provider-specific activity logs
-* persisted service-panel UI state
-* GitHub action surface
-* deploy guidance surface
-* Supabase guided setup surface
-
-The panel is task-first, but runtime behavior is provider-aware.
+* persisted UI state
+* GitHub actions
+* deploy guidance
+* Supabase setup assistance
 
 ---
 
 ## ServicePanel Log Model
 
-As of Phase 4.9.1, ServicePanel log persistence is **provider-keyed** rather than using one shared array.
+As of Phase 4.9.1, logs are **provider-keyed**.
 
-Conceptual structure:
+Structure:
 
-```javascript
+```
 {
   github: [],
   supabase: [],
-  stripe: [],
+  stripe: []
 }
 ```
 
-This state is persisted as:
+Persisted state:
 
 logsByService
 
-This replaced the earlier shared:
-
-logs
+This replaced the earlier shared log array.
 
 Result:
 
-* each provider has its own activity history
+* each provider maintains its own activity history
 * switching providers does not mix logs
-* returning to a provider restores that provider's earlier log history
+* returning to a provider restores that provider’s history
 
-Logs still reset when:
+Logs reset when:
 
 * workspace resets
 * project root changes
@@ -443,8 +564,6 @@ Logs still reset when:
 ---
 
 # 5a Supabase Adapter
-
-The Supabase adapter is the **first backend service integration** attached to the Services layer.
 
 Primary implementation:
 
@@ -456,34 +575,24 @@ src/runtime/ServicePanel.jsx
 
 Purpose:
 
-Provide a beginner-friendly connection workflow for Supabase-backed projects.
-
----
-
-## Supabase Adapter Responsibilities
-
-The adapter now performs **inspection, quick-connect guidance, and guided setup actions**.
+Provide a guided Supabase connection workflow.
 
 Capabilities include:
 
-* Supabase readiness inspection
-* Quick Connect entry action
+* readiness inspection
+* Quick Connect
 * environment variable detection
-* detection of empty versus non-empty env values
 * `.env.example` generation
 * `.env` creation helper
-* Supabase client library detection
-* Supabase client installation helper
+* Supabase client detection
+* Supabase client install helper
 * Supabase client file generation
 * local Supabase config detection
-* guided log output for the user
-* browser handoff to Supabase dashboard
+* browser handoff to dashboard
 
 ---
 
 ## Supabase Detection Signals
-
-The adapter checks for the following indicators.
 
 Environment files:
 
@@ -492,222 +601,27 @@ Environment files:
 * `.env.development`
 * `.env.example`
 
-Environment variables:
+Variables:
 
-* `SUPABASE_URL`
-* `SUPABASE_ANON_KEY`
-* `VITE_SUPABASE_URL`
-* `VITE_SUPABASE_ANON_KEY`
+* SUPABASE_URL
+* SUPABASE_ANON_KEY
+* VITE_SUPABASE_URL
+* VITE_SUPABASE_ANON_KEY
 
-Important detection rule:
+Empty values are treated as **not configured**.
 
-Empty values such as:
+Local detection:
 
-`SUPABASE_URL=`
+supabase/config.toml
 
-are treated as **not set**.
+Client library:
 
-Local Supabase project:
+@supabase/supabase-js
 
-* `supabase/config.toml`
+Client file candidates:
 
-Supabase client library:
-
-* `@supabase/supabase-js`
-* Supabase dependency signals in `package.json`
-
-Supabase client file candidates:
-
-* `src/lib/supabase.js`
-* `src/lib/supabase.ts`
-
----
-
-## Supabase Quick Connect
-
-Phase 4.9 adds a faster guided entry point:
-
-Quick Connect
-
-Command:
-
-supabase_quick_connect
-
-Purpose:
-
-Let the user start from:
-
-I want Supabase
-→ inspect current setup
-→ guide the next required step
-
-This reduces setup friction for beginners and vibe coders.
-
-Quick Connect is layered on top of the existing Supabase checks and actions rather than replacing them.
-
----
-
-## Cloud and Local Supabase Coverage
-
-The Supabase lane supports both:
-
-### Cloud Supabase
-
-Typical connection sources:
-
-* project URL from Supabase dashboard
-* anon key from Supabase dashboard
-
-Typical URL shape:
-
-* `https://your-project.supabase.co`
-
-### Local Supabase
-
-Typical detection signals:
-
-* `supabase/config.toml`
-* local URL such as `http://127.0.0.1:54321`
-
-This keeps the backend lane useful for both hosted and local workflows.
-
----
-
-## Supabase Environment Helper
-
-If `.env.example` does not exist:
-
-KForge creates a **template file** containing:
-
-```
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
-
-The user can then run:
-
-Create `.env` file
-
-This copies:
-
-.env.example → .env
-
-If `.env` already exists, the operation is skipped.
-
----
-
-## Supabase Client Installation
-
-KForge provides a guided action:
-
-Install Supabase client
-
-Command executed:
-
-pnpm add @supabase/supabase-js
-
-This installs the official Supabase JavaScript client library.
-
-In Phase 4.8.3 this action was hardened for desktop Windows use by running through a shell execution path rather than depending only on direct binary lookup.
-
-Current behavior also includes:
-
-* streamed install logs
-* surfaced package-manager output on failure
-* clearer next-step guidance after install
-
----
-
-## Supabase Client File
-
-KForge can also generate a **Supabase client file**.
-
-Typical generated location:
-
-src/lib/supabase.js
-
-Purpose:
-
-Provide a simple reusable Supabase connection wrapper for frontend code.
-
-Typical structure:
-
-createClient(
-import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL,
-import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY
-)
-
-If the client file already exists, KForge leaves it unchanged.
-
-Terminology is intentionally standardized as:
-
-**Supabase client file**
-
----
-
-## Supabase Panel UX Shape
-
-The Supabase panel is intentionally split into two layers.
-
-### Compact first-step guidance
-
-The panel emphasizes a clear first action:
-
-"Check Supabase setup"
-
-Quick Connect is available as the faster guided route for users who want a more streamlined setup pass.
-
-### Expandable extra help
-
-Additional explanation is available via a:
-
-More info
-
-toggle.
-
-This keeps the default panel compact while still supporting beginners.
-
----
-
-## Supabase Activity Log
-
-Supabase activity is rendered inside the Supabase provider log in:
-
-src/runtime/ServicePanel.jsx
-
-Current behavior:
-
-* each user action begins a new visible log section
-* log sections are separated visually
-* timestamps are included
-* quoted action labels are highlighted
-* repeated Supabase actions are easier to distinguish from older output
-
-Examples of highlighted actions:
-
-* "Check Supabase setup"
-* "Create .env file"
-* "Install Supabase client"
-* "Create Supabase client file"
-* "Supabase Quick Connect"
-
-This keeps the flow readable without requiring a wizard UI.
-
----
-
-## Supabase Dashboard Access
-
-The Supabase panel also includes a quick link:
-
-Open Supabase
-
-This opens:
-
-[https://supabase.com/dashboard](https://supabase.com/dashboard)
-
-This allows the user to easily copy connection values.
+* src/lib/supabase.js
+* src/lib/supabase.ts
 
 ---
 
@@ -721,17 +635,17 @@ Primary UI surface:
 
 src/runtime/ServicePanel.jsx
 
-GitHub capabilities include:
+Capabilities include:
 
-* detect whether current folder is already a Git repo
-* detect whether a remote exists
-* publish local project to a new GitHub repository
-* open current repository on GitHub in browser
-* pull latest changes into an existing local repo
-* push local changes to GitHub
-* support GitHub import during New Project flow
+* detect Git repository
+* detect remote
+* publish repository
+* open GitHub repo
+* pull latest changes
+* push changes
+* import GitHub repository during New Project
 
-Authentication is delegated to GitHub CLI rather than managed directly by KForge.
+Authentication handled by **GitHub CLI**.
 
 ---
 
@@ -741,36 +655,19 @@ Primary file:
 
 src/runtime/ServicePanel.jsx
 
-ServicePanel consumes shared project identity from:
+Uses shared identity from:
 
 previewDetectTemplates(...)
 
-This avoids duplicate framework detection logic inside Services.
+Mapping:
 
-Key mapping helper:
-
-getDeployProjectIdentity(...)
-
-Current smart deploy mappings:
-
-* static-html / static → Good fit: Netlify or Vercel
-* vite-react → Good fit: Netlify or Vercel
+* static-html → Netlify or Vercel
+* vite-react → Netlify or Vercel
 * nextjs → Recommended: Vercel
 
-Provider-specific hints are also supported.
+Fallback remains calm:
 
-Examples:
-
-* Vercel + Next.js → Recommended for Next.js projects.
-* Netlify + Next.js → Next.js usually fits best on Vercel.
-
-Fallback behavior remains calm:
-
-* Recommendation: Good fit: Netlify or Vercel
-
-This fallback is user-facing.
-
-Developer maintenance reminder is registry-facing, not user-facing.
+Good fit: Netlify or Vercel
 
 ---
 
@@ -790,7 +687,7 @@ Meaning:
 * bottom = dock below workspace
 * full = focus mode replaces main layout
 
-Focus mode is a surface promotion, not a resized dock.
+Focus mode is a surface promotion.
 
 ---
 
@@ -805,12 +702,27 @@ Open folder
 → Open
 → Iterate
 
+---
+
 ## AI Editing Loop
 
 Open folder
 → prompt AI
 → AI edits files
 → preview / install / rerun
+
+---
+
+## Agent Workflow
+
+Open folder
+→ prompt AI
+→ AI requests tools
+→ tools execute
+→ AI continues reasoning
+→ AI returns final answer
+
+---
 
 ## GitHub Flow
 
@@ -820,41 +732,28 @@ Open folder
 → Push changes
 → Open on GitHub or Pull latest
 
+---
+
 ## Deploy Flow
 
 Open folder
 → Services
 → Deploy
 → choose Vercel or Netlify
-→ follow provider browser flow
+→ provider flow
 
-## Smart Deploy Flow
-
-Open folder
-→ project identity detected through preview pipeline
-→ Services → Deploy
-→ recommendation shown based on template/project type
-→ provider opened in browser
+---
 
 ## Backend Flow (Supabase)
 
 Open folder
 → Services
 → Backend → Supabase
-→ Quick Connect or "Check Supabase setup"
-→ "Create .env file" if needed
-→ Add connection values
-→ "Install Supabase client"
-→ "Create Supabase client file"
-→ import client in application code
-
-## Service Log Flow
-
-Open folder
-→ use a provider inside Services
-→ logs append to that provider only
-→ switch providers without log mixing
-→ return to provider and see earlier provider history
+→ Quick Connect
+→ Create `.env`
+→ install client
+→ create client file
+→ connect backend
 
 ---
 
@@ -863,27 +762,20 @@ Open folder
 Current stable milestone includes:
 
 * AI message architecture
-* safe filesystem tools
-* preview runtime
-* scaffold templates
+* tool runtime
+* agent runtime
+* preview runner
+* scaffold system
 * command runner
 * service integration layer
 * GitHub workflow
-* GitHub import
-* deploy shortcuts
-* smart deploy guidance
+* deploy guidance
 * Supabase backend integration
-* guided Supabase setup actions
 * Supabase Quick Connect
-* Supabase polish for calmer UX and clearer log flow
-* per-service Services log isolation
+* per-service log isolation
+* tool-calling agent loop
+* agent runtime hardening for weaker models
 
-This project map should be updated whenever:
-
-* execution authority moves
-* registry responsibilities change
-* a new runtime lane appears
-* deploy recommendation mappings expand
-* ServicePanel persistence structure changes
+---
 
 

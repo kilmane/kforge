@@ -1,11 +1,10 @@
 
-
 # User Guide Notes (development capture)
 
-Last Updated: March 27th, 2026
+Last Updated: **March 28th, 2026**
 
 Location:
-D:\kforge\docs-internal\user-guide-notes.md
+`D:\kforge\docs-internal\user-guide-notes.md`
 
 These notes capture **user-facing behavior during development**.
 
@@ -72,9 +71,11 @@ No dependency installation is required.
 
 Example static project:
 
+```
 index.html
 styles.css
 script.js
+```
 
 For static-only projects the **Install** step is skipped.
 
@@ -97,13 +98,15 @@ Open
 
 Typical commands executed:
 
+```
 pnpm install
 pnpm dev
+```
 
 Currently recognized framework templates include:
 
-Vite + React
-Next.js
+* Vite + React
+* Next.js
 
 ---
 
@@ -113,9 +116,9 @@ Generate creates a **starter template project** inside the opened workspace fold
 
 Current templates supported:
 
-Static HTML/CSS/JS
-Vite + React
-Next.js
+* Static HTML/CSS/JS
+* Vite + React
+* Next.js
 
 Template generation is driven by the **Template Registry**.
 
@@ -125,9 +128,11 @@ Template generation is driven by the **Template Registry**.
 
 Creates a simple project:
 
+```
 index.html
 styles.css
 script.js
+```
 
 Workflow:
 
@@ -143,7 +148,9 @@ No dependency installation required.
 
 Command executed:
 
+```
 pnpm dlx create-vite@latest . --template react --no-interactive
+```
 
 Dependencies are installed later using **Install**.
 
@@ -153,7 +160,9 @@ Dependencies are installed later using **Install**.
 
 Command executed:
 
+```
 pnpm create next-app@latest . --yes
+```
 
 Next.js installs dependencies during generation.
 
@@ -167,7 +176,9 @@ Install installs project dependencies.
 
 Command used:
 
+```
 pnpm install
+```
 
 Not required for static projects.
 
@@ -214,7 +225,7 @@ Current providers visible in development include:
 * Supabase
 * Stripe
 
-The panel is task-first and only shows one active provider at a time.
+The panel is **task-first** and only shows one active provider at a time.
 
 This keeps the surface calmer as integrations expand.
 
@@ -269,7 +280,7 @@ Deploy currently supports:
 
 Deploy actions are lightweight handoffs to provider flows in the browser.
 
-KForge does not expose advanced hosting dashboards inside the app.
+KForge does **not expose advanced hosting dashboards inside the app**.
 
 The deploy workflow is intended to feel like:
 
@@ -396,7 +407,9 @@ When Quick Connect or **Check Supabase setup** runs, KForge inspects the project
 
 Empty values such as:
 
+```
 SUPABASE_URL=
+```
 
 are treated as **not configured**.
 
@@ -491,8 +504,10 @@ npx supabase start
 
 Vite-based frontend apps typically use:
 
+```
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
+```
 
 These variables are exposed to the browser by Vite.
 
@@ -526,7 +541,9 @@ Install Supabase client
 
 This runs:
 
+```
 pnpm add @supabase/supabase-js
+```
 
 The installation is executed through a shell path designed to work reliably on Windows.
 
@@ -536,7 +553,9 @@ The installation is executed through a shell path designed to work reliably on W
 
 The panel can generate a client file:
 
+```
 src/lib/supabase.js
+```
 
 Example:
 
@@ -595,6 +614,91 @@ Import from GitHub clones the selected repository into the chosen parent folder 
 
 ---
 
+# AI Models and Provider Behavior
+
+KForge supports multiple AI providers.
+
+Different models have **different strengths and behaviors**.
+
+Some models are optimized for reasoning and tool use, while others are optimized for speed and conversation.
+
+---
+
+## Why Groq / Llama / Mixtral still matter
+
+### Speed (Groq’s strength)
+
+Groq models are extremely fast.
+
+Typical latency:
+
+| Provider | Typical Speed            |
+| -------- | ------------------------ |
+| Groq     | ⚡ 20–50 tokens/sec       |
+| OpenAI   | ~5–15 tokens/sec         |
+| Claude   | slower but very accurate |
+
+This makes Groq excellent for:
+
+* brainstorming
+* code explanations
+* UI ideas
+* quick conversations
+* rapid iteration
+
+---
+
+### Cost and accessibility
+
+Groq is often:
+
+* free
+* extremely inexpensive
+
+This makes it useful for:
+
+* beginners
+* experimentation
+* fast iteration
+* non-critical tasks
+
+---
+
+### Model diversity
+
+Different models are good at different tasks.
+
+Example:
+
+| Model type      | Best use                 |
+| --------------- | ------------------------ |
+| GPT-4o / Claude | tool-driven agents       |
+| Groq Llama      | fast chat                |
+| Mixtral         | reasoning                |
+| small models    | inexpensive autocomplete |
+
+KForge becomes more powerful when **multiple models are available**.
+
+---
+
+## Practical KForge usage guidance
+
+For best results:
+
+| Task                     | Suggested provider |
+| ------------------------ | ------------------ |
+| Chat / brainstorming     | Groq               |
+| Tool-based agent actions | OpenAI / Claude    |
+| Code reasoning           | either             |
+
+This allows users to balance:
+
+* speed
+* cost
+* reliability
+
+---
+
 # User-Facing Design Principles Captured So Far
 
 KForge should feel:
@@ -613,4 +717,5 @@ KForge should avoid:
 * provider-specific complexity walls
 
 ---
+
 

@@ -105,8 +105,6 @@ const SAFE_AUTOMATIC_TOOLS = new Set([
   "read_file",
   "list_dir",
   "search_in_file",
-  "write_file",
-  "mkdir",
 ]);
 
 function getMsgText(msg) {
@@ -330,8 +328,7 @@ function buildToolBatchDoneMessage(calls) {
     return `${intro}\n${lines.join("\n")}`;
   }
 
-  const total = Array.isArray(calls) ? calls.length : 0;
-  return `Done — applied ${total} project ${total === 1 ? "change" : "changes"}.`;
+  return "";
 }
 function buildAgentConversationInput(messages, tools, maxTurns = 20) {
   const relevant = (Array.isArray(messages) ? messages : [])
@@ -885,10 +882,17 @@ export default function AiPanel({
     },
     [appendMessage, updateMessage],
   );
-
+  const lastToolEventRef = useRef("");
   const appendTranscript = useCallback(
     (entry) => {
       const meta = entry?.meta || {};
+      const fingerprint = `${meta.toolName || ""}:${meta.phase || ""}:${String(entry?.content || "").slice(0, 120)}`;
+
+      if (fingerprint && lastToolEventRef.current === fingerprint) {
+        return; // prevent duplicate transcript entries
+      }
+
+      lastToolEventRef.current = fingerprint;
       const phase = meta.phase;
 
       if (phase === "call") return;
@@ -1102,10 +1106,24 @@ export default function AiPanel({
         if (batchCalls.length > 0) {
           appendMessage("assistant", buildToolBatchWorkingMessage(batchCalls));
 
+          const executedBatchResults = [];
+
           for (const call of batchCalls) {
-            await runTool({
+            const result = await runTool({
               toolName: call.toolName,
               args: call.args,
+            });
+
+            executedBatchResults.push({
+              toolName: String(call.toolName || ""),
+              args: call.args || {},
+              ok: !!result?.ok,
+              cancelled: !!result?.cancelled,
+              error: result?.error ? String(result.error) : "",
+              result:
+                typeof result?.result === "string"
+                  ? result.result
+                  : JSON.stringify(result?.result ?? {}, null, 2),
             });
           }
 
@@ -1117,13 +1135,25 @@ export default function AiPanel({
 
               const agentResult = await runAgent({
                 prompt: "",
-                messages: (Array.isArray(messages) ? messages : []).map(
-                  (m) => ({
+                messages: [
+                  ...(Array.isArray(messages) ? messages : []).map((m) => ({
                     role: String(m?.role || "system"),
                     content: String(m?.content || ""),
-                  }),
-                ),
+                  })),
+                  ...executedBatchResults.map((item) => ({
+                    role: "system",
+                    content: item.cancelled
+                      ? `Tool result:\n${item.toolName} was cancelled by the user.`
+                      : item.ok
+                        ? `Tool result:\n${item.result}`
+                        : `Tool result:\n${item.toolName} failed.\n${item.error || "Unknown error"}`,
+                  })),
+                ],
                 tools: toolSchemas,
+                initialSeenToolCalls: batchCalls.map((call) => ({
+                  name: call.toolName,
+                  args: call.args,
+                })),
                 callModel: async ({ messages: workingMessages }) => {
                   const input = buildAgentConversationInput(
                     workingMessages,
@@ -1171,7 +1201,8 @@ export default function AiPanel({
                 appendMessage("assistant", finalText);
               } else if (
                 agentResult?.stopReason &&
-                agentResult.stopReason !== "final_text"
+                agentResult.stopReason !== "final_text" &&
+                agentResult.stopReason !== "duplicate_tool_call"
               ) {
                 appendMessage(
                   "system",

@@ -95,6 +95,7 @@ export async function runAgent({
   appendTranscript = defaultAppendTranscript,
   appendToolResult = defaultAppendToolResult,
   maxSteps = 8,
+  initialSeenToolCalls = [],
 }) {
   if (typeof callModel !== "function") {
     throw new Error("runAgent: callModel is required");
@@ -105,7 +106,11 @@ export async function runAgent({
   }
 
   const workingMessages = Array.isArray(messages) ? [...messages] : [];
-  const seenToolCalls = new Set();
+  const seenToolCalls = new Set(
+    (Array.isArray(initialSeenToolCalls) ? initialSeenToolCalls : [])
+      .map((toolCall) => buildToolCallKey(toolCall))
+      .filter(Boolean),
+  );
   if (prompt && String(prompt).trim()) {
     workingMessages.push({
       role: "user",
@@ -127,13 +132,13 @@ export async function runAgent({
       const callKey = buildToolCallKey(normalizedToolCall);
 
       if (callKey && seenToolCalls.has(callKey)) {
-        return {
-          ok: false,
-          text: "",
-          steps: step,
-          messages: workingMessages,
-          stopReason: "duplicate_tool_call",
-        };
+        // Skip duplicate tool calls and let the model continue reasoning
+        workingMessages.push({
+          role: "system",
+          content:
+            "The requested tool call was already executed earlier. Do not repeat it. Continue reasoning and produce the final answer.",
+        });
+        continue;
       }
 
       if (callKey) {
