@@ -2,6 +2,7 @@
 
 import { listKforgeServiceWorkflows } from "./kforgeServiceWorkflows";
 import { buildKforgePreviewWorkflowManifest } from "./kforgePreviewWorkflows";
+import { listKforgeTerminalWorkflows } from "./kforgeTerminalWorkflows";
 import { discoverCapabilities } from "./discoverCapabilities";
 
 /*
@@ -103,6 +104,7 @@ export function buildKforgeCapabilitySummary(userMessage = "") {
   const workflows = [
     ...listKforgeServiceWorkflows(),
     buildKforgePreviewWorkflowManifest(),
+    ...listKforgeTerminalWorkflows(),
   ];
 
   const discovered = discoverCapabilities();
