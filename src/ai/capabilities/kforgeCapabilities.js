@@ -137,7 +137,8 @@ export function buildKforgeCapabilitySummary(userMessage = "") {
     pushWorkflow(lines, workflow);
   }
 
-  pushDiscovered(lines, discovered);
+  const filteredDiscovered = filterRelevantWorkflows(discovered, userMessage);
+  pushDiscovered(lines, filteredDiscovered);
 
   lines.push("=== End KForge Workflow Awareness ===");
   lines.push("");
