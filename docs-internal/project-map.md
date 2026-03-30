@@ -5,8 +5,8 @@ Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: **v19**
-Updated: **29/03/2026**
+Version: **v20**
+Updated: **30/03/2026**
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -46,9 +46,9 @@ src/App.js
 
 Structure:
 
-```
+```text
 messages = [{ id, role, content, ts, action?, actions? }]
-```
+````
 
 Everything renders from this.
 
@@ -129,7 +129,7 @@ Handles:
 
 Runtime flow:
 
-```
+```text
 detect tool
 → consent
 → handler execution
@@ -193,7 +193,7 @@ The runtime now supports **multi-step reasoning with tools**.
 
 Execution flow:
 
-```
+```text
 assistant reasoning
 → tool request
 → runtime executes tool
@@ -481,7 +481,7 @@ Unified architecture for external service integrations.
 
 Pattern:
 
-```
+```text
 registry entry
 + adapter implementation
 ```
@@ -536,7 +536,7 @@ As of Phase 4.9.1, logs are **provider-keyed**.
 
 Structure:
 
-```
+```text
 {
   github: [],
   supabase: [],
@@ -647,6 +647,11 @@ Capabilities include:
 
 Authentication handled by **GitHub CLI**.
 
+Important distinction:
+
+* **Services → Code → GitHub** is for actions on the **current open local project**
+* **New Project → Import from GitHub** is the GitHub import flow
+
 ---
 
 # 5c Smart Deploy Guidance
@@ -671,7 +676,116 @@ Good fit: Netlify or Vercel
 
 ---
 
-# 6 Layout / Dock Architecture
+# 6 AI Capability Awareness Architecture (Phase 5.0.2)
+
+Primary files:
+
+* src/ai/capabilities/kforgeCapabilities.js
+* src/ai/capabilities/kforgeServiceWorkflows.js
+* src/ai/capabilities/kforgePreviewWorkflows.js
+
+Purpose:
+
+Teach the AI about **real KForge workflows** so it can guide users toward KForge-first actions instead of immediately performing those workflows inside chat.
+
+---
+
+## Top-Level Formatter
+
+File:
+
+src/ai/capabilities/kforgeCapabilities.js
+
+Responsibilities:
+
+* assemble KForge workflow-awareness context
+* combine multiple capability domains
+* apply global handoff rules
+* provide AI-facing workflow summary used by App.js prompt construction
+
+Current global rule:
+
+If a workflow exists in KForge, the assistant should guide the user to that workflow first and should not execute that workflow inside chat unless the user explicitly chooses to bypass KForge.
+
+---
+
+## Current Capability Domains
+
+### Service workflows
+
+File:
+
+src/ai/capabilities/kforgeServiceWorkflows.js
+
+Current grounded domains include:
+
+* GitHub
+* Supabase
+* Stripe
+* Vercel
+* Netlify
+
+### Preview / Generate workflows
+
+File:
+
+src/ai/capabilities/kforgePreviewWorkflows.js
+
+Current grounded domain includes:
+
+* Preview → Generate
+* Install / Preview follow-up guidance
+* supported starter templates
+
+---
+
+## AI Guidance Boundaries
+
+Important rule:
+
+This architecture is for **AI-awareness only**.
+
+It must not reintroduce the rejected UI-routing behavior from the earlier Phase 5.0.1 experiment.
+
+Do **not** use AI intent to:
+
+* auto-open Services
+* auto-select providers
+* change Focus Mode
+* hijack panels
+* create sticky recommendation state
+
+Safe scope:
+
+* infer relevant KForge workflow
+* improve AI wording and handoff behavior
+* keep UI state unchanged
+
+---
+
+## AI Capability Awareness Maintenance Rule
+
+Current maintenance discipline:
+
+* new **service workflow** → update:
+
+  * src/ai/capabilities/kforgeServiceWorkflows.js
+* new **non-service guided workflow or panel** → create or update a manifest under:
+
+  * src/ai/capabilities/
+* then include that manifest in:
+
+  * src/ai/capabilities/kforgeCapabilities.js
+
+Why this matters:
+
+Without this step, the AI may not know that the new KForge capability exists and may incorrectly try to do the task directly in chat instead of guiding the user to the product workflow.
+
+This is currently manual and is a known target for improvement in the next phase.
+
+---
+
+# 7 Layout / Dock Architecture
 
 Dock shell file:
 
@@ -691,7 +805,7 @@ Focus mode is a surface promotion.
 
 ---
 
-# 7 Operational Flow Map
+# 8 Operational Flow Map
 
 ## Standard Local Development
 
@@ -728,9 +842,13 @@ Open folder
 
 Open folder
 → Services
-→ Publish
-→ Push changes
-→ Open on GitHub or Pull latest
+→ Code → GitHub
+→ Publish / Push / Pull / Open repository
+
+Import flow:
+
+New Project
+→ Import from GitHub
 
 ---
 
@@ -757,7 +875,27 @@ Open folder
 
 ---
 
-# 8 Stable Milestone Summary
+## Preview Template Flow
+
+Open folder
+→ Preview
+→ Generate
+→ Install if needed
+→ Preview
+→ Open
+
+---
+
+## Workflow-Aware AI Flow
+
+User asks for a capability
+→ AI checks whether KForge already has a workflow for it
+→ AI guides user to the KForge-first path
+→ AI only continues inside chat if the user explicitly chooses to bypass KForge
+
+---
+
+# 9 Stable Milestone Summary
 
 Current stable milestone includes:
 
@@ -775,7 +913,27 @@ Current stable milestone includes:
 * per-service log isolation
 * tool-calling agent loop
 * agent runtime hardening for weaker models
+* AI workflow-awareness manifests
+* Preview workflow-aware AI guidance
+* GitHub import-vs-service distinction in AI guidance
+* KForge-first handoff behavior for supported workflows
 
 ---
 
+# 10 Next Architecture Lane
+
+Next planned lane:
+
+**Phase 5.0.3 — Global AI Capability Awareness**
+
+Likely goals:
+
+* safe intent routing with no UI auto-navigation
+* broader awareness beyond Services alone
+* terminal awareness if present
+* capability summary compression / relevance filtering
+* AI capability self-discovery from real KForge code sources
+* reduced manual maintenance when new KForge capabilities are added
+
+---
 

@@ -1,17 +1,19 @@
+
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **March 29th, 2026**
+Last Updated: **March 30th, 2026**
 
-Phase: **4.10.1 — Agent Hardening**
+Phase: **5.0.2 — KForge service workflow awareness for AI guidance**
 Status: **Stable milestone committed**
 
 Stable restore tags now available:
 
 - `phase-4.10-agent-loop-stable`
 - `phase-4.10.1-agent-hardening-stable`
+- `phase-5.0.2-kforge-workflow-awareness`
 
 ---
 
@@ -464,6 +466,7 @@ service_setup
 github_detect_repo
 github_open_repo
 github_pull
+github_push
 github_clone_repo
 supabase_create_env_file
 supabase_install_client
@@ -1087,7 +1090,7 @@ Conceptual shape:
   supabase: [],
   stripe: [],
 }
-```
+````
 
 Persisted state now tracks:
 
@@ -1309,6 +1312,200 @@ Best tool-driving reliability still comes from stronger models such as OpenAI or
 
 ---
 
+# 🟦 5.0.1 Intent-Driven Backend Setup (rolled back UI-routing attempt)
+
+Phase 5.0.1 explored **intent-driven backend setup** by inferring likely backend needs from prompts such as:
+
+• "I need login"
+• "I need a database"
+• "I need file storage"
+
+The original implementation tried to route that intent into UI behavior.
+
+This version was deliberately rolled back.
+
+---
+
+## Why 5.0.1 Was Rejected
+
+The original UI-routing version caused bad UX and unstable state behavior, including:
+
+• forced jump into Services
+• auto-selection of providers
+• Focus Mode / Exit Focus stickiness
+• Reset Workspace feeling trapped in recommendation state
+
+This proved that AI intent should **not** directly drive UI routing in the current architecture.
+
+---
+
+## 5.0.1 Important Lesson
+
+The useful part of the experiment was:
+
+• making the AI aware of KForge capabilities
+
+The rejected part was:
+
+• auto-opening Services
+• panel hijacking
+• sticky recommendation state
+• focus-mode side effects
+
+Safe future direction:
+
+AI-awareness only, not UI control.
+
+---
+
+# 🟦 5.0.2 KForge Service Workflow Awareness for AI Guidance
+
+Phase 5.0.2 rebuilt the useful part of the 5.0.1 experiment safely.
+
+Instead of trying to control the UI, this phase taught the AI about **real KForge workflows**.
+
+Primary files:
+
+• src/ai/capabilities/kforgeCapabilities.js
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/App.js
+
+---
+
+## 5.0.2 Purpose
+
+The goal was to make the assistant aware of KForge as a product, not just as a file-editing chatbot.
+
+This allows the AI to guide users toward KForge-first workflows such as:
+
+• Services → Backend → Supabase
+• Services → Code → GitHub
+• Services → Deploy → Vercel / Netlify
+• Preview → Generate
+
+without forcing any UI state change.
+
+---
+
+## 5.0.2 Capability Awareness Model
+
+KForge AI awareness now uses structured manifests.
+
+Current structure:
+
+### Top-level formatter
+
+src/ai/capabilities/kforgeCapabilities.js
+
+### Service workflow manifest
+
+src/ai/capabilities/kforgeServiceWorkflows.js
+
+### Preview / Generate workflow manifest
+
+src/ai/capabilities/kforgePreviewWorkflows.js
+
+This is the first real internal architecture for **product-aware AI guidance** inside KForge.
+
+---
+
+## 5.0.2 Behavior Rule
+
+Important new AI rule:
+
+If a workflow exists in KForge, the assistant should guide the user to that workflow first and should not execute that workflow inside chat unless the user explicitly chooses to bypass KForge.
+
+This now applies to:
+
+• Supabase guided setup
+• GitHub service actions
+• Deploy handoff guidance
+• Preview template generation
+
+---
+
+## 5.0.2 Grounded Product Truths Captured
+
+The AI now has explicit product guidance for:
+
+### Supabase
+
+Preferred path:
+
+Services
+→ Backend
+→ Supabase
+
+The AI should hand off to:
+
+• Quick Connect Supabase
+• Check Supabase setup
+
+and should not immediately create `.env` or client files in chat unless the user explicitly chooses to bypass KForge.
+
+### GitHub
+
+Services → Code → GitHub is for actions on the **current open local project**.
+
+Current GitHub actions include:
+
+• publish
+• push
+• pull
+• open repository
+
+GitHub import is **not** in Services.
+
+Import path is:
+
+New Project
+→ Import from GitHub
+
+### Preview / Generate
+
+If the user asks for a React / Next.js / static starter app that KForge can generate, AI should guide them to:
+
+Preview
+→ Generate
+
+and should not manually scaffold template files in chat unless the user explicitly chooses to bypass KForge.
+
+### Stripe
+
+Stripe is still **planned**, not a ready guided KForge workflow.
+
+The AI should say this clearly and should not pretend the workflow is available.
+
+---
+
+## AI Capability Awareness Maintenance Rule
+
+KForge AI workflow awareness is now maintained through structured capability manifests.
+
+Current files:
+
+• src/ai/capabilities/kforgeCapabilities.js
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/kforgePreviewWorkflows.js
+
+Current maintenance rule:
+
+• if a new **service workflow** is added, update:
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• if a new **non-service guided workflow or panel** is added, create or update a manifest under:
+• src/ai/capabilities/
+• then include that workflow manifest in:
+• src/ai/capabilities/kforgeCapabilities.js
+
+Reason:
+
+Without this step, the AI may not know that the new KForge capability exists, may fail to guide users to it, or may incorrectly bypass the KForge workflow and try to perform the task directly in chat.
+
+This is currently a **manual maintenance discipline** and should later be improved by a broader global AI capability awareness / self-discovery system.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -1356,6 +1553,13 @@ Choose local create or GitHub import
 Open project automatically
 Continue development
 
+Workflow-aware AI guidance:
+
+User asks for a capability
+→ AI maps request to an existing KForge workflow if one exists
+→ AI guides user to KForge-first path
+→ AI only continues in chat if the user explicitly chooses to bypass KForge
+
 ---
 
 # 🟢 6️⃣ Filesystem Guarantees
@@ -1398,7 +1602,7 @@ Principles:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 4.10.1 Agent Hardening**:
+As of **Phase 5.0.2 — KForge service workflow awareness for AI guidance**:
 
 • AI surface stable
 • filesystem tools validated
@@ -1437,6 +1641,10 @@ As of **Phase 4.10.1 Agent Hardening**:
 • stale tool-result continuation fix working
 • Supabase documentation captured
 • agent runtime documentation captured
+• AI workflow-awareness manifests implemented
+• Preview template workflow awareness implemented
+• GitHub import-vs-service distinction captured for AI guidance
+• KForge-first handoff behavior implemented for guided workflows
 
 Supported workflows now include:
 
@@ -1460,22 +1668,32 @@ Supabase beginner-friendly guided setup
 Per-service persistent activity logs in Services
 Tool-based AI inspection and reasoning
 Agent-style read/inspect/explain loops
+Workflow-aware AI guidance to existing KForge features
+Preview-driven template generation guidance
+KForge-first handoff for supported product workflows
 
 ---
 
 # 🏗 Extensibility Lanes
 
-KForge now has five extensibility/runtime systems:
+KForge now has six extensibility/runtime systems:
 
 Template Registry
 Service Registry
 Preview Runtime
 Command Runtime
 Agent Runtime
+AI Capability Awareness Manifests
 
 These lanes allow new capabilities to be added without redesigning the architecture.
 
 Future integrations will attach adapters rather than creating new subsystems.
+
+Current AI-awareness maintenance discipline:
+
+• new service workflow → update `src/ai/capabilities/kforgeServiceWorkflows.js`
+• new non-service guided workflow → add/update a manifest under `src/ai/capabilities/`
+• then include it in `src/ai/capabilities/kforgeCapabilities.js`
 
 Planned adapters:
 
@@ -1491,6 +1709,8 @@ Possible future backend improvements:
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
 • richer model-routing between fast chat models and stronger tool-driving models
+• broader global AI capability awareness
+• AI capability self-discovery from real KForge registries / panels
 
 ---
 
@@ -1536,9 +1756,9 @@ Replace the **entire file**.
 
 Advantages:
 
-- fewer merge mistakes
-- clearer changes
-- easier verification
+* fewer merge mistakes
+* clearer changes
+* easier verification
 
 Large files should use **precise block replacement instead**.
 
@@ -1599,9 +1819,9 @@ Development proceeds **incrementally**.
 
 Rules:
 
-- no jumping ahead
-- verify each change
-- test before continuing
+* no jumping ahead
+* verify each change
+* test before continuing
 
 This discipline keeps KForge stable even during rapid iteration.
 
@@ -1621,6 +1841,10 @@ Phase 4.10 then introduced the first real **tool-calling agent loop**.
 
 Phase 4.10.1 hardened that loop based on real model behavior, especially for weaker models.
 
+Phase 5.0.1 explored **Intent-Driven Backend Setup**, but the UI-routing version was deliberately rolled back because auto-navigation and sticky state created instability.
+
+Phase 5.0.2 then rebuilt the useful part safely as **KForge service workflow awareness for AI guidance**.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -1630,6 +1854,8 @@ What this now proves:
 • backend integrations can remain explicit, calm, and low-noise without turning into dashboard-heavy workflows
 • KForge can support real agent-style reasoning without sacrificing consent-gated tooling
 • weaker models can be made more usable with targeted runtime hardening
+• AI can be taught real KForge workflows without hijacking the UI
+• KForge product awareness should live in structured manifests, not scattered prompt prose
 
 Current stable journey:
 
@@ -1640,74 +1866,37 @@ Local Project
 → Supabase Quick Connect
 → guided Supabase setup
 → AI tool-calling agent workflow
+→ KForge workflow-aware AI guidance
 
-This sets up the next major integration lanes:
+This sets up the next major integration lane:
 
-Phase 5.0 — Intent-Driven Backend Setup
+Phase 5.0.3 — Global AI Capability Awareness
 
-Allow users to request backend capabilities by intent rather than by provider.
+Goals:
 
-Examples:
+• safe intent routing with no UI auto-navigation
+• broader awareness beyond Services alone
+• Preview / Generate / template-awareness expansion
+• terminal-awareness if terminal capability exists
+• capability summary compression / relevance filtering
+• AI capability self-discovery from real codebase sources where possible
+• reduced manual maintenance when new KForge capabilities are added
 
-"I need login"
-"I need a database"
-"I need file storage"
+Important warning for future work:
 
-KForge interprets the request and recommends an appropriate backend integration.
+Do **not** return to intrusive UI-routing intent behavior.
 
----
+Previously rejected:
 
-Phase 5.1 — Stripe Adapter
+• auto-opening Services
+• auto-selecting providers from chat
+• focus-mode side effects
+• sticky recommendation state
+• panel hijacking
 
-Guided Stripe setup and example payment flow.
+Safe direction is:
 
-The adapter will assist with:
+AI-awareness only, not UI control.
 
-• installing Stripe SDK
-• environment variable setup
-• example payment workflow
-• developer-friendly usage examples
+````
 
----
-
-Phase 5.2 — OpenAI Adapter
-
-Guided OpenAI SDK setup and example usage.
-
-The adapter will assist with:
-
-• installing the OpenAI SDK
-• environment variable setup
-• example API calls
-• framework-aware usage guidance
-
----
-
-Phase 5.3 — Supabase Developer Assist
-
-Enhance Supabase developer ergonomics after setup.
-
-Capabilities may include:
-
-• generating example queries
-• CRUD helper examples
-• detecting existing Supabase client files
-• framework-aware usage examples
-
-This phase improves developer productivity once Supabase is already connected.
-
----
-
-Phase 5.4 — Future Template Expansion
-
-Current templates remain sufficient:
-
-• Static HTML
-• Vite + React
-• Next.js
-
-Possible future template:
-
-• Expo React Native (mobile app template)
-
-Template expansion will continue to use the registry-driven scaffold system introduced earlier.

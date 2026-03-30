@@ -1,7 +1,6 @@
-
 # User Guide Notes (development capture)
 
-Last Updated: **March 28th, 2026**
+Last Updated: **March 30th, 2026**
 
 Location:
 `D:\kforge\docs-internal\user-guide-notes.md`
@@ -48,8 +47,8 @@ package.json signals → framework identification when possible
 
 This allows KForge to both:
 
-* decide the correct preview workflow
-* show a more human-readable project detection result when possible
+- decide the correct preview workflow
+- show a more human-readable project detection result when possible
 
 ---
 
@@ -71,7 +70,7 @@ No dependency installation is required.
 
 Example static project:
 
-```
+```text
 index.html
 styles.css
 script.js
@@ -98,15 +97,15 @@ Open
 
 Typical commands executed:
 
-```
+```text
 pnpm install
 pnpm dev
 ```
 
 Currently recognized framework templates include:
 
-* Vite + React
-* Next.js
+- Vite + React
+- Next.js
 
 ---
 
@@ -116,11 +115,24 @@ Generate creates a **starter template project** inside the opened workspace fold
 
 Current templates supported:
 
-* Static HTML/CSS/JS
-* Vite + React
-* Next.js
+- Static HTML/CSS/JS
+- Vite + React
+- Next.js
 
 Template generation is driven by the **Template Registry**.
+
+Generate is available from the **Preview** panel.
+
+Typical flow:
+
+Open Folder
+Preview
+Generate
+Install (if needed)
+Preview
+Open
+
+If no folder is open, Generate is blocked.
 
 ---
 
@@ -128,7 +140,7 @@ Template generation is driven by the **Template Registry**.
 
 Creates a simple project:
 
-```
+```text
 index.html
 styles.css
 script.js
@@ -148,7 +160,7 @@ No dependency installation required.
 
 Command executed:
 
-```
+```text
 pnpm dlx create-vite@latest . --template react --no-interactive
 ```
 
@@ -160,7 +172,7 @@ Dependencies are installed later using **Install**.
 
 Command executed:
 
-```
+```text
 pnpm create next-app@latest . --yes
 ```
 
@@ -176,11 +188,13 @@ Install installs project dependencies.
 
 Command used:
 
-```
+```text
 pnpm install
 ```
 
 Not required for static projects.
+
+If a template already installs dependencies during scaffold, Install may not be needed immediately.
 
 ---
 
@@ -212,18 +226,18 @@ The Services panel is a guided integration surface for project-connected tasks.
 
 Current groups:
 
-* Code
-* Deploy
-* Backend
-* Payments
+- Code
+- Deploy
+- Backend
+- Payments
 
 Current providers visible in development include:
 
-* GitHub
-* Vercel
-* Netlify
-* Supabase
-* Stripe
+- GitHub
+- Vercel
+- Netlify
+- Supabase
+- Stripe
 
 The panel is **task-first** and only shows one active provider at a time.
 
@@ -253,21 +267,40 @@ This behavior was introduced in **Phase 4.9.1 — ServicePanel log isolation**.
 
 # GitHub in Services
 
+GitHub currently supports actions for the **current open local project**.
+
 GitHub currently supports:
 
-* Publish
-* Push changes
-* Pull latest
-* Open on GitHub
+- Publish
+- Push changes
+- Pull latest
+- Open on GitHub
 
 GitHub state shown in the panel includes:
 
-* whether a git repo is detected
-* whether a commit exists
-* whether a remote exists
-* current branch
+- whether a git repo is detected
+- whether a commit exists
+- whether a remote exists
+- current branch
 
 Publishing requires a project folder to be open.
+
+Important clarification:
+
+**Services → Code → GitHub is not the GitHub import flow.**
+
+It is used for GitHub actions on the project that is already open in KForge.
+
+---
+
+## Import from GitHub
+
+If the user wants to bring an existing GitHub repository into KForge, the correct flow is:
+
+New Project
+→ Import from GitHub
+
+This is separate from **Services → Code → GitHub**.
 
 ---
 
@@ -275,8 +308,8 @@ Publishing requires a project folder to be open.
 
 Deploy currently supports:
 
-* Vercel
-* Netlify
+- Vercel
+- Netlify
 
 Deploy actions are lightweight handoffs to provider flows in the browser.
 
@@ -342,10 +375,10 @@ Users can still choose either provider.
 
 Supabase provides:
 
-* hosted database
-* authentication
-* storage
-* API services
+- hosted database
+- authentication
+- storage
+- API services
 
 KForge helps connect a project to Supabase through **guided setup assistance**.
 
@@ -366,10 +399,10 @@ Quick Connect performs a guided setup check and helps prepare the project for Su
 
 Quick Connect verifies:
 
-* environment variables
-* Supabase client library
-* Supabase configuration
-* client file presence
+- environment variables
+- Supabase client library
+- Supabase configuration
+- client file presence
 
 If issues are detected, the panel suggests the next step required.
 
@@ -383,12 +416,12 @@ The Supabase panel acts as a **guided checklist**.
 
 Typical actions available:
 
-* Quick Connect
-* Check Supabase setup
-* Create `.env` file
-* Install Supabase client
-* Create Supabase client file
-* Open Supabase dashboard
+- Quick Connect
+- Check Supabase setup
+- Create `.env` file
+- Install Supabase client
+- Create Supabase client file
+- Open Supabase dashboard
 
 ---
 
@@ -396,18 +429,18 @@ Typical actions available:
 
 When Quick Connect or **Check Supabase setup** runs, KForge inspects the project for:
 
-* environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
-* whether `SUPABASE_URL` has a value
-* whether `SUPABASE_ANON_KEY` has a value
-* whether `VITE_SUPABASE_URL` has a value
-* whether `VITE_SUPABASE_ANON_KEY` has a value
-* local Supabase configuration (`supabase/config.toml`)
-* Supabase client library presence in `package.json`
-* existence of a client file such as `src/lib/supabase.js`
+- environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
+- whether `SUPABASE_URL` has a value
+- whether `SUPABASE_ANON_KEY` has a value
+- whether `VITE_SUPABASE_URL` has a value
+- whether `VITE_SUPABASE_ANON_KEY` has a value
+- local Supabase configuration (`supabase/config.toml`)
+- Supabase client library presence in `package.json`
+- existence of a client file such as `src/lib/supabase.js`
 
 Empty values such as:
 
-```
+```text
 SUPABASE_URL=
 ```
 
@@ -445,7 +478,7 @@ Local Supabase projects are usually created with the **Supabase CLI**.
 
 To start the local development stack, run:
 
-```
+```text
 npx supabase start
 ```
 
@@ -453,14 +486,14 @@ This command launches the local Supabase services using Docker.
 
 When the stack starts, the CLI prints important connection values such as:
 
-* API URL
-* Studio URL
-* Database connection string
-* anon public key
+- API URL
+- Studio URL
+- Database connection string
+- anon public key
 
 Example output:
 
-```
+```text
 API URL: http://127.0.0.1:54321
 Studio URL: http://127.0.0.1:54323
 anon key: eyJhbGciOiJIUzI1NiIs...
@@ -494,7 +527,7 @@ For cloud projects this key is copied from the Supabase dashboard.
 
 For local projects the key is printed when running:
 
-```
+```text
 npx supabase start
 ```
 
@@ -504,7 +537,7 @@ npx supabase start
 
 Vite-based frontend apps typically use:
 
-```
+```text
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 ```
@@ -541,7 +574,7 @@ Install Supabase client
 
 This runs:
 
-```
+```text
 pnpm add @supabase/supabase-js
 ```
 
@@ -553,7 +586,7 @@ The installation is executed through a shell path designed to work reliably on W
 
 The panel can generate a client file:
 
-```
+```text
 src/lib/supabase.js
 ```
 
@@ -581,10 +614,10 @@ Supabase actions write to the **Supabase service log**.
 
 Log behavior:
 
-* actions start a visible log section
-* sections are separated visually
-* timestamps are included
-* commands are easier to distinguish
+- actions start a visible log section
+- sections are separated visually
+- timestamps are included
+- commands are easier to distinguish
 
 This improves readability when running multiple setup actions.
 
@@ -598,8 +631,8 @@ Open Supabase
 
 This opens the Supabase dashboard where users normally copy:
 
-* project URL
-* anon key
+- project URL
+- anon key
 
 ---
 
@@ -607,10 +640,81 @@ This opens the Supabase dashboard where users normally copy:
 
 New Project supports:
 
-* creating a local project
-* importing from GitHub
+- creating a local project
+- importing from GitHub
 
 Import from GitHub clones the selected repository into the chosen parent folder and opens it automatically in KForge.
+
+---
+
+# AI Guidance Inside KForge
+
+KForge AI is becoming more aware of **real KForge workflows**.
+
+This means the assistant should increasingly guide the user toward KForge-first actions instead of immediately doing everything inside chat.
+
+Current examples:
+
+- for Supabase setup, AI should guide users to:
+  Services → Backend → Supabase
+- for GitHub actions on the current project, AI should guide users to:
+  Services → Code → GitHub
+- for creating a starter app template, AI should guide users to:
+  Preview → Generate
+- for importing a GitHub repository, AI should guide users to:
+  New Project → Import from GitHub
+
+---
+
+## AI Workflow Handoff Rule
+
+Current intended behavior:
+
+If a workflow already exists in KForge, the assistant should:
+
+1. guide the user to that KForge workflow first
+2. avoid performing that workflow directly inside chat
+3. only continue inside chat if the user explicitly wants to **bypass KForge**
+
+This helps KForge feel more like a guided tool surface and less like a generic coding chatbot.
+
+---
+
+## Example AI handoff behavior
+
+### React / Next.js / static starter app
+
+Preferred AI guidance:
+
+Preview
+→ Generate
+→ Install (if needed)
+→ Preview
+
+Instead of manually writing starter files in chat.
+
+### Supabase
+
+Preferred AI guidance:
+
+Services
+→ Backend
+→ Supabase
+
+Instead of immediately creating `.env` or client files inside chat.
+
+### GitHub
+
+Preferred AI guidance for an already-open project:
+
+Services
+→ Code
+→ GitHub
+
+Preferred guidance for importing a repo into KForge:
+
+New Project
+→ Import from GitHub
 
 ---
 
@@ -634,17 +738,17 @@ Typical latency:
 
 | Provider | Typical Speed            |
 | -------- | ------------------------ |
-| Groq     | ⚡ 20–50 tokens/sec       |
+| Groq     | ⚡ 20–50 tokens/sec      |
 | OpenAI   | ~5–15 tokens/sec         |
 | Claude   | slower but very accurate |
 
 This makes Groq excellent for:
 
-* brainstorming
-* code explanations
-* UI ideas
-* quick conversations
-* rapid iteration
+- brainstorming
+- code explanations
+- UI ideas
+- quick conversations
+- rapid iteration
 
 ---
 
@@ -652,15 +756,15 @@ This makes Groq excellent for:
 
 Groq is often:
 
-* free
-* extremely inexpensive
+- free
+- extremely inexpensive
 
 This makes it useful for:
 
-* beginners
-* experimentation
-* fast iteration
-* non-critical tasks
+- beginners
+- experimentation
+- fast iteration
+- non-critical tasks
 
 ---
 
@@ -693,9 +797,9 @@ For best results:
 
 This allows users to balance:
 
-* speed
-* cost
-* reliability
+- speed
+- cost
+- reliability
 
 ---
 
@@ -703,19 +807,17 @@ This allows users to balance:
 
 KForge should feel:
 
-* calm
-* explicit
-* guided
-* low-noise
-* project-aware
+- calm
+- explicit
+- guided
+- low-noise
+- project-aware
 
 KForge should avoid:
 
-* hidden actions
-* noisy debug-heavy surfaces
-* overwhelming dashboards
-* provider-specific complexity walls
+- hidden actions
+- noisy debug-heavy surfaces
+- overwhelming dashboards
+- provider-specific complexity walls
 
 ---
-
-
