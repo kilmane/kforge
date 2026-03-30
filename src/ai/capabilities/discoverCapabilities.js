@@ -15,19 +15,39 @@ and AI awareness.
 */
 
 import { SERVICE_REGISTRY } from "../../runtime/serviceRegistry";
+import { TEMPLATE_REGISTRY } from "../../runtime/templateRegistry";
 
 /*
 Discover service providers from the runtime registry.
 */
 
 export function discoverServiceCapabilities() {
-  if (!SERVICE_REGISTRY) return [];
+  if (!Array.isArray(SERVICE_REGISTRY)) return [];
 
-  return Object.keys(SERVICE_REGISTRY).map((name) => ({
-    name: `Service: ${name}`,
+  return SERVICE_REGISTRY.map((service) => ({
+    name: `Service: ${service.name}`,
+    status: service.status || "available",
+    route: `Services → ${service.name}`,
+    summary:
+      service.description ||
+      `Connect and configure the ${service.name} integration inside KForge.`,
+  }));
+}
+
+/*
+Discover templates from the runtime registry.
+*/
+
+export function discoverTemplateCapabilities() {
+  if (!Array.isArray(TEMPLATE_REGISTRY)) return [];
+
+  return TEMPLATE_REGISTRY.map((template) => ({
+    name: `Template: ${template.name}`,
     status: "available",
-    route: `Services → ${name}`,
-    summary: `Connect and configure the ${name} integration inside KForge.`,
+    route: `Preview → Generate → ${template.name}`,
+    summary:
+      template.description ||
+      `Generate a ${template.name} project from inside KForge.`,
   }));
 }
 
@@ -36,11 +56,10 @@ Main discovery entry point.
 Future domains can be added here.
 
 Examples:
-- template registry
-- terminal runner
 - environment panel
+- project memory
 */
 
 export function discoverCapabilities() {
-  return [...discoverServiceCapabilities()];
+  return [...discoverServiceCapabilities(), ...discoverTemplateCapabilities()];
 }
