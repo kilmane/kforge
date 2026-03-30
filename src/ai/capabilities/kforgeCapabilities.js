@@ -1,6 +1,8 @@
 // src/ai/capabilities/kforgeCapabilities.js
+
 import { listKforgeServiceWorkflows } from "./kforgeServiceWorkflows";
 import { buildKforgePreviewWorkflowManifest } from "./kforgePreviewWorkflows";
+import { discoverCapabilities } from "./discoverCapabilities";
 
 /*
 AI-facing formatter.
@@ -67,11 +69,29 @@ function pushWorkflow(lines, workflow) {
   lines.push("");
 }
 
+/*
+Push discovered capabilities (lighter formatting)
+*/
+
+function pushDiscovered(lines, capabilities) {
+  if (!capabilities || capabilities.length === 0) return;
+
+  lines.push("=== Discovered KForge Capabilities ===");
+
+  for (const cap of capabilities) {
+    lines.push(`${cap.name} [${cap.status}] — ${cap.route} — ${cap.summary}`);
+  }
+
+  lines.push("");
+}
+
 export function buildKforgeCapabilitySummary() {
   const workflows = [
     ...listKforgeServiceWorkflows(),
     buildKforgePreviewWorkflowManifest(),
   ];
+
+  const discovered = discoverCapabilities();
 
   const lines = [];
 
@@ -99,6 +119,8 @@ export function buildKforgeCapabilitySummary() {
   for (const workflow of workflows) {
     pushWorkflow(lines, workflow);
   }
+
+  pushDiscovered(lines, discovered);
 
   lines.push("=== End KForge Workflow Awareness ===");
   lines.push("");
