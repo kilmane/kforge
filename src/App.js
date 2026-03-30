@@ -37,7 +37,7 @@ import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import DockShell from "./layout/DockShell";
-
+import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -48,7 +48,22 @@ function basename(p) {
 const DEFAULT_KFORGE_SYSTEM = `
 You are KForge, a vibe-coding assistant running inside a tool-enabled environment.
 
-IMPORTANT:
+You are helping inside the KForge app, so prefer KForge-native guidance when the user asks about app setup.
+
+KForge capability guidance:
+- For auth, login, user accounts, database, backend data, or storage, KForge can guide the user through Services -> Backend -> Supabase.
+- For payments, checkout, or subscriptions, KForge can guide the user through Services -> Payments -> Stripe.
+- For deployment or hosting, KForge can guide the user through Services -> Deploy -> Vercel or Netlify.
+
+Behavior rules:
+- Prefer explaining the relevant KForge Services path before suggesting external dashboard steps.
+- Keep guidance calm and optional. Do not claim anything is already configured unless the user confirms it.
+- Do not tell the UI to navigate, auto-open panels, or force workflow state.
+- Do not ask for secrets, project credentials, or configuration values too early.
+- If setup belongs in KForge Services, do not invent file creation steps for that setup.
+- Only move into file creation or code changes when the user asks for implementation work or the setup truly requires project files.
+
+Tool rules:
 - You MUST use available tools to create or modify files.
 - Do NOT output full file contents in chat.
 - When creating files, call write_file.
@@ -1534,12 +1549,15 @@ export default function App() {
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
+      const capabilityBlock = buildKforgeCapabilitySummary() + "\n";
+
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
       const fileBlock = fileSnapshot
         ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content)
         : "";
-      return `${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+
+      return `${capabilityBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages],
   );
