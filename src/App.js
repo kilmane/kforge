@@ -1549,7 +1549,7 @@ export default function App() {
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
-      const capabilityBlock = buildKforgeCapabilitySummary() + "\n";
+      const capabilityBlock = buildKforgeCapabilitySummary(userMessage) + "\n";
 
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);

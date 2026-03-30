@@ -69,10 +69,6 @@ function pushWorkflow(lines, workflow) {
   lines.push("");
 }
 
-/*
-Push discovered capabilities (lighter formatting)
-*/
-
 function pushDiscovered(lines, capabilities) {
   if (!capabilities || capabilities.length === 0) return;
 
@@ -85,13 +81,32 @@ function pushDiscovered(lines, capabilities) {
   lines.push("");
 }
 
-export function buildKforgeCapabilitySummary() {
+function filterRelevantWorkflows(workflows, userMessage) {
+  if (!userMessage || userMessage.trim().length < 4) {
+    return workflows;
+  }
+
+  const message = userMessage.toLowerCase().trim();
+  const terms = message.split(/\s+/).filter(Boolean);
+
+  const filtered = workflows.filter((workflow) => {
+    const text =
+      `${workflow.name} ${workflow.summary} ${workflow.route}`.toLowerCase();
+
+    return terms.some((term) => text.includes(term));
+  });
+
+  return filtered.length > 0 ? filtered : workflows;
+}
+
+export function buildKforgeCapabilitySummary(userMessage = "") {
   const workflows = [
     ...listKforgeServiceWorkflows(),
     buildKforgePreviewWorkflowManifest(),
   ];
 
   const discovered = discoverCapabilities();
+  const filteredWorkflows = filterRelevantWorkflows(workflows, userMessage);
 
   const lines = [];
 
@@ -116,7 +131,7 @@ export function buildKforgeCapabilitySummary() {
   );
   lines.push("");
 
-  for (const workflow of workflows) {
+  for (const workflow of filteredWorkflows) {
     pushWorkflow(lines, workflow);
   }
 
