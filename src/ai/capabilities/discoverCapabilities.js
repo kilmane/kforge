@@ -21,13 +21,41 @@ import { TEMPLATE_REGISTRY } from "../../runtime/templateRegistry";
 Discover service providers from the runtime registry.
 */
 
+function discoverServiceRoute(service) {
+  if (!service?.id) {
+    return "Services";
+  }
+
+  if (service.id === "github") {
+    return "Services -> Code -> GitHub";
+  }
+
+  if (service.id === "supabase") {
+    return "Services -> Backend -> Supabase";
+  }
+
+  if (service.id === "stripe") {
+    return "Services -> Payments -> Stripe";
+  }
+
+  if (service.id === "vercel") {
+    return "Services -> Deploy -> Vercel";
+  }
+
+  if (service.id === "netlify") {
+    return "Services -> Deploy -> Netlify";
+  }
+
+  return `Services -> ${service.name}`;
+}
+
 export function discoverServiceCapabilities() {
   if (!Array.isArray(SERVICE_REGISTRY)) return [];
 
   return SERVICE_REGISTRY.map((service) => ({
     name: `Service: ${service.name}`,
     status: service.status || "available",
-    route: `Services → ${service.name}`,
+    route: discoverServiceRoute(service),
     summary:
       service.description ||
       `Connect and configure the ${service.name} integration inside KForge.`,
@@ -44,7 +72,7 @@ export function discoverTemplateCapabilities() {
   return TEMPLATE_REGISTRY.map((template) => ({
     name: `Template: ${template.name}`,
     status: "available",
-    route: `Preview → Generate → ${template.name}`,
+    route: `Preview -> Generate -> ${template.name}`,
     summary:
       template.description ||
       `Generate a ${template.name} project from inside KForge.`,

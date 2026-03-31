@@ -133,7 +133,7 @@ export const KFORGE_SERVICE_WORKFLOWS = {
     preferred_ai_behavior: [
       "Prefer the KForge Stripe service flow before suggesting manual Stripe setup steps.",
       "If no project folder is open, tell the user to open a project folder first.",
-      "Describe Stripe support as a KForge service, not as a planned placeholder.",
+      "Describe Stripe support as a KForge service with real setup guidance.",
       'Recommend "Check Stripe setup" as the first step.',
       "Mention webhook readiness when the user is working on checkout completion, subscriptions, or backend Stripe event handling.",
       "After recommending the KForge workflow, explicitly tell the user they can now leave the chat and continue in KForge Services.",
