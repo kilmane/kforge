@@ -1,5 +1,4 @@
 
-
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
@@ -7,7 +6,7 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
 Last Updated: **March 31st, 2026**
 
-Phase: **5.0.3 — Global AI Capability Awareness**
+Phase: **5.1.1 — Stripe Webhook Readiness**
 Status: **Stable milestone committed**
 
 Stable restore tags now available:
@@ -483,6 +482,7 @@ supabase_create_env_file
 supabase_install_client
 supabase_create_client_file
 supabase_quick_connect
+stripe_create_env_file
 open_url
 
 ---
@@ -1101,7 +1101,7 @@ Conceptual shape:
   supabase: [],
   stripe: [],
 }
-```
+````
 
 Persisted state now tracks:
 
@@ -1484,9 +1484,9 @@ and should not manually scaffold template files in chat unless the user explicit
 
 ### Stripe
 
-Stripe is still **planned**, not a ready guided KForge workflow.
+Stripe was still **planned** at the time of Phase 5.0.2 and was not yet a ready guided KForge workflow.
 
-The AI should say this clearly and should not pretend the workflow is available.
+This historical note is now superseded by Phase 5.1 and 5.1.1.
 
 ---
 
@@ -1768,6 +1768,144 @@ This is stronger than the earlier manual-only discipline while still keeping the
 
 ---
 
+# 🟨 5.1 Stripe Adapter
+
+Phase 5.1 converted Stripe from a planned service entry into a **real adapter-backed Payments lane**.
+
+Primary files:
+
+• src-tauri/src/service.rs
+• src-tauri/src/lib.rs
+• src/runtime/serviceRunner.js
+• src/runtime/serviceRegistry.js
+• src/runtime/ServicePanel.jsx
+• src/ai/capabilities/kforgeServiceWorkflows.js
+
+Primary route:
+
+Services
+→ Payments
+→ Stripe
+
+---
+
+## 5.1 Purpose
+
+The goal of 5.1 was to give KForge a first real payments integration lane without turning the app into a billing dashboard.
+
+This phase focused on guided setup assistance, not on subscription admin or analytics.
+
+---
+
+## 5.1 Stripe Capabilities Added
+
+The Stripe adapter now supports:
+
+• readiness inspection for current project setup
+• environment file detection
+• detection of `STRIPE_SECRET_KEY`
+• detection of `STRIPE_PUBLISHABLE_KEY`
+• `.env.example` generation or update for Stripe placeholders
+• `.env` creation helper from `.env.example`
+• browser handoff to Stripe dashboard
+• browser handoff to Stripe docs
+• calmer Stripe-specific activity log guidance
+• AI truthfulness for Services → Payments → Stripe
+
+Command added:
+
+stripe_create_env_file
+
+---
+
+## 5.1 Stripe UX Shape
+
+Services → Payments → Stripe now provides a guided, explicit setup lane.
+
+Current Stripe actions include:
+
+• Check Stripe setup
+• Create `.env` file
+• Open Stripe dashboard
+• Open Stripe docs
+
+The panel remains deliberately narrow in scope.
+
+It does **not** introduce:
+
+• subscription dashboard UI
+• invoice management
+• webhook event browser
+• analytics panels
+• hidden payment automation
+
+---
+
+# 🟨 5.1.1 Stripe Webhook Readiness
+
+Phase 5.1.1 extended the new Stripe lane with **webhook-readiness guidance**.
+
+This is a small follow-on phase, not a new subsystem.
+
+Primary files:
+
+• src-tauri/src/service.rs
+• src/runtime/serviceRegistry.js
+• src/runtime/ServicePanel.jsx
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/discoverCapabilities.js
+
+---
+
+## 5.1.1 Purpose
+
+The goal of 5.1.1 was to help projects that need server-side Stripe event handling, such as:
+
+• checkout completion
+• subscription updates
+• payment event verification
+• webhook-driven backend workflows
+
+This phase still avoids turning KForge into a Stripe operations dashboard.
+
+---
+
+## 5.1.1 Webhook-Readiness Capabilities Added
+
+Stripe guidance now also supports:
+
+• detection of `STRIPE_WEBHOOK_SECRET`
+• `.env.example` webhook placeholder support
+• webhook-readiness status messaging in the Stripe setup check
+• browser handoff to Stripe webhook docs
+• AI guidance that mentions webhook readiness when relevant
+• truthful discovered capability routing for Stripe via capability discovery
+
+Additional Stripe action added:
+
+• Open Stripe webhook docs
+
+---
+
+## 5.1.1 Stripe Readiness Model
+
+Stripe setup now distinguishes between:
+
+### Core payment readiness
+
+• `STRIPE_SECRET_KEY`
+• `STRIPE_PUBLISHABLE_KEY`
+
+### Webhook-ready server flows
+
+• `STRIPE_WEBHOOK_SECRET`
+
+If the core keys exist but the webhook secret does not, KForge reports that the main payment keys are available while webhook signing is not yet configured.
+
+This keeps the guidance calm and accurate for both simple and server-driven Stripe integrations.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -1806,6 +1944,7 @@ Publish to GitHub
 Push changes
 Deploy via Vercel or Netlify
 Configure Supabase if needed
+Configure Stripe if needed
 Continue development
 
 Import workflow:
@@ -1884,7 +2023,7 @@ Important 5.x rule:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 5.0.3 — Global AI Capability Awareness**:
+As of **Phase 5.1.1 — Stripe Webhook Readiness**:
 
 • AI surface stable
 • filesystem tools validated
@@ -1915,6 +2054,12 @@ As of **Phase 5.0.3 — Global AI Capability Awareness**:
 • Supabase quoted action highlighting working
 • compact Supabase guidance card working
 • Supabase Quick Connect working
+• Stripe adapter implemented
+• Stripe setup inspection working
+• Stripe `.env.example` generation/update working
+• Stripe `.env` creation assist working
+• Stripe dashboard/docs browser handoff working
+• Stripe webhook readiness guidance working
 • per-service Services log isolation working
 • tool schema layer working
 • tool-calling agent loop working
@@ -1932,6 +2077,7 @@ As of **Phase 5.0.3 — Global AI Capability Awareness**:
 • capability relevance filtering implemented
 • capability self-discovery from service registry implemented
 • capability self-discovery from template registry implemented
+• service-route discovery now aligned more closely to real task-grouped paths
 • tool-emission guardrails tightened for explanations and manual-only requests
 
 Supported workflows now include:
@@ -1953,6 +2099,10 @@ Supabase environment file preparation
 Supabase client install guidance
 Supabase client file generation
 Supabase beginner-friendly guided setup
+Stripe setup inspection
+Stripe environment file preparation
+Stripe dashboard/docs handoff
+Stripe webhook-readiness guidance
 Per-service persistent activity logs in Services
 Tool-based AI inspection and reasoning
 Agent-style read/inspect/explain loops
@@ -1990,14 +2140,12 @@ Current AI-awareness maintenance discipline:
 
 Planned adapters:
 
-• Stripe
 • OpenAI
 
 Possible future backend improvements:
 
 • environment variable manager
 • template-aware backend scaffolding
-• Stripe adapter
 • OpenAI adapter
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
@@ -2138,6 +2286,10 @@ Phase 5.0.2 then rebuilt the useful part safely as **KForge service workflow awa
 
 Phase 5.0.3 then expanded that foundation into **Global AI Capability Awareness**.
 
+Phase 5.1 then converted Stripe from a placeholder into a real **Stripe Adapter** inside Services → Payments.
+
+Phase 5.1.1 then extended that lane with **Stripe Webhook Readiness** guidance.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -2151,6 +2303,7 @@ What this now proves:
 • KForge product awareness can scale beyond Services into Preview, Terminal, and discovered runtime capabilities
 • capability self-discovery reduces drift between real KForge features and AI awareness
 • relevance filtering can reduce prompt bloat while keeping workflow guidance effective
+• task-grouped service-route discovery matters for truthful AI guidance
 • tool-emission rules must distinguish between action requests and explanatory chat
 
 Current stable journey:
@@ -2161,13 +2314,13 @@ Local Project
 → Vercel / Netlify
 → Supabase Quick Connect
 → guided Supabase setup
+→ Stripe setup and webhook-readiness guidance
 → AI tool-calling agent workflow
 → KForge workflow-aware AI guidance
 → Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
 
 This sets up the next major integration lanes:
 
-Phase 5.1 — Stripe Adapter
 Phase 5.2 — OpenAI Adapter
 Phase 5.3 — Supabase Developer Assist
 Phase 5.4 — Future Template Expansion
@@ -2187,3 +2340,6 @@ Previously rejected:
 Safe direction is:
 
 AI-awareness only, not UI control.
+
+````
+

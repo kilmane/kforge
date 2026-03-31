@@ -1,12 +1,11 @@
 
-
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: **v21**
+Version: **v22**
 Updated: **31/03/2026**
 
 Purpose: architectural topology & execution responsibility map.
@@ -50,7 +49,7 @@ Structure:
 
 ```text
 messages = [{ id, role, content, ts, action?, actions? }]
-```
+````
 
 Everything renders from this.
 
@@ -531,6 +530,7 @@ Responsibilities:
 * GitHub actions
 * deploy guidance
 * Supabase setup assistance
+* Stripe setup assistance
 
 ---
 
@@ -644,6 +644,66 @@ Mapping:
 Fallback remains calm:
 
 Good fit: Netlify or Vercel
+
+---
+
+# 5d Stripe Adapter
+
+Primary implementation:
+
+src-tauri/src/service.rs
+
+Primary UI surface:
+
+src/runtime/ServicePanel.jsx
+
+Frontend bridge:
+
+src/runtime/serviceRunner.js
+
+Registry surface:
+
+src/runtime/serviceRegistry.js
+
+AI-awareness surface:
+
+src/ai/capabilities/kforgeServiceWorkflows.js
+
+Discovery support:
+
+src/ai/capabilities/discoverCapabilities.js
+
+Purpose:
+
+Provide a guided Stripe payments setup workflow inside:
+
+Services
+→ Payments
+→ Stripe
+
+Capabilities include:
+
+* readiness inspection
+* detection of `STRIPE_SECRET_KEY`
+* detection of `STRIPE_PUBLISHABLE_KEY`
+* detection of `STRIPE_WEBHOOK_SECRET`
+* `.env.example` generation or update for Stripe placeholders
+* `.env` creation helper
+* browser handoff to Stripe dashboard
+* browser handoff to Stripe docs
+* browser handoff to Stripe webhook docs
+* webhook-readiness guidance for server-side Stripe event flows
+
+Important scope rule:
+
+This adapter is intentionally **guided setup assistance**, not a billing dashboard.
+
+It does not introduce:
+
+* subscription management UI
+* invoice admin UI
+* webhook event browser
+* payment analytics surfaces
 
 ---
 
@@ -877,6 +937,18 @@ Open folder
 
 ---
 
+## Payments Flow (Stripe)
+
+Open folder
+→ Services
+→ Payments → Stripe
+→ Check Stripe setup
+→ Create `.env`
+→ Open Stripe dashboard / docs / webhook docs
+→ continue project setup
+
+---
+
 ## Preview Template Flow
 
 Open folder
@@ -928,6 +1000,8 @@ Current stable milestone includes:
 * deploy guidance
 * Supabase backend integration
 * Supabase Quick Connect
+* Stripe adapter
+* Stripe webhook-readiness guidance
 * per-service log isolation
 * tool-calling agent loop
 * agent runtime hardening for weaker models
@@ -938,6 +1012,7 @@ Current stable milestone includes:
 * KForge-first handoff behavior for supported workflows
 * capability relevance filtering
 * capability discovery from runtime registries
+* task-grouped service-route discovery for truthful AI handoff
 
 ---
 
@@ -945,7 +1020,6 @@ Current stable milestone includes:
 
 Next planned lanes:
 
-**Phase 5.1 — Stripe Adapter**
 **Phase 5.2 — OpenAI Adapter**
 **Phase 5.3 — Supabase Developer Assist**
 **Phase 5.4 — Future Template Expansion**
@@ -964,3 +1038,4 @@ Potential work includes:
 
 ---
 
+`
