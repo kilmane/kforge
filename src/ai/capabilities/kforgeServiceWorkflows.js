@@ -104,7 +104,7 @@ export const KFORGE_SERVICE_WORKFLOWS = {
     status: "available",
     route: "Services -> Payments -> Stripe",
     summary:
-      "Check Stripe readiness, help prepare env files, and guide the next setup steps for payments.",
+      "Check Stripe readiness, help prepare env files, and guide the next setup steps for payments and webhook-ready projects.",
     prerequisites: [
       "A project folder should be open before running Stripe actions.",
     ],
@@ -114,21 +114,28 @@ export const KFORGE_SERVICE_WORKFLOWS = {
         "Create .env file",
         "Open Stripe dashboard",
         "Open Stripe docs",
+        "Open Stripe webhook docs",
       ],
     },
     service_notes: [
       'Step-by-step path: "Check Stripe setup".',
       "KForge can check whether STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY are present.",
+      "KForge can also check whether STRIPE_WEBHOOK_SECRET is present for webhook-ready server flows.",
       "KForge can help prepare .env.example and create a local .env file when needed.",
-      "KForge can open the Stripe dashboard or Stripe docs for the next manual steps.",
+      "KForge can open the Stripe dashboard, Stripe docs, or Stripe webhook docs for the next manual steps.",
       "This phase focuses on readiness and setup guidance, not on a full billing dashboard.",
     ],
-    env_vars: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"],
+    env_vars: [
+      "STRIPE_SECRET_KEY",
+      "STRIPE_PUBLISHABLE_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+    ],
     preferred_ai_behavior: [
       "Prefer the KForge Stripe service flow before suggesting manual Stripe setup steps.",
       "If no project folder is open, tell the user to open a project folder first.",
       "Describe Stripe support as a KForge service, not as a planned placeholder.",
       'Recommend "Check Stripe setup" as the first step.',
+      "Mention webhook readiness when the user is working on checkout completion, subscriptions, or backend Stripe event handling.",
       "After recommending the KForge workflow, explicitly tell the user they can now leave the chat and continue in KForge Services.",
       "Do not ask the user how they want to proceed with KForge Services.",
       "Do not continue the KForge Services workflow inside chat.",
@@ -140,7 +147,7 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       "First make sure a project folder is open.",
       "You can now leave the chat and open: Services -> Payments -> Stripe.",
       'Start with "Check Stripe setup" to verify whether this project already has the core Stripe keys in place.',
-      'If needed, use "Create .env file", then open "Stripe dashboard" or "Stripe docs" for the next setup steps.',
+      'If needed, use "Create .env file", then open "Stripe dashboard", "Stripe docs", or "Stripe webhook docs" for the next setup steps.',
       "You can now leave the chat and proceed with KForge Services. If you prefer to bypass KForge, stay in the chat and I can guide you through a manual Stripe setup instead.",
       "Do not continue the KForge Services steps in chat unless the user explicitly asks to bypass KForge Services.",
     ],
@@ -148,7 +155,6 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       "Only offer manual Stripe env wiring and code integration after the user chooses the manual path.",
     ],
   },
-
   vercel: {
     id: "vercel",
     category: "deploy",

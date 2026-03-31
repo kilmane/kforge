@@ -26,10 +26,14 @@ export const SERVICE_REGISTRY = [
     id: "stripe",
     name: "Stripe",
     description:
-      "Check Stripe readiness, help prepare env files, and guide the next setup steps for payments.",
+      "Check Stripe readiness, help prepare env files, and guide the next setup steps for payments and webhook-ready projects.",
     quickActionLabel: "Check Stripe setup",
     status: "available",
-    envVars: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"],
+    envVars: [
+      "STRIPE_SECRET_KEY",
+      "STRIPE_PUBLISHABLE_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+    ],
     setupCommand: "service_setup",
   },
   {

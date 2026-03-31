@@ -832,7 +832,19 @@ export default function ServicePanel({ projectPath }) {
       );
     }
   }
+  async function handleOpenStripeWebhookDocs() {
+    appendLogSection("Stripe — Open webhook docs");
 
+    try {
+      await openExternalUrl("https://docs.stripe.com/webhooks");
+      appendLog("status", "Opened Stripe webhook docs in browser.");
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not open Stripe webhook docs in browser.",
+      );
+    }
+  }
   async function handleCreateStripeEnvFile() {
     if (!projectPath || !String(projectPath).trim()) {
       appendLog("error", "Open a project folder before creating a .env file.");
@@ -1187,12 +1199,18 @@ export default function ServicePanel({ projectPath }) {
                     frontend Stripe integration.
                   </div>
                   <div style={{ color: "#a1a1aa" }}>
-                    KForge can help prepare .env.example, create a local .env
-                    file, and guide you to the Stripe dashboard or docs.
+                    STRIPE_WEBHOOK_SECRET is needed when your server verifies
+                    Stripe webhook events such as checkout completion or
+                    subscription updates.
                   </div>
                   <div style={{ color: "#a1a1aa" }}>
-                    Webhook setup and billing dashboard work can come later.
-                    This phase stays focused on readiness and project setup.
+                    KForge can help prepare .env.example, create a local .env
+                    file, and guide you to the Stripe dashboard, webhook docs,
+                    or general Stripe docs.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    This phase stays focused on readiness and project setup, not
+                    on building a billing dashboard.
                   </div>
                 </div>
               ) : null}
@@ -1475,6 +1493,17 @@ export default function ServicePanel({ projectPath }) {
                 title="Open Stripe documentation"
               >
                 Open Stripe docs
+              </button>
+            ) : null}
+            {isStripe ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleOpenStripeWebhookDocs}
+                disabled={isBusy}
+                title="Open Stripe webhook documentation"
+              >
+                Open Stripe webhook docs
               </button>
             ) : null}
             {canDeployFromGithub ? (
