@@ -1,6 +1,8 @@
+
+
 # User Guide Notes (development capture)
 
-Last Updated: **March 30th, 2026**
+Last Updated: **March 31st, 2026**
 
 Location:
 `D:\kforge\docs-internal\user-guide-notes.md`
@@ -47,8 +49,8 @@ package.json signals → framework identification when possible
 
 This allows KForge to both:
 
-- decide the correct preview workflow
-- show a more human-readable project detection result when possible
+* decide the correct preview workflow
+* show a more human-readable project detection result when possible
 
 ---
 
@@ -56,7 +58,9 @@ This allows KForge to both:
 
 If a project contains:
 
+```
 index.html
+```
 
 KForge automatically runs a **static preview server**.
 
@@ -86,7 +90,9 @@ Framework projects use a **development server**.
 
 Typical indicator:
 
+```
 package.json
+```
 
 Workflow:
 
@@ -104,8 +110,8 @@ pnpm dev
 
 Currently recognized framework templates include:
 
-- Vite + React
-- Next.js
+* Vite + React
+* Next.js
 
 ---
 
@@ -115,9 +121,9 @@ Generate creates a **starter template project** inside the opened workspace fold
 
 Current templates supported:
 
-- Static HTML/CSS/JS
-- Vite + React
-- Next.js
+* Static HTML/CSS/JS
+* Vite + React
+* Next.js
 
 Template generation is driven by the **Template Registry**.
 
@@ -133,6 +139,11 @@ Preview
 Open
 
 If no folder is open, Generate is blocked.
+
+Important distinction:
+
+**Preview runs an existing project.**
+**Generate creates a new starter project.**
 
 ---
 
@@ -203,7 +214,7 @@ If a template already installs dependencies during scaffold, Install may not be 
 Preview starts the project runtime.
 
 Static → internal static server
-Framework → pnpm dev
+Framework → `pnpm dev`
 
 Preview logs stream into the Preview Runner panel.
 
@@ -215,8 +226,49 @@ Open launches the running preview in the browser.
 
 Example URLs:
 
-[http://localhost:3000](http://localhost:3000)
-[http://127.0.0.1:4173](http://127.0.0.1:4173)
+```
+http://localhost:3000
+http://127.0.0.1:4173
+```
+
+---
+
+# Terminal
+
+KForge includes a built-in **Terminal** panel inside the AI panel.
+
+The Terminal allows users to run commands directly inside the current project workspace.
+
+Typical usage:
+
+```
+AI Panel
+→ Terminal
+→ enter command
+→ Run
+```
+
+Commands run in the **workspace root folder**.
+
+Example commands:
+
+```
+pnpm install
+pnpm dev
+git status
+git add .
+```
+
+Terminal logs appear inside the panel and stream in real time.
+
+The Terminal is useful for:
+
+* installing packages
+* running development servers
+* running Git commands
+* diagnosing project issues
+
+Commands run independently and do not persist shell sessions.
 
 ---
 
@@ -226,18 +278,18 @@ The Services panel is a guided integration surface for project-connected tasks.
 
 Current groups:
 
-- Code
-- Deploy
-- Backend
-- Payments
+* Code
+* Deploy
+* Backend
+* Payments
 
 Current providers visible in development include:
 
-- GitHub
-- Vercel
-- Netlify
-- Supabase
-- Stripe
+* GitHub
+* Vercel
+* Netlify
+* Supabase
+* Stripe
 
 The panel is **task-first** and only shows one active provider at a time.
 
@@ -271,17 +323,17 @@ GitHub currently supports actions for the **current open local project**.
 
 GitHub currently supports:
 
-- Publish
-- Push changes
-- Pull latest
-- Open on GitHub
+* Publish
+* Push changes
+* Pull latest
+* Open on GitHub
 
 GitHub state shown in the panel includes:
 
-- whether a git repo is detected
-- whether a commit exists
-- whether a remote exists
-- current branch
+* whether a git repo is detected
+* whether a commit exists
+* whether a remote exists
+* current branch
 
 Publishing requires a project folder to be open.
 
@@ -308,8 +360,8 @@ This is separate from **Services → Code → GitHub**.
 
 Deploy currently supports:
 
-- Vercel
-- Netlify
+* Vercel
+* Netlify
 
 Deploy actions are lightweight handoffs to provider flows in the browser.
 
@@ -337,313 +389,15 @@ Push changes before deploying.
 
 ## Smart Deploy Guidance
 
-Deploy guidance is now aware of the detected project type.
+Deploy guidance is aware of the detected project type.
 
-Current examples:
+Examples:
 
-### Static HTML
-
-Project type:
-Static HTML
-
-Recommendation:
-Good fit: Netlify or Vercel
-
-### Vite + React
-
-Project type:
-Vite + React
-
-Recommendation:
-Good fit: Netlify or Vercel
-
-### Next.js
-
-Project type:
-Next.js
-
-Recommendation:
-Recommended: Vercel
+Static HTML → good fit for Netlify or Vercel
+Vite + React → good fit for Netlify or Vercel
+Next.js → recommended: Vercel
 
 This is guidance, not a restriction.
-
-Users can still choose either provider.
-
----
-
-# Services → Backend → Supabase
-
-Supabase provides:
-
-- hosted database
-- authentication
-- storage
-- API services
-
-KForge helps connect a project to Supabase through **guided setup assistance**.
-
-Workflow:
-
-Open Folder
-Services
-Backend
-Supabase
-
----
-
-# Supabase Quick Connect
-
-KForge now includes **Supabase Quick Connect**.
-
-Quick Connect performs a guided setup check and helps prepare the project for Supabase usage.
-
-Quick Connect verifies:
-
-- environment variables
-- Supabase client library
-- Supabase configuration
-- client file presence
-
-If issues are detected, the panel suggests the next step required.
-
-This allows beginners to connect Supabase **without remembering the full setup process**.
-
----
-
-# Supabase Setup Assistant
-
-The Supabase panel acts as a **guided checklist**.
-
-Typical actions available:
-
-- Quick Connect
-- Check Supabase setup
-- Create `.env` file
-- Install Supabase client
-- Create Supabase client file
-- Open Supabase dashboard
-
----
-
-# What the Supabase check looks for
-
-When Quick Connect or **Check Supabase setup** runs, KForge inspects the project for:
-
-- environment files such as `.env`, `.env.local`, `.env.development`, `.env.example`
-- whether `SUPABASE_URL` has a value
-- whether `SUPABASE_ANON_KEY` has a value
-- whether `VITE_SUPABASE_URL` has a value
-- whether `VITE_SUPABASE_ANON_KEY` has a value
-- local Supabase configuration (`supabase/config.toml`)
-- Supabase client library presence in `package.json`
-- existence of a client file such as `src/lib/supabase.js`
-
-Empty values such as:
-
-```text
-SUPABASE_URL=
-```
-
-are treated as **not configured**.
-
----
-
-# Cloud vs Local Supabase
-
-KForge supports both:
-
-### Cloud Supabase
-
-Typical project URL:
-
-[https://your-project.supabase.co](https://your-project.supabase.co)
-
-Connection values are copied from the Supabase dashboard.
-
----
-
-### Local Supabase
-
-Local development may use:
-
-[http://127.0.0.1:54321](http://127.0.0.1:54321)
-
-If a local Supabase project is detected, KForge recognizes the configuration automatically.
-
----
-
-## Starting a Local Supabase Stack
-
-Local Supabase projects are usually created with the **Supabase CLI**.
-
-To start the local development stack, run:
-
-```text
-npx supabase start
-```
-
-This command launches the local Supabase services using Docker.
-
-When the stack starts, the CLI prints important connection values such as:
-
-- API URL
-- Studio URL
-- Database connection string
-- anon public key
-
-Example output:
-
-```text
-API URL: http://127.0.0.1:54321
-Studio URL: http://127.0.0.1:54323
-anon key: eyJhbGciOiJIUzI1NiIs...
-```
-
-These values are what your application should place into the `.env` file.
-
----
-
-# Supabase Environment Variables
-
-## SUPABASE_URL
-
-The address of the Supabase project.
-
-Cloud example:
-
-[https://your-project.supabase.co](https://your-project.supabase.co)
-
-Local example:
-
-[http://127.0.0.1:54321](http://127.0.0.1:54321)
-
----
-
-## SUPABASE_ANON_KEY
-
-Public API key used by frontend applications.
-
-For cloud projects this key is copied from the Supabase dashboard.
-
-For local projects the key is printed when running:
-
-```text
-npx supabase start
-```
-
----
-
-## VITE_SUPABASE variables
-
-Vite-based frontend apps typically use:
-
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-```
-
-These variables are exposed to the browser by Vite.
-
-KForge checks for both naming styles.
-
----
-
-# .env.example and .env help
-
-KForge helps with both files.
-
-### .env.example
-
-If `.env.example` does not exist, KForge can generate one with Supabase placeholders.
-
-### Create `.env` file
-
-If `.env` does not exist:
-
-KForge copies `.env.example` → `.env`.
-
-If `.env` already exists, it is not overwritten.
-
----
-
-# Install Supabase client
-
-The panel includes:
-
-Install Supabase client
-
-This runs:
-
-```text
-pnpm add @supabase/supabase-js
-```
-
-The installation is executed through a shell path designed to work reliably on Windows.
-
----
-
-# Create Supabase client file
-
-The panel can generate a client file:
-
-```text
-src/lib/supabase.js
-```
-
-Example:
-
-```javascript
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
-
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-```
-
-If the file already exists, KForge leaves it unchanged.
-
----
-
-# Supabase Activity Log
-
-Supabase actions write to the **Supabase service log**.
-
-Log behavior:
-
-- actions start a visible log section
-- sections are separated visually
-- timestamps are included
-- commands are easier to distinguish
-
-This improves readability when running multiple setup actions.
-
----
-
-# Supabase Dashboard
-
-The panel includes:
-
-Open Supabase
-
-This opens the Supabase dashboard where users normally copy:
-
-- project URL
-- anon key
-
----
-
-# New Project
-
-New Project supports:
-
-- creating a local project
-- importing from GitHub
-
-Import from GitHub clones the selected repository into the chosen parent folder and opens it automatically in KForge.
 
 ---
 
@@ -651,155 +405,57 @@ Import from GitHub clones the selected repository into the chosen parent folder 
 
 KForge AI is becoming more aware of **real KForge workflows**.
 
-This means the assistant should increasingly guide the user toward KForge-first actions instead of immediately doing everything inside chat.
+The assistant should increasingly guide users toward KForge workflows instead of performing everything inside chat.
 
-Current examples:
+Examples:
 
-- for Supabase setup, AI should guide users to:
-  Services → Backend → Supabase
-- for GitHub actions on the current project, AI should guide users to:
-  Services → Code → GitHub
-- for creating a starter app template, AI should guide users to:
-  Preview → Generate
-- for importing a GitHub repository, AI should guide users to:
-  New Project → Import from GitHub
+Supabase setup →
+Services → Backend → Supabase
+
+GitHub actions →
+Services → Code → GitHub
+
+Create starter app →
+Preview → Generate
+
+Import GitHub repo →
+New Project → Import from GitHub
+
+Run commands →
+AI Panel → Terminal
 
 ---
 
 ## AI Workflow Handoff Rule
 
-Current intended behavior:
-
 If a workflow already exists in KForge, the assistant should:
 
-1. guide the user to that KForge workflow first
-2. avoid performing that workflow directly inside chat
-3. only continue inside chat if the user explicitly wants to **bypass KForge**
+1. guide the user to the KForge workflow first
+2. avoid performing the workflow directly in chat
+3. continue in chat **only if the user explicitly bypasses KForge**
 
-This helps KForge feel more like a guided tool surface and less like a generic coding chatbot.
-
----
-
-## Example AI handoff behavior
-
-### React / Next.js / static starter app
-
-Preferred AI guidance:
-
-Preview
-→ Generate
-→ Install (if needed)
-→ Preview
-
-Instead of manually writing starter files in chat.
-
-### Supabase
-
-Preferred AI guidance:
-
-Services
-→ Backend
-→ Supabase
-
-Instead of immediately creating `.env` or client files inside chat.
-
-### GitHub
-
-Preferred AI guidance for an already-open project:
-
-Services
-→ Code
-→ GitHub
-
-Preferred guidance for importing a repo into KForge:
-
-New Project
-→ Import from GitHub
+This keeps KForge feeling like a **guided development environment**, not just a chatbot.
 
 ---
 
-# AI Models and Provider Behavior
+## AI Tool Usage Behavior
 
-KForge supports multiple AI providers.
+AI may request internal tools when a user explicitly asks for an action inside the project.
 
-Different models have **different strengths and behaviors**.
+Examples:
 
-Some models are optimized for reasoning and tool use, while others are optimized for speed and conversation.
+* creating files
+* modifying files
+* running project operations
 
----
+However, the assistant should **not emit tool actions** when the user is:
 
-## Why Groq / Llama / Mixtral still matter
+* asking conceptual questions
+* asking for explanations
+* requesting manual instructions
+* explicitly bypassing KForge workflows
 
-### Speed (Groq’s strength)
-
-Groq models are extremely fast.
-
-Typical latency:
-
-| Provider | Typical Speed            |
-| -------- | ------------------------ |
-| Groq     | ⚡ 20–50 tokens/sec      |
-| OpenAI   | ~5–15 tokens/sec         |
-| Claude   | slower but very accurate |
-
-This makes Groq excellent for:
-
-- brainstorming
-- code explanations
-- UI ideas
-- quick conversations
-- rapid iteration
-
----
-
-### Cost and accessibility
-
-Groq is often:
-
-- free
-- extremely inexpensive
-
-This makes it useful for:
-
-- beginners
-- experimentation
-- fast iteration
-- non-critical tasks
-
----
-
-### Model diversity
-
-Different models are good at different tasks.
-
-Example:
-
-| Model type      | Best use                 |
-| --------------- | ------------------------ |
-| GPT-4o / Claude | tool-driven agents       |
-| Groq Llama      | fast chat                |
-| Mixtral         | reasoning                |
-| small models    | inexpensive autocomplete |
-
-KForge becomes more powerful when **multiple models are available**.
-
----
-
-## Practical KForge usage guidance
-
-For best results:
-
-| Task                     | Suggested provider |
-| ------------------------ | ------------------ |
-| Chat / brainstorming     | Groq               |
-| Tool-based agent actions | OpenAI / Claude    |
-| Code reasoning           | either             |
-
-This allows users to balance:
-
-- speed
-- cost
-- reliability
+In those cases the assistant responds with normal chat guidance instead.
 
 ---
 
@@ -807,17 +463,17 @@ This allows users to balance:
 
 KForge should feel:
 
-- calm
-- explicit
-- guided
-- low-noise
-- project-aware
+* calm
+* explicit
+* guided
+* low-noise
+* project-aware
 
 KForge should avoid:
 
-- hidden actions
-- noisy debug-heavy surfaces
-- overwhelming dashboards
-- provider-specific complexity walls
+* hidden actions
+* noisy debug-heavy surfaces
+* overwhelming dashboards
+* provider-specific complexity walls
 
----
+

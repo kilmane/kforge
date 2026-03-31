@@ -1,12 +1,13 @@
 
+
 # 🗺 KForge Project Map
 
 Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: **v20**
-Updated: **30/03/2026**
+Version: **v21**
+Updated: **31/03/2026**
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -29,6 +30,7 @@ Responsibilities:
 * project lifecycle
 * workspace root management
 * layout authority
+* AI capability-awareness context injection
 
 This is the **AI execution brain**.
 
@@ -48,7 +50,7 @@ Structure:
 
 ```text
 messages = [{ id, role, content, ts, action?, actions? }]
-````
+```
 
 Everything renders from this.
 
@@ -455,6 +457,8 @@ Events:
 
 Preview and Terminal are mutually exclusive collapsibles.
 
+The **user-facing label is Terminal**.
+
 ---
 
 # 5 Service Integration Layer
@@ -592,39 +596,6 @@ Capabilities include:
 
 ---
 
-## Supabase Detection Signals
-
-Environment files:
-
-* `.env`
-* `.env.local`
-* `.env.development`
-* `.env.example`
-
-Variables:
-
-* SUPABASE_URL
-* SUPABASE_ANON_KEY
-* VITE_SUPABASE_URL
-* VITE_SUPABASE_ANON_KEY
-
-Empty values are treated as **not configured**.
-
-Local detection:
-
-supabase/config.toml
-
-Client library:
-
-@supabase/supabase-js
-
-Client file candidates:
-
-* src/lib/supabase.js
-* src/lib/supabase.ts
-
----
-
 # 5b GitHub Adapter
 
 Primary implementation:
@@ -676,13 +647,15 @@ Good fit: Netlify or Vercel
 
 ---
 
-# 6 AI Capability Awareness Architecture (Phase 5.0.2)
+# 6 AI Capability Awareness Architecture (Phase 5.x)
 
 Primary files:
 
 * src/ai/capabilities/kforgeCapabilities.js
 * src/ai/capabilities/kforgeServiceWorkflows.js
 * src/ai/capabilities/kforgePreviewWorkflows.js
+* src/ai/capabilities/kforgeTerminalWorkflows.js
+* src/ai/capabilities/discoverCapabilities.js
 
 Purpose:
 
@@ -698,18 +671,15 @@ src/ai/capabilities/kforgeCapabilities.js
 
 Responsibilities:
 
-* assemble KForge workflow-awareness context
-* combine multiple capability domains
-* apply global handoff rules
-* provide AI-facing workflow summary used by App.js prompt construction
-
-Current global rule:
-
-If a workflow exists in KForge, the assistant should guide the user to that workflow first and should not execute that workflow inside chat unless the user explicitly chooses to bypass KForge.
+* assemble capability-awareness context
+* combine multiple workflow domains
+* apply global AI guidance rules
+* apply **relevance filtering**
+* produce AI-facing capability summaries injected into prompts
 
 ---
 
-## Current Capability Domains
+## Capability Domains
 
 ### Service workflows
 
@@ -717,7 +687,7 @@ File:
 
 src/ai/capabilities/kforgeServiceWorkflows.js
 
-Current grounded domains include:
+Domains include:
 
 * GitHub
 * Supabase
@@ -725,17 +695,71 @@ Current grounded domains include:
 * Vercel
 * Netlify
 
-### Preview / Generate workflows
+---
+
+### Preview workflows
 
 File:
 
 src/ai/capabilities/kforgePreviewWorkflows.js
 
-Current grounded domain includes:
+Domains include:
 
-* Preview → Generate
-* Install / Preview follow-up guidance
+* Preview existing project
+* Generate template
+* Install / Preview flow
 * supported starter templates
+
+---
+
+### Terminal workflows
+
+File:
+
+src/ai/capabilities/kforgeTerminalWorkflows.js
+
+Domains include:
+
+* run shell commands
+* package installation
+* Git operations
+* development server control
+
+---
+
+## Capability Self-Discovery
+
+File:
+
+src/ai/capabilities/discoverCapabilities.js
+
+Discovery sources:
+
+* serviceRegistry.js
+* templateRegistry.js
+
+Purpose:
+
+Reduce manual maintenance by letting AI awareness detect real capabilities from the runtime registries.
+
+---
+
+## Relevance Filtering
+
+App.js now passes the **user prompt** into the capability system.
+
+The capability formatter then returns only the most relevant workflow summaries.
+
+Benefits:
+
+* smaller prompts
+* better AI signal
+* less prompt noise
+* improved workflow matching
+
+Fallback behavior:
+
+If no clear match exists, broader capability context may still be included.
 
 ---
 
@@ -760,28 +784,6 @@ Safe scope:
 * infer relevant KForge workflow
 * improve AI wording and handoff behavior
 * keep UI state unchanged
-
----
-
-## AI Capability Awareness Maintenance Rule
-
-Current maintenance discipline:
-
-* new **service workflow** → update:
-
-  * src/ai/capabilities/kforgeServiceWorkflows.js
-* new **non-service guided workflow or panel** → create or update a manifest under:
-
-  * src/ai/capabilities/
-* then include that manifest in:
-
-  * src/ai/capabilities/kforgeCapabilities.js
-
-Why this matters:
-
-Without this step, the AI may not know that the new KForge capability exists and may incorrectly try to do the task directly in chat instead of guiding the user to the product workflow.
-
-This is currently manual and is a known target for improvement in the next phase.
 
 ---
 
@@ -886,6 +888,21 @@ Open folder
 
 ---
 
+## Terminal Workflow
+
+Open folder
+→ AI Panel
+→ Terminal
+→ run command
+
+Example commands:
+
+* pnpm install
+* pnpm dev
+* git status
+
+---
+
 ## Workflow-Aware AI Flow
 
 User asks for a capability
@@ -905,6 +922,7 @@ Current stable milestone includes:
 * preview runner
 * scaffold system
 * command runner
+* terminal panel
 * service integration layer
 * GitHub workflow
 * deploy guidance
@@ -915,25 +933,34 @@ Current stable milestone includes:
 * agent runtime hardening for weaker models
 * AI workflow-awareness manifests
 * Preview workflow-aware AI guidance
+* Terminal workflow-aware AI guidance
 * GitHub import-vs-service distinction in AI guidance
 * KForge-first handoff behavior for supported workflows
+* capability relevance filtering
+* capability discovery from runtime registries
 
 ---
 
 # 10 Next Architecture Lane
 
-Next planned lane:
+Next planned lanes:
 
-**Phase 5.0.3 — Global AI Capability Awareness**
+**Phase 5.1 — Stripe Adapter**
+**Phase 5.2 — OpenAI Adapter**
+**Phase 5.3 — Supabase Developer Assist**
+**Phase 5.4 — Future Template Expansion**
 
-Likely goals:
+Longer-term direction:
 
-* safe intent routing with no UI auto-navigation
-* broader awareness beyond Services alone
-* terminal awareness if present
-* capability summary compression / relevance filtering
-* AI capability self-discovery from real KForge code sources
-* reduced manual maintenance when new KForge capabilities are added
+**Phase 6 — Model Guidance & Routing**
+
+Potential work includes:
+
+* model capability registry
+* model usage hints
+* task templates
+* agent workflows
+* smart provider switching
 
 ---
 

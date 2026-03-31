@@ -1,19 +1,21 @@
 
+
 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **March 30th, 2026**
+Last Updated: **March 31st, 2026**
 
-Phase: **5.0.2 — KForge service workflow awareness for AI guidance**
+Phase: **5.0.3 — Global AI Capability Awareness**
 Status: **Stable milestone committed**
 
 Stable restore tags now available:
 
-- `phase-4.10-agent-loop-stable`
-- `phase-4.10.1-agent-hardening-stable`
-- `phase-5.0.2-kforge-workflow-awareness`
+* `phase-4.10-agent-loop-stable`
+* `phase-4.10.1-agent-hardening-stable`
+* `phase-5.0.2-kforge-workflow-awareness`
+* `phase-5.0.3-global-capability-awareness`
 
 ---
 
@@ -435,6 +437,15 @@ kforge://command/log
 kforge://command/status
 
 Preview and Terminal panels are **mutually exclusive collapsibles**.
+
+User-facing surface name is:
+
+**Terminal**
+
+Path:
+
+AI Panel
+→ Terminal
 
 ---
 
@@ -1090,7 +1101,7 @@ Conceptual shape:
   supabase: [],
   stripe: [],
 }
-````
+```
 
 Persisted state now tracks:
 
@@ -1506,6 +1517,257 @@ This is currently a **manual maintenance discipline** and should later be improv
 
 ---
 
+# 🟦 5.0.3 Global AI Capability Awareness
+
+Phase 5.0.3 expanded KForge AI awareness from a first safe workflow-handoff layer into a broader **global capability-awareness system**.
+
+This phase kept the safe 5.0.2 principle intact:
+
+AI-awareness only, not UI control.
+
+Primary files:
+
+• src/ai/capabilities/kforgeCapabilities.js
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/ai/capabilities/kforgeTerminalWorkflows.js
+• src/ai/capabilities/discoverCapabilities.js
+• src/App.js
+
+---
+
+## 5.0.3 Purpose
+
+The goal of 5.0.3 was to make KForge AI aware of a broader product surface while reducing manual drift and prompt bloat.
+
+This phase specifically added:
+
+• broader non-service capability awareness
+• Terminal workflow awareness
+• capability self-discovery from real runtime registries
+• relevance filtering so prompts receive more focused capability context
+• safer tool-emission behavior for explanations and manual-only requests
+
+---
+
+## 5.0.3 Capability Awareness Model
+
+KForge AI awareness now has four layers:
+
+### Top-level capability formatter
+
+src/ai/capabilities/kforgeCapabilities.js
+
+Responsibilities:
+
+• aggregate workflow manifests
+• format AI-facing capability context
+• apply relevance filtering
+• inject global KForge workflow behavior rules
+
+### Structured workflow manifests
+
+Current examples:
+
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/ai/capabilities/kforgeTerminalWorkflows.js
+
+These files define:
+
+• workflow name
+• route
+• summary
+• preferred AI behavior
+• KForge handoff language
+• manual fallback language
+
+### Capability self-discovery
+
+File:
+
+src/ai/capabilities/discoverCapabilities.js
+
+Current discovery sources:
+
+• src/runtime/serviceRegistry.js
+• src/runtime/templateRegistry.js
+
+This reduces manual drift by allowing AI awareness to pick up real runtime capabilities from the codebase.
+
+### Prompt integration
+
+File:
+
+src/App.js
+
+App.js now passes the current prompt text into the capability formatter so only the most relevant workflow context is injected.
+
+---
+
+## 5.0.3 New Capability Coverage
+
+The AI can now recognize and guide users toward:
+
+• Services workflows
+• Preview workflows
+• Generate workflows
+• Terminal workflows
+• discovered service capabilities from `SERVICE_REGISTRY`
+• discovered template capabilities from `TEMPLATE_REGISTRY`
+
+This makes the assistant more aware of the real KForge surface without adding UI-routing behavior.
+
+---
+
+## 5.0.3 Terminal Awareness
+
+A dedicated Terminal workflow manifest now exists:
+
+src/ai/capabilities/kforgeTerminalWorkflows.js
+
+This teaches the AI to prefer:
+
+AI Panel
+→ Terminal
+
+when the user wants to:
+
+• run shell commands
+• install packages
+• run dev servers
+• run Git commands
+• perform project diagnostics
+
+Important rule:
+
+The AI may recommend Terminal, but must remain **advisory only** and must not imply that it can open or control the Terminal UI automatically.
+
+---
+
+## 5.0.3 Preview Guidance Tightening
+
+Preview guidance was refined in 5.0.3 to separate:
+
+• previewing an existing project
+from
+• generating a new starter template
+
+Current rule:
+
+If the user asks to **preview the current project**, AI should guide them to:
+
+Preview
+
+Only if the user explicitly wants to create a new supported starter project should AI guide them to:
+
+Preview
+→ Generate
+
+This prevents incorrect “Generate” handoffs for users who already have a project open.
+
+---
+
+## 5.0.3 Relevance Filtering
+
+Capability context is now filtered based on the active user message.
+
+This means App.js no longer injects the full capability surface into every prompt.
+
+Instead, the system prefers relevant subsets, which improves:
+
+• prompt size
+• signal-to-noise ratio
+• likelihood of correct workflow matching
+
+Fallback behavior remains safe:
+
+if no strong relevance match exists, the system can still fall back to the broader capability list.
+
+---
+
+## 5.0.3 Self-Discovery Rule
+
+Capability self-discovery now supplements manual manifests.
+
+Current discovery includes:
+
+### Services
+
+Discovered from:
+
+src/runtime/serviceRegistry.js
+
+This means service availability, status, route labels, and descriptions can be surfaced to the AI from the real runtime registry.
+
+### Templates
+
+Discovered from:
+
+src/runtime/templateRegistry.js
+
+This means supported starter templates can also be surfaced from the real registry.
+
+This reduces the risk that a new service or template exists in KForge but is invisible to the assistant.
+
+---
+
+## 5.0.3 Tool Emission Guardrails
+
+Tool-emission instructions in App.js were tightened to prevent AI overreach.
+
+Current rule:
+
+The assistant should only emit tool fenced blocks when the user is explicitly asking for an action inside the project, such as:
+
+• creating files
+• editing files
+• running project operations
+
+The assistant should **not** emit tool calls when the user is:
+
+• asking conceptual questions
+• asking for explanations
+• asking for planning help
+• asking for manual commands only
+• explicitly bypassing KForge
+
+This improves alignment between workflow awareness and normal conversational help.
+
+---
+
+## 5.0.3 AI Capability Maintenance Rule
+
+KForge AI capability awareness is now maintained through a hybrid model:
+
+### Manual manifests
+
+Used for:
+
+• AI-specific workflow wording
+• nuanced handoff behavior
+• manual fallback language
+• product-specific advisory rules
+
+### Real registry discovery
+
+Used for:
+
+• service discovery
+• template discovery
+
+Current files involved:
+
+• src/ai/capabilities/kforgeCapabilities.js
+• src/ai/capabilities/kforgeServiceWorkflows.js
+• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/ai/capabilities/kforgeTerminalWorkflows.js
+• src/ai/capabilities/discoverCapabilities.js
+
+This is stronger than the earlier manual-only discipline while still keeping the architecture simple.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -1560,6 +1822,19 @@ User asks for a capability
 → AI guides user to KForge-first path
 → AI only continues in chat if the user explicitly chooses to bypass KForge
 
+Terminal-aware AI guidance:
+
+User asks to run commands, install packages, or use shell workflow
+→ AI prefers AI Panel → Terminal if that matches the request
+→ AI remains advisory only
+
+Conceptual-help rule:
+
+User asks for explanation / conceptual help / manual-only guidance
+→ AI answers normally
+→ no unnecessary tool calls
+→ no forced KForge workflow unless the user is clearly asking to use one
+
 ---
 
 # 🟢 6️⃣ Filesystem Guarantees
@@ -1598,11 +1873,18 @@ Principles:
 • no hidden side effects
 • guided integrations, not dashboard sprawl
 
+Important 5.x rule:
+
+• AI may guide
+• AI may recommend
+• AI may hand off to real workflows
+• AI must not hijack UI state
+
 ---
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 5.0.2 — KForge service workflow awareness for AI guidance**:
+As of **Phase 5.0.3 — Global AI Capability Awareness**:
 
 • AI surface stable
 • filesystem tools validated
@@ -1610,6 +1892,7 @@ As of **Phase 5.0.2 — KForge service workflow awareness for AI guidance**:
 • scaffold system operational
 • template registry working
 • command runner operational
+• Terminal panel awareness implemented for AI guidance
 • service integration layer operational
 • GitHub workflow implemented
 • GitHub import implemented
@@ -1642,9 +1925,14 @@ As of **Phase 5.0.2 — KForge service workflow awareness for AI guidance**:
 • Supabase documentation captured
 • agent runtime documentation captured
 • AI workflow-awareness manifests implemented
+• Preview workflow guidance tightened for existing projects vs new template generation
 • Preview template workflow awareness implemented
 • GitHub import-vs-service distinction captured for AI guidance
 • KForge-first handoff behavior implemented for guided workflows
+• capability relevance filtering implemented
+• capability self-discovery from service registry implemented
+• capability self-discovery from template registry implemented
+• tool-emission guardrails tightened for explanations and manual-only requests
 
 Supported workflows now include:
 
@@ -1670,7 +1958,10 @@ Tool-based AI inspection and reasoning
 Agent-style read/inspect/explain loops
 Workflow-aware AI guidance to existing KForge features
 Preview-driven template generation guidance
+Preview-first guidance for already-open projects
+Terminal-aware command guidance
 KForge-first handoff for supported product workflows
+Capability-aware conversational behavior with reduced prompt bloat
 
 ---
 
@@ -1683,7 +1974,7 @@ Service Registry
 Preview Runtime
 Command Runtime
 Agent Runtime
-AI Capability Awareness Manifests
+AI Capability Awareness
 
 These lanes allow new capabilities to be added without redesigning the architecture.
 
@@ -1691,9 +1982,11 @@ Future integrations will attach adapters rather than creating new subsystems.
 
 Current AI-awareness maintenance discipline:
 
-• new service workflow → update `src/ai/capabilities/kforgeServiceWorkflows.js`
+• new service workflow → update `src/ai/capabilities/kforgeServiceWorkflows.js` when AI-specific guidance is needed
 • new non-service guided workflow → add/update a manifest under `src/ai/capabilities/`
-• then include it in `src/ai/capabilities/kforgeCapabilities.js`
+• discovered runtime services come from `src/runtime/serviceRegistry.js`
+• discovered templates come from `src/runtime/templateRegistry.js`
+• top-level formatting and filtering live in `src/ai/capabilities/kforgeCapabilities.js`
 
 Planned adapters:
 
@@ -1709,8 +2002,6 @@ Possible future backend improvements:
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
 • richer model-routing between fast chat models and stronger tool-driving models
-• broader global AI capability awareness
-• AI capability self-discovery from real KForge registries / panels
 
 ---
 
@@ -1845,6 +2136,8 @@ Phase 5.0.1 explored **Intent-Driven Backend Setup**, but the UI-routing version
 
 Phase 5.0.2 then rebuilt the useful part safely as **KForge service workflow awareness for AI guidance**.
 
+Phase 5.0.3 then expanded that foundation into **Global AI Capability Awareness**.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -1855,7 +2148,10 @@ What this now proves:
 • KForge can support real agent-style reasoning without sacrificing consent-gated tooling
 • weaker models can be made more usable with targeted runtime hardening
 • AI can be taught real KForge workflows without hijacking the UI
-• KForge product awareness should live in structured manifests, not scattered prompt prose
+• KForge product awareness can scale beyond Services into Preview, Terminal, and discovered runtime capabilities
+• capability self-discovery reduces drift between real KForge features and AI awareness
+• relevance filtering can reduce prompt bloat while keeping workflow guidance effective
+• tool-emission rules must distinguish between action requests and explanatory chat
 
 Current stable journey:
 
@@ -1867,20 +2163,14 @@ Local Project
 → guided Supabase setup
 → AI tool-calling agent workflow
 → KForge workflow-aware AI guidance
+→ Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
 
-This sets up the next major integration lane:
+This sets up the next major integration lanes:
 
-Phase 5.0.3 — Global AI Capability Awareness
-
-Goals:
-
-• safe intent routing with no UI auto-navigation
-• broader awareness beyond Services alone
-• Preview / Generate / template-awareness expansion
-• terminal-awareness if terminal capability exists
-• capability summary compression / relevance filtering
-• AI capability self-discovery from real codebase sources where possible
-• reduced manual maintenance when new KForge capabilities are added
+Phase 5.1 — Stripe Adapter
+Phase 5.2 — OpenAI Adapter
+Phase 5.3 — Supabase Developer Assist
+Phase 5.4 — Future Template Expansion
 
 Important warning for future work:
 
@@ -1897,6 +2187,3 @@ Previously rejected:
 Safe direction is:
 
 AI-awareness only, not UI control.
-
-````
-
