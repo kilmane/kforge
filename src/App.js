@@ -1549,7 +1549,7 @@ export default function App() {
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
-      const capabilityBlock = buildKforgeCapabilitySummary(userMessage) + "\n";
+      const capabilityBlock = buildKforgeCapabilitySummary(rawPrompt) + "\n";
 
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
@@ -1617,6 +1617,9 @@ export default function App() {
         : "";
       const toolInstruction = !askForPatch
         ? "\n\nIMPORTANT:\n" +
+          "Use tool fenced blocks only when the user is explicitly asking you to take an action in the project, such as creating files, editing files, or running project operations.\n" +
+          "If the user is asking for an explanation, conceptual help, planning, or manual commands only, do not emit tool calls.\n" +
+          "If the user explicitly says they want to bypass KForge or wants manual steps only, do not emit tool calls and do not simulate actions.\n" +
           "If you need to create or update files, you MUST request tools.\n" +
           "Do NOT paste full file contents in chat.\n" +
           "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
@@ -1625,7 +1628,7 @@ export default function App() {
           "```tool\n" +
           '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
           "```\n" +
-          "After creating files, output a final tool call to list the folder:\n" +
+          "After creating files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
           "```tool\n" +
           '{ "name": "list_dir", "args": { "path": "." } }\n' +
           "```\n"
