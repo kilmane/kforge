@@ -25,8 +25,10 @@ export const SERVICE_REGISTRY = [
   {
     id: "stripe",
     name: "Stripe",
-    description: "Payments integration placeholder for future guided setup.",
-    status: "planned",
+    description:
+      "Check Stripe readiness, help prepare env files, and guide the next setup steps for payments.",
+    quickActionLabel: "Check Stripe setup",
+    status: "available",
     envVars: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"],
     setupCommand: "service_setup",
   },

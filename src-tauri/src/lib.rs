@@ -155,6 +155,7 @@ pub fn run() {
             service::github_detect_repo,
             service::github_open_repo,
             service::supabase_create_env_file,
+            service::stripe_create_env_file,
             service::supabase_install_client,
             service::supabase_create_client_file,
             service::supabase_quick_connect,

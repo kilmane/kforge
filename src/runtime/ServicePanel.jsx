@@ -8,6 +8,7 @@ import {
   githubPush,
   openExternalUrl,
   runServiceSetup,
+  stripeCreateEnvFile,
   subscribeServiceLogs,
   subscribeServiceStatus,
   supabaseCreateClientFile,
@@ -284,6 +285,7 @@ export default function ServicePanel({ projectPath }) {
   const [detectedProjectKind, setDetectedProjectKind] = useState("");
   const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
   const [showSupabaseMoreInfo, setShowSupabaseMoreInfo] = useState(false);
+  const [showStripeMoreInfo, setShowStripeMoreInfo] = useState(false);
   const logEndRef = useRef(null);
   const activeProviderIdRef = useRef(
     persistedServicePanelState.activeProviderId || DEFAULT_PROVIDER_ID,
@@ -428,6 +430,7 @@ export default function ServicePanel({ projectPath }) {
       setDetectedProjectKind("");
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
+      setShowStripeMoreInfo(false);
       lastProjectPathRef.current = "";
       return;
     }
@@ -450,6 +453,7 @@ export default function ServicePanel({ projectPath }) {
       setDetectedProjectKind("");
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
+      setShowStripeMoreInfo(false);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
@@ -801,7 +805,51 @@ export default function ServicePanel({ projectPath }) {
       );
     }
   }
+  async function handleOpenStripeDashboard() {
+    appendLogSection("Stripe — Open dashboard");
 
+    try {
+      await openExternalUrl("https://dashboard.stripe.com/");
+      appendLog("status", "Opened Stripe dashboard in browser.");
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not open Stripe dashboard in browser.",
+      );
+    }
+  }
+
+  async function handleOpenStripeDocs() {
+    appendLogSection("Stripe — Open docs");
+
+    try {
+      await openExternalUrl("https://docs.stripe.com/");
+      appendLog("status", "Opened Stripe docs in browser.");
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not open Stripe docs in browser.",
+      );
+    }
+  }
+
+  async function handleCreateStripeEnvFile() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog("error", "Open a project folder before creating a .env file.");
+      return;
+    }
+
+    appendLogSection("Stripe — Create .env file");
+
+    try {
+      await stripeCreateEnvFile(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create Stripe .env file.",
+      );
+    }
+  }
   async function handleCreateSupabaseClientFile() {
     if (!projectPath || !String(projectPath).trim()) {
       appendLog(
@@ -825,6 +873,7 @@ export default function ServicePanel({ projectPath }) {
 
   const isGithub = activeProvider?.id === "github";
   const isSupabase = activeProvider?.id === "supabase";
+  const isStripe = activeProvider?.id === "stripe";
   const isDeploy = isDeployProvider(activeProvider?.id);
   const isBusy = busyServiceId === activeProvider?.id;
   const isPlanned = activeProvider?.status === "planned";
@@ -1072,6 +1121,82 @@ export default function ServicePanel({ projectPath }) {
                 </div>
               ) : null}
             </div>
+          ) : isStripe ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "8px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <div>Connect this project to Stripe for payments.</div>
+
+              <div style={{ color: "#a1a1aa" }}>
+                Start with{" "}
+                <span style={{ color: "#f4b942", fontWeight: 600 }}>
+                  "Check Stripe setup"
+                </span>{" "}
+                to see whether this project already has the core Stripe keys in
+                place.
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowStripeMoreInfo((prev) => !prev)}
+                  style={{
+                    border: "1px solid #3f3f46",
+                    background: "rgba(24, 24, 27, 0.35)",
+                    color: "#d4d4d8",
+                    borderRadius: "999px",
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    width: "fit-content",
+                  }}
+                >
+                  {showStripeMoreInfo ? "Hide details" : "More info"}
+                </button>
+              </div>
+
+              {showStripeMoreInfo ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                    paddingTop: "4px",
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "#a1a1aa" }}>Connection values:</span>{" "}
+                    {formatEnvVars(activeProvider?.envVars)}
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    STRIPE_SECRET_KEY is the server-side secret key and should
+                    never be exposed in client code.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    STRIPE_PUBLISHABLE_KEY is the client-safe key used by your
+                    frontend Stripe integration.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    KForge can help prepare .env.example, create a local .env
+                    file, and guide you to the Stripe dashboard or docs.
+                  </div>
+                  <div style={{ color: "#a1a1aa" }}>
+                    Webhook setup and billing dashboard work can come later.
+                    This phase stays focused on readiness and project setup.
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div
               className="command-runner-item__meta"
@@ -1306,6 +1431,50 @@ export default function ServicePanel({ projectPath }) {
                 title="Open your Supabase dashboard"
               >
                 Open Supabase
+              </button>
+            ) : null}
+            {isStripe ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => handleSetup(activeProvider)}
+                disabled={isBusy || isPlanned}
+                title="Check this project and prepare the Stripe connection setup"
+              >
+                {isBusy ? "Working..." : "Check Stripe setup"}
+              </button>
+            ) : null}
+            {isStripe ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateStripeEnvFile}
+                disabled={isBusy}
+                title="Create a .env file from .env.example"
+              >
+                Create .env file
+              </button>
+            ) : null}
+            {isStripe ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleOpenStripeDashboard}
+                disabled={isBusy}
+                title="Open your Stripe dashboard"
+              >
+                Open Stripe dashboard
+              </button>
+            ) : null}
+            {isStripe ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleOpenStripeDocs}
+                disabled={isBusy}
+                title="Open Stripe documentation"
+              >
+                Open Stripe docs
               </button>
             ) : null}
             {canDeployFromGithub ? (
