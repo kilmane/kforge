@@ -63,7 +63,23 @@ export async function supabaseCreateClientFile(projectPath) {
     projectPath: requireProjectPath(projectPath),
   });
 }
+export async function supabaseCreateReadExample(projectPath) {
+  return invoke("supabase_create_read_example", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
 
+export async function supabaseCreateInsertExample(projectPath) {
+  return invoke("supabase_create_insert_example", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
+
+export async function supabaseCreateQueryHelper(projectPath) {
+  return invoke("supabase_create_query_helper", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
 export async function supabaseQuickConnect(projectPath) {
   return invoke("supabase_quick_connect", {
     projectPath: requireProjectPath(projectPath),

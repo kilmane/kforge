@@ -46,7 +46,8 @@ export const KFORGE_SERVICE_WORKFLOWS = {
     name: "Supabase",
     status: "available",
     route: "Services -> Backend -> Supabase",
-    summary: "Connect this project to a Supabase database.",
+    summary:
+      "Connect this project to a Supabase database and generate starter integration files for development.",
     prerequisites: [
       "A project folder must be open before running Supabase actions.",
     ],
@@ -64,6 +65,8 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       'Beginner-friendly path: "Quick Connect Supabase".',
       'Step-by-step path: "Check Supabase setup".',
       "After env setup, common next steps are installing the Supabase client and creating a client file such as src/lib/supabase.js.",
+      "KForge can also generate starter development files such as read examples, insert examples, and a reusable query helper.",
+      "These developer-assist files help you start integrating Supabase into real application code.",
       "If Supabase is local, KForge also checks for local Supabase configuration.",
     ],
     env_vars: [

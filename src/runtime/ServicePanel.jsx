@@ -13,6 +13,9 @@ import {
   subscribeServiceStatus,
   supabaseCreateClientFile,
   supabaseCreateEnvFile,
+  supabaseCreateInsertExample,
+  supabaseCreateQueryHelper,
+  supabaseCreateReadExample,
   supabaseInstallClient,
   supabaseQuickConnect,
 } from "./serviceRunner";
@@ -883,6 +886,68 @@ export default function ServicePanel({ projectPath }) {
     }
   }
 
+  async function handleCreateSupabaseReadExample() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before creating a Supabase read example.",
+      );
+      return;
+    }
+
+    appendLogSection("Supabase — Create read example");
+
+    try {
+      await supabaseCreateReadExample(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create the Supabase read example.",
+      );
+    }
+  }
+
+  async function handleCreateSupabaseInsertExample() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before creating a Supabase insert example.",
+      );
+      return;
+    }
+
+    appendLogSection("Supabase — Create insert example");
+
+    try {
+      await supabaseCreateInsertExample(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create the Supabase insert example.",
+      );
+    }
+  }
+
+  async function handleCreateSupabaseQueryHelper() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before creating a Supabase query helper.",
+      );
+      return;
+    }
+
+    appendLogSection("Supabase — Create query helper");
+
+    try {
+      await supabaseCreateQueryHelper(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create the Supabase query helper.",
+      );
+    }
+  }
   const isGithub = activeProvider?.id === "github";
   const isSupabase = activeProvider?.id === "supabase";
   const isStripe = activeProvider?.id === "stripe";
@@ -1438,6 +1503,39 @@ export default function ServicePanel({ projectPath }) {
                 title="Create src/lib/supabase.js"
               >
                 Create Supabase client file
+              </button>
+            ) : null}
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateSupabaseReadExample}
+                disabled={isBusy}
+                title="Create src/examples/supabaseExample.js"
+              >
+                Create Supabase read example
+              </button>
+            ) : null}
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateSupabaseQueryHelper}
+                disabled={isBusy}
+                title="Create src/lib/supabaseQueries.js"
+              >
+                Create Supabase query helper
+              </button>
+            ) : null}
+            {isSupabase ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateSupabaseInsertExample}
+                disabled={isBusy}
+                title="Create src/examples/supabaseInsertExample.js"
+              >
+                Create Supabase insert example
               </button>
             ) : null}
             {isSupabase ? (

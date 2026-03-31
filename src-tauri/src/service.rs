@@ -581,6 +581,20 @@ fn supabase_example_file_path(project_dir: &PathBuf) -> PathBuf {
         .join("supabaseExample.js")
 }
 
+fn supabase_insert_example_file_path(project_dir: &PathBuf) -> PathBuf {
+    project_dir
+        .join("src")
+        .join("examples")
+        .join("supabaseInsertExample.js")
+}
+
+fn supabase_queries_file_path(project_dir: &PathBuf) -> PathBuf {
+    project_dir
+        .join("src")
+        .join("lib")
+        .join("supabaseQueries.js")
+}
+
 fn create_supabase_example_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
     let example_path = supabase_example_file_path(project_dir);
 
@@ -613,6 +627,91 @@ export async function loadExampleData() {
         .map_err(|error| format!("Failed to write Supabase example file: {}", error))?;
 
     Ok(example_path)
+}
+
+fn create_supabase_insert_example_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    let example_path = supabase_insert_example_file_path(project_dir);
+
+    if example_path.exists() {
+        return Ok(example_path);
+    }
+
+    if let Some(parent) = example_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create examples folder: {}", error))?;
+    }
+
+    let content = r#"import { supabase } from "../lib/supabase";
+
+export async function insertExampleRow() {
+  const { data, error } = await supabase
+    .from("your_table")
+    .insert([
+      {
+        name: "Example row",
+      },
+    ])
+    .select();
+
+  if (error) {
+    console.error("Supabase insert failed:", error);
+    return null;
+  }
+
+  return data;
+}
+"#;
+
+    fs::write(&example_path, content)
+        .map_err(|error| format!("Failed to write Supabase insert example file: {}", error))?;
+
+    Ok(example_path)
+}
+
+fn create_supabase_queries_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    let queries_path = supabase_queries_file_path(project_dir);
+
+    if queries_path.exists() {
+        return Ok(queries_path);
+    }
+
+    if let Some(parent) = queries_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create lib folder: {}", error))?;
+    }
+
+    let content = r#"import { supabase } from "./supabase";
+
+export async function fetchRows(table) {
+  const { data, error } = await supabase
+    .from(table)
+    .select("*");
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function insertRow(table, values) {
+  const { data, error } = await supabase
+    .from(table)
+    .insert([values])
+    .select();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+"#;
+
+    fs::write(&queries_path, content)
+        .map_err(|error| format!("Failed to write Supabase queries file: {}", error))?;
+
+    Ok(queries_path)
 }
 fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), String> {
     emit_log(app, "status", "Checking this project for Supabase setup...");
@@ -656,6 +755,9 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
     let has_supabase_js = has_supabase_client_dependency(project_dir);
 
     let existing_client_file = existing_supabase_client_file(project_dir);
+    let example_file_exists = supabase_example_file_path(project_dir).exists();
+    let insert_example_file_exists = supabase_insert_example_file_path(project_dir).exists();
+    let queries_file_exists = supabase_queries_file_path(project_dir).exists();
 
     emit_log(
         app,
@@ -761,6 +863,45 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
                     .to_string()
             } else {
                 "not found".to_string()
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
+            "Read example file: {}",
+            if example_file_exists {
+                "found (src/examples/supabaseExample.js)"
+            } else {
+                "not found"
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
+            "Insert example file: {}",
+            if insert_example_file_exists {
+                "found (src/examples/supabaseInsertExample.js)"
+            } else {
+                "not found"
+            }
+        ),
+    );
+
+    emit_log(
+        app,
+        "stdout",
+        &format!(
+            "Query helper file: {}",
+            if queries_file_exists {
+                "found (src/lib/supabaseQueries.js)"
+            } else {
+                "not found"
             }
         ),
     );
@@ -901,6 +1042,46 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
             app,
             "stdout",
             "Next suggested action: Click \"Create Supabase client file\". This creates src/lib/supabase.js so your app has a single place to connect to Supabase.",
+        );
+    }
+
+    if has_supabase_js && existing_client_file.is_some() {
+        if !example_file_exists {
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Click \"Create Supabase read example\". This generates src/examples/supabaseExample.js with a safe starter query.",
+            );
+            return Ok(());
+        }
+
+        if !queries_file_exists {
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Click \"Create Supabase query helper\". This generates src/lib/supabaseQueries.js with simple reusable read and insert helpers.",
+            );
+            return Ok(());
+        }
+
+        if !insert_example_file_exists {
+            emit_log(
+                app,
+                "stdout",
+                "Next suggested action: Click \"Create Supabase insert example\". This generates src/examples/supabaseInsertExample.js with a safe starter insert pattern.",
+            );
+            return Ok(());
+        }
+
+        emit_log(
+            app,
+            "status",
+            "Supabase developer-assist files look ready. Your next step is to open the generated starter files and wire them into your real app code.",
+        );
+        emit_log(
+            app,
+            "stdout",
+            "Suggested coding path: start with src/lib/supabase.js, then review src/lib/supabaseQueries.js, then adapt the examples in src/examples/ to your real table names and app flows.",
         );
     }
 
@@ -1355,7 +1536,6 @@ pub fn supabase_install_client(app: AppHandle, project_path: String) -> Result<(
         }
     }
 }
-
 #[tauri::command]
 pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;
@@ -1375,15 +1555,18 @@ pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Resu
                 display_path
             ),
         );
+
         emit_log(
             &app,
             "status",
             "Supabase client file already exists. Leaving it unchanged.",
         );
+
         return Ok(());
     }
 
     let created_path = create_supabase_client_file(&project_dir)?;
+
     let display_path = created_path
         .strip_prefix(&project_dir)
         .ok()
@@ -1395,6 +1578,7 @@ pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Resu
         "stdout",
         &format!("Created Supabase client file at {}", display_path),
     );
+
     emit_log(
         &app,
         "status",
@@ -1402,6 +1586,83 @@ pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Resu
             "Your project now has a Supabase client file at {}. The next step is to use this file inside your app when you want to read or write Supabase data.",
             display_path
         ),
+    );
+
+    Ok(())
+}
+#[tauri::command]
+pub fn supabase_create_read_example(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    let created_path = create_supabase_example_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/examples/supabaseExample.js");
+
+    emit_log(
+        &app,
+        "stdout",
+        &format!("Supabase read example ready at {}", display_path),
+    );
+
+    emit_log(
+        &app,
+        "status",
+        "You can now open this file and adapt the table name and query fields to your real database schema.",
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn supabase_create_insert_example(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    let created_path = create_supabase_insert_example_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/examples/supabaseInsertExample.js");
+
+    emit_log(
+        &app,
+        "stdout",
+        &format!("Supabase insert example ready at {}", display_path),
+    );
+
+    emit_log(
+        &app,
+        "status",
+        "You can now adapt this example to insert rows into your own Supabase tables.",
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn supabase_create_query_helper(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    let created_path = create_supabase_queries_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/lib/supabaseQueries.js");
+
+    emit_log(
+        &app,
+        "stdout",
+        &format!("Supabase query helper ready at {}", display_path),
+    );
+
+    emit_log(
+        &app,
+        "status",
+        "This helper file contains reusable read and insert functions you can call from your app code.",
     );
 
     Ok(())

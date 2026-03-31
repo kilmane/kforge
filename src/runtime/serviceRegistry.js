@@ -11,7 +11,7 @@ export const SERVICE_REGISTRY = [
     id: "supabase",
     name: "Supabase",
     description:
-      "Check Supabase readiness, guide next steps, and help create the files your app needs to connect.",
+      "Check Supabase readiness, guide next development steps, and help create starter integration files after setup.",
     quickActionLabel: "Quick Connect Supabase",
     status: "available",
     envVars: [
