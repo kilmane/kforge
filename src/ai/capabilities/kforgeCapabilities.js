@@ -70,12 +70,23 @@ function pushWorkflow(lines, workflow) {
   lines.push("");
 }
 
-function pushDiscovered(lines, capabilities) {
+function pushDiscovered(lines, capabilities, options = {}) {
   if (!capabilities || capabilities.length === 0) return;
+
+  const hideTemplateCapabilities =
+    options.projectOpen && options.detectedTemplateName;
+
+  const filteredCapabilities = hideTemplateCapabilities
+    ? capabilities.filter(
+        (cap) => !String(cap?.name || "").startsWith("Template: "),
+      )
+    : capabilities;
+
+  if (filteredCapabilities.length === 0) return;
 
   lines.push("=== Discovered KForge Capabilities ===");
 
-  for (const cap of capabilities) {
+  for (const cap of filteredCapabilities) {
     lines.push(`${cap.name} [${cap.status}] — ${cap.route} — ${cap.summary}`);
   }
 
@@ -100,7 +111,7 @@ function filterRelevantWorkflows(workflows, userMessage) {
   return filtered.length > 0 ? filtered : workflows;
 }
 
-export function buildKforgeCapabilitySummary(userMessage = "") {
+export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {
   const workflows = [
     ...listKforgeServiceWorkflows(),
     buildKforgePreviewWorkflowManifest(),
@@ -114,10 +125,22 @@ export function buildKforgeCapabilitySummary(userMessage = "") {
 
   lines.push("=== KForge Workflow Awareness ===");
   lines.push(
-    "Global rule: if a workflow exists in KForge, guide the user to that KForge workflow first.",
+    "Global rule: use KForge workflow handoff first only when the user's goal is actually a KForge-managed workflow.",
   );
   lines.push(
-    "Do not perform that workflow inside chat unless the user explicitly says they want to bypass KForge.",
+    "Examples of KForge-managed workflows include service setup, deployment setup, preview/run actions, terminal actions, and explicit template generation.",
+  );
+  lines.push(
+    "Do not hand off to a KForge workflow just because KForge has a related capability.",
+  );
+  lines.push(
+    "If a project is already open and the user is asking to build, add, edit, or implement product code, treat that as in-project implementation work by default.",
+  );
+  lines.push(
+    "Do not avoid normal project file edits merely because a related KForge workflow exists.",
+  );
+  lines.push(
+    "Only hand off when the user is actually asking for that workflow, or when the workflow is the most truthful path for the requested action.",
   );
   lines.push(
     "When handing off to a KForge workflow, do not ask how the user would like to proceed.",
@@ -129,7 +152,7 @@ export function buildKforgeCapabilitySummary(userMessage = "") {
     "End the response after the KForge handoff and the manual-bypass note.",
   );
   lines.push(
-    "Only continue solving inside chat when the user explicitly chooses to bypass KForge.",
+    "Only continue solving inside chat when the user explicitly chooses to bypass KForge, or when the request is normal in-project implementation work.",
   );
   lines.push("");
 
@@ -138,7 +161,7 @@ export function buildKforgeCapabilitySummary(userMessage = "") {
   }
 
   const filteredDiscovered = filterRelevantWorkflows(discovered, userMessage);
-  pushDiscovered(lines, filteredDiscovered);
+  pushDiscovered(lines, filteredDiscovered, options);
 
   lines.push("=== End KForge Workflow Awareness ===");
   lines.push("");

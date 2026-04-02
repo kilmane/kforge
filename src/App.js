@@ -37,6 +37,7 @@ import SettingsModal from "./components/settings/SettingsModal.jsx";
 import AiPanel from "./ai/panel/AiPanel.jsx";
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import DockShell from "./layout/DockShell";
+import { previewDetectTemplates } from "./runtime/previewRunner";
 import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
 function basename(p) {
   if (!p) return "";
@@ -409,7 +410,71 @@ function buildActiveFileContextBlock(filePath, fileContent) {
     `=== End active file context ===\n\n`
   );
 }
+function buildWorkspaceTreeContextBlock(tree, projectPath) {
+  const root = Array.isArray(tree) ? tree : [];
+  if (!projectPath || root.length === 0) return "";
 
+  const lines = [];
+  let truncated = false;
+  const MAX_LINES = 120;
+
+  function walk(nodes, depth = 0) {
+    if (!Array.isArray(nodes) || truncated) return;
+
+    const sorted = [...nodes].sort((a, b) => {
+      const aDir = Array.isArray(a?.children);
+      const bDir = Array.isArray(b?.children);
+      if (aDir !== bDir) return aDir ? -1 : 1;
+      return String(a?.name || "").localeCompare(String(b?.name || ""));
+    });
+
+    for (const node of sorted) {
+      if (lines.length >= MAX_LINES) {
+        truncated = true;
+        return;
+      }
+
+      const isDir = Array.isArray(node?.children);
+      const indent = "  ".repeat(depth);
+      const name = String(node?.name || "");
+      lines.push(`${indent}${isDir ? "[dir] " : "[file] "}${name}`);
+
+      if (isDir) walk(node.children, depth + 1);
+      if (truncated) return;
+    }
+  }
+
+  walk(root, 0);
+
+  if (lines.length === 0) return "";
+
+  let out = "";
+  out +=
+    "=== Workspace Tree Snapshot (reference only; follow existing structure) ===\n";
+  out += `Project root: ${projectPath}\n`;
+  out += lines.join("\n");
+  if (truncated) out += "\n... (tree truncated)";
+  out += "\n";
+  out +=
+    "Use this tree to prefer existing files and folders before proposing new ones.\n";
+  out +=
+    "Do not invent framework entry files or tutorial files when equivalent project files already exist in this workspace.\n";
+  out += "=== End Workspace Tree Snapshot ===\n\n";
+
+  return out;
+}
+function buildPrimaryEditTargetBlock(filePath) {
+  const path = String(filePath || "").trim();
+  if (!path) return "";
+
+  return (
+    "=== Primary Edit Target ===\n" +
+    `Primary file to modify: ${path}\n` +
+    "Modify this file directly if the request can reasonably be satisfied there.\n" +
+    "Do not create alternative files with similar roles unless the user explicitly asks for that structure or the change truly requires it.\n" +
+    "=== End Primary Edit Target ===\n\n"
+  );
+}
 function buildProjectMemoryBlock() {
   try {
     const mem = getProjectMemory ? getProjectMemory() : null;
@@ -603,6 +668,7 @@ function TranscriptBubble({
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
+  const [projectTemplateInfo, setProjectTemplateInfo] = useState(null);
 
   // Tabs state
   const [tabs, setTabs] = useState([]); // { path, name, content, isDirty }
@@ -793,10 +859,10 @@ export default function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
-
   const handleRefreshTree = useCallback(async () => {
     if (!projectPath) {
       setAiTestOutput("No folder open.");
+      setProjectTemplateInfo(null);
       return;
     }
 
@@ -813,8 +879,10 @@ export default function App() {
       await loadProjectMemoryForCurrentRoot();
 
       const nextTree = await readFolderTree(projectPath);
+      const detectedTemplates = await previewDetectTemplates(projectPath);
 
       setTree(nextTree || []);
+      setProjectTemplateInfo(detectedTemplates || null);
       setAiTestOutput("");
     } catch (err) {
       const msg = formatTauriError ? formatTauriError(err) : String(err);
@@ -1549,7 +1617,72 @@ export default function App() {
   // Helper: compute the “input” that includes last N turns + optional active file context
   const buildInputWithContext = useCallback(
     (rawPrompt, fileSnapshot = null) => {
-      const capabilityBlock = buildKforgeCapabilitySummary(rawPrompt) + "\n";
+      const detectedTemplateName =
+        projectTemplateInfo?.detectedTemplate?.name || null;
+      const detectedKind = projectTemplateInfo?.kind || null;
+      const projectOpen = !!projectPath;
+
+      const capabilityBlock =
+        buildKforgeCapabilitySummary(rawPrompt, {
+          projectOpen,
+          detectedTemplateName,
+        }) + "\n";
+
+      const templateStructureHints =
+        detectedTemplateName === "Vite + React"
+          ? [
+              "Typical Vite + React structure:",
+              "- React app code usually lives in src/",
+              "- Main app component is usually src/App.jsx or src/App.js",
+              "- Entry file is usually src/main.jsx or src/main.js",
+              "- For simple app feature requests, prefer modifying src/App.jsx first unless the existing project structure clearly suggests another file",
+              "- Do not propose creating index.html, TodoApp.js, App.tsx examples, or standalone React tutorial files when this Vite + React project already exists",
+            ]
+          : detectedTemplateName === "Next.js"
+            ? [
+                "Typical Next.js structure:",
+                "- App code usually lives in app/ or pages/",
+                "- Prefer modifying existing route files and existing project structure instead of proposing generic React tutorial files",
+              ]
+            : [];
+
+      const existingProjectBehaviorHints = projectOpen
+        ? [
+            "=== Existing Project Behavior Rules ===",
+            "A project is already open in KForge.",
+            "Treat requests like create/build/add/make/implement a page, feature, UI, component, app, screen, form, table, dashboard, auth flow, or CRUD flow as implementation work inside the current project by default.",
+            "Do not switch into new-project scaffolding mode unless the user explicitly asks to create a new project, generate a template, scaffold a new app, or start from scratch.",
+            "Do not route to Preview -> Generate for ordinary implementation requests inside an already-open project.",
+            "Do not invent generic tutorial file plans that ignore the detected project structure.",
+            "Prefer editing existing project files that match the detected stack and structure.",
+            "When the detected template is Vite + React, default to existing src/ files before suggesting new top-level tutorial files.",
+            "If the user asks to create a simple app inside an existing Vite + React project, interpret that as updating the current React app, usually starting with src/App.jsx or nearby existing files.",
+            "Use truthful, project-aware actions only. Never imply a new scaffold will be generated unless the user explicitly requested one.",
+            "",
+          ]
+        : [];
+
+      const projectContextBlock = projectOpen
+        ? [
+            "=== Current Project Context ===",
+            `Project folder open: yes`,
+            `Project path: ${projectPath}`,
+            `Detected project kind: ${detectedKind || "unknown"}`,
+            `Detected template: ${detectedTemplateName || "none detected"}`,
+            "If a project folder is already open, prefer modifying the current project unless the user explicitly asks to scaffold a new template.",
+            "If a detected template already exists, requests to create an app, page, feature, component, UI, or screen should usually be treated as implementation work inside the current project.",
+            "Do not route to Preview just because the project uses React, Vite, or Next.js.",
+            "Only route to Preview when the user explicitly wants to run, preview, start, test, or view the current app.",
+            "Only route to Generate when the user explicitly wants a new scaffolded template project.",
+            ...templateStructureHints,
+            "",
+          ].join("\n")
+        : "";
+
+      const workspaceTreeBlock = buildWorkspaceTreeContextBlock(
+        tree,
+        projectPath,
+      );
 
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
@@ -1557,9 +1690,13 @@ export default function App() {
         ? buildActiveFileContextBlock(fileSnapshot.path, fileSnapshot.content)
         : "";
 
-      return `${capabilityBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      const primaryEditTargetBlock = buildPrimaryEditTargetBlock(
+        fileSnapshot?.path || activeTab?.path || null,
+      );
+
+      return `${capabilityBlock}${existingProjectBehaviorHints.join("\n")}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
-    [messages],
+    [messages, projectPath, projectTemplateInfo, tree, activeTab],
   );
 
   const sendWithPrompt = useCallback(
@@ -1617,18 +1754,35 @@ export default function App() {
         : "";
       const toolInstruction = !askForPatch
         ? "\n\nIMPORTANT:\n" +
-          "Use tool fenced blocks only when the user is explicitly asking you to take an action in the project, such as creating files, editing files, or running project operations.\n" +
+          "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
+          "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
+          "If a specific file path is mentioned or implied (such as src/App.jsx), modify that file directly instead of creating alternatives.\n" +
+          "Do NOT describe the change in prose.\n" +
+          "Do NOT say things like 'I will create the file'.\n" +
+          "Immediately output the required ```tool fenced blocks.\n" +
+          "\n" +
+          "Use tool fenced blocks when the user is asking you to take an action in the project, such as creating files, editing files, or running project operations.\n" +
           "If the user is asking for an explanation, conceptual help, planning, or manual commands only, do not emit tool calls.\n" +
           "If the user explicitly says they want to bypass KForge or wants manual steps only, do not emit tool calls and do not simulate actions.\n" +
+          "\n" +
           "If you need to create or update files, you MUST request tools.\n" +
+          "Never output code changes only in chat when a file must be edited.\n" +
+          "\n" +
           "Do NOT paste full file contents in chat.\n" +
           "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
           "Do NOT simulate file creation.\n" +
+          "\n" +
+          "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
+          "Do NOT invent or emit any other tool names.\n" +
+          "Do NOT emit tools like preview, install, terminal, services, supabase, stripe, or deploy.\n" +
+          "If the user wants a KForge UI workflow such as Preview, Services, or Terminal, answer in normal assistant text and guide them there instead of emitting a tool call.\n" +
+          "\n" +
           "Instead, output one or more ```tool fenced blocks, each containing JSON like:\n" +
           "```tool\n" +
           '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
           "```\n" +
-          "After creating files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
+          "\n" +
+          "After creating or modifying files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
           "```tool\n" +
           '{ "name": "list_dir", "args": { "path": "." } }\n' +
           "```\n"

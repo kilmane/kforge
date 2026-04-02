@@ -292,10 +292,14 @@ function collectToolBatchPaths(calls, toolName) {
 }
 
 function buildToolBatchWorkingMessage(calls) {
-  const writePaths = collectToolBatchPaths(calls, "write_file");
-  const dirPaths = collectToolBatchPaths(calls, "mkdir");
-  const createdCount = writePaths.length + dirPaths.length;
+  const items = Array.isArray(calls) ? calls : [];
+  const writePaths = collectToolBatchPaths(items, "write_file");
+  const dirPaths = collectToolBatchPaths(items, "mkdir");
+  const readPaths = collectToolBatchPaths(items, "read_file");
+  const listPaths = collectToolBatchPaths(items, "list_dir");
+  const searchPaths = collectToolBatchPaths(items, "search_in_file");
 
+  const createdCount = writePaths.length + dirPaths.length;
   if (createdCount > 0) {
     if (createdCount === 1) {
       const onlyPath = writePaths[0] || dirPaths[0];
@@ -304,31 +308,97 @@ function buildToolBatchWorkingMessage(calls) {
     return "Working… creating project files";
   }
 
-  const total = Array.isArray(calls) ? calls.length : 0;
-  return `Working… applying ${total} project ${total === 1 ? "change" : "changes"}.`;
+  if (readPaths.length === 1 && items.length === 1) {
+    return `Working… reading ${readPaths[0]}.`;
+  }
+
+  if (listPaths.length === 1 && items.length === 1) {
+    return `Working… listing ${listPaths[0]}.`;
+  }
+
+  if (searchPaths.length === 1 && items.length === 1) {
+    return `Working… searching ${searchPaths[0]}.`;
+  }
+
+  const total = items.length;
+  return `Working… applying ${total} tool ${total === 1 ? "action" : "actions"}.`;
 }
 
 function buildToolBatchDoneMessage(calls) {
   const writePaths = collectToolBatchPaths(calls, "write_file");
   const dirPaths = collectToolBatchPaths(calls, "mkdir");
   const listed = [...dirPaths, ...writePaths].filter(Boolean);
-  const totalCreated = listed.length;
+  const totalTouched = listed.length;
 
-  if (totalCreated > 0) {
+  if (totalTouched > 0) {
     const lines = listed.slice(0, 6).map((p) => `- ${p}`);
     if (listed.length > 6) {
       lines.push(`- ...and ${listed.length - 6} more`);
     }
 
     const intro =
-      totalCreated === 1
-        ? "Done> created the following file:"
-        : "Done> created the following files:";
+      totalTouched === 1
+        ? "Done> wrote the following path:"
+        : "Done> wrote the following paths:";
 
     return `${intro}\n${lines.join("\n")}`;
   }
 
   return "";
+}
+function getLatestUserMessageText(messages) {
+  const items = Array.isArray(messages) ? messages : [];
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    if (String(items[i]?.role || "") === "user") {
+      return String(items[i]?.content || "").trim();
+    }
+  }
+  return "";
+}
+function getNearestUserMessageTextBeforeIndex(messages, index) {
+  const items = Array.isArray(messages) ? messages : [];
+  const max = Math.min(
+    typeof index === "number" ? index : items.length - 1,
+    items.length - 1,
+  );
+
+  for (let i = max; i >= 0; i -= 1) {
+    if (String(items[i]?.role || "") === "user") {
+      return String(items[i]?.content || "").trim();
+    }
+  }
+
+  return "";
+}
+function isShowChangesIntent(text) {
+  const s = String(text || "").toLowerCase();
+  return (
+    s.includes("show the changes") ||
+    s.includes("see the changes") ||
+    s.includes("show me the changes") ||
+    s.includes("see what changed") ||
+    s.includes("review the changes") ||
+    s.includes("display the changes")
+  );
+}
+
+function isPreviewIntent(text) {
+  const s = String(text || "").toLowerCase();
+  return (
+    s.includes("preview") ||
+    s.includes("run the app") ||
+    s.includes("use the kforge preview flow") ||
+    s.includes("open preview") ||
+    s.includes("start the app")
+  );
+}
+
+function buildPreviewHandoffMessage() {
+  return (
+    "KForge can help with this through the Preview panel.\n\n" +
+    'You can now leave the chat and open: Preview. Use "Preview" to run the current project. If the project needs dependencies, use "Install" first.\n\n' +
+    "If you prefer to bypass KForge, stay in the chat and I can help you run the project manually instead."
+  );
 }
 function buildAgentConversationInput(messages, tools, maxTurns = 20) {
   const relevant = (Array.isArray(messages) ? messages : [])
@@ -353,10 +423,12 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
           : role === "assistant"
             ? "Assistant"
             : "System";
+
       const content =
         role === "assistant"
           ? stripToolBlocksForChat(String(m?.content || ""))
           : String(m?.content || "");
+
       return `${label}: ${content.trim()}`;
     })
     .filter(Boolean);
@@ -365,11 +437,21 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `You are continuing an in-progress KForge conversation.\n\n` +
     `Available tools:\n${toolLines.join("\n")}\n\n` +
     `Rules:\n` +
+    `- Respect the latest user request above earlier momentum.\n` +
+    `- If the latest user request changes topic (for example from editing to previewing, explaining, or showing results), follow the latest request.\n` +
+    `- If the latest user asks to preview, run, start, test, or use the KForge Preview flow, do NOT write files.\n` +
+    `- For Preview/run requests, answer normally and guide the user to KForge Preview instead of making more code edits.\n` +
+    `- KForge UI workflows such as Preview, Services, and Terminal are not callable tools in this loop.\n` +
+    `- Do NOT emit tool names like preview, services, install, or terminal. Use normal assistant text for those handoffs.\n` +
+    `- If the latest user asks to see changes, summarize the existing tool result or read the file if needed. Do NOT rewrite the file again.\n` +
+    `- If the latest user asks to see changes, prefer read_file on the active file or most recently written file.\n` +
+    `- Do NOT use list_dir for a "show changes" request unless the user explicitly asked for a directory listing.\n` +
+    `- If a file was already written successfully, do NOT repeat the same write_file call unless the user explicitly asks for another edit.\n` +
     `- If you need a tool, request exactly one tool call.\n` +
     `- Prefer a single tool call at a time.\n` +
     `- If no more tools are needed, provide the final assistant answer.\n` +
     `- Do not repeat the full prior conversation unnecessarily.\n` +
-    `- You are inspecting an existing workspace unless the user explicitly asks you to create files or folders.\n` +
+    `- You are inspecting or continuing work inside an existing workspace unless the user explicitly asks to create files or folders.\n` +
     `- Do NOT create files or directories unless the user explicitly asks for them.\n` +
     `- When inspecting a workspace, start with the list_dir tool on "." unless the conversation already contains a directory listing.\n` +
     `- If a tool already returned the requested information, DO NOT call the same tool again.\n` +
@@ -389,7 +471,6 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `Continue from the latest state.`
   );
 }
-
 function normalizeAgentToolCall(call, activeFilePath) {
   if (!call || typeof call !== "object") return null;
 
@@ -977,6 +1058,7 @@ export default function AiPanel({
     const processAssistantToolCalls = async () => {
       toolBatchRunningRef.current = true;
       const batchCalls = [];
+      let triggerMessageIndex = -1;
 
       try {
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -989,12 +1071,16 @@ export default function AiPanel({
           const msgKey = String(msg?.id ?? msg?.ts ?? i);
           const pendingCalls = [];
 
-          const queueCall = ({ key, toolName, args }) => {
+          const queueCall = ({ key, toolName, args, sourceIndex }) => {
             if (
               GLOBAL_SEEN_TOOL_KEYS.has(key) ||
               processedKeysRef.current.has(key)
             ) {
               return;
+            }
+
+            if (triggerMessageIndex < 0 && typeof sourceIndex === "number") {
+              triggerMessageIndex = sourceIndex;
             }
 
             GLOBAL_SEEN_TOOL_KEYS.add(key);
@@ -1030,7 +1116,7 @@ export default function AiPanel({
 
               const tiny = hashString(`${c.name}|${JSON.stringify(args)}`);
               const key = `mtool:xml:${msgKey}:${tiny}`;
-              queueCall({ key, toolName: c.name, args });
+              queueCall({ key, toolName: c.name, args, sourceIndex: i });
             }
           }
 
@@ -1065,7 +1151,7 @@ export default function AiPanel({
 
               const tiny = hashString(`${parsed.name}|${b.payload}`);
               const key = `mtool:fence:${msgKey}:${tiny}`;
-              queueCall({ key, toolName: parsed.name, args });
+              queueCall({ key, toolName: parsed.name, args, sourceIndex: i });
             }
           }
 
@@ -1091,12 +1177,12 @@ export default function AiPanel({
               } else {
                 const tiny = hashString(`${bare.name}|${content.trim()}`);
                 const key = `mtool:bare:${msgKey}:${tiny}`;
-                queueCall({ key, toolName: bare.name, args });
+                queueCall({ key, toolName: bare.name, args, sourceIndex: i });
               }
             } else {
               const tiny = hashString(`${bare.name}|${content.trim()}`);
               const key = `mtool:bare:${msgKey}:${tiny}`;
-              queueCall({ key, toolName: bare.name, args });
+              queueCall({ key, toolName: bare.name, args, sourceIndex: i });
             }
           }
           if (pendingCalls.length > 0) {
@@ -1129,7 +1215,31 @@ export default function AiPanel({
 
           appendMessage("assistant", buildToolBatchDoneMessage(batchCalls));
 
-          if (typeof runAi === "function") {
+          const latestUserText = getNearestUserMessageTextBeforeIndex(
+            messages,
+            triggerMessageIndex,
+          );
+          const writePaths = collectToolBatchPaths(batchCalls, "write_file");
+          const latestWrittenPath =
+            writePaths.length > 0 ? writePaths[writePaths.length - 1] : "";
+
+          const fallbackReadPath = latestWrittenPath || activeTab?.path || "";
+
+          if (isPreviewIntent(latestUserText)) {
+            appendMessage("assistant", buildPreviewHandoffMessage());
+          } else if (isShowChangesIntent(latestUserText) && fallbackReadPath) {
+            await runTool({
+              toolName: "read_file",
+              args: { path: fallbackReadPath },
+            });
+          } else if (writePaths.length > 0) {
+            appendMessage(
+              "assistant",
+              latestWrittenPath
+                ? `Done — updated ${latestWrittenPath}.\n\nWould you like to preview the app, see the file changes, or make another edit?`
+                : "Done — file updated.\n\nWould you like to preview the app, see the file changes, or make another edit?",
+            );
+          } else if (typeof runAi === "function") {
             try {
               const toolSchemas = getToolSchemas();
 
