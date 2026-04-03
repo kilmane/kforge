@@ -988,7 +988,7 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
             emit_log(
                 app,
                 "status",
-                "Supabase setup is not complete yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your .env file. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+                "Supabase connection values are still missing in .env. Add SUPABASE_URL and SUPABASE_ANON_KEY first. If this is a Vite frontend, you will usually also want VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. You can also continue by creating the Supabase client file now and fill in the values after that.",
             );
         }
 
@@ -1577,7 +1577,7 @@ pub fn supabase_create_client_file(app: AppHandle, project_path: String) -> Resu
         &app,
         "status",
         &format!(
-            "Your project now has a Supabase client file at {}. The next step is to use this file inside your app when you want to read or write Supabase data.",
+            "Your project now has a Supabase client file at {}. Next, you can create a read example or query helper, then copy those patterns into your app when you're ready to connect real data.",
             display_path
         ),
     );
@@ -1604,7 +1604,7 @@ pub fn supabase_create_read_example(app: AppHandle, project_path: String) -> Res
     emit_log(
         &app,
         "status",
-        "You can now open this file and adapt the table name and query fields to your real database schema.",
+        "This is a starter read example. Replace \"your_table\" with your real table name, adjust the selected fields if needed, and then copy the pattern into your app.",
     );
 
     Ok(())
@@ -1630,7 +1630,7 @@ pub fn supabase_create_insert_example(app: AppHandle, project_path: String) -> R
     emit_log(
         &app,
         "status",
-        "You can now adapt this example to insert rows into your own Supabase tables.",
+        "This is a starter insert example. Replace \"your_table\" and the example values with your real table name and fields, then copy the pattern into your app.",
     );
 
     Ok(())
@@ -1656,7 +1656,7 @@ pub fn supabase_create_query_helper(app: AppHandle, project_path: String) -> Res
     emit_log(
         &app,
         "status",
-        "This helper file contains reusable read and insert functions you can call from your app code.",
+        "This helper file contains reusable read and insert functions. Use it if you want simple shared helpers for your app instead of writing Supabase queries inline each time.",
     );
 
     Ok(())
