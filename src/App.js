@@ -1661,7 +1661,36 @@ export default function App() {
             "",
           ]
         : [];
-
+      const noProjectBehaviorHints = !projectOpen
+        ? [
+            "=== No Project Open Behavior Rules ===",
+            "No project folder is currently open in KForge.",
+            "If the user says they do not have a project yet, wants to create a new project, wants a starter app, or wants to start from scratch, do not emit file-edit tools against relative paths.",
+            "Do not create ad-hoc starter files manually when KForge can generate a supported template project.",
+            "For no-project new-app requests, answer with a KForge-first handoff: tell the user to create or open a folder first in Explorer, then leave chat and use Preview -> Generate for a supported starter template project.",
+            "If the user is unsure which template to pick, let them stay in chat and recommend the best starter template before sending them to Preview -> Generate.",
+            "Do not say 'let me know once the folder is open so I can create files' as the default next step for a new-project request.",
+            "If the user explicitly says they want to bypass KForge, switch fully into manual-chat mode.",
+            "In manual-chat mode, do not keep describing the path as Preview, Generate, or KForge template creation.",
+            "In manual-chat mode, recommend a concrete stack directly and give commands or steps only.",
+            "For simple interactive web apps with no framework preference, Vite + React is usually the default manual recommendation.",
+            "If no project folder is open during manual bypass, tell the user to create or open a folder first before any file edits or preview suggestions.",
+            "Only fall back to manual chat-only scaffolding if the user explicitly asks to bypass KForge.",
+            "",
+          ]
+        : [];
+      const emptyFolderBehaviorHints =
+        projectOpen && Array.isArray(tree) && tree.length === 0
+          ? [
+              "=== Empty Folder Behavior Rules ===",
+              "A project folder is open, but it appears to be empty.",
+              "If the user wants a new app, starter, or fresh project in an empty folder, prefer KForge Preview -> Generate for a supported template project.",
+              "Do not default to manually writing index.html, app.js, or other ad-hoc boilerplate into an empty folder unless the user explicitly asks for manual scaffolding or bypasses KForge.",
+              "If helpful, mention that supported starters may include Static HTML, Vite + React, and Next.js.",
+              "If the user does not know which template to choose, recommend one in chat before sending them to Preview -> Generate.",
+              "",
+            ]
+          : [];
       const projectContextBlock = projectOpen
         ? [
             "=== Current Project Context ===",
@@ -1694,7 +1723,7 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorHints.join("\n")}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorHints.join("\n")}${noProjectBehaviorHints.join("\n")}${emptyFolderBehaviorHints.join("\n")}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab],
   );
@@ -1764,7 +1793,14 @@ export default function App() {
           "Use tool fenced blocks when the user is asking you to take an action in the project, such as creating files, editing files, or running project operations.\n" +
           "If the user is asking for an explanation, conceptual help, planning, or manual commands only, do not emit tool calls.\n" +
           "If the user explicitly says they want to bypass KForge or wants manual steps only, do not emit tool calls and do not simulate actions.\n" +
+          "When the user chooses manual bypass, stay fully in manual chat mode.\n" +
+          "Do not keep describing the manual path as Preview, Generate, or KForge template creation.\n" +
+          "Recommend a concrete stack and provide direct commands or steps.\n" +
+          "If no project folder is open, tell the user to create or open one first before any file edits or preview suggestions.\n" +
           "\n" +
+          "When the user's message is only gratitude, acknowledgement, or casual closing language such as 'thanks', 'thank you', 'cool thanks', 'nice', 'great', 'perfect', or 'ok thanks', do not emit tool calls and do not route to KForge workflows.\n" +
+          "Respond briefly and naturally in plain chat.\n" +
+          "If appropriate, offer a simple next-step option such as making another change, adding a feature, or reviewing the result.\n" +
           "If you need to create or update files, you MUST request tools.\n" +
           "Never output code changes only in chat when a file must be edited.\n" +
           "\n" +

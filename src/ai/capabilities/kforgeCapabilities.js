@@ -99,7 +99,68 @@ function filterRelevantWorkflows(workflows, userMessage) {
   }
 
   const message = userMessage.toLowerCase().trim();
-  const terms = message.split(/\s+/).filter(Boolean);
+  const stopWords = new Set([
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "to",
+    "of",
+    "for",
+    "in",
+    "on",
+    "at",
+    "by",
+    "with",
+    "from",
+    "my",
+    "me",
+    "i",
+    "you",
+    "it",
+    "this",
+    "that",
+    "please",
+    "just",
+    "help",
+    "build",
+    "make",
+    "create",
+  ]);
+
+  const terms = message
+    .split(/\s+/)
+    .map((term) => term.replace(/[^a-z0-9_-]/g, ""))
+    .filter((term) => term.length >= 3)
+    .filter((term) => !stopWords.has(term));
+
+  const explicitWorkflowHints = [
+    "preview",
+    "run",
+    "start",
+    "test",
+    "open preview",
+    "generate",
+    "scaffold",
+    "template",
+    "supabase",
+    "github",
+    "git",
+    "stripe",
+    "deploy",
+    "deployment",
+    "terminal",
+    "npm",
+    "pnpm",
+    "yarn",
+    "install",
+    "package",
+  ];
+
+  const hasExplicitWorkflowHint = explicitWorkflowHints.some((hint) =>
+    message.includes(hint),
+  );
 
   const filtered = workflows.filter((workflow) => {
     const text =
@@ -108,7 +169,15 @@ function filterRelevantWorkflows(workflows, userMessage) {
     return terms.some((term) => text.includes(term));
   });
 
-  return filtered.length > 0 ? filtered : workflows;
+  if (filtered.length > 0) {
+    return filtered;
+  }
+
+  if (hasExplicitWorkflowHint) {
+    return workflows;
+  }
+
+  return [];
 }
 
 export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {

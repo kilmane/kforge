@@ -324,24 +324,65 @@ function buildToolBatchWorkingMessage(calls) {
   return `Working… applying ${total} tool ${total === 1 ? "action" : "actions"}.`;
 }
 
-function buildToolBatchDoneMessage(calls) {
-  const writePaths = collectToolBatchPaths(calls, "write_file");
-  const dirPaths = collectToolBatchPaths(calls, "mkdir");
-  const listed = [...dirPaths, ...writePaths].filter(Boolean);
-  const totalTouched = listed.length;
+function collectSuccessfulToolBatchPaths(results, toolName) {
+  const items = Array.isArray(results) ? results : [];
+  return items
+    .filter(
+      (item) => item?.ok && String(item?.toolName || "") === String(toolName),
+    )
+    .map((item) => String(item?.args?.path || "").trim())
+    .filter(Boolean);
+}
 
-  if (totalTouched > 0) {
-    const lines = listed.slice(0, 6).map((p) => `- ${p}`);
-    if (listed.length > 6) {
-      lines.push(`- ...and ${listed.length - 6} more`);
+function collectFailedToolBatchPaths(results, toolName) {
+  const items = Array.isArray(results) ? results : [];
+  return items
+    .filter(
+      (item) =>
+        !item?.ok &&
+        !item?.cancelled &&
+        String(item?.toolName || "") === String(toolName),
+    )
+    .map((item) => String(item?.args?.path || "").trim())
+    .filter(Boolean);
+}
+
+function buildToolBatchDoneMessage(results) {
+  const successfulWritePaths = collectSuccessfulToolBatchPaths(
+    results,
+    "write_file",
+  );
+  const successfulDirPaths = collectSuccessfulToolBatchPaths(results, "mkdir");
+  const successfulPaths = [
+    ...successfulDirPaths,
+    ...successfulWritePaths,
+  ].filter(Boolean);
+
+  if (successfulPaths.length > 0) {
+    const lines = successfulPaths.slice(0, 6).map((p) => `- ${p}`);
+    if (successfulPaths.length > 6) {
+      lines.push(`- ...and ${successfulPaths.length - 6} more`);
     }
 
     const intro =
-      totalTouched === 1
+      successfulPaths.length === 1
         ? "Done> wrote the following path:"
         : "Done> wrote the following paths:";
 
     return `${intro}\n${lines.join("\n")}`;
+  }
+
+  const failedWritePaths = collectFailedToolBatchPaths(results, "write_file");
+  const failedDirPaths = collectFailedToolBatchPaths(results, "mkdir");
+  const failedPaths = [...failedDirPaths, ...failedWritePaths].filter(Boolean);
+
+  if (failedPaths.length > 0) {
+    const lines = failedPaths.slice(0, 6).map((p) => `- ${p}`);
+    if (failedPaths.length > 6) {
+      lines.push(`- ...and ${failedPaths.length - 6} more`);
+    }
+
+    return `Done> no files were written.\nThe following requested paths failed:\n${lines.join("\n")}`;
   }
 
   return "";
@@ -1213,26 +1254,65 @@ export default function AiPanel({
             });
           }
 
-          appendMessage("assistant", buildToolBatchDoneMessage(batchCalls));
+          const doneMessage = buildToolBatchDoneMessage(executedBatchResults);
+          if (doneMessage) {
+            appendMessage("assistant", doneMessage);
+          }
 
           const latestUserText = getNearestUserMessageTextBeforeIndex(
             messages,
             triggerMessageIndex,
           );
-          const writePaths = collectToolBatchPaths(batchCalls, "write_file");
+          const successfulWritePaths = collectSuccessfulToolBatchPaths(
+            executedBatchResults,
+            "write_file",
+          );
+          const successfulDirPaths = collectSuccessfulToolBatchPaths(
+            executedBatchResults,
+            "mkdir",
+          );
+          const failedWritePaths = collectFailedToolBatchPaths(
+            executedBatchResults,
+            "write_file",
+          );
+          const failedDirPaths = collectFailedToolBatchPaths(
+            executedBatchResults,
+            "mkdir",
+          );
+
           const latestWrittenPath =
-            writePaths.length > 0 ? writePaths[writePaths.length - 1] : "";
+            successfulWritePaths.length > 0
+              ? successfulWritePaths[successfulWritePaths.length - 1]
+              : "";
 
           const fallbackReadPath = latestWrittenPath || activeTab?.path || "";
 
-          if (isPreviewIntent(latestUserText)) {
+          const allWritesFailed =
+            (failedWritePaths.length > 0 || failedDirPaths.length > 0) &&
+            successfulWritePaths.length === 0 &&
+            successfulDirPaths.length === 0;
+
+          if (allWritesFailed) {
+            appendMessage(
+              "assistant",
+              "Those file changes did not complete. Check the tool errors above. If no project folder is open, open one first in Explorer. I did not create any files.",
+            );
+          } else if (
+            isPreviewIntent(latestUserText) &&
+            successfulWritePaths.length === 0 &&
+            successfulDirPaths.length === 0
+          ) {
             appendMessage("assistant", buildPreviewHandoffMessage());
-          } else if (isShowChangesIntent(latestUserText) && fallbackReadPath) {
+          } else if (
+            isShowChangesIntent(latestUserText) &&
+            fallbackReadPath &&
+            successfulWritePaths.length > 0
+          ) {
             await runTool({
               toolName: "read_file",
               args: { path: fallbackReadPath },
             });
-          } else if (writePaths.length > 0) {
+          } else if (successfulWritePaths.length > 0) {
             appendMessage(
               "assistant",
               latestWrittenPath
