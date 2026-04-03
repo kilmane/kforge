@@ -75,7 +75,7 @@ export function discoverTemplateCapabilities() {
     route: `Preview -> Generate -> ${template.name}`,
     summary:
       template.description ||
-      `Generate a ${template.name} project from inside KForge.`,
+      `Scaffold a new ${template.name} template project from inside KForge when the user explicitly wants a new template project.`,
   }));
 }
 

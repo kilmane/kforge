@@ -1,8 +1,7 @@
 
-
 # User Guide Notes (development capture)
 
-Last Updated: **March 31st, 2026**
+Last Updated: **April 3rd, 2026**
 
 Location:
 `D:\kforge\docs-internal\user-guide-notes.md`
@@ -25,7 +24,7 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-Open Folder → Explore files
+Open Folder → Explore files  
 Preview → Focus on running app
 
 ---
@@ -44,7 +43,7 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-Project structure → coarse project type
+Project structure → coarse project type  
 package.json signals → framework identification when possible
 
 This allows KForge to both:
@@ -58,9 +57,9 @@ This allows KForge to both:
 
 If a project contains:
 
-```
+```text
 index.html
-```
+````
 
 KForge automatically runs a **static preview server**.
 
@@ -90,7 +89,7 @@ Framework projects use a **development server**.
 
 Typical indicator:
 
-```
+```text
 package.json
 ```
 
@@ -207,6 +206,10 @@ Not required for static projects.
 
 If a template already installs dependencies during scaffold, Install may not be needed immediately.
 
+KForge may also expose an **Install** button or joblet-style install action in places where dependency installation is the obvious next step.
+
+This is intended to reduce terminal friction for beginners.
+
 ---
 
 # Preview
@@ -226,7 +229,7 @@ Open launches the running preview in the browser.
 
 Example URLs:
 
-```
+```text
 http://localhost:3000
 http://127.0.0.1:4173
 ```
@@ -241,7 +244,7 @@ The Terminal allows users to run commands directly inside the current project wo
 
 Typical usage:
 
-```
+```text
 AI Panel
 → Terminal
 → enter command
@@ -252,7 +255,7 @@ Commands run in the **workspace root folder**.
 
 Example commands:
 
-```
+```text
 pnpm install
 pnpm dev
 git status
@@ -353,6 +356,250 @@ New Project
 → Import from GitHub
 
 This is separate from **Services → Code → GitHub**.
+
+---
+
+# Supabase in Services
+
+Supabase in KForge is a **guided backend onboarding flow** for projects that already exist.
+
+The intended user journey is:
+
+Build app first
+→ open **Services → Backend → Supabase**
+→ connect Supabase step by step
+→ adapt the generated examples to the real app
+
+This means KForge is not trying to hide Supabase behind a single magic button.
+
+Instead, it helps the user move through setup in small understandable steps.
+
+---
+
+## Supabase Developer Assist
+
+**Supabase Developer Assist** is the name used for the guided helper actions available in:
+
+```text
+Services
+→ Backend
+→ Supabase
+```
+
+These actions are meant to reduce friction for developers who want to connect an existing project to Supabase.
+
+Current actions include:
+
+* Check Supabase setup
+* Create `.env` file
+* Install Supabase client
+* Create Supabase client file
+* Create read example
+* Create insert example
+* Create query helper
+
+The feature is designed to help with **integration work after the app already exists**.
+
+Example workflow:
+
+```text
+Create or open app
+→ build UI first
+→ open Services → Backend → Supabase
+→ create env + client
+→ generate example queries
+→ adapt examples to real schema
+→ wire app to database
+```
+
+This is useful because many users can build a frontend, but still need help with the first backend connection steps.
+
+---
+
+## What “Check Supabase setup” Does
+
+**Check Supabase setup** is a diagnostic and guidance action.
+
+It checks the current project for things like:
+
+* `.env` and `.env.example`
+* expected Supabase environment variables
+* local Supabase config
+* installed Supabase client library
+* generated helper/example files
+
+The action then reports current state and suggests the next likely step.
+
+Examples:
+
+* create `.env`
+* install the Supabase client
+* create the client file
+
+The goal is to make backend onboarding feel **explicit and calm**, not mysterious.
+
+---
+
+## `.env` and `.env.example`
+
+KForge may create:
+
+```text
+.env.example
+```
+
+to document the expected Supabase variables for the project.
+
+KForge may then create:
+
+```text
+.env
+```
+
+from that example file so the user has a local place to paste real values.
+
+General mental model:
+
+```text
+.env.example = project documentation
+.env = local working values / secrets
+```
+
+This follows normal developer conventions.
+
+---
+
+## Supabase Client File
+
+KForge can generate:
+
+```text
+src/lib/supabase.js
+```
+
+This file creates a reusable Supabase client for the project.
+
+The purpose is to give the app **one shared connection point** instead of repeating client setup in many places.
+
+This is a good beginner-friendly step because it keeps the setup small and easy to understand.
+
+---
+
+## Read Example
+
+KForge can generate:
+
+```text
+src/examples/supabaseExample.js
+```
+
+This is a **starter read example**.
+
+Purpose:
+
+* show the shape of a basic Supabase query
+* give the user a copyable pattern
+* help the user replace placeholder values with their real table name
+
+This is intended as a learning bridge between:
+
+```text
+Supabase is installed
+```
+
+and
+
+```text
+my real app now reads data
+```
+
+---
+
+## Insert Example
+
+KForge can generate:
+
+```text
+src/examples/supabaseInsertExample.js
+```
+
+This is a **starter insert example**.
+
+Purpose:
+
+* show the shape of a basic insert operation
+* provide a safe editable pattern
+* help the user understand how rows are added
+
+Like the read example, this file is not meant to be the final app architecture.
+
+It is a starter pattern the user can adapt and copy into real app code.
+
+---
+
+## Query Helper
+
+KForge can generate:
+
+```text
+src/lib/supabaseQueries.js
+```
+
+This file contains simple reusable helpers for common read and insert actions.
+
+Purpose:
+
+* reduce repeated query code
+* give the project a small shared helper layer
+* provide a cleaner path for slightly more structured app code
+
+This helper is still simple, but it is conceptually a little more advanced than the read or insert example files.
+
+That does **not** mean it should be removed.
+
+It means documentation should explain clearly that:
+
+```text
+read/insert examples = easiest learning path
+query helper = optional reusable helper path
+```
+
+---
+
+## Local and Cloud Supabase
+
+The Supabase flow is intended to support both:
+
+* **Cloud Supabase**
+* **Local Supabase**
+
+KForge setup messaging may detect whether a local Supabase config is present.
+
+If no local config is detected, cloud setup is still considered valid.
+
+Generated client setup may also support both frontend-style and generic environment variable names such as:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+SUPABASE_URL
+SUPABASE_ANON_KEY
+```
+
+This allows the same guided flow to work across common project setups.
+
+---
+
+## Supabase Developer Assist Design Intent
+
+The design intent is:
+
+* do not force the user into raw backend setup immediately
+* do not dump a giant scaffold into the project
+* provide small helpful artifacts
+* let the user move from setup → examples → real integration
+
+This is meant to feel like **developer assist**, not full backend automation.
 
 ---
 
@@ -476,4 +723,5 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 
+````
 

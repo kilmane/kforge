@@ -1,20 +1,21 @@
 
-🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
+# 🧭 KForge — PROJECT SNAPSHOT (Internal Canonical State)
 
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **March 31st, 2026**
+Last Updated: **April 3rd, 2026**
 
-Phase: **5.1.1 — Stripe Webhook Readiness**
-Status: **Stable milestone committed**
+Phase: **5.2 — Supabase Developer Assist**
+Status: **Testing resumed, fixes and polish checkpointed**
 
 Stable restore tags now available:
 
 * `phase-4.10-agent-loop-stable`
 * `phase-4.10.1-agent-hardening-stable`
-* `phase-5.0.2-kforge-workflow-awareness`
-* `phase-5.0.3-global-capability-awareness`
+* `phase-5.2-awareness-stable`
+* `phase-5.2-supabase-dev-assist-midtest`
+* `phase-5.2-supabase-dev-assist-polish`
 
 ---
 
@@ -22,9 +23,9 @@ This file is the authoritative operational reference.
 
 If anything conflicts with:
 
-• chat memory
-• assumptions
-• scattered notes
+• chat memory  
+• assumptions  
+• scattered notes  
 
 This file wins.
 
@@ -36,10 +37,10 @@ Not user-facing.
 
 KForge is a desktop-first developer workspace built around:
 
-• A GPT-clean AI surface
-• Secure filesystem access
-• Explicit, consent-gated tooling
-• Calm, attention-disciplined UI
+• A GPT-clean AI surface  
+• Secure filesystem access  
+• Explicit, consent-gated tooling  
+• Calm, attention-disciplined UI  
 
 KForge is **chat-first**, not tool-first.
 
@@ -55,14 +56,14 @@ src/App.js
 
 This file owns:
 
-• canonical message state
-• AI request building
-• context injection
-• patch instruction injection
-• retry logic
-• project lifecycle control
-• workspace root management
-• TranscriptBubble definition
+• canonical message state  
+• AI request building  
+• context injection  
+• patch instruction injection  
+• retry logic  
+• project lifecycle control  
+• workspace root management  
+• TranscriptBubble definition  
 
 If AI behaves incorrectly → start here.
 
@@ -96,10 +97,10 @@ src/ai/panel/AiPanel.jsx
 
 Shows:
 
-• assistant messages
-• AI messages
-• relevant tool messages
-• consent prompts
+• assistant messages  
+• AI messages  
+• relevant tool messages  
+• consent prompts  
 
 ---
 
@@ -113,13 +114,13 @@ Full system log.
 
 Contains:
 
-• user / assistant / system / tool messages
-• Retry + Clear controls
-• consent actions
+• user / assistant / system / tool messages  
+• Retry + Clear controls  
+• consent actions  
 
 Architectural rule:
 
-Chat = filtered projection
+Chat = filtered projection  
 Transcript = complete system log
 
 ---
@@ -162,13 +163,13 @@ src/ai/panel/AiPanel.jsx
 
 Handles:
 
-• tool payload parsing
-• JSON/XML tool formats
-• natural-language fallback parsing for weaker models
-• deduplication
-• consent gating
-• execution dispatch
-• agent continuation handoff
+• tool payload parsing  
+• JSON/XML tool formats  
+• natural-language fallback parsing for weaker models  
+• deduplication  
+• consent gating  
+• execution dispatch  
+• agent continuation handoff  
 
 ---
 
@@ -180,17 +181,17 @@ src/ai/tools/toolRuntime.js
 
 Responsibilities:
 
-• consent enforcement
-• lifecycle messages
-• transcript logging
-• error formatting
+• consent enforcement  
+• lifecycle messages  
+• transcript logging  
+• error formatting  
 
 Runtime flow:
 
-detect tool
-→ consent request
-→ handler execution
-→ append result
+detect tool  
+→ consent request  
+→ handler execution  
+→ append result  
 
 ---
 
@@ -202,17 +203,17 @@ src/ai/tools/toolSchema.js
 
 Responsibilities:
 
-• exposes model-facing tool descriptions
-• defines available tool names and parameters
-• keeps model-visible tool inventory aligned with real handlers
+• exposes model-facing tool descriptions  
+• defines available tool names and parameters  
+• keeps model-visible tool inventory aligned with real handlers  
 
 Current model-visible tools:
 
-• read_file
-• list_dir
-• search_in_file
-• write_file
-• mkdir
+• read_file  
+• list_dir  
+• search_in_file  
+• write_file  
+• mkdir  
 
 ---
 
@@ -224,17 +225,17 @@ src/ai/tools/handlers/index.js
 
 Tools currently available:
 
-• read_file
-• list_dir
-• write_file
-• search_in_file
-• mkdir
+• read_file  
+• list_dir  
+• write_file  
+• search_in_file  
+• mkdir  
 
 Filesystem authority:
 
 src/lib/fs.js
 
-App.js sets project root.
+App.js sets project root.  
 fs.js enforces safety.
 
 ---
@@ -243,19 +244,19 @@ fs.js enforces safety.
 
 Files:
 
-src/ai/agent/agentRunner.js
+src/ai/agent/agentRunner.js  
 src/ai/panel/AiPanel.jsx
 
 Phase 4.10 introduced a real **tool-calling agent loop**.
 
 Core flow:
 
-model
-→ tool request
-→ consent/runtime execution
-→ tool result fed back to model
-→ continued reasoning
-→ final answer
+model  
+→ tool request  
+→ consent/runtime execution  
+→ tool result fed back to model  
+→ continued reasoning  
+→ final answer  
 
 This loop sits **above** the existing tool runtime and does **not bypass** it.
 
@@ -275,24 +276,24 @@ Phase 4.10.1 added hardening for weaker and more inconsistent models.
 
 Improvements include:
 
-• duplicate tool-call detection
-• prevention of repeated identical tool executions
-• support for natural-language tool-call recovery such as `list_dir(.)`
-• bounded inspection guidance for workspace-analysis tasks
-• write tools no longer treated as safe automatic actions
-• local tool-result injection so the continuation model sees fresh results immediately
-• calmer transcript behavior during duplicate suppression
+• duplicate tool-call detection  
+• prevention of repeated identical tool executions  
+• support for natural-language tool-call recovery such as `list_dir(.)`  
+• bounded inspection guidance for workspace-analysis tasks  
+• write tools no longer treated as safe automatic actions  
+• local tool-result injection so the continuation model sees fresh results immediately  
+• calmer transcript behavior during duplicate suppression  
 
 Read-only tools that may auto-run:
 
-• read_file
-• list_dir
-• search_in_file
+• read_file  
+• list_dir  
+• search_in_file  
 
 Write tools now require consent:
 
-• write_file
-• mkdir
+• write_file  
+• mkdir  
 
 This change was made specifically because weaker models could otherwise attempt unwanted file creation during inspection flows.
 
@@ -314,15 +315,15 @@ src/runtime/PreviewPanel.jsx
 
 Preview runner provides:
 
-• dependency installation
-• development server startup
-• static site preview
-• log streaming
-• URL detection
-• controlled process stop
-• preview log persistence
-• project-type detection
-• registry-aware template identification
+• dependency installation  
+• development server startup  
+• static site preview  
+• log streaming  
+• URL detection  
+• controlled process stop  
+• preview log persistence  
+• project-type detection  
+• registry-aware template identification  
 
 ---
 
@@ -338,8 +339,8 @@ preview_detect_kind
 
 Current kinds include:
 
-• static
-• package
+• static  
+• package  
 
 ### Stage 2 — registry-aware template identification
 
@@ -349,15 +350,15 @@ src/runtime/previewRunner.js
 
 Uses:
 
-• templateRegistry hints
-• package.json dependency inspection
-• compatible template lookup
+• templateRegistry hints  
+• package.json dependency inspection  
+• compatible template lookup  
 
 Current recognized template identities include:
 
-• Static HTML
-• Vite + React
-• Next.js
+• Static HTML  
+• Vite + React  
+• Next.js  
 
 Important implementation note:
 
@@ -381,15 +382,15 @@ src/runtime/templateRegistry.js
 
 Registered scaffold commands:
 
-scaffold_static_html
-scaffold_vite_react
-scaffold_nextjs
+scaffold_static_html  
+scaffold_vite_react  
+scaffold_nextjs  
 
 Templates supported:
 
-• Static HTML
-• Vite + React
-• Next.js
+• Static HTML  
+• Vite + React  
+• Next.js  
 
 Scaffolds generate **directly into the workspace root**.
 
@@ -399,9 +400,9 @@ src/runtime/templateRegistry.js
 
 When new templates are added, future maintainers are reminded to also review:
 
-• src/runtime/previewRunner.js
-• src/runtime/PreviewPanel.jsx
-• src/runtime/ServicePanel.jsx
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
 
 so deploy guidance and detection remain in sync.
 
@@ -423,17 +424,17 @@ src/runtime/CommandRunnerPanel.jsx
 
 Capabilities:
 
-• run shell commands in project root
-• stream stdout/stderr logs
-• one command at a time
+• run shell commands in project root  
+• stream stdout/stderr logs  
+• one command at a time  
 • Windows compatibility using:
 
 cmd /C <command>
 
 Events emitted:
 
-kforge://command/log
-kforge://command/status
+kforge://command/log  
+kforge://command/status  
 
 Preview and Terminal panels are **mutually exclusive collapsibles**.
 
@@ -443,8 +444,8 @@ User-facing surface name is:
 
 Path:
 
-AI Panel
-→ Terminal
+AI Panel  
+→ Terminal  
 
 ---
 
@@ -472,18 +473,21 @@ src/ai/panel/AiPanel.jsx
 
 Registered commands include:
 
-service_setup
-github_detect_repo
-github_open_repo
-github_pull
-github_push
-github_clone_repo
-supabase_create_env_file
-supabase_install_client
-supabase_create_client_file
-supabase_quick_connect
-stripe_create_env_file
-open_url
+service_setup  
+github_detect_repo  
+github_open_repo  
+github_pull  
+github_push  
+github_clone_repo  
+supabase_create_env_file  
+supabase_install_client  
+supabase_create_client_file  
+supabase_create_read_example  
+supabase_create_insert_example  
+supabase_create_query_helper  
+supabase_quick_connect  
+stripe_create_env_file  
+open_url  
 
 ---
 
@@ -507,24 +511,24 @@ src/runtime/serviceRegistry.js
 
 Current services:
 
-• GitHub
-• Supabase
-• Stripe
-• OpenAI
+• GitHub  
+• Supabase  
+• Stripe  
+• OpenAI  
 
 Deploy providers are currently represented through the task-first Services UI and fallback provider mapping in the Services panel:
 
-• Vercel
-• Netlify
+• Vercel  
+• Netlify  
 
 Fields include:
 
-• id
-• name
-• description
-• status
-• envVars
-• setupCommand
+• id  
+• name  
+• description  
+• status  
+• envVars  
+• setupCommand  
 
 ---
 
@@ -550,13 +554,13 @@ src/runtime/serviceRunner.js
 
 GitHub support now includes:
 
-• publish local project to a new GitHub repository
-• detect whether current folder is already a Git repo
-• detect whether a remote exists
-• open current repository on GitHub in browser
-• pull latest changes into an existing local repo
-• push local changes to GitHub
-• import an existing GitHub repository during New Project flow
+• publish local project to a new GitHub repository  
+• detect whether current folder is already a Git repo  
+• detect whether a remote exists  
+• open current repository on GitHub in browser  
+• pull latest changes into an existing local repo  
+• push local changes to GitHub  
+• import an existing GitHub repository during New Project flow  
 
 This means KForge now supports **both directions**:
 
@@ -578,8 +582,8 @@ Authentication is delegated to the GitHub CLI.
 
 Requirements:
 
-• git installed
-• GitHub CLI installed
+• git installed  
+• GitHub CLI installed  
 • user authenticated via:
 
 gh auth login
@@ -592,23 +596,23 @@ This keeps KForge secure and avoids token storage.
 
 Services panel now supports:
 
-• task-based top-level grouping
-• single-active-service display
-• GitHub-focused action surface
-• repository name input
-• public/private visibility selection
-• GitHub publish trigger
-• push / pull / open actions
-• live service log streaming
+• task-based top-level grouping  
+• single-active-service display  
+• GitHub-focused action surface  
+• repository name input  
+• public/private visibility selection  
+• GitHub publish trigger  
+• push / pull / open actions  
+• live service log streaming  
 
 Logs persist when:
 
-• collapsing / reopening Services
+• collapsing / reopening Services  
 
 Logs reset when:
 
-• workspace resets
-• project root changes
+• workspace resets  
+• project root changes  
 
 ---
 
@@ -616,10 +620,10 @@ Logs reset when:
 
 Example grouping:
 
-• Code → GitHub
-• Deploy → Vercel / Netlify
-• Backend → Supabase
-• Payments → Stripe
+• Code → GitHub  
+• Deploy → Vercel / Netlify  
+• Backend → Supabase  
+• Payments → Stripe  
 
 This architecture was introduced specifically to support scaling future integrations cleanly.
 
@@ -633,8 +637,8 @@ Deploy
 
 Current deploy providers:
 
-• Vercel
-• Netlify
+• Vercel  
+• Netlify  
 
 Deploy actions are intentionally lightweight.
 
@@ -648,19 +652,19 @@ Instead, KForge provides **guided deploy shortcuts** for GitHub-connected projec
 
 For a project that is already connected to GitHub, KForge now supports:
 
-• detect deploy readiness from current GitHub repo state
-• show the current GitHub repository inside Deploy
-• open Vercel import flow for the detected repository
-• open Netlify start/import flow for the detected repository
-• guide the user with deploy-specific log messages
-• show a warning hint when deployment should wait for a push
+• detect deploy readiness from current GitHub repo state  
+• show the current GitHub repository inside Deploy  
+• open Vercel import flow for the detected repository  
+• open Netlify start/import flow for the detected repository  
+• guide the user with deploy-specific log messages  
+• show a warning hint when deployment should wait for a push  
 
 This creates the intended user path:
 
-Local project
-→ Publish to GitHub
-→ Push changes
-→ Deploy via Vercel or Netlify
+Local project  
+→ Publish to GitHub  
+→ Push changes  
+→ Deploy via Vercel or Netlify  
 
 ---
 
@@ -672,10 +676,10 @@ This is guidance only.
 
 It does **not** introduce:
 
-• provider lock-in
-• advanced hosting dashboards
-• build setting editors
-• environment config panels
+• provider lock-in  
+• advanced hosting dashboards  
+• build setting editors  
+• environment config panels  
 
 Instead, Services → Deploy now reads already-known project identity and shows calmer, smarter wording.
 
@@ -687,10 +691,10 @@ Project identity is shared from the existing preview detection path.
 
 Primary files:
 
-• src/runtime/templateRegistry.js
-• src/runtime/previewRunner.js
-• src/runtime/PreviewPanel.jsx
-• src/runtime/ServicePanel.jsx
+• src/runtime/templateRegistry.js  
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
 
 This keeps deploy guidance aligned with preview/template detection instead of creating duplicate framework detection logic inside Services.
 
@@ -702,38 +706,38 @@ Current mappings:
 
 ### Static HTML
 
-Project type:
+Project type:  
 Static HTML
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
-Hint text:
+Hint text:  
 Good fit for static sites.
 
 ### Vite + React
 
-Project type:
+Project type:  
 Vite + React
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
-Hint text:
+Hint text:  
 Good fit for this project.
 
 ### Next.js
 
-Project type:
+Project type:  
 Next.js
 
-Recommendation:
+Recommendation:  
 Recommended: Vercel
 
 Provider-specific hints:
 
-• Vercel → Recommended for Next.js projects.
-• Netlify → Next.js usually fits best on Vercel.
+• Vercel → Recommended for Next.js projects.  
+• Netlify → Next.js usually fits best on Vercel.  
 
 This preserves user choice while still giving clearer guidance.
 
@@ -747,10 +751,10 @@ Services → Deploy → Vercel / Netlify
 
 Deploy panel now shows:
 
-• Project type: <detected template label>
-• Recommendation: <provider guidance>
-• GitHub repo: <owner/repo> or GitHub connection required
-• provider-specific hint text
+• Project type: <detected template label>  
+• Recommendation: <provider guidance>  
+• GitHub repo: <owner/repo> or GitHub connection required  
+• provider-specific hint text  
 
 This keeps the deploy panel more context-aware without increasing complexity.
 
@@ -796,14 +800,14 @@ src/runtime/ServicePanel.jsx
 
 The Supabase adapter now supports:
 
-• readiness inspection for current project setup
-• environment file detection
-• detection of `SUPABASE_URL`
-• detection of `SUPABASE_ANON_KEY`
-• local Supabase configuration detection via `supabase/config.toml`
-• Supabase client library detection in `package.json`
-• `.env.example` generation when missing
-• browser handoff to Supabase dashboard
+• readiness inspection for current project setup  
+• environment file detection  
+• detection of `SUPABASE_URL`  
+• detection of `SUPABASE_ANON_KEY`  
+• local Supabase configuration detection via `supabase/config.toml`  
+• Supabase client library detection in `package.json`  
+• `.env.example` generation when missing  
+• browser handoff to Supabase dashboard  
 
 This gives the user a first real guided path for backend connection setup.
 
@@ -821,11 +825,11 @@ This phase improved the onboarding path without turning KForge into a backend da
 
 Additional capabilities added in 4.8.1 include:
 
-• Create `.env` file from `.env.example`
-• calmer beginner-friendly wording in Services → Backend → Supabase
-• clearer explanation of connection values inside the panel
-• user guide notes for Supabase flow
-• project map + snapshot updates for Supabase architecture
+• Create `.env` file from `.env.example`  
+• calmer beginner-friendly wording in Services → Backend → Supabase  
+• clearer explanation of connection values inside the panel  
+• user guide notes for Supabase flow  
+• project map + snapshot updates for Supabase architecture  
 
 Command added:
 
@@ -845,11 +849,11 @@ This phase exists specifically to remove ambiguity for beginners and vibe coders
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src-tauri/src/lib.rs
-• src/runtime/serviceRunner.js
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
+• src-tauri/src/service.rs  
+• src-tauri/src/lib.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -857,19 +861,19 @@ Primary files:
 
 The Supabase adapter also supports:
 
-• improved final success wording after readiness check
-• detection of `VITE_SUPABASE_URL`
-• detection of `VITE_SUPABASE_ANON_KEY`
-• clearer Vite-aware guidance in the Supabase panel
-• guided install action for `@supabase/supabase-js`
-• guided creation of `src/lib/supabase.js`
-• detection of an existing Supabase client file
-• non-destructive client-file generation behavior
+• improved final success wording after readiness check  
+• detection of `VITE_SUPABASE_URL`  
+• detection of `VITE_SUPABASE_ANON_KEY`  
+• clearer Vite-aware guidance in the Supabase panel  
+• guided install action for `@supabase/supabase-js`  
+• guided creation of `src/lib/supabase.js`  
+• detection of an existing Supabase client file  
+• non-destructive client-file generation behavior  
 
 New commands added:
 
-supabase_install_client
-supabase_create_client_file
+supabase_install_client  
+supabase_create_client_file  
 
 ---
 
@@ -881,10 +885,10 @@ src/lib/supabase.js
 
 Typical client-file logic:
 
-• imports `createClient` from `@supabase/supabase-js`
-• reads `VITE_SUPABASE_URL` or `SUPABASE_URL`
-• reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`
-• exports a reusable `supabase` client
+• imports `createClient` from `@supabase/supabase-js`  
+• reads `VITE_SUPABASE_URL` or `SUPABASE_URL`  
+• reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`  
+• exports a reusable `supabase` client  
 
 If a client file already exists, KForge logs that no changes were made and leaves the file untouched.
 
@@ -898,11 +902,11 @@ This phase focused on reducing ambiguity, improving Windows reliability, and mak
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src/runtime/ServicePanel.jsx
-• docs-internal/user-guide-notes.md
-• docs-internal/project-map.md
-• docs-internal/PROJECT-SNAPSHOT.md
+• src-tauri/src/service.rs  
+• src/runtime/ServicePanel.jsx  
+• docs-internal/user-guide-notes.md  
+• docs-internal/project-map.md  
+• docs-internal/PROJECT-SNAPSHOT.md  
 
 ---
 
@@ -910,15 +914,15 @@ Primary files:
 
 The Supabase adapter and panel now also support:
 
-• environment-variable checks that treat empty values as **not set**
-• clearer next-step guidance after each Supabase action
-• Windows-safe package installation for `pnpm add @supabase/supabase-js` using shell execution
-• clearer install failure feedback with surfaced command output
-• consistent terminology: **Supabase client file**
-• compact top-of-panel guidance with a **More info** toggle
-• activity log grouping into visible sections
-• quoted action labels highlighted inside the log
-• cleaner log readability across repeated setup actions
+• environment-variable checks that treat empty values as **not set**  
+• clearer next-step guidance after each Supabase action  
+• Windows-safe package installation for `pnpm add @supabase/supabase-js` using shell execution  
+• clearer install failure feedback with surfaced command output  
+• consistent terminology: **Supabase client file**  
+• compact top-of-panel guidance with a **More info** toggle  
+• activity log grouping into visible sections  
+• quoted action labels highlighted inside the log  
+• cleaner log readability across repeated setup actions  
 
 ---
 
@@ -928,9 +932,9 @@ The Supabase install action now runs through a shell path instead of depending o
 
 Current behavior:
 
-• Windows uses a shell execution path compatible with GUI runtime conditions
-• install output is streamed into the Services log
-• if installation fails, the user sees clearer package-manager output in the log
+• Windows uses a shell execution path compatible with GUI runtime conditions  
+• install output is streamed into the Services log  
+• if installation fails, the user sees clearer package-manager output in the log  
 
 This fixes the real test failure where the button could fail on Windows even though `pnpm add @supabase/supabase-js` worked in the internal terminal.
 
@@ -964,17 +968,17 @@ The Services log for Supabase is now easier to scan.
 
 Current behavior:
 
-• each user action begins a new visible log section
-• log sections are separated visually
-• action names in quotes are highlighted
-• repeated actions are easier to distinguish from older output
+• each user action begins a new visible log section  
+• log sections are separated visually  
+• action names in quotes are highlighted  
+• repeated actions are easier to distinguish from older output  
 
 Examples of highlighted action labels:
 
-• "Check Supabase setup"
-• "Create .env file"
-• "Install Supabase client"
-• "Create Supabase client file"
+• "Check Supabase setup"  
+• "Create .env file"  
+• "Install Supabase client"  
+• "Create Supabase client file"  
 
 This keeps the beginner guidance readable without needing a separate wizard UI.
 
@@ -988,10 +992,10 @@ This is a UX-focused improvement on top of the existing Supabase lane, not a new
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src/runtime/serviceRunner.js
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
+• src-tauri/src/service.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -999,9 +1003,9 @@ Primary files:
 
 Quick Connect is intended to feel more like:
 
-I want to use Supabase
-→ tell me what is missing
-→ guide me toward a working setup
+I want to use Supabase  
+→ tell me what is missing  
+→ guide me toward a working setup  
 
 This reduces the feeling that the user must manually understand every setup detail before getting started.
 
@@ -1011,12 +1015,12 @@ This reduces the feeling that the user must manually understand every setup deta
 
 Phase 4.9 adds or strengthens:
 
-• one-click guided Supabase setup check
-• clearer log headings for Supabase actions
-• cleaner separation between action blocks
-• timestamps in service log entries
-• faster path toward a usable beginner setup
-• better continuity between setup inspection and guided actions
+• one-click guided Supabase setup check  
+• clearer log headings for Supabase actions  
+• cleaner separation between action blocks  
+• timestamps in service log entries  
+• faster path toward a usable beginner setup  
+• better continuity between setup inspection and guided actions  
 
 Command added:
 
@@ -1032,15 +1036,15 @@ Quick Connect and the existing setup checks now better support both:
 
 Typical connection values:
 
-• project URL from Supabase dashboard
-• anon key from Supabase dashboard
+• project URL from Supabase dashboard  
+• anon key from Supabase dashboard  
 
 ### Local Supabase
 
 Typical connection signals:
 
-• local URL such as `http://127.0.0.1:54321`
-• local project config at `supabase/config.toml`
+• local URL such as `http://127.0.0.1:54321`  
+• local project config at `supabase/config.toml`  
 
 This keeps the Supabase lane useful for both hosted and local development workflows.
 
@@ -1050,10 +1054,10 @@ This keeps the Supabase lane useful for both hosted and local development workfl
 
 Supabase service logging now includes:
 
-• clearer headings
-• clearer separation between log blocks
-• timestamps for entries
-• improved readability during repeated setup steps
+• clearer headings  
+• clearer separation between log blocks  
+• timestamps for entries  
+• improved readability during repeated setup steps  
 
 This makes the guided setup flow easier to understand in real use.
 
@@ -1067,7 +1071,7 @@ This is not a structural phase, but it materially improves clarity.
 
 Primary file:
 
-• src/runtime/ServicePanel.jsx
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -1075,17 +1079,17 @@ Primary file:
 
 Before 4.9.1:
 
-• service activity streamed into a shared log array
-• switching services could show unrelated earlier log output
-• this was confusing during mixed GitHub / Supabase use
+• service activity streamed into a shared log array  
+• switching services could show unrelated earlier log output  
+• this was confusing during mixed GitHub / Supabase use  
 
 After 4.9.1:
 
-• each service keeps its own activity history
-• GitHub shows only GitHub logs
-• Supabase shows only Supabase logs
-• switching services does not mix provider output
-• returning to a service restores its earlier log history
+• each service keeps its own activity history  
+• GitHub shows only GitHub logs  
+• Supabase shows only Supabase logs  
+• switching services does not mix provider output  
+• returning to a service restores its earlier log history  
 
 ---
 
@@ -1906,6 +1910,176 @@ This keeps the guidance calm and accurate for both simple and server-driven Stri
 
 ---
 
+# 🟩 5.2 Supabase Developer Assist
+
+Phase 5.2 resumed after a separate AI-awareness stabilization detour and now focuses on **guided developer-assist artifacts for Supabase integration**.
+
+This phase is not primarily about awareness.
+It is about whether new Supabase helper actions are genuinely useful for real projects.
+
+Primary files:
+
+• src-tauri/src/service.rs
+• src-tauri/src/lib.rs
+• src/runtime/serviceRunner.js
+• src/runtime/ServicePanel.jsx
+• src/runtime/serviceRegistry.js
+• src/ai/capabilities/kforgeServiceWorkflows.js
+
+Awareness-related files touched during the detour and checkpointed separately:
+
+• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/ai/capabilities/discoverCapabilities.js
+• src/ai/capabilities/kforgeCapabilities.js
+• src/App.js
+• src/ai/panel/AiPanel.jsx
+
+---
+
+## 5.2 Purpose
+
+The goal of 5.2 is to help users who already have an app and now want to connect it to Supabase without starting from scratch.
+
+The intended flow is:
+
+existing app
+→ Services → Backend → Supabase
+→ check setup
+→ create env and client
+→ generate starter examples/helpers
+→ adapt those patterns to the real schema
+→ wire app to database
+
+This is meant to feel like **developer assist**, not full backend automation.
+
+---
+
+## 5.2 Supabase Developer Assist Capabilities
+
+Supabase Developer Assist now includes:
+
+• Check Supabase setup
+• Create `.env` file
+• Install Supabase client
+• Create Supabase client file
+• Create read example
+• Create insert example
+• Create query helper
+
+The setup and generated artifacts are intended to support both:
+
+• Cloud Supabase
+• Local Supabase
+
+Current generated files include:
+
+• `src/lib/supabase.js`
+• `src/examples/supabaseExample.js`
+• `src/examples/supabaseInsertExample.js`
+• `src/lib/supabaseQueries.js`
+
+---
+
+## 5.2 Generated Artifact Intent
+
+The generated files are intentionally small.
+
+They are meant to provide:
+
+• a reusable Supabase client
+• a tiny starter read query
+• a tiny starter insert query
+• an optional small helper layer for repeated read/insert patterns
+
+This is designed to bridge the gap between:
+
+frontend app already exists
+and
+developer now needs the first real Supabase integration patterns
+
+The feature set is especially aimed at:
+
+• beginners
+• vibe coders
+• frontend-first developers who need backend connection help
+
+---
+
+## 5.2 Real Test Findings So Far
+
+Real restart testing in a fresh Vite + React workspace confirmed:
+
+• `Check Supabase setup` remains useful and beginner-friendly
+• `.env.example` and `.env` creation still provide a clear setup path
+• Supabase client install works through the guided service flow
+• generated `src/lib/supabase.js` is small, conventional, and supports both Vite and generic env names
+• generated read and insert examples are simple starter artifacts, not heavy scaffolding
+• the query helper is technically good, but conceptually slightly more advanced than the read/insert examples
+
+Product judgment from testing so far:
+
+• keep the full feature set
+• explain the helper files better in docs and UI wording
+• do not remove advanced-looking helpers just because beginners are still learning them
+
+---
+
+## 5.2 Bugs Found During Testing
+
+Testing surfaced a real wiring bug:
+
+The following commands existed in `src-tauri/src/service.rs` but were not registered in the Tauri invoke handler in `src-tauri/src/lib.rs`:
+
+• `supabase_create_read_example`
+• `supabase_create_insert_example`
+• `supabase_create_query_helper`
+
+This caused the UI actions to fail even though the backend implementations existed.
+
+This has now been fixed.
+
+---
+
+## 5.2 Messaging Polish
+
+Testing also surfaced a wording issue in the Supabase setup flow:
+
+The setup log previously duplicated the recommendation to create `.env`, and some later wording created sequence tension between:
+
+• “fill env values now”
+and
+• “create the client file now”
+
+Polish in `src-tauri/src/service.rs` now makes the guidance clearer by:
+
+• removing duplicated “Create .env file” prompting
+• explaining that env values can be filled now or after generating the client file
+• making read/insert example messages more concrete
+• making the query-helper explanation more understandable
+
+---
+
+## 5.2 Current Product Judgment
+
+Supabase Developer Assist now appears to be a feature worth keeping.
+
+Current direction:
+
+• keep setup helpers
+• keep generated client file
+• keep read example
+• keep insert example
+• keep query helper
+• improve docs and wording so the purpose is clearer to users who are newer to database work
+
+This phase strengthens the Supabase lane from:
+
+guided setup
+into
+guided setup + starter integration patterns
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -2023,7 +2197,7 @@ Important 5.x rule:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 5.1.1 — Stripe Webhook Readiness**:
+As of **Phase 5.2 — Supabase Developer Assist**:
 
 • AI surface stable
 • filesystem tools validated
@@ -2050,6 +2224,12 @@ As of **Phase 5.1.1 — Stripe Webhook Readiness**:
 • Supabase client install action working
 • Windows-safe Supabase install execution working
 • Supabase client file creation working
+• Supabase read example generation working
+• Supabase insert example generation working
+• Supabase query helper generation working
+• missing Supabase developer-assist Tauri command registration fixed
+• Supabase setup messaging duplication fixed
+• Supabase example/helper wording improved
 • Supabase log grouping working
 • Supabase quoted action highlighting working
 • compact Supabase guidance card working
@@ -2098,6 +2278,9 @@ Supabase Quick Connect
 Supabase environment file preparation
 Supabase client install guidance
 Supabase client file generation
+Supabase read example generation
+Supabase insert example generation
+Supabase query helper generation
 Supabase beginner-friendly guided setup
 Stripe setup inspection
 Stripe environment file preparation
@@ -2290,6 +2473,8 @@ Phase 5.1 then converted Stripe from a placeholder into a real **Stripe Adapter*
 
 Phase 5.1.1 then extended that lane with **Stripe Webhook Readiness** guidance.
 
+Phase 5.2 then returned to its actual purpose: **Supabase Developer Assist**. Real testing in a fresh project validated the generated helper flow, exposed missing Tauri command registration for the new Supabase example/helper actions, and improved the setup/example messaging so the feature is clearer for beginners and vibe coders.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -2305,6 +2490,7 @@ What this now proves:
 • relevance filtering can reduce prompt bloat while keeping workflow guidance effective
 • task-grouped service-route discovery matters for truthful AI guidance
 • tool-emission rules must distinguish between action requests and explanatory chat
+• Supabase setup helpers become much more valuable when paired with tiny generated starter patterns for real reads and writes
 
 Current stable journey:
 
@@ -2314,6 +2500,7 @@ Local Project
 → Vercel / Netlify
 → Supabase Quick Connect
 → guided Supabase setup
+→ Supabase Developer Assist starter artifacts
 → Stripe setup and webhook-readiness guidance
 → AI tool-calling agent workflow
 → KForge workflow-aware AI guidance
@@ -2321,8 +2508,7 @@ Local Project
 
 This sets up the next major integration lanes:
 
-Phase 5.2 — OpenAI Adapter
-Phase 5.3 — Supabase Developer Assist
+Phase 5.3 — OpenAI Adapter
 Phase 5.4 — Future Template Expansion
 
 Important warning for future work:

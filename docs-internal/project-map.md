@@ -5,8 +5,8 @@ Location:
 
 D:\kforge\docs-internal\project-map.md
 
-Version: **v22**
-Updated: **31/03/2026**
+Version: **v23**
+Updated: **03/04/2026**
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -552,8 +552,6 @@ Persisted state:
 
 logsByService
 
-This replaced the earlier shared log array.
-
 Result:
 
 * each provider maintains its own activity history
@@ -596,7 +594,50 @@ Capabilities include:
 
 ---
 
-# 5b GitHub Adapter
+# 5b Supabase Developer Assist (Phase 5.2)
+
+Phase 5.2 extends the Supabase adapter with **developer-assist integration helpers**.
+
+Primary files:
+
+* src-tauri/src/service.rs
+* src-tauri/src/lib.rs
+* src/runtime/serviceRunner.js
+* src/runtime/ServicePanel.jsx
+
+New commands:
+
+* supabase_create_read_example
+* supabase_create_insert_example
+* supabase_create_query_helper
+
+Generated files:
+
+```text
+src/examples/supabaseExample.js
+src/examples/supabaseInsertExample.js
+src/lib/supabaseQueries.js
+```
+
+Purpose:
+
+Provide **small starter patterns** for integrating Supabase reads and writes into an existing project.
+
+These artifacts are intentionally lightweight and designed to:
+
+* help beginners understand query structure
+* give copyable patterns for real app code
+* reduce the learning gap between frontend development and database interaction
+
+Important bug fixed during testing:
+
+The developer-assist commands were originally implemented in `service.rs` but not registered in `src-tauri/src/lib.rs`.
+
+Phase 5.2 testing exposed this issue and corrected the command wiring.
+
+---
+
+# 5c GitHub Adapter
 
 Primary implementation:
 
@@ -625,7 +666,7 @@ Important distinction:
 
 ---
 
-# 5c Smart Deploy Guidance
+# 5d Smart Deploy Guidance
 
 Primary file:
 
@@ -647,7 +688,7 @@ Good fit: Netlify or Vercel
 
 ---
 
-# 5d Stripe Adapter
+# 5e Stripe Adapter
 
 Primary implementation:
 
@@ -678,8 +719,7 @@ Purpose:
 Provide a guided Stripe payments setup workflow inside:
 
 Services
-→ Payments
-→ Stripe
+→ Payments → Stripe
 
 Capabilities include:
 
@@ -694,16 +734,9 @@ Capabilities include:
 * browser handoff to Stripe webhook docs
 * webhook-readiness guidance for server-side Stripe event flows
 
-Important scope rule:
+Scope rule:
 
-This adapter is intentionally **guided setup assistance**, not a billing dashboard.
-
-It does not introduce:
-
-* subscription management UI
-* invoice admin UI
-* webhook event browser
-* payment analytics surfaces
+Stripe adapter is **guided setup assistance**, not a payments dashboard.
 
 ---
 
@@ -719,71 +752,7 @@ Primary files:
 
 Purpose:
 
-Teach the AI about **real KForge workflows** so it can guide users toward KForge-first actions instead of immediately performing those workflows inside chat.
-
----
-
-## Top-Level Formatter
-
-File:
-
-src/ai/capabilities/kforgeCapabilities.js
-
-Responsibilities:
-
-* assemble capability-awareness context
-* combine multiple workflow domains
-* apply global AI guidance rules
-* apply **relevance filtering**
-* produce AI-facing capability summaries injected into prompts
-
----
-
-## Capability Domains
-
-### Service workflows
-
-File:
-
-src/ai/capabilities/kforgeServiceWorkflows.js
-
-Domains include:
-
-* GitHub
-* Supabase
-* Stripe
-* Vercel
-* Netlify
-
----
-
-### Preview workflows
-
-File:
-
-src/ai/capabilities/kforgePreviewWorkflows.js
-
-Domains include:
-
-* Preview existing project
-* Generate template
-* Install / Preview flow
-* supported starter templates
-
----
-
-### Terminal workflows
-
-File:
-
-src/ai/capabilities/kforgeTerminalWorkflows.js
-
-Domains include:
-
-* run shell commands
-* package installation
-* Git operations
-* development server control
+Teach the AI about **real KForge workflows** so it can guide users toward KForge-first actions instead of performing everything inside chat.
 
 ---
 
@@ -800,50 +769,40 @@ Discovery sources:
 
 Purpose:
 
-Reduce manual maintenance by letting AI awareness detect real capabilities from the runtime registries.
+Allow AI awareness to detect **real runtime capabilities** and reduce manual maintenance.
 
 ---
 
 ## Relevance Filtering
 
-App.js now passes the **user prompt** into the capability system.
+User prompts are passed into the capability formatter.
 
-The capability formatter then returns only the most relevant workflow summaries.
+The formatter returns **only relevant workflow context**.
 
 Benefits:
 
 * smaller prompts
-* better AI signal
-* less prompt noise
-* improved workflow matching
-
-Fallback behavior:
-
-If no clear match exists, broader capability context may still be included.
+* less noise
+* better workflow matching
 
 ---
 
 ## AI Guidance Boundaries
 
-Important rule:
+Capability awareness must remain **advisory only**.
 
-This architecture is for **AI-awareness only**.
-
-It must not reintroduce the rejected UI-routing behavior from the earlier Phase 5.0.1 experiment.
-
-Do **not** use AI intent to:
+It must never:
 
 * auto-open Services
 * auto-select providers
 * change Focus Mode
-* hijack panels
-* create sticky recommendation state
+* hijack UI panels
 
-Safe scope:
+Safe behavior:
 
-* infer relevant KForge workflow
-* improve AI wording and handoff behavior
-* keep UI state unchanged
+* infer relevant workflow
+* recommend KForge-first paths
+* continue in chat only if user bypasses KForge
 
 ---
 
@@ -863,7 +822,7 @@ Meaning:
 * bottom = dock below workspace
 * full = focus mode replaces main layout
 
-Focus mode is a surface promotion.
+Focus mode is a **surface promotion**.
 
 ---
 
@@ -933,6 +892,7 @@ Open folder
 → Create `.env`
 → install client
 → create client file
+→ generate example queries
 → connect backend
 
 ---
@@ -978,9 +938,9 @@ Example commands:
 ## Workflow-Aware AI Flow
 
 User asks for a capability
-→ AI checks whether KForge already has a workflow for it
+→ AI checks whether KForge already has a workflow
 → AI guides user to the KForge-first path
-→ AI only continues inside chat if the user explicitly chooses to bypass KForge
+→ AI continues in chat only if the user explicitly bypasses KForge
 
 ---
 
@@ -1000,42 +960,36 @@ Current stable milestone includes:
 * deploy guidance
 * Supabase backend integration
 * Supabase Quick Connect
+* Supabase Developer Assist starter artifacts
 * Stripe adapter
 * Stripe webhook-readiness guidance
 * per-service log isolation
-* tool-calling agent loop
-* agent runtime hardening for weaker models
-* AI workflow-awareness manifests
-* Preview workflow-aware AI guidance
-* Terminal workflow-aware AI guidance
-* GitHub import-vs-service distinction in AI guidance
-* KForge-first handoff behavior for supported workflows
-* capability relevance filtering
-* capability discovery from runtime registries
-* task-grouped service-route discovery for truthful AI handoff
+* AI capability-awareness system
+* preview-aware AI guidance
+* terminal-aware AI guidance
+* service registry discovery
+* template registry discovery
 
 ---
 
 # 10 Next Architecture Lane
 
-Next planned lanes:
+Next planned phases:
 
-**Phase 5.2 — OpenAI Adapter**
-**Phase 5.3 — Supabase Developer Assist**
+**Phase 5.3 — OpenAI Adapter**
 **Phase 5.4 — Future Template Expansion**
 
 Longer-term direction:
 
 **Phase 6 — Model Guidance & Routing**
 
-Potential work includes:
+Possible work:
 
 * model capability registry
-* model usage hints
-* task templates
-* agent workflows
-* smart provider switching
+* model routing
+* agent templates
+* smart model selection
+* improved AI workflow orchestration
 
----
+```
 
-`
