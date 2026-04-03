@@ -7,7 +7,7 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 Last Updated: **April 3rd, 2026**
 
 Phase: **5.2 — Supabase Developer Assist**
-Status: **Testing resumed, fixes and polish checkpointed**
+Status: **Testing resumed, fixes, polish, and routing hardening checkpointed**
 
 Stable restore tags now available:
 
@@ -16,6 +16,7 @@ Stable restore tags now available:
 * `phase-5.2-awareness-stable`
 * `phase-5.2-supabase-dev-assist-midtest`
 * `phase-5.2-supabase-dev-assist-polish`
+* `routing-hardening-2026-04-03`
 
 ---
 
@@ -1105,7 +1106,7 @@ Conceptual shape:
   supabase: [],
   stripe: [],
 }
-````
+```
 
 Persisted state now tracks:
 
@@ -1123,11 +1124,11 @@ This preserves the existing panel persistence model while isolating log history 
 
 Phase 4.9.1 does **not** change:
 
-• log timestamps
-• service status flow
-• task/provider grouping
-• Supabase setup logic
-• GitHub publish/push/pull behavior
+• log timestamps  
+• service status flow  
+• task/provider grouping  
+• Supabase setup logic  
+• GitHub publish/push/pull behavior  
 
 It only changes how log history is stored and shown in the ServicePanel UI.
 
@@ -1137,10 +1138,10 @@ It only changes how log history is stored and shown in the ServicePanel UI.
 
 Services logs now behave like this:
 
-• logs persist while the same project remains open
-• each provider has its own log history
-• logs still reset on workspace reset
-• logs still reset when project root changes
+• logs persist while the same project remains open  
+• each provider has its own log history  
+• logs still reset on workspace reset  
+• logs still reset when project root changes  
 
 This matches the mental model users expect from professional integration tooling.
 
@@ -1154,12 +1155,12 @@ This is a major AI-runtime milestone.
 
 Primary files:
 
-• src/ai/agent/agentRunner.js
-• src/ai/tools/toolSchema.js
-• src/ai/tools/toolRuntime.js
-• src/ai/tools/handlers/index.js
-• src/ai/panel/AiPanel.jsx
-• src/App.js
+• src/ai/agent/agentRunner.js  
+• src/ai/tools/toolSchema.js  
+• src/ai/tools/toolRuntime.js  
+• src/ai/tools/handlers/index.js  
+• src/ai/panel/AiPanel.jsx  
+• src/App.js  
 
 ---
 
@@ -1167,19 +1168,19 @@ Primary files:
 
 Before 4.10, AI responses could request tools, but the system behavior was closer to:
 
-single response
-→ detect tool text
-→ execute tool
-→ stop
+single response  
+→ detect tool text  
+→ execute tool  
+→ stop  
 
 After 4.10, the runtime supports:
 
-model
-→ tool request
-→ tool execution
-→ tool result returned to model
-→ continued reasoning
-→ final answer
+model  
+→ tool request  
+→ tool execution  
+→ tool result returned to model  
+→ continued reasoning  
+→ final answer  
 
 This gives KForge a real **agent-style reasoning loop** while preserving the existing consent model.
 
@@ -1195,10 +1196,10 @@ src/ai/tools/toolRuntime.js
 
 This means:
 
-• consent gating remains authoritative
-• tool execution still routes through the existing runtime pipeline
-• handler dispatch still flows through `src/ai/tools/handlers/index.js`
-• transcript-visible tool execution remains intact
+• consent gating remains authoritative  
+• tool execution still routes through the existing runtime pipeline  
+• handler dispatch still flows through `src/ai/tools/handlers/index.js`  
+• transcript-visible tool execution remains intact  
 
 ---
 
@@ -1206,12 +1207,12 @@ This means:
 
 Core loop now behaves conceptually like:
 
-assistant
-→ request tool
-→ tool executes
-→ result appended
-→ model continues
-→ final answer returned
+assistant  
+→ request tool  
+→ tool executes  
+→ result appended  
+→ model continues  
+→ final answer returned  
 
 This is the foundational runtime pattern used by modern coding agents.
 
@@ -1227,11 +1228,11 @@ This keeps the model-facing tool inventory aligned with the actual handler regis
 
 Current exposed tools include:
 
-• read_file
-• list_dir
-• search_in_file
-• write_file
-• mkdir
+• read_file  
+• list_dir  
+• search_in_file  
+• write_file  
+• mkdir  
 
 ---
 
@@ -1239,11 +1240,11 @@ Current exposed tools include:
 
 The AI panel now supports:
 
-• structured tool-call detection
-• continued reasoning after tools run
-• calm chat projection
-• full transcript visibility
-• agent-loop integration without replacing the existing message store
+• structured tool-call detection  
+• continued reasoning after tools run  
+• calm chat projection  
+• full transcript visibility  
+• agent-loop integration without replacing the existing message store  
 
 This keeps the user-facing experience aligned with KForge’s low-noise philosophy.
 
@@ -1255,8 +1256,8 @@ Phase 4.10.1 hardened the new agent runtime based on real testing, especially wi
 
 Primary files:
 
-• src/ai/agent/agentRunner.js
-• src/ai/panel/AiPanel.jsx
+• src/ai/agent/agentRunner.js  
+• src/ai/panel/AiPanel.jsx  
 
 ---
 
@@ -1264,12 +1265,12 @@ Primary files:
 
 Real testing surfaced several model/runtime edge cases:
 
-• weaker models describing tool calls in plain English
-• duplicate tool requests
-• repeated workspace exploration
-• accidental file-creation attempts during inspection
-• stale tool-result context during continuation
-• transcript duplication / loop-noise polish issues
+• weaker models describing tool calls in plain English  
+• duplicate tool requests  
+• repeated workspace exploration  
+• accidental file-creation attempts during inspection  
+• stale tool-result context during continuation  
+• transcript duplication / loop-noise polish issues  
 
 4.10.1 focused on stabilizing these behaviors without redesigning the architecture.
 
@@ -1279,13 +1280,13 @@ Real testing surfaced several model/runtime edge cases:
 
 The agent runtime now includes:
 
-• duplicate tool-call detection inside the agent loop
-• seeding duplicate protection with already-executed batch tool calls
-• natural-language fallback parsing for tool patterns such as `list_dir(.)`
-• explicit inspection-budget rules for workspace-analysis tasks
-• continuation prompts that discourage repeated exploration
-• local injection of freshly executed tool results into continuation context
-• suppression of duplicate-loop noise in transcript
+• duplicate tool-call detection inside the agent loop  
+• seeding duplicate protection with already-executed batch tool calls  
+• natural-language fallback parsing for tool patterns such as `list_dir(.)`  
+• explicit inspection-budget rules for workspace-analysis tasks  
+• continuation prompts that discourage repeated exploration  
+• local injection of freshly executed tool results into continuation context  
+• suppression of duplicate-loop noise in transcript  
 
 This made weaker-model behavior much more usable in real inspection flows.
 
@@ -1299,14 +1300,14 @@ write tools are no longer treated as safe automatic tools.
 
 Safe automatic tools are now read-only:
 
-• read_file
-• list_dir
-• search_in_file
+• read_file  
+• list_dir  
+• search_in_file  
 
 Write tools now require explicit consent:
 
-• write_file
-• mkdir
+• write_file  
+• mkdir  
 
 This prevents weaker models from creating files automatically during inspection or explanation tasks.
 
@@ -1318,10 +1319,10 @@ Weaker models such as Groq / Llama-family variants can still be valuable, but th
 
 Current KForge hardening now helps these models by:
 
-• recovering simple function-style tool requests
-• reducing runaway workspace exploration
-• preventing silent write execution
-• allowing read-only inspection flows to complete successfully more often
+• recovering simple function-style tool requests  
+• reducing runaway workspace exploration  
+• preventing silent write execution  
+• allowing read-only inspection flows to complete successfully more often  
 
 Best tool-driving reliability still comes from stronger models such as OpenAI or Claude.
 
@@ -1331,9 +1332,9 @@ Best tool-driving reliability still comes from stronger models such as OpenAI or
 
 Phase 5.0.1 explored **intent-driven backend setup** by inferring likely backend needs from prompts such as:
 
-• "I need login"
-• "I need a database"
-• "I need file storage"
+• "I need login"  
+• "I need a database"  
+• "I need file storage"  
 
 The original implementation tried to route that intent into UI behavior.
 
@@ -1345,10 +1346,10 @@ This version was deliberately rolled back.
 
 The original UI-routing version caused bad UX and unstable state behavior, including:
 
-• forced jump into Services
-• auto-selection of providers
-• Focus Mode / Exit Focus stickiness
-• Reset Workspace feeling trapped in recommendation state
+• forced jump into Services  
+• auto-selection of providers  
+• Focus Mode / Exit Focus stickiness  
+• Reset Workspace feeling trapped in recommendation state  
 
 This proved that AI intent should **not** directly drive UI routing in the current architecture.
 
@@ -1358,14 +1359,14 @@ This proved that AI intent should **not** directly drive UI routing in the curre
 
 The useful part of the experiment was:
 
-• making the AI aware of KForge capabilities
+• making the AI aware of KForge capabilities  
 
 The rejected part was:
 
-• auto-opening Services
-• panel hijacking
-• sticky recommendation state
-• focus-mode side effects
+• auto-opening Services  
+• panel hijacking  
+• sticky recommendation state  
+• focus-mode side effects  
 
 Safe future direction:
 
@@ -1381,10 +1382,10 @@ Instead of trying to control the UI, this phase taught the AI about **real KForg
 
 Primary files:
 
-• src/ai/capabilities/kforgeCapabilities.js
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/kforgePreviewWorkflows.js
-• src/App.js
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+• src/App.js  
 
 ---
 
@@ -1394,10 +1395,10 @@ The goal was to make the assistant aware of KForge as a product, not just as a f
 
 This allows the AI to guide users toward KForge-first workflows such as:
 
-• Services → Backend → Supabase
-• Services → Code → GitHub
-• Services → Deploy → Vercel / Netlify
-• Preview → Generate
+• Services → Backend → Supabase  
+• Services → Code → GitHub  
+• Services → Deploy → Vercel / Netlify  
+• Preview → Generate  
 
 without forcing any UI state change.
 
@@ -1433,10 +1434,10 @@ If a workflow exists in KForge, the assistant should guide the user to that work
 
 This now applies to:
 
-• Supabase guided setup
-• GitHub service actions
-• Deploy handoff guidance
-• Preview template generation
+• Supabase guided setup  
+• GitHub service actions  
+• Deploy handoff guidance  
+• Preview template generation  
 
 ---
 
@@ -1448,14 +1449,14 @@ The AI now has explicit product guidance for:
 
 Preferred path:
 
-Services
-→ Backend
-→ Supabase
+Services  
+→ Backend  
+→ Supabase  
 
 The AI should hand off to:
 
-• Quick Connect Supabase
-• Check Supabase setup
+• Quick Connect Supabase  
+• Check Supabase setup  
 
 and should not immediately create `.env` or client files in chat unless the user explicitly chooses to bypass KForge.
 
@@ -1465,24 +1466,24 @@ Services → Code → GitHub is for actions on the **current open local project*
 
 Current GitHub actions include:
 
-• publish
-• push
-• pull
-• open repository
+• publish  
+• push  
+• pull  
+• open repository  
 
 GitHub import is **not** in Services.
 
 Import path is:
 
-New Project
-→ Import from GitHub
+New Project  
+→ Import from GitHub  
 
 ### Preview / Generate
 
 If the user asks for a React / Next.js / static starter app that KForge can generate, AI should guide them to:
 
-Preview
-→ Generate
+Preview  
+→ Generate  
 
 and should not manually scaffold template files in chat unless the user explicitly chooses to bypass KForge.
 
@@ -1500,18 +1501,18 @@ KForge AI workflow awareness is now maintained through structured capability man
 
 Current files:
 
-• src/ai/capabilities/kforgeCapabilities.js
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/kforgePreviewWorkflows.js
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
 
 Current maintenance rule:
 
-• if a new **service workflow** is added, update:
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• if a new **non-service guided workflow or panel** is added, create or update a manifest under:
-• src/ai/capabilities/
-• then include that workflow manifest in:
-• src/ai/capabilities/kforgeCapabilities.js
+• if a new **service workflow** is added, update:  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• if a new **non-service guided workflow or panel** is added, create or update a manifest under:  
+• src/ai/capabilities/  
+• then include that workflow manifest in:  
+• src/ai/capabilities/kforgeCapabilities.js  
 
 Reason:
 
@@ -1531,12 +1532,13 @@ AI-awareness only, not UI control.
 
 Primary files:
 
-• src/ai/capabilities/kforgeCapabilities.js
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/kforgePreviewWorkflows.js
-• src/ai/capabilities/kforgeTerminalWorkflows.js
-• src/ai/capabilities/discoverCapabilities.js
-• src/App.js
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+• src/ai/capabilities/kforgeTerminalWorkflows.js  
+• src/ai/capabilities/discoverCapabilities.js  
+• src/ai/panel/AiPanel.jsx  
+• src/App.js  
 
 ---
 
@@ -1546,11 +1548,11 @@ The goal of 5.0.3 was to make KForge AI aware of a broader product surface while
 
 This phase specifically added:
 
-• broader non-service capability awareness
-• Terminal workflow awareness
-• capability self-discovery from real runtime registries
-• relevance filtering so prompts receive more focused capability context
-• safer tool-emission behavior for explanations and manual-only requests
+• broader non-service capability awareness  
+• Terminal workflow awareness  
+• capability self-discovery from real runtime registries  
+• relevance filtering so prompts receive more focused capability context  
+• safer tool-emission behavior for explanations and manual-only requests  
 
 ---
 
@@ -1564,27 +1566,27 @@ src/ai/capabilities/kforgeCapabilities.js
 
 Responsibilities:
 
-• aggregate workflow manifests
-• format AI-facing capability context
-• apply relevance filtering
-• inject global KForge workflow behavior rules
+• aggregate workflow manifests  
+• format AI-facing capability context  
+• apply relevance filtering  
+• inject global KForge workflow behavior rules  
 
 ### Structured workflow manifests
 
 Current examples:
 
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/kforgePreviewWorkflows.js
-• src/ai/capabilities/kforgeTerminalWorkflows.js
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+• src/ai/capabilities/kforgeTerminalWorkflows.js  
 
 These files define:
 
-• workflow name
-• route
-• summary
-• preferred AI behavior
-• KForge handoff language
-• manual fallback language
+• workflow name  
+• route  
+• summary  
+• preferred AI behavior  
+• KForge handoff language  
+• manual fallback language  
 
 ### Capability self-discovery
 
@@ -1594,8 +1596,8 @@ src/ai/capabilities/discoverCapabilities.js
 
 Current discovery sources:
 
-• src/runtime/serviceRegistry.js
-• src/runtime/templateRegistry.js
+• src/runtime/serviceRegistry.js  
+• src/runtime/templateRegistry.js  
 
 This reduces manual drift by allowing AI awareness to pick up real runtime capabilities from the codebase.
 
@@ -1613,12 +1615,12 @@ App.js now passes the current prompt text into the capability formatter so only 
 
 The AI can now recognize and guide users toward:
 
-• Services workflows
-• Preview workflows
-• Generate workflows
-• Terminal workflows
-• discovered service capabilities from `SERVICE_REGISTRY`
-• discovered template capabilities from `TEMPLATE_REGISTRY`
+• Services workflows  
+• Preview workflows  
+• Generate workflows  
+• Terminal workflows  
+• discovered service capabilities from `SERVICE_REGISTRY`  
+• discovered template capabilities from `TEMPLATE_REGISTRY`  
 
 This makes the assistant more aware of the real KForge surface without adding UI-routing behavior.
 
@@ -1632,16 +1634,16 @@ src/ai/capabilities/kforgeTerminalWorkflows.js
 
 This teaches the AI to prefer:
 
-AI Panel
-→ Terminal
+AI Panel  
+→ Terminal  
 
 when the user wants to:
 
-• run shell commands
-• install packages
-• run dev servers
-• run Git commands
-• perform project diagnostics
+• run shell commands  
+• install packages  
+• run dev servers  
+• run Git commands  
+• perform project diagnostics  
 
 Important rule:
 
@@ -1653,9 +1655,9 @@ The AI may recommend Terminal, but must remain **advisory only** and must not im
 
 Preview guidance was refined in 5.0.3 to separate:
 
-• previewing an existing project
-from
-• generating a new starter template
+• previewing an existing project  
+from  
+• generating a new starter template  
 
 Current rule:
 
@@ -1665,8 +1667,8 @@ Preview
 
 Only if the user explicitly wants to create a new supported starter project should AI guide them to:
 
-Preview
-→ Generate
+Preview  
+→ Generate  
 
 This prevents incorrect “Generate” handoffs for users who already have a project open.
 
@@ -1680,13 +1682,50 @@ This means App.js no longer injects the full capability surface into every promp
 
 Instead, the system prefers relevant subsets, which improves:
 
-• prompt size
-• signal-to-noise ratio
-• likelihood of correct workflow matching
+• prompt size  
+• signal-to-noise ratio  
+• likelihood of correct workflow matching  
 
-Fallback behavior remains safe:
+Current hardening rule:
 
-if no strong relevance match exists, the system can still fall back to the broader capability list.
+If no strong relevance match exists and the user is **not** clearly asking for a KForge-managed workflow, the system should avoid dumping the full workflow list into the prompt.
+
+This reduces false workflow handoffs for ordinary build/edit prompts.
+
+---
+
+## 5.0.3 Routing-Bucket Hardening (post-testing lesson)
+
+Post-testing hardening showed that stable AI behavior depends on classifying requests into a small number of durable routing buckets rather than endlessly adding one-off prompt patches.
+
+These buckets should now be treated as canonical guidance:
+
+• project open vs no project open  
+• empty folder vs real project  
+• KForge workflow request vs normal implementation request  
+• manual bypass vs KForge-managed path  
+• successful tool writes vs failed tool writes  
+• gratitude / closing turn vs active work request  
+
+Why this matters:
+
+• prevents false workflow handoff  
+• reduces model drift on low-quality prompts  
+• improves no-project and empty-folder behavior  
+• improves manual-bypass behavior  
+• prevents fake success messaging after failed writes  
+• avoids weird workflow re-handoffs after casual “thanks” turns  
+
+Primary files involved in this routing hardening:
+
+• src/App.js  
+• src/ai/panel/AiPanel.jsx  
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+
+Rule of thumb for future debugging:
+
+When a new AI-routing bug appears, first classify it into one of these buckets before adding more wording or guardrails.
 
 ---
 
@@ -1724,19 +1763,36 @@ Current rule:
 
 The assistant should only emit tool fenced blocks when the user is explicitly asking for an action inside the project, such as:
 
-• creating files
-• editing files
-• running project operations
+• creating files  
+• editing files  
+• running project operations  
 
 The assistant should **not** emit tool calls when the user is:
 
-• asking conceptual questions
-• asking for explanations
-• asking for planning help
-• asking for manual commands only
-• explicitly bypassing KForge
+• asking conceptual questions  
+• asking for explanations  
+• asking for planning help  
+• asking for manual commands only  
+• explicitly bypassing KForge  
+• only expressing gratitude / acknowledgement / casual closing language  
 
 This improves alignment between workflow awareness and normal conversational help.
+
+---
+
+## 5.0.3 Post-Tool Truthfulness Rule
+
+Post-tool follow-up messaging must now be based on **actual successful results**, not merely on requested tool calls.
+
+Current rule:
+
+The AI should not claim that files were written, suggest reviewing file changes, or offer Preview as the next step if the relevant write operations failed.
+
+This specifically protects against false success messaging in no-project / bad-path cases.
+
+Primary implementation surface:
+
+src/ai/panel/AiPanel.jsx
 
 ---
 
@@ -1748,25 +1804,25 @@ KForge AI capability awareness is now maintained through a hybrid model:
 
 Used for:
 
-• AI-specific workflow wording
-• nuanced handoff behavior
-• manual fallback language
-• product-specific advisory rules
+• AI-specific workflow wording  
+• nuanced handoff behavior  
+• manual fallback language  
+• product-specific advisory rules  
 
 ### Real registry discovery
 
 Used for:
 
-• service discovery
-• template discovery
+• service discovery  
+• template discovery  
 
 Current files involved:
 
-• src/ai/capabilities/kforgeCapabilities.js
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/kforgePreviewWorkflows.js
-• src/ai/capabilities/kforgeTerminalWorkflows.js
-• src/ai/capabilities/discoverCapabilities.js
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+• src/ai/capabilities/kforgeTerminalWorkflows.js  
+• src/ai/capabilities/discoverCapabilities.js  
 
 This is stronger than the earlier manual-only discipline while still keeping the architecture simple.
 
@@ -1778,18 +1834,18 @@ Phase 5.1 converted Stripe from a planned service entry into a **real adapter-ba
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src-tauri/src/lib.rs
-• src/runtime/serviceRunner.js
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
-• src/ai/capabilities/kforgeServiceWorkflows.js
+• src-tauri/src/service.rs  
+• src-tauri/src/lib.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
 
 Primary route:
 
-Services
-→ Payments
-→ Stripe
+Services  
+→ Payments  
+→ Stripe  
 
 ---
 
@@ -1805,16 +1861,16 @@ This phase focused on guided setup assistance, not on subscription admin or anal
 
 The Stripe adapter now supports:
 
-• readiness inspection for current project setup
-• environment file detection
-• detection of `STRIPE_SECRET_KEY`
-• detection of `STRIPE_PUBLISHABLE_KEY`
-• `.env.example` generation or update for Stripe placeholders
-• `.env` creation helper from `.env.example`
-• browser handoff to Stripe dashboard
-• browser handoff to Stripe docs
-• calmer Stripe-specific activity log guidance
-• AI truthfulness for Services → Payments → Stripe
+• readiness inspection for current project setup  
+• environment file detection  
+• detection of `STRIPE_SECRET_KEY`  
+• detection of `STRIPE_PUBLISHABLE_KEY`  
+• `.env.example` generation or update for Stripe placeholders  
+• `.env` creation helper from `.env.example`  
+• browser handoff to Stripe dashboard  
+• browser handoff to Stripe docs  
+• calmer Stripe-specific activity log guidance  
+• AI truthfulness for Services → Payments → Stripe  
 
 Command added:
 
@@ -1828,20 +1884,20 @@ Services → Payments → Stripe now provides a guided, explicit setup lane.
 
 Current Stripe actions include:
 
-• Check Stripe setup
-• Create `.env` file
-• Open Stripe dashboard
-• Open Stripe docs
+• Check Stripe setup  
+• Create `.env` file  
+• Open Stripe dashboard  
+• Open Stripe docs  
 
 The panel remains deliberately narrow in scope.
 
 It does **not** introduce:
 
-• subscription dashboard UI
-• invoice management
-• webhook event browser
-• analytics panels
-• hidden payment automation
+• subscription dashboard UI  
+• invoice management  
+• webhook event browser  
+• analytics panels  
+• hidden payment automation  
 
 ---
 
@@ -1853,11 +1909,11 @@ This is a small follow-on phase, not a new subsystem.
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
-• src/ai/capabilities/kforgeServiceWorkflows.js
-• src/ai/capabilities/discoverCapabilities.js
+• src-tauri/src/service.rs  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
+• src/ai/capabilities/discoverCapabilities.js  
 
 ---
 
@@ -1865,10 +1921,10 @@ Primary files:
 
 The goal of 5.1.1 was to help projects that need server-side Stripe event handling, such as:
 
-• checkout completion
-• subscription updates
-• payment event verification
-• webhook-driven backend workflows
+• checkout completion  
+• subscription updates  
+• payment event verification  
+• webhook-driven backend workflows  
 
 This phase still avoids turning KForge into a Stripe operations dashboard.
 
@@ -1878,16 +1934,16 @@ This phase still avoids turning KForge into a Stripe operations dashboard.
 
 Stripe guidance now also supports:
 
-• detection of `STRIPE_WEBHOOK_SECRET`
-• `.env.example` webhook placeholder support
-• webhook-readiness status messaging in the Stripe setup check
-• browser handoff to Stripe webhook docs
-• AI guidance that mentions webhook readiness when relevant
-• truthful discovered capability routing for Stripe via capability discovery
+• detection of `STRIPE_WEBHOOK_SECRET`  
+• `.env.example` webhook placeholder support  
+• webhook-readiness status messaging in the Stripe setup check  
+• browser handoff to Stripe webhook docs  
+• AI guidance that mentions webhook readiness when relevant  
+• truthful discovered capability routing for Stripe via capability discovery  
 
 Additional Stripe action added:
 
-• Open Stripe webhook docs
+• Open Stripe webhook docs  
 
 ---
 
@@ -1897,12 +1953,12 @@ Stripe setup now distinguishes between:
 
 ### Core payment readiness
 
-• `STRIPE_SECRET_KEY`
-• `STRIPE_PUBLISHABLE_KEY`
+• `STRIPE_SECRET_KEY`  
+• `STRIPE_PUBLISHABLE_KEY`  
 
 ### Webhook-ready server flows
 
-• `STRIPE_WEBHOOK_SECRET`
+• `STRIPE_WEBHOOK_SECRET`  
 
 If the core keys exist but the webhook secret does not, KForge reports that the main payment keys are available while webhook signing is not yet configured.
 
@@ -1914,25 +1970,25 @@ This keeps the guidance calm and accurate for both simple and server-driven Stri
 
 Phase 5.2 resumed after a separate AI-awareness stabilization detour and now focuses on **guided developer-assist artifacts for Supabase integration**.
 
-This phase is not primarily about awareness.
+This phase is not primarily about awareness.  
 It is about whether new Supabase helper actions are genuinely useful for real projects.
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src-tauri/src/lib.rs
-• src/runtime/serviceRunner.js
-• src/runtime/ServicePanel.jsx
-• src/runtime/serviceRegistry.js
-• src/ai/capabilities/kforgeServiceWorkflows.js
+• src-tauri/src/service.rs  
+• src-tauri/src/lib.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/ServicePanel.jsx  
+• src/runtime/serviceRegistry.js  
+• src/ai/capabilities/kforgeServiceWorkflows.js  
 
 Awareness-related files touched during the detour and checkpointed separately:
 
-• src/ai/capabilities/kforgePreviewWorkflows.js
-• src/ai/capabilities/discoverCapabilities.js
-• src/ai/capabilities/kforgeCapabilities.js
-• src/App.js
-• src/ai/panel/AiPanel.jsx
+• src/ai/capabilities/kforgePreviewWorkflows.js  
+• src/ai/capabilities/discoverCapabilities.js  
+• src/ai/capabilities/kforgeCapabilities.js  
+• src/App.js  
+• src/ai/panel/AiPanel.jsx  
 
 ---
 
@@ -1942,13 +1998,13 @@ The goal of 5.2 is to help users who already have an app and now want to connect
 
 The intended flow is:
 
-existing app
-→ Services → Backend → Supabase
-→ check setup
-→ create env and client
-→ generate starter examples/helpers
-→ adapt those patterns to the real schema
-→ wire app to database
+existing app  
+→ Services → Backend → Supabase  
+→ check setup  
+→ create env and client  
+→ generate starter examples/helpers  
+→ adapt those patterns to the real schema  
+→ wire app to database  
 
 This is meant to feel like **developer assist**, not full backend automation.
 
@@ -1958,25 +2014,25 @@ This is meant to feel like **developer assist**, not full backend automation.
 
 Supabase Developer Assist now includes:
 
-• Check Supabase setup
-• Create `.env` file
-• Install Supabase client
-• Create Supabase client file
-• Create read example
-• Create insert example
-• Create query helper
+• Check Supabase setup  
+• Create `.env` file  
+• Install Supabase client  
+• Create Supabase client file  
+• Create read example  
+• Create insert example  
+• Create query helper  
 
 The setup and generated artifacts are intended to support both:
 
-• Cloud Supabase
-• Local Supabase
+• Cloud Supabase  
+• Local Supabase  
 
 Current generated files include:
 
-• `src/lib/supabase.js`
-• `src/examples/supabaseExample.js`
-• `src/examples/supabaseInsertExample.js`
-• `src/lib/supabaseQueries.js`
+• `src/lib/supabase.js`  
+• `src/examples/supabaseExample.js`  
+• `src/examples/supabaseInsertExample.js`  
+• `src/lib/supabaseQueries.js`  
 
 ---
 
@@ -1986,22 +2042,22 @@ The generated files are intentionally small.
 
 They are meant to provide:
 
-• a reusable Supabase client
-• a tiny starter read query
-• a tiny starter insert query
-• an optional small helper layer for repeated read/insert patterns
+• a reusable Supabase client  
+• a tiny starter read query  
+• a tiny starter insert query  
+• an optional small helper layer for repeated read/insert patterns  
 
 This is designed to bridge the gap between:
 
-frontend app already exists
-and
-developer now needs the first real Supabase integration patterns
+frontend app already exists  
+and  
+developer now needs the first real Supabase integration patterns  
 
 The feature set is especially aimed at:
 
-• beginners
-• vibe coders
-• frontend-first developers who need backend connection help
+• beginners  
+• vibe coders  
+• frontend-first developers who need backend connection help  
 
 ---
 
@@ -2009,18 +2065,18 @@ The feature set is especially aimed at:
 
 Real restart testing in a fresh Vite + React workspace confirmed:
 
-• `Check Supabase setup` remains useful and beginner-friendly
-• `.env.example` and `.env` creation still provide a clear setup path
-• Supabase client install works through the guided service flow
-• generated `src/lib/supabase.js` is small, conventional, and supports both Vite and generic env names
-• generated read and insert examples are simple starter artifacts, not heavy scaffolding
-• the query helper is technically good, but conceptually slightly more advanced than the read/insert examples
+• `Check Supabase setup` remains useful and beginner-friendly  
+• `.env.example` and `.env` creation still provide a clear setup path  
+• Supabase client install works through the guided service flow  
+• generated `src/lib/supabase.js` is small, conventional, and supports both Vite and generic env names  
+• generated read and insert examples are simple starter artifacts, not heavy scaffolding  
+• the query helper is technically good, but conceptually slightly more advanced than the read/insert examples  
 
 Product judgment from testing so far:
 
-• keep the full feature set
-• explain the helper files better in docs and UI wording
-• do not remove advanced-looking helpers just because beginners are still learning them
+• keep the full feature set  
+• explain the helper files better in docs and UI wording  
+• do not remove advanced-looking helpers just because beginners are still learning them  
 
 ---
 
@@ -2030,9 +2086,9 @@ Testing surfaced a real wiring bug:
 
 The following commands existed in `src-tauri/src/service.rs` but were not registered in the Tauri invoke handler in `src-tauri/src/lib.rs`:
 
-• `supabase_create_read_example`
-• `supabase_create_insert_example`
-• `supabase_create_query_helper`
+• `supabase_create_read_example`  
+• `supabase_create_insert_example`  
+• `supabase_create_query_helper`  
 
 This caused the UI actions to fail even though the backend implementations existed.
 
@@ -2046,16 +2102,16 @@ Testing also surfaced a wording issue in the Supabase setup flow:
 
 The setup log previously duplicated the recommendation to create `.env`, and some later wording created sequence tension between:
 
-• “fill env values now”
-and
-• “create the client file now”
+• “fill env values now”  
+and  
+• “create the client file now”  
 
 Polish in `src-tauri/src/service.rs` now makes the guidance clearer by:
 
-• removing duplicated “Create .env file” prompting
-• explaining that env values can be filled now or after generating the client file
-• making read/insert example messages more concrete
-• making the query-helper explanation more understandable
+• removing duplicated “Create .env file” prompting  
+• explaining that env values can be filled now or after generating the client file  
+• making read/insert example messages more concrete  
+• making the query-helper explanation more understandable  
 
 ---
 
@@ -2065,18 +2121,18 @@ Supabase Developer Assist now appears to be a feature worth keeping.
 
 Current direction:
 
-• keep setup helpers
-• keep generated client file
-• keep read example
-• keep insert example
-• keep query helper
-• improve docs and wording so the purpose is clearer to users who are newer to database work
+• keep setup helpers  
+• keep generated client file  
+• keep read example  
+• keep insert example  
+• keep query helper  
+• improve docs and wording so the purpose is clearer to users who are newer to database work  
 
 This phase strengthens the Supabase lane from:
 
-guided setup
-into
-guided setup + starter integration patterns
+guided setup  
+into  
+guided setup + starter integration patterns  
 
 ---
 
@@ -2084,69 +2140,82 @@ guided setup + starter integration patterns
 
 Canonical workflow:
 
-Open folder
-Generate (optional)
-Install
-Preview
-Open
-Stop
-Iterate
+Open folder  
+Generate (optional)  
+Install  
+Preview  
+Open  
+Stop  
+Iterate  
 
 AI workflow:
 
-Open folder
-Prompt AI
-AI edits files
-Install
-Preview
-Hot reload
+Open folder  
+Prompt AI  
+AI edits files  
+Install  
+Preview  
+Hot reload  
 
 Agent workflow:
 
-Open folder
-Prompt AI
-AI requests tools
-Tools execute through consent/runtime
-AI continues reasoning
-AI returns final answer
+Open folder  
+Prompt AI  
+AI requests tools  
+Tools execute through consent/runtime  
+AI continues reasoning  
+AI returns final answer  
 
 Service workflow:
 
-Open folder
-Open Services
-Publish to GitHub
-Push changes
-Deploy via Vercel or Netlify
-Configure Supabase if needed
-Configure Stripe if needed
-Continue development
+Open folder  
+Open Services  
+Publish to GitHub  
+Push changes  
+Deploy via Vercel or Netlify  
+Configure Supabase if needed  
+Configure Stripe if needed  
+Continue development  
 
 Import workflow:
 
-New Project
-Choose local create or GitHub import
-Open project automatically
-Continue development
+New Project  
+Choose local create or GitHub import  
+Open project automatically  
+Continue development  
 
 Workflow-aware AI guidance:
 
-User asks for a capability
-→ AI maps request to an existing KForge workflow if one exists
-→ AI guides user to KForge-first path
-→ AI only continues in chat if the user explicitly chooses to bypass KForge
+User asks for a capability  
+→ AI maps request to an existing KForge workflow if one exists  
+→ AI guides user to KForge-first path  
+→ AI only continues in chat if the user explicitly chooses to bypass KForge  
 
 Terminal-aware AI guidance:
 
-User asks to run commands, install packages, or use shell workflow
-→ AI prefers AI Panel → Terminal if that matches the request
-→ AI remains advisory only
+User asks to run commands, install packages, or use shell workflow  
+→ AI prefers AI Panel → Terminal if that matches the request  
+→ AI remains advisory only  
 
 Conceptual-help rule:
 
-User asks for explanation / conceptual help / manual-only guidance
-→ AI answers normally
-→ no unnecessary tool calls
-→ no forced KForge workflow unless the user is clearly asking to use one
+User asks for explanation / conceptual help / manual-only guidance  
+→ AI answers normally  
+→ no unnecessary tool calls  
+→ no forced KForge workflow unless the user is clearly asking to use one  
+
+Routing-bucket rule:
+
+When behavior feels wrong, first classify the case into:
+
+• project-open state  
+• empty-folder state  
+• workflow request vs implementation request  
+• manual-bypass state  
+• tool success vs tool failure  
+• gratitude / closing turn  
+
+before adding more steering text.
 
 ---
 
@@ -2154,16 +2223,16 @@ User asks for explanation / conceptual help / manual-only guidance
 
 Filesystem layer ensures:
 
-• writes scoped to project root
-• parent folders auto-created
-• invalid paths blocked
-• clear surfaced errors
+• writes scoped to project root  
+• parent folders auto-created  
+• invalid paths blocked  
+• clear surfaced errors  
 
 Explorer refreshes after:
 
-• AI file writes
-• directory creation
-• scaffold generation
+• AI file writes  
+• directory creation  
+• scaffold generation  
 
 Service adapters must follow the same project-root restriction.
 
@@ -2179,19 +2248,19 @@ A calm reasoning-first coding surface.
 
 Principles:
 
-• chat is primary
-• tools are explicit
-• diagnostics optional
-• human-readable errors first
-• no hidden side effects
-• guided integrations, not dashboard sprawl
+• chat is primary  
+• tools are explicit  
+• diagnostics optional  
+• human-readable errors first  
+• no hidden side effects  
+• guided integrations, not dashboard sprawl  
 
 Important 5.x rule:
 
-• AI may guide
-• AI may recommend
-• AI may hand off to real workflows
-• AI must not hijack UI state
+• AI may guide  
+• AI may recommend  
+• AI may hand off to real workflows  
+• AI must not hijack UI state  
 
 ---
 
@@ -2199,102 +2268,108 @@ Important 5.x rule:
 
 As of **Phase 5.2 — Supabase Developer Assist**:
 
-• AI surface stable
-• filesystem tools validated
-• preview runner stable
-• scaffold system operational
-• template registry working
-• command runner operational
-• Terminal panel awareness implemented for AI guidance
-• service integration layer operational
-• GitHub workflow implemented
-• GitHub import implemented
-• Services UX architecture stabilized
-• Deploy pipeline implemented
-• Vercel deploy shortcut working
-• Netlify deploy shortcut working
-• template-aware deploy guidance working
-• Next.js deploy recommendation working
-• Supabase adapter implemented
-• Supabase setup inspection working
-• `.env.example` generation working
-• `.env` creation assist working
-• Supabase beginner UX wording improved
-• Vite-aware Supabase env guidance working
-• Supabase client install action working
-• Windows-safe Supabase install execution working
-• Supabase client file creation working
-• Supabase read example generation working
-• Supabase insert example generation working
-• Supabase query helper generation working
-• missing Supabase developer-assist Tauri command registration fixed
-• Supabase setup messaging duplication fixed
-• Supabase example/helper wording improved
-• Supabase log grouping working
-• Supabase quoted action highlighting working
-• compact Supabase guidance card working
-• Supabase Quick Connect working
-• Stripe adapter implemented
-• Stripe setup inspection working
-• Stripe `.env.example` generation/update working
-• Stripe `.env` creation assist working
-• Stripe dashboard/docs browser handoff working
-• Stripe webhook readiness guidance working
-• per-service Services log isolation working
-• tool schema layer working
-• tool-calling agent loop working
-• duplicate tool-call protection working
-• weak-model fallback parsing working
-• write-tool consent tightening working
-• stale tool-result continuation fix working
-• Supabase documentation captured
-• agent runtime documentation captured
-• AI workflow-awareness manifests implemented
-• Preview workflow guidance tightened for existing projects vs new template generation
-• Preview template workflow awareness implemented
-• GitHub import-vs-service distinction captured for AI guidance
-• KForge-first handoff behavior implemented for guided workflows
-• capability relevance filtering implemented
-• capability self-discovery from service registry implemented
-• capability self-discovery from template registry implemented
-• service-route discovery now aligned more closely to real task-grouped paths
-• tool-emission guardrails tightened for explanations and manual-only requests
+• AI surface stable  
+• filesystem tools validated  
+• preview runner stable  
+• scaffold system operational  
+• template registry working  
+• command runner operational  
+• Terminal panel awareness implemented for AI guidance  
+• service integration layer operational  
+• GitHub workflow implemented  
+• GitHub import implemented  
+• Services UX architecture stabilized  
+• Deploy pipeline implemented  
+• Vercel deploy shortcut working  
+• Netlify deploy shortcut working  
+• template-aware deploy guidance working  
+• Next.js deploy recommendation working  
+• Supabase adapter implemented  
+• Supabase setup inspection working  
+• `.env.example` generation working  
+• `.env` creation assist working  
+• Supabase beginner UX wording improved  
+• Vite-aware Supabase env guidance working  
+• Supabase client install action working  
+• Windows-safe Supabase install execution working  
+• Supabase client file creation working  
+• Supabase read example generation working  
+• Supabase insert example generation working  
+• Supabase query helper generation working  
+• missing Supabase developer-assist Tauri command registration fixed  
+• Supabase setup messaging duplication fixed  
+• Supabase example/helper wording improved  
+• Supabase log grouping working  
+• Supabase quoted action highlighting working  
+• compact Supabase guidance card working  
+• Supabase Quick Connect working  
+• Stripe adapter implemented  
+• Stripe setup inspection working  
+• Stripe `.env.example` generation/update working  
+• Stripe `.env` creation assist working  
+• Stripe dashboard/docs browser handoff working  
+• Stripe webhook readiness guidance working  
+• per-service Services log isolation working  
+• tool schema layer working  
+• tool-calling agent loop working  
+• duplicate tool-call protection working  
+• weak-model fallback parsing working  
+• write-tool consent tightening working  
+• stale tool-result continuation fix working  
+• Supabase documentation captured  
+• agent runtime documentation captured  
+• AI workflow-awareness manifests implemented  
+• Preview workflow guidance tightened for existing projects vs new template generation  
+• Preview template workflow awareness implemented  
+• GitHub import-vs-service distinction captured for AI guidance  
+• KForge-first handoff behavior implemented for guided workflows  
+• capability relevance filtering implemented  
+• capability self-discovery from service registry implemented  
+• capability self-discovery from template registry implemented  
+• service-route discovery now aligned more closely to real task-grouped paths  
+• tool-emission guardrails tightened for explanations and manual-only requests  
+• no-project vs empty-folder routing hardening implemented  
+• manual-bypass routing tightened  
+• truthful post-tool success/failure follow-up behavior improved  
+• gratitude / closing-turn workflow restraint added  
 
 Supported workflows now include:
 
-AI editing
-Project scaffolding
-Dev server preview
-Static site preview
-In-app terminal commands
-GitHub repository publishing
-GitHub repo push / pull / open
-GitHub repository import during project creation
-Deploy handoff to Vercel
-Deploy handoff to Netlify
-Template-aware deploy recommendation inside Services
-Supabase setup inspection
-Supabase Quick Connect
-Supabase environment file preparation
-Supabase client install guidance
-Supabase client file generation
-Supabase read example generation
-Supabase insert example generation
-Supabase query helper generation
-Supabase beginner-friendly guided setup
-Stripe setup inspection
-Stripe environment file preparation
-Stripe dashboard/docs handoff
-Stripe webhook-readiness guidance
-Per-service persistent activity logs in Services
-Tool-based AI inspection and reasoning
-Agent-style read/inspect/explain loops
-Workflow-aware AI guidance to existing KForge features
-Preview-driven template generation guidance
-Preview-first guidance for already-open projects
-Terminal-aware command guidance
-KForge-first handoff for supported product workflows
-Capability-aware conversational behavior with reduced prompt bloat
+AI editing  
+Project scaffolding  
+Dev server preview  
+Static site preview  
+In-app terminal commands  
+GitHub repository publishing  
+GitHub repo push / pull / open  
+GitHub repository import during project creation  
+Deploy handoff to Vercel  
+Deploy handoff to Netlify  
+Template-aware deploy recommendation inside Services  
+Supabase setup inspection  
+Supabase Quick Connect  
+Supabase environment file preparation  
+Supabase client install guidance  
+Supabase client file generation  
+Supabase read example generation  
+Supabase insert example generation  
+Supabase query helper generation  
+Supabase beginner-friendly guided setup  
+Stripe setup inspection  
+Stripe environment file preparation  
+Stripe dashboard/docs handoff  
+Stripe webhook-readiness guidance  
+Per-service persistent activity logs in Services  
+Tool-based AI inspection and reasoning  
+Agent-style read/inspect/explain loops  
+Workflow-aware AI guidance to existing KForge features  
+Preview-driven template generation guidance  
+Preview-first guidance for already-open projects  
+Terminal-aware command guidance  
+KForge-first handoff for supported product workflows  
+Capability-aware conversational behavior with reduced prompt bloat  
+Routing-bucket-aware AI hardening for common workflow states  
+Truthful post-tool follow-up behavior  
 
 ---
 
@@ -2302,12 +2377,12 @@ Capability-aware conversational behavior with reduced prompt bloat
 
 KForge now has six extensibility/runtime systems:
 
-Template Registry
-Service Registry
-Preview Runtime
-Command Runtime
-Agent Runtime
-AI Capability Awareness
+Template Registry  
+Service Registry  
+Preview Runtime  
+Command Runtime  
+Agent Runtime  
+AI Capability Awareness  
 
 These lanes allow new capabilities to be added without redesigning the architecture.
 
@@ -2315,24 +2390,25 @@ Future integrations will attach adapters rather than creating new subsystems.
 
 Current AI-awareness maintenance discipline:
 
-• new service workflow → update `src/ai/capabilities/kforgeServiceWorkflows.js` when AI-specific guidance is needed
-• new non-service guided workflow → add/update a manifest under `src/ai/capabilities/`
-• discovered runtime services come from `src/runtime/serviceRegistry.js`
-• discovered templates come from `src/runtime/templateRegistry.js`
-• top-level formatting and filtering live in `src/ai/capabilities/kforgeCapabilities.js`
+• new service workflow → update `src/ai/capabilities/kforgeServiceWorkflows.js` when AI-specific guidance is needed  
+• new non-service guided workflow → add/update a manifest under `src/ai/capabilities/`  
+• discovered runtime services come from `src/runtime/serviceRegistry.js`  
+• discovered templates come from `src/runtime/templateRegistry.js`  
+• top-level formatting and filtering live in `src/ai/capabilities/kforgeCapabilities.js`  
+• routing-state hardening and post-tool truthfulness frequently involve `src/App.js` and `src/ai/panel/AiPanel.jsx`  
 
 Planned adapters:
 
-• OpenAI
+• OpenAI  
 
 Possible future backend improvements:
 
-• environment variable manager
-• template-aware backend scaffolding
-• OpenAI adapter
-• richer Supabase code generation guidance
-• lightweight Supabase connection test action
-• richer model-routing between fast chat models and stronger tool-driving models
+• environment variable manager  
+• template-aware backend scaffolding  
+• OpenAI adapter  
+• richer Supabase code generation guidance  
+• lightweight Supabase connection test action  
+• richer model-routing between fast chat models and stronger tool-driving models  
 
 ---
 
@@ -2390,9 +2466,9 @@ Large files should use **precise block replacement instead**.
 
 When partial edits are required:
 
-1. extract the exact current block
-2. modify only that block
-3. paste the corrected block back
+1. extract the exact current block  
+2. modify only that block  
+3. paste the corrected block back  
 
 Never guess surrounding code.
 
@@ -2469,6 +2545,8 @@ Phase 5.0.2 then rebuilt the useful part safely as **KForge service workflow awa
 
 Phase 5.0.3 then expanded that foundation into **Global AI Capability Awareness**.
 
+Post-phase testing then added a **routing hardening checkpoint** covering no-project state, empty-folder state, manual bypass, truthful post-tool follow-up behavior, and gratitude / closing-turn restraint.
+
 Phase 5.1 then converted Stripe from a placeholder into a real **Stripe Adapter** inside Services → Payments.
 
 Phase 5.1.1 then extended that lane with **Stripe Webhook Readiness** guidance.
@@ -2477,39 +2555,42 @@ Phase 5.2 then returned to its actual purpose: **Supabase Developer Assist**. Re
 
 What this now proves:
 
-• the Services layer can support beginner-friendly backend onboarding
-• fast guided entry points reduce friction for vibe coders
-• structured logs materially improve usability
-• per-service history matters once multiple integrations live in one panel
-• backend integrations can remain explicit, calm, and low-noise without turning into dashboard-heavy workflows
-• KForge can support real agent-style reasoning without sacrificing consent-gated tooling
-• weaker models can be made more usable with targeted runtime hardening
-• AI can be taught real KForge workflows without hijacking the UI
-• KForge product awareness can scale beyond Services into Preview, Terminal, and discovered runtime capabilities
-• capability self-discovery reduces drift between real KForge features and AI awareness
-• relevance filtering can reduce prompt bloat while keeping workflow guidance effective
-• task-grouped service-route discovery matters for truthful AI guidance
-• tool-emission rules must distinguish between action requests and explanatory chat
-• Supabase setup helpers become much more valuable when paired with tiny generated starter patterns for real reads and writes
+• the Services layer can support beginner-friendly backend onboarding  
+• fast guided entry points reduce friction for vibe coders  
+• structured logs materially improve usability  
+• per-service history matters once multiple integrations live in one panel  
+• backend integrations can remain explicit, calm, and low-noise without turning into dashboard-heavy workflows  
+• KForge can support real agent-style reasoning without sacrificing consent-gated tooling  
+• weaker models can be made more usable with targeted runtime hardening  
+• AI can be taught real KForge workflows without hijacking the UI  
+• KForge product awareness can scale beyond Services into Preview, Terminal, and discovered runtime capabilities  
+• capability self-discovery reduces drift between real KForge features and AI awareness  
+• relevance filtering can reduce prompt bloat while keeping workflow guidance effective  
+• task-grouped service-route discovery matters for truthful AI guidance  
+• tool-emission rules must distinguish between action requests and explanatory chat  
+• stable AI behavior depends on classifying requests into a small number of routing buckets  
+• post-tool follow-up messaging must be tied to actual tool success, not merely intended calls  
+• Supabase setup helpers become much more valuable when paired with tiny generated starter patterns for real reads and writes  
 
 Current stable journey:
 
-Local Project
-→ GitHub
-→ Smart Deploy Guidance
-→ Vercel / Netlify
-→ Supabase Quick Connect
-→ guided Supabase setup
-→ Supabase Developer Assist starter artifacts
-→ Stripe setup and webhook-readiness guidance
-→ AI tool-calling agent workflow
-→ KForge workflow-aware AI guidance
-→ Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
+Local Project  
+→ GitHub  
+→ Smart Deploy Guidance  
+→ Vercel / Netlify  
+→ Supabase Quick Connect  
+→ guided Supabase setup  
+→ Supabase Developer Assist starter artifacts  
+→ Stripe setup and webhook-readiness guidance  
+→ AI tool-calling agent workflow  
+→ KForge workflow-aware AI guidance  
+→ Global AI capability awareness across Services / Preview / Terminal / registry-discovered features  
+→ routing-bucket hardening for calmer, more truthful AI behavior  
 
 This sets up the next major integration lanes:
 
-Phase 5.3 — OpenAI Adapter
-Phase 5.4 — Future Template Expansion
+Phase 5.3 — OpenAI Adapter  
+Phase 5.4 — Future Template Expansion  
 
 Important warning for future work:
 
@@ -2517,15 +2598,14 @@ Do **not** return to intrusive UI-routing intent behavior.
 
 Previously rejected:
 
-• auto-opening Services
-• auto-selecting providers from chat
-• focus-mode side effects
-• sticky recommendation state
-• panel hijacking
+• auto-opening Services  
+• auto-selecting providers from chat  
+• focus-mode side effects  
+• sticky recommendation state  
+• panel hijacking  
 
 Safe direction is:
 
 AI-awareness only, not UI control.
-
 ````
 
