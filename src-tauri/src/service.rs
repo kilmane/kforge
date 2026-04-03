@@ -912,11 +912,6 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
             "stdout",
             "Created .env.example with Supabase connection variables.",
         );
-        emit_log(
-            app,
-            "stdout",
-            "Next suggested action: Click \"Create .env file\" to create a working local env file for this project.",
-        );
     } else {
         emit_log(
             app,
@@ -924,7 +919,6 @@ fn run_supabase_setup(app: &AppHandle, project_dir: &PathBuf) -> Result<(), Stri
             ".env.example already exists. Leaving it unchanged.",
         );
     }
-
     if supabase_config_exists {
         emit_log(app, "stdout", "Local Supabase config detected.");
         emit_log(
