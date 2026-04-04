@@ -1546,6 +1546,46 @@ pub fn stripe_create_env_file(app: AppHandle, project_path: String) -> Result<()
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn openai_install_sdk(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    if !project_dir.join("package.json").exists() {
+        return Err("package.json not found in this project".to_string());
+    }
+
+    if !shell_command_exists(&project_dir, "pnpm") {
+        return Err(
+            "pnpm could not be found from KForge. Install pnpm globally or restart KForge after making pnpm available in your PATH."
+                .to_string(),
+        );
+    }
+
+    emit_log(&app, "status", "Installing OpenAI SDK...");
+    emit_log(&app, "stdout", "Running: pnpm add openai");
+
+    match run_shell_command_capture(&app, &project_dir, "pnpm add openai") {
+        Ok(_) => {
+            emit_log(&app, "status", "OpenAI SDK installed successfully.");
+            emit_log(
+                &app,
+                "stdout",
+                "Next suggested action: Create OpenAI client file.",
+            );
+            Ok(())
+        }
+        Err(error) => {
+            emit_log(
+                &app,
+                "stderr",
+                "OpenAI SDK install failed. Read the command output above for the exact package manager message.",
+            );
+            Err(format!("Could not install the OpenAI SDK. {}", error))
+        }
+    }
+}
+
 #[tauri::command]
 pub fn supabase_install_client(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;

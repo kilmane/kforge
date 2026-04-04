@@ -10,6 +10,7 @@ import {
   runServiceSetup,
   stripeCreateEnvFile,
   openaiCreateEnvFile,
+  openaiInstallSdk,
   subscribeServiceLogs,
   subscribeServiceStatus,
   supabaseCreateClientFile,
@@ -1610,6 +1611,17 @@ export default function ServicePanel({ projectPath }) {
                 title="Create a .env file with OPENAI_API_KEY"
               >
                 Create .env file
+              </button>
+            ) : null}
+            {isOpenAI ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => openaiInstallSdk(projectPath)}
+                disabled={isBusy}
+                title="Install the OpenAI Node SDK with pnpm"
+              >
+                Install OpenAI SDK
               </button>
             ) : null}
             {isStripe ? (

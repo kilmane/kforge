@@ -96,6 +96,11 @@ export async function openaiCreateEnvFile(projectPath) {
     projectPath: requireProjectPath(projectPath),
   });
 }
+export async function openaiInstallSdk(projectPath) {
+  return invoke("openai_install_sdk", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
 export async function openExternalUrl(url) {
   if (!url || !String(url).trim()) {
     throw new Error("URL is required");

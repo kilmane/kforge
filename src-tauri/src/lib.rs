@@ -157,6 +157,7 @@ pub fn run() {
             service::supabase_create_env_file,
             service::stripe_create_env_file,
             service::openai_create_env_file,
+            service::openai_install_sdk,
             service::supabase_install_client,
             service::supabase_create_client_file,
             service::supabase_create_read_example,
