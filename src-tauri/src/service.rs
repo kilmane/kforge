@@ -1340,17 +1340,42 @@ fn run_placeholder_setup(app: &AppHandle, label: &str, project_path: &str) {
         "status",
         &format!("Starting {} setup in {}", label, project_path),
     );
-    emit_log(
-        app,
-        "stdout",
-        "This service is still on the Phase 4.5 foundation placeholder path. No real files are changed yet.",
-    );
-    emit_log(
-        app,
-        "stdout",
-        "Future phases will attach real adapters for config generation, env setup, and guided install steps.",
-    );
-    emit_log(app, "stdout", &format!("{} adapter slot is ready.", label));
+
+    if label == "OpenAI" {
+        emit_log(app, "stdout", "Checking OpenAI integration readiness...");
+
+        emit_log(
+            app,
+            "stdout",
+            "OpenAI integration requires an OPENAI_API_KEY environment variable.",
+        );
+
+        emit_log(
+            app,
+            "stdout",
+            "You can create this using the Services panel action: \"Create .env file\".",
+        );
+
+        emit_log(
+            app,
+            "stdout",
+            "Next steps typically include installing the OpenAI SDK and creating a client file.",
+        );
+
+        emit_log(app, "stdout", "OpenAI adapter foundation is ready.");
+    } else {
+        emit_log(
+            app,
+            "stdout",
+            "This service is still on the Phase 4.5 foundation placeholder path. No real files are changed yet.",
+        );
+        emit_log(
+            app,
+            "stdout",
+            "Future phases will attach real adapters for config generation, env setup, and guided install steps.",
+        );
+        emit_log(app, "stdout", &format!("{} adapter slot is ready.", label));
+    }
 }
 
 #[tauri::command]
@@ -1450,6 +1475,38 @@ pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<
             &app,
             "stdout",
             "Next suggested action: Click \"Install Supabase client\". This adds the official Supabase library your app uses to connect to your database from code.",
+        );
+    }
+
+    Ok(())
+}
+#[tauri::command]
+pub fn openai_create_env_file(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    let env_path = project_dir.join(".env");
+
+    if !env_path.exists() {
+        std::fs::write(&env_path, "OPENAI_API_KEY=\n")
+            .map_err(|e| format!("Failed to create .env file: {}", e))?;
+
+        emit_log(&app, "stdout", "Created .env file for OpenAI");
+        emit_log(
+            &app,
+            "status",
+            ".env file is ready. Add your OPENAI_API_KEY.",
+        );
+        emit_log(
+            &app,
+            "stdout",
+            "Next suggested action: Copy your API key from the OpenAI dashboard and paste it into the .env file.",
+        );
+    } else {
+        emit_log(&app, "stdout", ".env already exists. No changes made.");
+        emit_log(
+            &app,
+            "status",
+            ".env already exists. Add or update OPENAI_API_KEY if needed.",
         );
     }
 

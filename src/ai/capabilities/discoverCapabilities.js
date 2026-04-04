@@ -37,7 +37,9 @@ function discoverServiceRoute(service) {
   if (service.id === "stripe") {
     return "Services -> Payments -> Stripe";
   }
-
+  if (service.id === "openai") {
+    return "Services -> AI -> OpenAI";
+  }
   if (service.id === "vercel") {
     return "Services -> Deploy -> Vercel";
   }

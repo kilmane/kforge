@@ -39,8 +39,9 @@ export const SERVICE_REGISTRY = [
   {
     id: "openai",
     name: "OpenAI",
-    description: "AI provider integration placeholder for future guided setup.",
-    status: "planned",
+    description:
+      "Add OpenAI-powered features to this project, including text generation, chat, and embeddings.",
+    status: "available",
     envVars: ["OPENAI_API_KEY"],
     setupCommand: "service_setup",
   },

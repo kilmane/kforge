@@ -158,6 +158,61 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       "Only offer manual Stripe env wiring and code integration after the user chooses the manual path.",
     ],
   },
+
+  openai: {
+    id: "openai",
+    category: "ai",
+    name: "OpenAI",
+    status: "planned",
+    route: "Services -> AI -> OpenAI",
+    summary:
+      "Add OpenAI-powered features to your project, including text generation, images, and embeddings.",
+    prerequisites: [
+      "A project folder should be open before running OpenAI setup actions.",
+      "An OpenAI API key is required to use the OpenAI API from your project.",
+    ],
+    kforge_paths: {
+      step_by_step: "Check OpenAI setup",
+      optional_steps: [
+        "Create .env file",
+        "Install OpenAI SDK",
+        "Create OpenAI client file",
+        "Create text generation example",
+        "Open OpenAI dashboard",
+      ],
+    },
+    env_vars: ["OPENAI_API_KEY"],
+    service_notes: [
+      "This service helps integrate OpenAI into the user's project.",
+      "It does not configure which AI model powers KForge itself.",
+      "Users will normally need their own OpenAI API key.",
+      "API usage may incur charges depending on model usage.",
+    ],
+    preferred_ai_behavior: [
+      "Prefer the KForge OpenAI service flow before suggesting manual SDK setup.",
+      "If no project folder is open, tell the user to open a project folder first.",
+      "Describe OpenAI support as a KForge service for adding AI features to the user's project.",
+      "Do not confuse this with choosing the provider that powers KForge's own AI chat.",
+      "After recommending the KForge workflow, explicitly tell the user they can now leave the chat and continue in KForge Services.",
+      "Do not ask the user how they want to proceed with KForge Services.",
+      "Do not continue the KForge Services workflow inside chat.",
+      "Only move into manual OpenAI SDK setup if the user explicitly says they do not want to use KForge Services or they want to bypass that flow.",
+      "If the user wants the KForge path, stop at guidance and hand off to Services.",
+    ],
+    first_response_template: [
+      "KForge can help with this through Services -> AI -> OpenAI.",
+      "First make sure a project folder is open.",
+      "You can now leave the chat and open: Services -> AI -> OpenAI.",
+      'Start with "Check OpenAI setup" to verify whether this project already has the required environment variable and starter setup.',
+      "This service is for adding OpenAI to your project, not for changing which provider powers KForge itself.",
+      "You can now leave the chat and proceed with KForge Services. If you prefer to bypass KForge, stay in the chat and I can guide you through a manual OpenAI setup instead.",
+      "Do not continue the KForge Services steps in chat unless the user explicitly asks to bypass KForge Services.",
+    ],
+    manual_fallback: [
+      "Only offer manual OpenAI env wiring and SDK integration after the user chooses the manual path.",
+    ],
+  },
+
   vercel: {
     id: "vercel",
     category: "deploy",

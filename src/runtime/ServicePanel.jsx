@@ -9,6 +9,7 @@ import {
   openExternalUrl,
   runServiceSetup,
   stripeCreateEnvFile,
+  openaiCreateEnvFile,
   subscribeServiceLogs,
   subscribeServiceStatus,
   supabaseCreateClientFile,
@@ -43,6 +44,11 @@ const TASK_GROUPS = [
     id: "payments",
     label: "Payments",
     providerIds: ["stripe"],
+  },
+  {
+    id: "ai",
+    label: "AI",
+    providerIds: ["openai"],
   },
 ];
 
@@ -951,6 +957,7 @@ export default function ServicePanel({ projectPath }) {
   const isGithub = activeProvider?.id === "github";
   const isSupabase = activeProvider?.id === "supabase";
   const isStripe = activeProvider?.id === "stripe";
+  const isOpenAI = activeProvider?.id === "openai";
   const isDeploy = isDeployProvider(activeProvider?.id);
   const isBusy = busyServiceId === activeProvider?.id;
   const isPlanned = activeProvider?.status === "planned";
@@ -1197,6 +1204,39 @@ export default function ServicePanel({ projectPath }) {
                   </div>
                 </div>
               ) : null}
+            </div>
+          ) : isOpenAI ? (
+            <div
+              className="command-runner-item__meta"
+              style={{
+                display: "grid",
+                gap: "8px",
+                padding: "10px 12px",
+                border: "1px solid #27272a",
+                borderRadius: "8px",
+                background: "rgba(24, 24, 27, 0.35)",
+                fontSize: "13px",
+                color: "#d4d4d8",
+              }}
+            >
+              <div>Connect this project to OpenAI for AI-powered features.</div>
+
+              <div style={{ color: "#a1a1aa" }}>
+                Start with{" "}
+                <span style={{ color: "#f4b942", fontWeight: 600 }}>
+                  "Check OpenAI setup"
+                </span>{" "}
+                to verify whether this project already has the required
+                environment variable.
+              </div>
+
+              <div style={{ color: "#a1a1aa" }}>
+                OpenAI integrations typically require an{" "}
+                <span style={{ color: "#f4b942", fontWeight: 600 }}>
+                  OPENAI_API_KEY
+                </span>{" "}
+                inside your project's <code>.env</code> file.
+              </div>
             </div>
           ) : isStripe ? (
             <div
@@ -1547,6 +1587,29 @@ export default function ServicePanel({ projectPath }) {
                 title="Open your Supabase dashboard"
               >
                 Open Supabase
+              </button>
+            ) : null}
+            {isOpenAI ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => handleSetup(activeProvider)}
+                disabled={isBusy || isPlanned}
+                title="Check this project and prepare the OpenAI connection setup"
+              >
+                {isBusy ? "Working..." : "Check OpenAI setup"}
+              </button>
+            ) : null}
+
+            {isOpenAI ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={() => openaiCreateEnvFile(projectPath)}
+                disabled={isBusy}
+                title="Create a .env file with OPENAI_API_KEY"
+              >
+                Create .env file
               </button>
             ) : null}
             {isStripe ? (
