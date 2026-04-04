@@ -178,7 +178,41 @@ fn run_shell_command_capture(
 
     Ok(stdout)
 }
+fn install_pnpm_package(
+    app: &AppHandle,
+    project_dir: &PathBuf,
+    package: &str,
+    label: &str,
+) -> Result<(), String> {
+    if !project_dir.join("package.json").exists() {
+        return Err("package.json not found in this project".to_string());
+    }
 
+    if !shell_command_exists(project_dir, "pnpm") {
+        return Err(
+            "pnpm could not be found from KForge. Install pnpm globally or restart KForge after making pnpm available in your PATH."
+                .to_string(),
+        );
+    }
+
+    emit_log(app, "status", &format!("Installing {}...", label));
+    emit_log(app, "stdout", &format!("Running: pnpm add {}", package));
+
+    match run_shell_command_capture(app, project_dir, &format!("pnpm add {}", package)) {
+        Ok(_) => {
+            emit_log(app, "status", &format!("{} installed successfully.", label));
+            Ok(())
+        }
+        Err(error) => {
+            emit_log(
+                app,
+                "stderr",
+                "Package install failed. Read the command output above for the exact package manager message.",
+            );
+            Err(format!("Could not install {}. {}", label, error))
+        }
+    }
+}
 fn run_command_status(project_dir: &PathBuf, program: &str, args: &[&str]) -> Result<bool, String> {
     let status = Command::new(program)
         .args(args)
