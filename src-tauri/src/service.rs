@@ -1555,7 +1555,7 @@ pub fn supabase_create_env_file(app: AppHandle, project_path: String) -> Result<
             "Next suggested action: Click \"Install Supabase client\". This adds the official Supabase library your app uses to connect to your database from code.",
         );
     } else {
-        emit_log(&app, "stdout", ".env already exists. No changes made.");
+        emit_log(&app, "stdout", ".env already exists.");
         if supabase_config_exists {
             emit_log(
                 &app,
@@ -1600,12 +1600,8 @@ pub fn openai_create_env_file(app: AppHandle, project_path: String) -> Result<()
             "Next suggested action: Copy your API key from the OpenAI dashboard and paste it into the .env file.",
         );
     } else {
-        emit_log(&app, "stdout", ".env already exists. No changes made.");
-        emit_log(
-            &app,
-            "status",
-            ".env already exists. Add or update OPENAI_API_KEY if needed.",
-        );
+        emit_log(&app, "stdout", ".env already exists.");
+        emit_log(&app, "status", "Add or update OPENAI_API_KEY if needed.");
     }
 
     Ok(())
@@ -1629,12 +1625,8 @@ pub fn stripe_create_env_file(app: AppHandle, project_path: String) -> Result<()
             "Next suggested action: Open Stripe in the browser, copy the keys for this project, and paste them into .env.",
         );
     } else {
-        emit_log(&app, "stdout", ".env already exists. No changes made.");
-        emit_log(
-            &app,
-            "status",
-            ".env already exists. Update it with your Stripe keys if needed.",
-        );
+        emit_log(&app, "stdout", ".env already exists.");
+        emit_log(&app, "status", "Update it with your Stripe keys if needed.");
         emit_log(
             &app,
             "stdout",
