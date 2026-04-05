@@ -7,7 +7,7 @@ D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 Last Updated: **April 5th, 2026**
 
 Phase: **5.3 — OpenAI Adapter**
-Status: **5.3.2 complete — client generation added and checkpointed**
+Status: **5.3 complete — OpenAI service lane fully implemented and checkpointed**
 
 Stable restore tags now available:
 
@@ -492,6 +492,7 @@ stripe_create_env_file
 openai_create_env_file
 openai_install_sdk
 openai_create_client_file
+openai_create_example
 open_url
 
 ---
@@ -957,7 +958,6 @@ Primary files:
 • src-tauri/src/service.rs
 • src/runtime/ServicePanel.jsx
 • docs-internal/user-guide-notes.md
-• docs-internal/project-map.md
 • docs-internal/PROJECT-SNAPSHOT.md
 
 ---
@@ -1158,7 +1158,7 @@ Conceptual shape:
   stripe: [],
   openai: [],
 }
-```
+````
 
 Persisted state now tracks:
 
@@ -2309,14 +2309,7 @@ export const openai = new OpenAI({
 });
 ```
 
-The OpenAI lane now supports:
-
-• Check OpenAI setup
-• Create `.env` file
-• Install OpenAI SDK
-• Create OpenAI client file
-
-This phase confirms the Services architecture now supports the full sequence:
+This phase confirmed the Services architecture supports the sequence:
 
 setup check
 → env generation
@@ -2324,6 +2317,56 @@ setup check
 → client generation
 
 for an AI provider, not just backend or payments providers.
+
+---
+
+## 5.3.3 Generate OpenAI Example
+
+Phase 5.3.3 completed the OpenAI onboarding lane with guided example-file generation.
+
+New action:
+
+Create OpenAI example
+
+Command added:
+
+openai_create_example
+
+Generated file:
+
+`src/examples/openaiExample.js`
+
+Current generated example shape:
+
+```javascript
+import { openai } from "../lib/openai";
+
+async function runExample() {
+  const response = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: "Write a one sentence description of KForge."
+  });
+
+  console.log(response.output[0].content[0].text);
+}
+
+runExample();
+```
+
+Purpose of the generated example:
+
+• confirm the OpenAI client works
+• demonstrate a minimal API call
+• provide a copyable starter pattern
+• prove the project can successfully reach the OpenAI API
+
+This phase completed the full OpenAI lane:
+
+• Check OpenAI setup
+• Create `.env` file
+• Install OpenAI SDK
+• Create OpenAI client file
+• Create OpenAI example
 
 ---
 
@@ -2473,7 +2516,7 @@ Important 5.x rule:
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 5.3.2 — Generate OpenAI Client**:
+As of **Phase 5.3 — OpenAI Adapter complete**:
 
 • AI surface stable
 • filesystem tools validated
@@ -2521,6 +2564,7 @@ As of **Phase 5.3.2 — Generate OpenAI Client**:
 • OpenAI `.env` creation assist working
 • OpenAI SDK install action working
 • OpenAI client file generation working
+• OpenAI example generation working
 • OpenAI service lane now present under Services → AI
 • reusable pnpm installer helper established in service layer
 • per-service Services log isolation working
@@ -2578,6 +2622,7 @@ OpenAI setup inspection
 OpenAI environment file preparation
 OpenAI SDK installation guidance
 OpenAI client file generation
+OpenAI example generation
 Per-service persistent activity logs in Services
 Tool-based AI inspection and reasoning
 Agent-style read/inspect/explain loops
@@ -2628,7 +2673,6 @@ Possible future backend / AI improvements:
 
 • environment variable manager
 • template-aware backend scaffolding
-• OpenAI example-file generation
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
 • richer model-routing between fast chat models and stronger tool-driving models
@@ -2782,6 +2826,8 @@ Phase 5.3.1 then added **Install OpenAI SDK**, validated the first package-manag
 
 Phase 5.3.2 then added **Generate OpenAI Client**, wiring guided creation of `src/lib/openai.js` through the same service pipeline and confirming the OpenAI lane now supports setup, env creation, SDK installation, and client generation.
 
+Phase 5.3.3 then added **Generate OpenAI Example**, wiring guided creation of `src/examples/openaiExample.js` through the same service pipeline and completing the full OpenAI onboarding lane from setup check to first working API call.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -2801,7 +2847,7 @@ What this now proves:
 • stable AI behavior depends on classifying requests into a small number of routing buckets
 • post-tool follow-up messaging must be tied to actual tool success, not merely intended calls
 • Supabase setup helpers become much more valuable when paired with tiny generated starter patterns for real reads and writes
-• the service pipeline now supports setup checks, env generation, SDK installs, and client generation across multiple provider categories
+• the service pipeline now supports setup checks, env generation, SDK installs, client generation, and example generation across multiple provider categories
 
 Current stable journey:
 
@@ -2813,7 +2859,7 @@ Local Project
 → guided Supabase setup
 → Supabase Developer Assist starter artifacts
 → Stripe setup and webhook-readiness guidance
-→ OpenAI setup, SDK install, and client generation guidance
+→ OpenAI setup, SDK install, client generation, and example generation guidance
 → AI tool-calling agent workflow
 → KForge workflow-aware AI guidance
 → Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
@@ -2821,7 +2867,6 @@ Local Project
 
 This sets up the next major integration lanes:
 
-Phase 5.3.3 — OpenAI Example Generation
 Phase 5.4 — Future Template Expansion
 
 Important warning for future work:
@@ -2840,3 +2885,4 @@ Safe direction is:
 
 AI-awareness only, not UI control.
 
+```
