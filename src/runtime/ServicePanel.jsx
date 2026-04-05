@@ -11,6 +11,7 @@ import {
   stripeCreateEnvFile,
   openaiCreateEnvFile,
   openaiInstallSdk,
+  openaiCreateClientFile,
   subscribeServiceLogs,
   subscribeServiceStatus,
   supabaseCreateClientFile,
@@ -872,6 +873,26 @@ export default function ServicePanel({ projectPath }) {
       );
     }
   }
+  async function handleCreateOpenAIClientFile() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before creating an OpenAI client file.",
+      );
+      return;
+    }
+
+    appendLogSection("OpenAI — Create OpenAI client file");
+
+    try {
+      await openaiCreateClientFile(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create the OpenAI client file.",
+      );
+    }
+  }
   async function handleCreateSupabaseClientFile() {
     if (!projectPath || !String(projectPath).trim()) {
       appendLog(
@@ -1622,6 +1643,17 @@ export default function ServicePanel({ projectPath }) {
                 title="Install the OpenAI Node SDK with pnpm"
               >
                 Install OpenAI SDK
+              </button>
+            ) : null}
+            {isOpenAI ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateOpenAIClientFile}
+                disabled={isBusy}
+                title="Create src/lib/openai.js"
+              >
+                Create OpenAI client file
               </button>
             ) : null}
             {isStripe ? (

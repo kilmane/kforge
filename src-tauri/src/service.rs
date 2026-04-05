@@ -594,6 +594,30 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     Ok(client_path)
 }
+fn openai_client_file_path(project_dir: &PathBuf) -> PathBuf {
+    project_dir.join("src").join("lib").join("openai.js")
+}
+
+fn create_openai_client_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    let client_path = openai_client_file_path(project_dir);
+
+    if let Some(parent) = client_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create client folder: {}", error))?;
+    }
+
+    let content = r#"import OpenAI from "openai";
+
+export const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+});
+"#;
+
+    fs::write(&client_path, content)
+        .map_err(|error| format!("Failed to write OpenAI client file: {}", error))?;
+
+    Ok(client_path)
+}
 fn has_supabase_client_dependency(project_dir: &PathBuf) -> bool {
     let package_json_path = project_dir.join("package.json");
 
@@ -1619,7 +1643,25 @@ pub fn openai_install_sdk(app: AppHandle, project_path: String) -> Result<(), St
         }
     }
 }
+#[tauri::command]
+pub fn openai_create_client_file(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
 
+    emit_log(&app, "status", "Creating OpenAI client file...");
+
+    let created_path = create_openai_client_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/lib/openai.js");
+
+    emit_log(&app, "stdout", &format!("Created {}", display_path));
+    emit_log(&app, "status", "OpenAI client is ready to use.");
+    emit_log(&app, "stdout", "Next suggested action: Create AI example.");
+
+    Ok(())
+}
 #[tauri::command]
 pub fn supabase_install_client(app: AppHandle, project_path: String) -> Result<(), String> {
     let project_dir = validate_project_path(&project_path)?;
