@@ -1456,7 +1456,11 @@ fn run_placeholder_setup(app: &AppHandle, label: &str, project_path: &str) {
             "Next steps typically include installing the OpenAI SDK and creating a client file.",
         );
 
-        emit_log(app, "stdout", "OpenAI adapter foundation is ready.");
+        emit_log(
+            app,
+            "stdout",
+            "OpenAI support is available for this project.",
+        );
     } else {
         emit_log(
             app,

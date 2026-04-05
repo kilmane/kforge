@@ -636,7 +636,9 @@ export default function ServicePanel({ projectPath }) {
         ? "GitHub — Publish"
         : service.id === "supabase"
           ? "Supabase — Check setup"
-          : `${service.name} — Run`;
+          : service.id === "openai"
+            ? "OpenAI — Check OpenAI setup"
+            : `${service.name} — Run`;
 
     appendLogSection(sectionTitle);
 
@@ -872,6 +874,38 @@ export default function ServicePanel({ projectPath }) {
         "error",
         error?.message || "Could not create Stripe .env file.",
       );
+    }
+  }
+  async function handleCreateOpenAIEnvFile() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog("error", "Open a project folder before creating a .env file.");
+      return;
+    }
+
+    appendLogSection("OpenAI — Create .env file");
+
+    try {
+      await openaiCreateEnvFile(projectPath);
+    } catch (error) {
+      appendLog("error", error?.message || "Could not create .env file.");
+    }
+  }
+
+  async function handleInstallOpenAISdk() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before installing the OpenAI SDK.",
+      );
+      return;
+    }
+
+    appendLogSection("OpenAI — Install OpenAI SDK");
+
+    try {
+      await openaiInstallSdk(projectPath);
+    } catch (error) {
+      appendLog("error", error?.message || "Could not install the OpenAI SDK.");
     }
   }
   async function handleCreateOpenAIClientFile() {
@@ -1648,7 +1682,7 @@ export default function ServicePanel({ projectPath }) {
               <button
                 type="button"
                 className="command-runner-runButton"
-                onClick={() => openaiCreateEnvFile(projectPath)}
+                onClick={handleCreateOpenAIEnvFile}
                 disabled={isBusy}
                 title="Create a .env file with OPENAI_API_KEY"
               >
@@ -1659,7 +1693,7 @@ export default function ServicePanel({ projectPath }) {
               <button
                 type="button"
                 className="command-runner-runButton"
-                onClick={() => openaiInstallSdk(projectPath)}
+                onClick={handleInstallOpenAISdk}
                 disabled={isBusy}
                 title="Install the OpenAI Node SDK with pnpm"
               >
