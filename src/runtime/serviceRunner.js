@@ -106,6 +106,11 @@ export async function openaiCreateClientFile(projectPath) {
     projectPath: requireProjectPath(projectPath),
   });
 }
+export async function openaiCreateExample(projectPath) {
+  return invoke("openai_create_example", {
+    projectPath: requireProjectPath(projectPath),
+  });
+}
 export async function openExternalUrl(url) {
   if (!url || !String(url).trim()) {
     throw new Error("URL is required");

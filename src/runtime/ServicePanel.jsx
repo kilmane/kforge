@@ -21,6 +21,7 @@ import {
   supabaseCreateReadExample,
   supabaseInstallClient,
   supabaseQuickConnect,
+  openaiCreateExample,
 } from "./serviceRunner";
 
 const DEFAULT_TASK_ID = "code";
@@ -893,6 +894,26 @@ export default function ServicePanel({ projectPath }) {
       );
     }
   }
+  async function handleCreateOpenAIExample() {
+    if (!projectPath || !String(projectPath).trim()) {
+      appendLog(
+        "error",
+        "Open a project folder before creating an OpenAI example.",
+      );
+      return;
+    }
+
+    appendLogSection("OpenAI — Create OpenAI example");
+
+    try {
+      await openaiCreateExample(projectPath);
+    } catch (error) {
+      appendLog(
+        "error",
+        error?.message || "Could not create the OpenAI example.",
+      );
+    }
+  }
   async function handleCreateSupabaseClientFile() {
     if (!projectPath || !String(projectPath).trim()) {
       appendLog(
@@ -1654,6 +1675,17 @@ export default function ServicePanel({ projectPath }) {
                 title="Create src/lib/openai.js"
               >
                 Create OpenAI client file
+              </button>
+            ) : null}
+            {isOpenAI ? (
+              <button
+                type="button"
+                className="command-runner-runButton"
+                onClick={handleCreateOpenAIExample}
+                disabled={isBusy}
+                title="Create src/examples/openaiExample.js"
+              >
+                Create OpenAI example
               </button>
             ) : null}
             {isStripe ? (

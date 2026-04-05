@@ -597,7 +597,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 fn openai_client_file_path(project_dir: &PathBuf) -> PathBuf {
     project_dir.join("src").join("lib").join("openai.js")
 }
-
+fn openai_example_file_path(project_dir: &PathBuf) -> PathBuf {
+    project_dir
+        .join("src")
+        .join("examples")
+        .join("openaiExample.js")
+}
 fn create_openai_client_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
     let client_path = openai_client_file_path(project_dir);
 
@@ -617,6 +622,37 @@ export const openai = new OpenAI({
         .map_err(|error| format!("Failed to write OpenAI client file: {}", error))?;
 
     Ok(client_path)
+}
+fn create_openai_example_file(project_dir: &PathBuf) -> Result<PathBuf, String> {
+    let example_path = openai_example_file_path(project_dir);
+
+    if example_path.exists() {
+        return Ok(example_path);
+    }
+
+    if let Some(parent) = example_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create examples folder: {}", error))?;
+    }
+
+    let content = r#"import { openai } from "../lib/openai";
+
+async function runExample() {
+  const response = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: "Write a one sentence description of KForge."
+  });
+
+  console.log(response.output[0].content[0].text);
+}
+
+runExample();
+"#;
+
+    fs::write(&example_path, content)
+        .map_err(|error| format!("Failed to write OpenAI example file: {}", error))?;
+
+    Ok(example_path)
 }
 fn has_supabase_client_dependency(project_dir: &PathBuf) -> bool {
     let package_json_path = project_dir.join("package.json");
@@ -1659,6 +1695,29 @@ pub fn openai_create_client_file(app: AppHandle, project_path: String) -> Result
     emit_log(&app, "stdout", &format!("Created {}", display_path));
     emit_log(&app, "status", "OpenAI client is ready to use.");
     emit_log(&app, "stdout", "Next suggested action: Create AI example.");
+
+    Ok(())
+}
+#[tauri::command]
+pub fn openai_create_example(app: AppHandle, project_path: String) -> Result<(), String> {
+    let project_dir = validate_project_path(&project_path)?;
+
+    emit_log(&app, "status", "Creating OpenAI example...");
+
+    let created_path = create_openai_example_file(&project_dir)?;
+    let display_path = created_path
+        .strip_prefix(&project_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or("src/examples/openaiExample.js");
+
+    emit_log(&app, "stdout", &format!("Created {}", display_path));
+    emit_log(&app, "status", "OpenAI example created successfully.");
+    emit_log(
+        &app,
+        "stdout",
+        "Next suggested action: Run the example inside your project.",
+    );
 
     Ok(())
 }
