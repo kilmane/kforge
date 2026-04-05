@@ -24,7 +24,7 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-Open Folder → Explore files
+Open Folder → Explore files  
 Preview → Focus on running app
 
 ---
@@ -43,7 +43,7 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-Project structure → coarse project type
+Project structure → coarse project type  
 package.json signals → framework identification when possible
 
 This allows KForge to both:
@@ -59,7 +59,7 @@ If a project contains:
 
 ```text
 index.html
-```
+````
 
 KForge automatically runs a **static preview server**.
 
@@ -146,52 +146,6 @@ Important distinction:
 
 ---
 
-## Static HTML Template
-
-Creates a simple project:
-
-```text
-index.html
-styles.css
-script.js
-```
-
-Workflow:
-
-Generate
-Preview
-Open
-
-No dependency installation required.
-
----
-
-## Vite + React Template
-
-Command executed:
-
-```text
-pnpm dlx create-vite@latest . --template react --no-interactive
-```
-
-Dependencies are installed later using **Install**.
-
----
-
-## Next.js Template
-
-Command executed:
-
-```text
-pnpm create next-app@latest . --yes
-```
-
-Next.js installs dependencies during generation.
-
-Generation therefore takes longer than other templates.
-
----
-
 # Install
 
 Install installs project dependencies.
@@ -203,12 +157,6 @@ pnpm install
 ```
 
 Not required for static projects.
-
-If a template already installs dependencies during scaffold, Install may not be needed immediately.
-
-KForge may also expose an **Install** button or joblet-style install action in places where dependency installation is the obvious next step.
-
-This is intended to reduce terminal friction for beginners.
 
 ---
 
@@ -244,7 +192,7 @@ The Terminal allows users to run commands directly inside the current project wo
 
 Typical usage:
 
-```text
+```
 AI Panel
 → Terminal
 → enter command
@@ -255,7 +203,7 @@ Commands run in the **workspace root folder**.
 
 Example commands:
 
-```text
+```
 pnpm install
 pnpm dev
 git status
@@ -263,15 +211,6 @@ git add .
 ```
 
 Terminal logs appear inside the panel and stream in real time.
-
-The Terminal is useful for:
-
-* installing packages
-* running development servers
-* running Git commands
-* diagnosing project issues
-
-Commands run independently and do not persist shell sessions.
 
 ---
 
@@ -298,8 +237,6 @@ Current providers visible in development include:
 
 The panel is **task-first** and only shows one active provider at a time.
 
-This keeps the surface calmer as integrations expand.
-
 ---
 
 # Services Activity Logs
@@ -322,71 +259,16 @@ This behavior was introduced in **Phase 4.9.1 — ServicePanel log isolation**.
 
 ---
 
-# GitHub in Services
-
-GitHub currently supports actions for the **current open local project**.
-
-GitHub currently supports:
-
-* Publish
-* Push changes
-* Pull latest
-* Open on GitHub
-
-GitHub state shown in the panel includes:
-
-* whether a git repo is detected
-* whether a commit exists
-* whether a remote exists
-* current branch
-
-Publishing requires a project folder to be open.
-
-Important clarification:
-
-**Services → Code → GitHub is not the GitHub import flow.**
-
-It is used for GitHub actions on the project that is already open in KForge.
-
----
-
-## Import from GitHub
-
-If the user wants to bring an existing GitHub repository into KForge, the correct flow is:
-
-New Project
-→ Import from GitHub
-
-This is separate from **Services → Code → GitHub**.
-
----
-
 # Supabase in Services
 
 Supabase in KForge is a **guided backend onboarding flow** for projects that already exist.
 
-The intended user journey is:
+Typical journey:
 
 Build app first
 → open **Services → Backend → Supabase**
 → connect Supabase step by step
-→ adapt the generated examples to the real app
-
----
-
-## Supabase Developer Assist
-
-Actions available:
-
-* Check Supabase setup
-* Create `.env` file
-* Install Supabase client
-* Create Supabase client file
-* Create read example
-* Create insert example
-* Create query helper
-
-These actions help developers **connect an existing project to Supabase** without needing to leave the editor.
+→ adapt generated examples to the real app
 
 ---
 
@@ -394,32 +276,37 @@ These actions help developers **connect an existing project to Supabase** withou
 
 OpenAI in KForge provides a **guided AI integration flow** for projects that already exist.
 
-The intent is similar to the Supabase developer assist flow.
+The flow mirrors the Supabase developer assist workflow.
 
-Users typically:
+Typical journey:
 
 Build an application first
 → open **Services → AI → OpenAI**
-→ connect the OpenAI SDK step by step
-→ generate a client and example code
+→ connect OpenAI step by step
+→ generate working AI code
 
-The OpenAI helper actions currently include:
+---
+
+## OpenAI Integration Steps
+
+The OpenAI helper currently provides:
 
 * Check OpenAI setup
 * Create `.env` file
 * Install OpenAI SDK
 * Create OpenAI client file
+* Create OpenAI example
 
 These steps help developers move from:
 
-```text
+```
 AI idea
 ```
 
 to
 
-```text
-AI connected inside the app
+```
+AI working inside the application
 ```
 
 without needing to manually configure the SDK.
@@ -430,17 +317,17 @@ without needing to manually configure the SDK.
 
 KForge can generate:
 
-```text
+```
 .env
 ```
 
 containing:
 
-```text
+```
 OPENAI_API_KEY=
 ```
 
-The user pastes their API key from the OpenAI dashboard into this file.
+The user pastes their API key from the OpenAI dashboard.
 
 ---
 
@@ -448,23 +335,19 @@ The user pastes their API key from the OpenAI dashboard into this file.
 
 KForge installs the official OpenAI Node SDK:
 
-```text
+```
 pnpm add openai
 ```
-
-This is executed through the **service pipeline**, which runs the command inside the project folder.
 
 ---
 
 ## OpenAI Client File
 
-KForge can generate:
+KForge generates:
 
-```text
+```
 src/lib/openai.js
 ```
-
-This file initializes a reusable OpenAI client.
 
 Example:
 
@@ -479,16 +362,50 @@ export const openai = new OpenAI({
 Purpose:
 
 * centralize OpenAI setup
-* give the project a single reusable AI client
-* reduce repeated configuration inside application code
+* provide a reusable client
+* reduce repeated configuration in application code
 
-Developers can then import the client anywhere in the project:
+---
+
+## OpenAI Example
+
+KForge can generate a minimal working AI example:
+
+```
+src/examples/openaiExample.js
+```
+
+Example:
 
 ```javascript
 import { openai } from "../lib/openai";
+
+async function runExample() {
+  const response = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: "Write a one sentence description of KForge."
+  });
+
+  console.log(response.output[0].content[0].text);
+}
+
+runExample();
 ```
 
-This file acts as the **connection layer between the application and the OpenAI API**.
+Purpose of this example:
+
+* confirm the OpenAI connection works
+* demonstrate a minimal API call
+* provide a copyable starting pattern
+
+This verifies that:
+
+* the API key is valid
+* the SDK is installed
+* the OpenAI client works
+* the application can successfully call the OpenAI API
+
+Developers can then adapt this pattern for real features.
 
 ---
 
@@ -499,11 +416,9 @@ Deploy currently supports:
 * Vercel
 * Netlify
 
-Deploy actions are lightweight handoffs to provider flows in the browser.
+Deploy actions open provider flows in the browser.
 
-KForge does **not expose advanced hosting dashboards inside the app**.
-
-The deploy workflow is intended to feel like:
+The typical deploy path is:
 
 Local project
 → GitHub
@@ -511,23 +426,9 @@ Local project
 
 ---
 
-## Deploy Preconditions
-
-Deploy requires the current project to already be connected to GitHub.
-
-If GitHub is not connected, the deploy action is blocked and the panel tells the user to connect GitHub first.
-
-If the repository exists but changes have not yet been pushed, the panel may show:
-
-Push changes before deploying.
-
----
-
 # AI Guidance Inside KForge
 
-KForge AI is becoming more aware of **real KForge workflows**.
-
-The assistant should increasingly guide users toward KForge workflows instead of performing everything inside chat.
+KForge AI increasingly guides users toward **native KForge workflows** instead of doing everything in chat.
 
 Examples:
 
@@ -551,7 +452,7 @@ AI Panel → Terminal
 
 ---
 
-# User-Facing Design Principles Captured So Far
+# User-Facing Design Principles
 
 KForge should feel:
 
@@ -568,5 +469,8 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 
+```
+
 ---
+
 
