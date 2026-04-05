@@ -1,7 +1,7 @@
 
 # User Guide Notes (development capture)
 
-Last Updated: **April 3rd, 2026**
+Last Updated: **April 5th, 2026**
 
 Location:
 `D:\kforge\docs-internal\user-guide-notes.md`
@@ -24,7 +24,7 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-Open Folder → Explore files  
+Open Folder → Explore files
 Preview → Focus on running app
 
 ---
@@ -43,7 +43,7 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-Project structure → coarse project type  
+Project structure → coarse project type
 package.json signals → framework identification when possible
 
 This allows KForge to both:
@@ -59,7 +59,7 @@ If a project contains:
 
 ```text
 index.html
-````
+```
 
 KForge automatically runs a **static preview server**.
 
@@ -285,6 +285,7 @@ Current groups:
 * Deploy
 * Backend
 * Payments
+* AI
 
 Current providers visible in development include:
 
@@ -293,6 +294,7 @@ Current providers visible in development include:
 * Netlify
 * Supabase
 * Stripe
+* OpenAI
 
 The panel is **task-first** and only shows one active provider at a time.
 
@@ -370,25 +372,11 @@ Build app first
 → connect Supabase step by step
 → adapt the generated examples to the real app
 
-This means KForge is not trying to hide Supabase behind a single magic button.
-
-Instead, it helps the user move through setup in small understandable steps.
-
 ---
 
 ## Supabase Developer Assist
 
-**Supabase Developer Assist** is the name used for the guided helper actions available in:
-
-```text
-Services
-→ Backend
-→ Supabase
-```
-
-These actions are meant to reduce friction for developers who want to connect an existing project to Supabase.
-
-Current actions include:
+Actions available:
 
 * Check Supabase setup
 * Create `.env` file
@@ -398,208 +386,109 @@ Current actions include:
 * Create insert example
 * Create query helper
 
-The feature is designed to help with **integration work after the app already exists**.
-
-Example workflow:
-
-```text
-Create or open app
-→ build UI first
-→ open Services → Backend → Supabase
-→ create env + client
-→ generate example queries
-→ adapt examples to real schema
-→ wire app to database
-```
-
-This is useful because many users can build a frontend, but still need help with the first backend connection steps.
+These actions help developers **connect an existing project to Supabase** without needing to leave the editor.
 
 ---
 
-## What “Check Supabase setup” Does
+# OpenAI in Services
 
-**Check Supabase setup** is a diagnostic and guidance action.
+OpenAI in KForge provides a **guided AI integration flow** for projects that already exist.
 
-It checks the current project for things like:
+The intent is similar to the Supabase developer assist flow.
 
-* `.env` and `.env.example`
-* expected Supabase environment variables
-* local Supabase config
-* installed Supabase client library
-* generated helper/example files
+Users typically:
 
-The action then reports current state and suggests the next likely step.
+Build an application first
+→ open **Services → AI → OpenAI**
+→ connect the OpenAI SDK step by step
+→ generate a client and example code
 
-Examples:
+The OpenAI helper actions currently include:
 
-* create `.env`
-* install the Supabase client
-* create the client file
+* Check OpenAI setup
+* Create `.env` file
+* Install OpenAI SDK
+* Create OpenAI client file
 
-The goal is to make backend onboarding feel **explicit and calm**, not mysterious.
+These steps help developers move from:
+
+```text
+AI idea
+```
+
+to
+
+```text
+AI connected inside the app
+```
+
+without needing to manually configure the SDK.
 
 ---
 
-## `.env` and `.env.example`
+## OpenAI `.env` File
 
-KForge may create:
-
-```text
-.env.example
-```
-
-to document the expected Supabase variables for the project.
-
-KForge may then create:
+KForge can generate:
 
 ```text
 .env
 ```
 
-from that example file so the user has a local place to paste real values.
-
-General mental model:
+containing:
 
 ```text
-.env.example = project documentation
-.env = local working values / secrets
+OPENAI_API_KEY=
 ```
 
-This follows normal developer conventions.
+The user pastes their API key from the OpenAI dashboard into this file.
 
 ---
 
-## Supabase Client File
+## Install OpenAI SDK
+
+KForge installs the official OpenAI Node SDK:
+
+```text
+pnpm add openai
+```
+
+This is executed through the **service pipeline**, which runs the command inside the project folder.
+
+---
+
+## OpenAI Client File
 
 KForge can generate:
 
 ```text
-src/lib/supabase.js
+src/lib/openai.js
 ```
 
-This file creates a reusable Supabase client for the project.
+This file initializes a reusable OpenAI client.
 
-The purpose is to give the app **one shared connection point** instead of repeating client setup in many places.
+Example:
 
-This is a good beginner-friendly step because it keeps the setup small and easy to understand.
+```javascript
+import OpenAI from "openai";
 
----
-
-## Read Example
-
-KForge can generate:
-
-```text
-src/examples/supabaseExample.js
+export const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+});
 ```
-
-This is a **starter read example**.
 
 Purpose:
 
-* show the shape of a basic Supabase query
-* give the user a copyable pattern
-* help the user replace placeholder values with their real table name
+* centralize OpenAI setup
+* give the project a single reusable AI client
+* reduce repeated configuration inside application code
 
-This is intended as a learning bridge between:
+Developers can then import the client anywhere in the project:
 
-```text
-Supabase is installed
+```javascript
+import { openai } from "../lib/openai";
 ```
 
-and
-
-```text
-my real app now reads data
-```
-
----
-
-## Insert Example
-
-KForge can generate:
-
-```text
-src/examples/supabaseInsertExample.js
-```
-
-This is a **starter insert example**.
-
-Purpose:
-
-* show the shape of a basic insert operation
-* provide a safe editable pattern
-* help the user understand how rows are added
-
-Like the read example, this file is not meant to be the final app architecture.
-
-It is a starter pattern the user can adapt and copy into real app code.
-
----
-
-## Query Helper
-
-KForge can generate:
-
-```text
-src/lib/supabaseQueries.js
-```
-
-This file contains simple reusable helpers for common read and insert actions.
-
-Purpose:
-
-* reduce repeated query code
-* give the project a small shared helper layer
-* provide a cleaner path for slightly more structured app code
-
-This helper is still simple, but it is conceptually a little more advanced than the read or insert example files.
-
-That does **not** mean it should be removed.
-
-It means documentation should explain clearly that:
-
-```text
-read/insert examples = easiest learning path
-query helper = optional reusable helper path
-```
-
----
-
-## Local and Cloud Supabase
-
-The Supabase flow is intended to support both:
-
-* **Cloud Supabase**
-* **Local Supabase**
-
-KForge setup messaging may detect whether a local Supabase config is present.
-
-If no local config is detected, cloud setup is still considered valid.
-
-Generated client setup may also support both frontend-style and generic environment variable names such as:
-
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-SUPABASE_URL
-SUPABASE_ANON_KEY
-```
-
-This allows the same guided flow to work across common project setups.
-
----
-
-## Supabase Developer Assist Design Intent
-
-The design intent is:
-
-* do not force the user into raw backend setup immediately
-* do not dump a giant scaffold into the project
-* provide small helpful artifacts
-* let the user move from setup → examples → real integration
-
-This is meant to feel like **developer assist**, not full backend automation.
+This file acts as the **connection layer between the application and the OpenAI API**.
 
 ---
 
@@ -634,20 +523,6 @@ Push changes before deploying.
 
 ---
 
-## Smart Deploy Guidance
-
-Deploy guidance is aware of the detected project type.
-
-Examples:
-
-Static HTML → good fit for Netlify or Vercel
-Vite + React → good fit for Netlify or Vercel
-Next.js → recommended: Vercel
-
-This is guidance, not a restriction.
-
----
-
 # AI Guidance Inside KForge
 
 KForge AI is becoming more aware of **real KForge workflows**.
@@ -658,6 +533,9 @@ Examples:
 
 Supabase setup →
 Services → Backend → Supabase
+
+OpenAI setup →
+Services → AI → OpenAI
 
 GitHub actions →
 Services → Code → GitHub
@@ -670,39 +548,6 @@ New Project → Import from GitHub
 
 Run commands →
 AI Panel → Terminal
-
----
-
-## AI Workflow Handoff Rule
-
-If a workflow already exists in KForge, the assistant should:
-
-1. guide the user to the KForge workflow first
-2. avoid performing the workflow directly in chat
-3. continue in chat **only if the user explicitly bypasses KForge**
-
-This keeps KForge feeling like a **guided development environment**, not just a chatbot.
-
----
-
-## AI Tool Usage Behavior
-
-AI may request internal tools when a user explicitly asks for an action inside the project.
-
-Examples:
-
-* creating files
-* modifying files
-* running project operations
-
-However, the assistant should **not emit tool actions** when the user is:
-
-* asking conceptual questions
-* asking for explanations
-* requesting manual instructions
-* explicitly bypassing KForge workflows
-
-In those cases the assistant responds with normal chat guidance instead.
 
 ---
 
@@ -723,5 +568,5 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 
-````
+---
 
