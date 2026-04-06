@@ -41,6 +41,22 @@ function getStatusLabel(status) {
   return value;
 }
 
+function findPreviewUrl(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return "";
+  }
+
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const text = String(entries[i]?.line ?? "");
+    const match = text.match(URL_RE);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
 export default function PreviewPanel({ projectPath }) {
   const [status, setStatus] = useState(getPreviewStatusValue());
   const [logs, setLogs] = useState(() => getPreviewLogBuffer());
@@ -59,6 +75,7 @@ export default function PreviewPanel({ projectPath }) {
   const [detectedKind, setDetectedKind] = useState("");
   const [compatibleTemplates, setCompatibleTemplates] = useState([]);
   const [detectedTemplate, setDetectedTemplate] = useState(null);
+  const [showExpoGuidance, setShowExpoGuidance] = useState(false);
 
   const scaffoldTemplates = useMemo(() => listScaffoldTemplates(), []);
 
@@ -96,20 +113,12 @@ export default function PreviewPanel({ projectPath }) {
   useEffect(() => {
     setScaffoldErr("");
     setLastGeneratedTemplateId("");
+    setShowExpoGuidance(false);
     lastLogKeyRef.current = "";
 
-    const bufferedLogs = getPreviewLogBuffer();
-    setLogs(bufferedLogs);
+    setLogs(getPreviewLogBuffer());
     setStatus(getPreviewStatusValue());
-
-    const restoredUrl =
-      bufferedLogs.find((entry) => {
-        const text = String(entry?.line ?? "");
-        return URL_RE.test(text);
-      })?.line ?? "";
-
-    const match = restoredUrl.match(URL_RE);
-    setPreviewUrl(match?.[1] || "");
+    setPreviewUrl("");
   }, [projectPath]);
 
   useEffect(() => {
@@ -157,9 +166,6 @@ export default function PreviewPanel({ projectPath }) {
         const entry = { kind, line: text, ts: Date.now() };
         appendPreviewLog(entry);
         setLogs(getPreviewLogBuffer());
-
-        const m = text.match(URL_RE);
-        if (m && m[1]) setPreviewUrl((prev) => prev || m[1]);
       });
 
       if (cancelled) {
@@ -252,20 +258,15 @@ export default function PreviewPanel({ projectPath }) {
 
   const isExpoProject = detectedTemplate?.id === "expo-react-native";
 
-  const expoPreviewGuidance = useMemo(() => {
-    if (!isExpoProject) {
-      return "";
+  useEffect(() => {
+    if (isExpoProject) {
+      setPreviewUrl("");
+      return;
     }
 
-    return [
-      "Expo app detected.",
-      "Preview happens outside KForge.",
-      "Install Expo Go on your phone and scan the QR code shown in the logs.",
-      'Optional: press "w" in the Expo terminal for web preview.',
-      'Optional: press "a" for Android emulator or "i" for iOS simulator.',
-      "If device connection fails on local network, retry with tunnel mode.",
-    ].join(" ");
-  }, [isExpoProject]);
+    setPreviewUrl(findPreviewUrl(logs));
+  }, [isExpoProject, logs]);
+
   const installGuidance = useMemo(() => {
     if (!showInstallButton) {
       return "Static projects do not need Install.";
@@ -284,9 +285,27 @@ export default function PreviewPanel({ projectPath }) {
     return "Use Install if dependencies are not already installed.";
   }, [lastGeneratedTemplateId, showInstallButton]);
 
+  const showLogPanel = useMemo(() => {
+    if (!isExpoProject) return true;
+    if (logs.length > 0) return true;
+    if (status !== "idle") return true;
+    return false;
+  }, [isExpoProject, logs.length, status]);
+
   async function handleOpen() {
     if (!previewUrl || isExpoProject) return;
     await invoke("open_url", { url: previewUrl });
+  }
+
+  async function handlePreview() {
+    if (disabled || !isRunnerIdle) return;
+
+    if (isExpoProject) {
+      setShowExpoGuidance((prev) => !prev);
+      return;
+    }
+
+    await previewStart(targetPath);
   }
 
   async function handleGenerateTemplate(template) {
@@ -434,11 +453,13 @@ export default function PreviewPanel({ projectPath }) {
           <button
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm disabled:opacity-40"
             disabled={disabled || !isRunnerIdle}
-            onClick={() => previewStart(targetPath)}
+            onClick={handlePreview}
             title={
-              isStaticOnlyProject
-                ? "Start static preview"
-                : "Start the development server"
+              isExpoProject
+                ? "Show how to preview this Expo app outside KForge"
+                : isStaticOnlyProject
+                  ? "Start static preview"
+                  : "Start the development server"
             }
           >
             Preview
@@ -461,7 +482,7 @@ export default function PreviewPanel({ projectPath }) {
             onClick={handleOpen}
             title={
               isExpoProject
-                ? "Expo preview opens outside KForge using Expo Go, web, or emulator"
+                ? "Expo preview opens outside KForge"
                 : "Open the running preview in your browser"
             }
           >
@@ -478,48 +499,104 @@ export default function PreviewPanel({ projectPath }) {
           </button>
         </div>
       </div>
-
       <div className="mt-2 text-xs text-zinc-400">
-        {isExpoProject ? (
+        {!projectPath && <>Open a folder to enable preview tools.</>}
+
+        {projectPath && isExpoProject && !showExpoGuidance && (
           <>
-            <div>
-              Expo app detected. Click{" "}
-              <span className="font-semibold text-yellow-300">Preview</span> to
-              start Expo.
+            Expo app detected. Run{" "}
+            <span className="font-semibold text-yellow-300">Install</span> if
+            needed, then click{" "}
+            <span className="font-semibold text-yellow-300">Preview</span> to
+            see the external preview steps.
+          </>
+        )}
+
+        {projectPath && isExpoProject && showExpoGuidance && (
+          <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="font-medium text-yellow-200">
+                Expo preview opens outside KForge
+              </div>
+
+              <button
+                className="shrink-0 rounded-md border border-zinc-700/60 bg-black/20 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-black/30"
+                onClick={() => setShowExpoGuidance(false)}
+                title="Hide Expo preview help"
+              >
+                Close
+              </button>
             </div>
 
-            <div className="mt-1 text-zinc-400">
-              Use one of the following to view the app:
-              <br />• Scan the QR code with <b>Expo Go</b> on your phone
-              <br />• Press <b>w</b> in the terminal for web preview
-              <br />• Press <b>a</b> for Android emulator or <b>i</b> for iOS
-              simulator
+            <div className="mt-1">
+              If you have not run{" "}
+              <span className="font-semibold text-yellow-300">Install</span>{" "}
+              yet, do that first. Then open{" "}
+              <span className="text-zinc-200">KForge Terminal</span> in this
+              project folder and run one of these:
             </div>
-          </>
-        ) : (
+
+            <div className="mt-2 space-y-1 text-zinc-300">
+              <div>
+                <span className="font-mono text-blue-300">pnpm dev</span> —
+                phone with Expo Go, scan the QR code in Terminal
+              </div>
+
+              <div>
+                <span className="font-mono text-blue-300">pnpm run web</span> —
+                web browser preview
+              </div>
+
+              <div>
+                <span className="font-mono text-blue-300">
+                  pnpm run android
+                </span>{" "}
+                — Android Studio or device required
+              </div>
+
+              <div>
+                <span className="font-mono text-blue-300">pnpm run ios</span> —
+                macOS with Xcode required
+              </div>
+            </div>
+
+            <div className="mt-2 text-zinc-500">
+              Terminal folder:{" "}
+              <span className="font-mono text-zinc-400">{projectPath}</span>
+            </div>
+          </div>
+        )}
+
+        {projectPath && !isExpoProject && (
           <>
-            To preview your app: click{" "}
-            <span className="font-semibold text-yellow-300">Preview</span>, then{" "}
-            <span className="font-semibold text-yellow-300">Open</span>.
+            Click <span className="font-semibold text-yellow-300">Preview</span>{" "}
+            to start your app. When a preview URL is ready,{" "}
+            <span className="font-semibold text-yellow-300">Open</span> will
+            launch it in your browser.
             <span className="text-zinc-400"> {installGuidance}</span>
           </>
         )}
       </div>
-      <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
-        {logs.length === 0 ? (
-          <div className="text-zinc-500">No logs yet.</div>
-        ) : (
-          logs.map((l) => (
-            <div
-              key={l.ts + l.line}
-              className={l.kind === "stderr" ? "text-red-300" : "text-zinc-200"}
-            >
-              {l.line}
-            </div>
-          ))
-        )}
-        <div ref={endRef} />
-      </div>
+
+      {showLogPanel ? (
+        <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
+          {logs.length === 0 ? (
+            <div className="text-zinc-500">No logs yet.</div>
+          ) : (
+            logs.map((l) => (
+              <div
+                key={l.ts + l.line}
+                className={
+                  l.kind === "stderr" ? "text-red-300" : "text-zinc-200"
+                }
+              >
+                {l.line}
+              </div>
+            ))
+          )}
+          <div ref={endRef} />
+        </div>
+      ) : null}
     </div>
   );
 }
