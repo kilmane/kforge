@@ -8,6 +8,7 @@ use std::{
 };
 
 use serde::Serialize;
+use serde_json::Value;
 use tauri::Emitter;
 
 const PREVIEW_LOG_EVENT: &str = "kforge://preview/log";
@@ -67,7 +68,33 @@ fn validate_scaffold_inputs(parent_path: &str, app_name: &str) -> Result<(String
 
     Ok((parent_path, app_name))
 }
+fn ensure_expo_dev_script(project_path: &str) -> Result<(), String> {
+    let package_json_path = Path::new(project_path).join("package.json");
 
+    let package_text = fs::read_to_string(&package_json_path)
+        .map_err(|e| format!("Failed to read package.json: {}", e))?;
+
+    let mut package_json: Value = serde_json::from_str(&package_text)
+        .map_err(|e| format!("Failed to parse package.json: {}", e))?;
+
+    let scripts = package_json
+        .as_object_mut()
+        .and_then(|root| root.get_mut("scripts"))
+        .and_then(|scripts| scripts.as_object_mut())
+        .ok_or_else(|| "package.json is missing a scripts object".to_string())?;
+
+    if !scripts.contains_key("dev") {
+        scripts.insert("dev".to_string(), Value::String("expo start".to_string()));
+
+        let updated = serde_json::to_string_pretty(&package_json)
+            .map_err(|e| format!("Failed to serialize package.json: {}", e))?;
+
+        fs::write(&package_json_path, format!("{}\n", updated))
+            .map_err(|e| format!("Failed to write package.json: {}", e))?;
+    }
+
+    Ok(())
+}
 fn run_scaffold_blocking(
     window: tauri::Window,
     parent_path: String,
@@ -310,6 +337,34 @@ pub async fn scaffold_vite_react(
             ],
             "Vite",
         )
+    })
+    .await
+    .map_err(|e| format!("Scaffold task join error: {}", e))?
+}
+#[tauri::command]
+pub async fn scaffold_expo_react_native(
+    window: tauri::Window,
+    parent_path: String,
+    app_name: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let generated_path = run_scaffold_blocking(
+            window.clone(),
+            parent_path,
+            app_name,
+            "pnpm dlx create-expo-app@latest . --template blank",
+            &["dlx", "create-expo-app@latest", ".", "--template", "blank"],
+            "Expo React Native",
+        )?;
+
+        ensure_expo_dev_script(&generated_path)?;
+        emit_preview_log(
+            &window,
+            "stdout",
+            "Expo package.json updated: added dev script -> expo start",
+        );
+
+        Ok(generated_path)
     })
     .await
     .map_err(|e| format!("Scaffold task join error: {}", e))?

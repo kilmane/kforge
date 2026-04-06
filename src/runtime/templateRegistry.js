@@ -76,6 +76,28 @@ export const TEMPLATE_REGISTRY = [
       hints: ["next", "nextjs"],
     },
   },
+  {
+    id: "expo-react-native",
+    name: "Expo React Native",
+    description: "Mobile app powered by Expo and React Native",
+    category: "mobile",
+    scaffold: {
+      command: "scaffold_expo_react_native",
+      appName: "expo-react-native-app",
+    },
+    install: {
+      required: true,
+      installsDuringScaffold: false,
+    },
+    preview: {
+      strategy: "dev-server",
+    },
+    detection: {
+      kind: "package",
+      files: ["package.json"],
+      hints: ["expo", "react-native"],
+    },
+  },
 ];
 
 export function listTemplates() {

@@ -172,6 +172,7 @@ pub fn run() {
             service::deploy_open_netlify,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
+            scaffold::scaffold_expo_react_native,
             scaffold::scaffold_nextjs,
         ])
         .run(tauri::generate_context!())

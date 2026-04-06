@@ -77,6 +77,10 @@ function identifyTemplateFromDependencies(dependencies) {
     return findTemplateByHint("vite");
   }
 
+  if (dependencies.has("expo")) {
+    return findTemplateByHint("expo");
+  }
+
   const templates = listTemplates();
 
   for (const template of templates) {

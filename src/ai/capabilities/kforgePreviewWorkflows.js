@@ -26,13 +26,14 @@ export function buildKforgePreviewWorkflowManifest() {
     supported_templates: templateNames,
     preferred_ai_behavior: [
       "If the user asks to preview, run, start, test, or view the current project, guide them to Preview first, not Generate.",
-      "Only mention Generate when the user explicitly wants a new scaffolded template project, such as creating a Vite app, Next.js starter, or starting a new project from scratch.",
+      "Only mention Generate when the user explicitly wants a new scaffolded template project, such as creating a Vite app, Next.js starter, Expo React Native app, or starting a new project from scratch.",
       "Do not hand off to Preview for ordinary product requests like build, make, create, add, or implement an app, feature, page, UI, dashboard, tracker, form, or CRUD flow.",
       "Do not hand off to Preview just because the user asked to build an app and KForge has a Preview panel.",
       "Do not route to Generate just because the user asked to create an app, page, feature, component, UI, or screen inside an already-open project.",
       "If a project folder is already open, implementation requests should usually be treated as edits to the current project, not as a new scaffold request.",
       "If no project folder is open and the user is asking to build a product, app, or feature, do not redirect them to Preview unless they explicitly asked to run or preview something.",
       "Do not start manually creating template boilerplate in chat when KForge can generate a new supported template and the user explicitly asked for a new scaffold.",
+      "For Expo React Native projects, explain that preview happens outside KForge using Expo Go, web preview, or device emulators.",
       "After recommending Preview for run/preview actions, explicitly tell the user they can leave the chat and continue in Preview.",
       "Only move into manual run commands if the user explicitly says they want to bypass KForge.",
     ],
@@ -43,6 +44,7 @@ export function buildKforgePreviewWorkflowManifest() {
       'Use "Preview" to run the current project.',
       'Use "Install" first if the project needs dependencies.',
       'Use "Generate" only when you explicitly want to create a new supported template project.',
+      "For Expo React Native, KForge starts the project and the app is previewed outside KForge.",
       "If you prefer to bypass KForge, stay in the chat and I can help you manually instead.",
     ],
     service_notes: [
@@ -53,6 +55,7 @@ export function buildKforgePreviewWorkflowManifest() {
       "Install may be needed before Preview for package-based projects.",
       "If a template installs dependencies during scaffold, Install may not be needed immediately.",
       "Static projects do not need Install.",
+      "Expo React Native preview happens outside KForge using Expo Go, browser preview, or emulators.",
     ],
   };
 }

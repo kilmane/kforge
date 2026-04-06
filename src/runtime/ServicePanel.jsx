@@ -197,7 +197,16 @@ function getDeployProjectIdentity(detectedTemplate, detectedKind) {
       netlifyHint: "Next.js usually fits best on Vercel.",
     };
   }
-
+  if (detectedTemplate?.id === "expo-react-native") {
+    return {
+      label: "Expo React Native",
+      recommendation: "Mobile app: web deploy guidance does not apply directly",
+      vercelHint:
+        "Expo mobile apps are usually previewed on device, web, or emulator rather than deployed like a standard web app.",
+      netlifyHint:
+        "Expo mobile apps are usually previewed on device, web, or emulator rather than deployed like a standard web app.",
+    };
+  }
   if (detectedTemplate?.id === "vite-react") {
     return {
       label: "Vite + React",
