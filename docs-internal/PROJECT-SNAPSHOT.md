@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **April 5th, 2026**
+Last Updated: **April 8th, 2026**
 
-Phase: **5.3 — OpenAI Adapter**
-Status: **5.3 complete — OpenAI service lane fully implemented and checkpointed**
+Phase: **5.4 — Template Expansion + Expo Preview Flow**
+Status: **5.4 in active wrap-up — Expo template added, external mobile preview flow validated, docs and AI-awareness follow-up still in progress**
 
 Stable restore tags now available:
 
@@ -18,6 +18,7 @@ Stable restore tags now available:
 * `phase-5.2-supabase-dev-assist-polish`
 * `routing-hardening-2026-04-03`
 * `phase-5.3-openai-adapter-foundation`
+* `phase-5.4-expo-preview-flow-checkpoint`
 
 ---
 
@@ -25,9 +26,9 @@ This file is the authoritative operational reference.
 
 If anything conflicts with:
 
-• chat memory
-• assumptions
-• scattered notes
+• chat memory  
+• assumptions  
+• scattered notes  
 
 This file wins.
 
@@ -39,10 +40,10 @@ Not user-facing.
 
 KForge is a desktop-first developer workspace built around:
 
-• A GPT-clean AI surface
-• Secure filesystem access
-• Explicit, consent-gated tooling
-• Calm, attention-disciplined UI
+• A GPT-clean AI surface  
+• Secure filesystem access  
+• Explicit, consent-gated tooling  
+• Calm, attention-disciplined UI  
 
 KForge is **chat-first**, not tool-first.
 
@@ -58,14 +59,14 @@ src/App.js
 
 This file owns:
 
-• canonical message state
-• AI request building
-• context injection
-• patch instruction injection
-• retry logic
-• project lifecycle control
-• workspace root management
-• TranscriptBubble definition
+• canonical message state  
+• AI request building  
+• context injection  
+• patch instruction injection  
+• retry logic  
+• project lifecycle control  
+• workspace root management  
+• TranscriptBubble definition  
 
 If AI behaves incorrectly → start here.
 
@@ -99,10 +100,10 @@ src/ai/panel/AiPanel.jsx
 
 Shows:
 
-• assistant messages
-• AI messages
-• relevant tool messages
-• consent prompts
+• assistant messages  
+• AI messages  
+• relevant tool messages  
+• consent prompts  
 
 ---
 
@@ -116,13 +117,13 @@ Full system log.
 
 Contains:
 
-• user / assistant / system / tool messages
-• Retry + Clear controls
-• consent actions
+• user / assistant / system / tool messages  
+• Retry + Clear controls  
+• consent actions  
 
 Architectural rule:
 
-Chat = filtered projection
+Chat = filtered projection  
 Transcript = complete system log
 
 ---
@@ -165,13 +166,13 @@ src/ai/panel/AiPanel.jsx
 
 Handles:
 
-• tool payload parsing
-• JSON/XML tool formats
-• natural-language fallback parsing for weaker models
-• deduplication
-• consent gating
-• execution dispatch
-• agent continuation handoff
+• tool payload parsing  
+• JSON/XML tool formats  
+• natural-language fallback parsing for weaker models  
+• deduplication  
+• consent gating  
+• execution dispatch  
+• agent continuation handoff  
 
 ---
 
@@ -183,17 +184,17 @@ src/ai/tools/toolRuntime.js
 
 Responsibilities:
 
-• consent enforcement
-• lifecycle messages
-• transcript logging
-• error formatting
+• consent enforcement  
+• lifecycle messages  
+• transcript logging  
+• error formatting  
 
 Runtime flow:
 
-detect tool
-→ consent request
-→ handler execution
-→ append result
+detect tool  
+→ consent request  
+→ handler execution  
+→ append result  
 
 ---
 
@@ -205,17 +206,17 @@ src/ai/tools/toolSchema.js
 
 Responsibilities:
 
-• exposes model-facing tool descriptions
-• defines available tool names and parameters
-• keeps model-visible tool inventory aligned with real handlers
+• exposes model-facing tool descriptions  
+• defines available tool names and parameters  
+• keeps model-visible tool inventory aligned with real handlers  
 
 Current model-visible tools:
 
-• read_file
-• list_dir
-• search_in_file
-• write_file
-• mkdir
+• read_file  
+• list_dir  
+• search_in_file  
+• write_file  
+• mkdir  
 
 ---
 
@@ -227,17 +228,17 @@ src/ai/tools/handlers/index.js
 
 Tools currently available:
 
-• read_file
-• list_dir
-• write_file
-• search_in_file
-• mkdir
+• read_file  
+• list_dir  
+• write_file  
+• search_in_file  
+• mkdir  
 
 Filesystem authority:
 
 src/lib/fs.js
 
-App.js sets project root.
+App.js sets project root.  
 fs.js enforces safety.
 
 ---
@@ -246,19 +247,19 @@ fs.js enforces safety.
 
 Files:
 
-src/ai/agent/agentRunner.js
+src/ai/agent/agentRunner.js  
 src/ai/panel/AiPanel.jsx
 
 Phase 4.10 introduced a real **tool-calling agent loop**.
 
 Core flow:
 
-model
-→ tool request
-→ consent/runtime execution
-→ tool result fed back to model
-→ continued reasoning
-→ final answer
+model  
+→ tool request  
+→ consent/runtime execution  
+→ tool result fed back to model  
+→ continued reasoning  
+→ final answer  
 
 This loop sits **above** the existing tool runtime and does **not bypass** it.
 
@@ -278,24 +279,24 @@ Phase 4.10.1 added hardening for weaker and more inconsistent models.
 
 Improvements include:
 
-• duplicate tool-call detection
-• prevention of repeated identical tool executions
-• support for natural-language tool-call recovery such as `list_dir(.)`
-• bounded inspection guidance for workspace-analysis tasks
-• write tools no longer treated as safe automatic actions
-• local tool-result injection so the continuation model sees fresh results immediately
-• calmer transcript behavior during duplicate suppression
+• duplicate tool-call detection  
+• prevention of repeated identical tool executions  
+• support for natural-language tool-call recovery such as `list_dir(.)`  
+• bounded inspection guidance for workspace-analysis tasks  
+• write tools no longer treated as safe automatic actions  
+• local tool-result injection so the continuation model sees fresh results immediately  
+• calmer transcript behavior during duplicate suppression  
 
 Read-only tools that may auto-run:
 
-• read_file
-• list_dir
-• search_in_file
+• read_file  
+• list_dir  
+• search_in_file  
 
 Write tools now require consent:
 
-• write_file
-• mkdir
+• write_file  
+• mkdir  
 
 This change was made specifically because weaker models could otherwise attempt unwanted file creation during inspection flows.
 
@@ -317,15 +318,16 @@ src/runtime/PreviewPanel.jsx
 
 Preview runner provides:
 
-• dependency installation
-• development server startup
-• static site preview
-• log streaming
-• URL detection
-• controlled process stop
-• preview log persistence
-• project-type detection
-• registry-aware template identification
+• dependency installation  
+• development server startup  
+• static site preview  
+• log streaming  
+• URL detection  
+• controlled process stop  
+• preview log persistence  
+• project-type detection  
+• registry-aware template identification  
+• Expo-specific external preview guidance  
 
 ---
 
@@ -341,8 +343,8 @@ preview_detect_kind
 
 Current kinds include:
 
-• static
-• package
+• static  
+• package  
 
 ### Stage 2 — registry-aware template identification
 
@@ -352,19 +354,58 @@ src/runtime/previewRunner.js
 
 Uses:
 
-• templateRegistry hints
-• package.json dependency inspection
-• compatible template lookup
+• templateRegistry hints  
+• package.json dependency inspection  
+• compatible template lookup  
 
 Current recognized template identities include:
 
-• Static HTML
-• Vite + React
-• Next.js
+• Static HTML  
+• Vite + React  
+• Next.js  
+• Expo React Native  
 
 Important implementation note:
 
 Next.js detection is explicitly prioritized ahead of generic React/Vite matching so that Next.js is not misidentified as Vite + React.
+
+Expo detection is based on package dependency signals and template hints rather than on a browser URL.
+
+---
+
+## Expo Preview Reality
+
+Expo / React Native preview is now treated as a **truthful external mobile-preview workflow**, not a normal in-KForge web preview.
+
+Important product rules now proven:
+
+• KForge does **not** render mobile preview inside the app  
+• Expo's localhost dev endpoint must **not** be presented as a beginner-facing app preview URL  
+• Preview for Expo shows a guidance surface instead of pretending there is a browser preview inside KForge  
+• Open button remains disabled for Expo projects  
+
+Current PreviewPanel behavior for Expo:
+
+• detects Expo React Native project identity  
+• suppresses preview URL promotion from Expo logs  
+• shows compact external-preview instructions  
+• supports expandable / dismissible guidance  
+• points users to a **system terminal outside KForge**  
+• includes `pnpm dev`  
+• includes tunnel fallback `pnpm dev -- --tunnel`  
+• includes optional browser-preview note for `pnpm run web` with extra dependency hint  
+• includes Android / iOS notes with setup caveats  
+
+Important truth discovered in real testing:
+
+KForge Terminal can now run long-lived Expo commands, but it still does **not** surface a beginner-usable QR-code rendering path.  
+For phone preview, the recommended path remains:
+
+system terminal outside KForge  
+→ run Expo command  
+→ scan QR in Expo Go
+
+This exception must also be carried into AI-awareness follow-up work.
 
 ---
 
@@ -384,17 +425,30 @@ src/runtime/templateRegistry.js
 
 Registered scaffold commands:
 
-scaffold_static_html
-scaffold_vite_react
-scaffold_nextjs
+scaffold_static_html  
+scaffold_vite_react  
+scaffold_nextjs  
+scaffold_expo_react_native  
 
 Templates supported:
 
-• Static HTML
-• Vite + React
-• Next.js
+• Static HTML  
+• Vite + React  
+• Next.js  
+• Expo React Native  
 
 Scaffolds generate **directly into the workspace root**.
+
+Expo scaffold additions include:
+
+• `create-expo-app` blank template generation  
+• post-scaffold patch to ensure `package.json` contains:
+
+`"dev": "expo start"`
+
+This guarantees the Preview / Terminal guidance can rely on:
+
+`pnpm dev`
 
 Developer reminder now exists in:
 
@@ -402,11 +456,11 @@ src/runtime/templateRegistry.js
 
 When new templates are added, future maintainers are reminded to also review:
 
-• src/runtime/previewRunner.js
-• src/runtime/PreviewPanel.jsx
-• src/runtime/ServicePanel.jsx
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
 
-so deploy guidance and detection remain in sync.
+so detection, preview behavior, and deploy guidance remain in sync.
 
 ---
 
@@ -426,17 +480,21 @@ src/runtime/CommandRunnerPanel.jsx
 
 Capabilities:
 
-• run shell commands in project root
-• stream stdout/stderr logs
-• one command at a time
+• run shell commands in project root  
+• stream stdout/stderr logs  
+• one command session at a time  
 • Windows compatibility using:
 
 cmd /C <command>
 
+• persistent long-running dev session support  
+• tracked child PID for active command  
+• explicit Stop button for running command  
+
 Events emitted:
 
-kforge://command/log
-kforge://command/status
+kforge://command/log  
+kforge://command/status  
 
 Preview and Terminal panels are **mutually exclusive collapsibles**.
 
@@ -446,8 +504,35 @@ User-facing surface name is:
 
 Path:
 
-AI Panel
+AI Panel  
 → Terminal
+
+---
+
+## Command Runner Improvement in 5.4 Follow-Up
+
+The command runner was upgraded during Expo preview testing because the earlier implementation behaved like a one-shot command executor and blocked poorly on long-running dev servers.
+
+Fixes now include:
+
+• parallel stdout/stderr streaming threads  
+• tracked active child PID  
+• `command_stop` backend command  
+• frontend Stop button  
+• better handling of long-running processes such as Expo dev servers  
+
+This makes the Terminal more professional and more correct for dev-session behavior.
+
+However:
+
+Expo QR rendering still does not surface in a beginner-usable way inside KForge Terminal.
+
+So the current product truth is:
+
+• Terminal is improved and operational  
+• Stop works  
+• long-running Expo commands run  
+• phone-preview QR flow should still be done via **system terminal outside KForge**
 
 ---
 
@@ -475,25 +560,25 @@ src/ai/panel/AiPanel.jsx
 
 Registered commands include:
 
-service_setup
-github_detect_repo
-github_open_repo
-github_pull
-github_push
-github_clone_repo
-supabase_create_env_file
-supabase_install_client
-supabase_create_client_file
-supabase_create_read_example
-supabase_create_insert_example
-supabase_create_query_helper
-supabase_quick_connect
-stripe_create_env_file
-openai_create_env_file
-openai_install_sdk
-openai_create_client_file
-openai_create_example
-open_url
+service_setup  
+github_detect_repo  
+github_open_repo  
+github_pull  
+github_push  
+github_clone_repo  
+supabase_create_env_file  
+supabase_install_client  
+supabase_create_client_file  
+supabase_create_read_example  
+supabase_create_insert_example  
+supabase_create_query_helper  
+supabase_quick_connect  
+stripe_create_env_file  
+openai_create_env_file  
+openai_install_sdk  
+openai_create_client_file  
+openai_create_example  
+open_url  
 
 ---
 
@@ -517,24 +602,24 @@ src/runtime/serviceRegistry.js
 
 Current services:
 
-• GitHub
-• Supabase
-• Stripe
-• OpenAI
+• GitHub  
+• Supabase  
+• Stripe  
+• OpenAI  
 
 Deploy providers are currently represented through the task-first Services UI and fallback provider mapping in the Services panel:
 
-• Vercel
-• Netlify
+• Vercel  
+• Netlify  
 
 Fields include:
 
-• id
-• name
-• description
-• status
-• envVars
-• setupCommand
+• id  
+• name  
+• description  
+• status  
+• envVars  
+• setupCommand  
 
 ---
 
@@ -542,18 +627,18 @@ Fields include:
 
 The service lane is now proven across multiple provider types:
 
-• code hosting / GitHub
-• backend setup / Supabase
-• payments setup / Stripe
-• AI SDK setup / OpenAI
+• code hosting / GitHub  
+• backend setup / Supabase  
+• payments setup / Stripe  
+• AI SDK setup / OpenAI  
 
 This confirms the architecture supports repeatable service actions such as:
 
-• setup checks
-• environment generation
-• SDK installation
-• client generation
-• example generation
+• setup checks  
+• environment generation  
+• SDK installation  
+• client generation  
+• example generation  
 
 Future services should continue to plug into this same pipeline rather than creating one-off subsystems.
 
@@ -571,10 +656,10 @@ install_pnpm_package(...)
 
 This helper centralizes shared pnpm installer behavior for service adapters, including:
 
-• checking `package.json`
-• checking `pnpm` availability
-• running `pnpm add`
-• emitting install logs
+• checking `package.json`  
+• checking `pnpm` availability  
+• running `pnpm add`  
+• emitting install logs  
 
 OpenAI and Supabase package installers now use this helper.
 
@@ -606,13 +691,13 @@ src/runtime/serviceRunner.js
 
 GitHub support now includes:
 
-• publish local project to a new GitHub repository
-• detect whether current folder is already a Git repo
-• detect whether a remote exists
-• open current repository on GitHub in browser
-• pull latest changes into an existing local repo
-• push local changes to GitHub
-• import an existing GitHub repository during New Project flow
+• publish local project to a new GitHub repository  
+• detect whether current folder is already a Git repo  
+• detect whether a remote exists  
+• open current repository on GitHub in browser  
+• pull latest changes into an existing local repo  
+• push local changes to GitHub  
+• import an existing GitHub repository during New Project flow  
 
 This means KForge now supports **both directions**:
 
@@ -634,8 +719,8 @@ Authentication is delegated to the GitHub CLI.
 
 Requirements:
 
-• git installed
-• GitHub CLI installed
+• git installed  
+• GitHub CLI installed  
 • user authenticated via:
 
 gh auth login
@@ -648,23 +733,23 @@ This keeps KForge secure and avoids token storage.
 
 Services panel now supports:
 
-• task-based top-level grouping
-• single-active-service display
-• GitHub-focused action surface
-• repository name input
-• public/private visibility selection
-• GitHub publish trigger
-• push / pull / open actions
-• live service log streaming
+• task-based top-level grouping  
+• single-active-service display  
+• GitHub-focused action surface  
+• repository name input  
+• public/private visibility selection  
+• GitHub publish trigger  
+• push / pull / open actions  
+• live service log streaming  
 
 Logs persist when:
 
-• collapsing / reopening Services
+• collapsing / reopening Services  
 
 Logs reset when:
 
-• workspace resets
-• project root changes
+• workspace resets  
+• project root changes  
 
 ---
 
@@ -672,11 +757,11 @@ Logs reset when:
 
 Example grouping:
 
-• Code → GitHub
-• Deploy → Vercel / Netlify
-• Backend → Supabase
-• Payments → Stripe
-• AI → OpenAI
+• Code → GitHub  
+• Deploy → Vercel / Netlify  
+• Backend → Supabase  
+• Payments → Stripe  
+• AI → OpenAI  
 
 This architecture was introduced specifically to support scaling future integrations cleanly.
 
@@ -690,8 +775,8 @@ Deploy
 
 Current deploy providers:
 
-• Vercel
-• Netlify
+• Vercel  
+• Netlify  
 
 Deploy actions are intentionally lightweight.
 
@@ -705,19 +790,19 @@ Instead, KForge provides **guided deploy shortcuts** for GitHub-connected projec
 
 For a project that is already connected to GitHub, KForge now supports:
 
-• detect deploy readiness from current GitHub repo state
-• show the current GitHub repository inside Deploy
-• open Vercel import flow for the detected repository
-• open Netlify start/import flow for the detected repository
-• guide the user with deploy-specific log messages
-• show a warning hint when deployment should wait for a push
+• detect deploy readiness from current GitHub repo state  
+• show the current GitHub repository inside Deploy  
+• open Vercel import flow for the detected repository  
+• open Netlify start/import flow for the detected repository  
+• guide the user with deploy-specific log messages  
+• show a warning hint when deployment should wait for a push  
 
 This creates the intended user path:
 
-Local project
-→ Publish to GitHub
-→ Push changes
-→ Deploy via Vercel or Netlify
+Local project  
+→ Publish to GitHub  
+→ Push changes  
+→ Deploy via Vercel or Netlify  
 
 ---
 
@@ -729,10 +814,10 @@ This is guidance only.
 
 It does **not** introduce:
 
-• provider lock-in
-• advanced hosting dashboards
-• build setting editors
-• environment config panels
+• provider lock-in  
+• advanced hosting dashboards  
+• build setting editors  
+• environment config panels  
 
 Instead, Services → Deploy now reads already-known project identity and shows calmer, smarter wording.
 
@@ -744,10 +829,10 @@ Project identity is shared from the existing preview detection path.
 
 Primary files:
 
-• src/runtime/templateRegistry.js
-• src/runtime/previewRunner.js
-• src/runtime/PreviewPanel.jsx
-• src/runtime/ServicePanel.jsx
+• src/runtime/templateRegistry.js  
+• src/runtime/previewRunner.js  
+• src/runtime/PreviewPanel.jsx  
+• src/runtime/ServicePanel.jsx  
 
 This keeps deploy guidance aligned with preview/template detection instead of creating duplicate framework detection logic inside Services.
 
@@ -759,38 +844,48 @@ Current mappings:
 
 ### Static HTML
 
-Project type:
+Project type:  
 Static HTML
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
-Hint text:
+Hint text:  
 Good fit for static sites.
 
 ### Vite + React
 
-Project type:
+Project type:  
 Vite + React
 
-Recommendation:
+Recommendation:  
 Good fit: Netlify or Vercel
 
-Hint text:
+Hint text:  
 Good fit for this project.
 
 ### Next.js
 
-Project type:
+Project type:  
 Next.js
 
-Recommendation:
+Recommendation:  
 Recommended: Vercel
 
 Provider-specific hints:
 
-• Vercel → Recommended for Next.js projects.
+• Vercel → Recommended for Next.js projects.  
 • Netlify → Next.js usually fits best on Vercel.
+
+### Expo React Native
+
+Project type:  
+Expo React Native
+
+Current deploy stance:  
+Do not treat Expo like a normal web deploy target inside KForge Services guidance.
+
+This avoids false implication that Expo mobile projects belong on the same beginner deploy path as static / Vite / Next.js websites.
 
 This preserves user choice while still giving clearer guidance.
 
@@ -804,10 +899,10 @@ Services → Deploy → Vercel / Netlify
 
 Deploy panel now shows:
 
-• Project type: <detected template label>
-• Recommendation: <provider guidance>
-• GitHub repo: <owner/repo> or GitHub connection required
-• provider-specific hint text
+• Project type: <detected template label>  
+• Recommendation: <provider guidance>  
+• GitHub repo: <owner/repo> or GitHub connection required  
+• provider-specific hint text  
 
 This keeps the deploy panel more context-aware without increasing complexity.
 
@@ -853,14 +948,14 @@ src/runtime/ServicePanel.jsx
 
 The Supabase adapter now supports:
 
-• readiness inspection for current project setup
-• environment file detection
-• detection of `SUPABASE_URL`
-• detection of `SUPABASE_ANON_KEY`
-• local Supabase configuration detection via `supabase/config.toml`
-• Supabase client library detection in `package.json`
-• `.env.example` generation when missing
-• browser handoff to Supabase dashboard
+• readiness inspection for current project setup  
+• environment file detection  
+• detection of `SUPABASE_URL`  
+• detection of `SUPABASE_ANON_KEY`  
+• local Supabase configuration detection via `supabase/config.toml`  
+• Supabase client library detection in `package.json`  
+• `.env.example` generation when missing  
+• browser handoff to Supabase dashboard  
 
 This gives the user a first real guided path for backend connection setup.
 
@@ -878,11 +973,11 @@ This phase improved the onboarding path without turning KForge into a backend da
 
 Additional capabilities added in 4.8.1 include:
 
-• Create `.env` file from `.env.example`
-• calmer beginner-friendly wording in Services → Backend → Supabase
-• clearer explanation of connection values inside the panel
-• user guide notes for Supabase flow
-• project map + snapshot updates for Supabase architecture
+• Create `.env` file from `.env.example`  
+• calmer beginner-friendly wording in Services → Backend → Supabase  
+• clearer explanation of connection values inside the panel  
+• user guide notes for Supabase flow  
+• project map + snapshot updates for Supabase architecture  
 
 Command added:
 
@@ -902,11 +997,11 @@ This phase exists specifically to remove ambiguity for beginners and vibe coders
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src-tauri/src/lib.rs
-• src/runtime/serviceRunner.js
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
+• src-tauri/src/service.rs  
+• src-tauri/src/lib.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -914,19 +1009,19 @@ Primary files:
 
 The Supabase adapter also supports:
 
-• improved final success wording after readiness check
-• detection of `VITE_SUPABASE_URL`
-• detection of `VITE_SUPABASE_ANON_KEY`
-• clearer Vite-aware guidance in the Supabase panel
-• guided install action for `@supabase/supabase-js`
-• guided creation of `src/lib/supabase.js`
-• detection of an existing Supabase client file
-• non-destructive client-file generation behavior
+• improved final success wording after readiness check  
+• detection of `VITE_SUPABASE_URL`  
+• detection of `VITE_SUPABASE_ANON_KEY`  
+• clearer Vite-aware guidance in the Supabase panel  
+• guided install action for `@supabase/supabase-js`  
+• guided creation of `src/lib/supabase.js`  
+• detection of an existing Supabase client file  
+• non-destructive client-file generation behavior  
 
 New commands added:
 
-supabase_install_client
-supabase_create_client_file
+supabase_install_client  
+supabase_create_client_file  
 
 ---
 
@@ -938,10 +1033,10 @@ src/lib/supabase.js
 
 Typical client-file logic:
 
-• imports `createClient` from `@supabase/supabase-js`
-• reads `VITE_SUPABASE_URL` or `SUPABASE_URL`
-• reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`
-• exports a reusable `supabase` client
+• imports `createClient` from `@supabase/supabase-js`  
+• reads `VITE_SUPABASE_URL` or `SUPABASE_URL`  
+• reads `VITE_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`  
+• exports a reusable `supabase` client  
 
 If a client file already exists, KForge logs that no changes were made and leaves the file untouched.
 
@@ -955,10 +1050,10 @@ This phase focused on reducing ambiguity, improving Windows reliability, and mak
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src/runtime/ServicePanel.jsx
-• docs-internal/user-guide-notes.md
-• docs-internal/PROJECT-SNAPSHOT.md
+• src-tauri/src/service.rs  
+• src/runtime/ServicePanel.jsx  
+• docs-internal/user-guide-notes.md  
+• docs-internal/PROJECT-SNAPSHOT.md  
 
 ---
 
@@ -966,15 +1061,15 @@ Primary files:
 
 The Supabase adapter and panel now also support:
 
-• environment-variable checks that treat empty values as **not set**
-• clearer next-step guidance after each Supabase action
-• Windows-safe package installation for `pnpm add @supabase/supabase-js` using shell execution
-• clearer install failure feedback with surfaced command output
-• consistent terminology: **Supabase client file**
-• compact top-of-panel guidance with a **More info** toggle
-• activity log grouping into visible sections
-• quoted action labels highlighted inside the log
-• cleaner log readability across repeated setup actions
+• environment-variable checks that treat empty values as **not set**  
+• clearer next-step guidance after each Supabase action  
+• Windows-safe package installation for `pnpm add @supabase/supabase-js` using shell execution  
+• clearer install failure feedback with surfaced command output  
+• consistent terminology: **Supabase client file**  
+• compact top-of-panel guidance with a **More info** toggle  
+• activity log grouping into visible sections  
+• quoted action labels highlighted inside the log  
+• cleaner log readability across repeated setup actions  
 
 ---
 
@@ -984,9 +1079,9 @@ The Supabase install action now runs through a shell path instead of depending o
 
 Current behavior:
 
-• Windows uses a shell execution path compatible with GUI runtime conditions
-• install output is streamed into the Services log
-• if installation fails, the user sees clearer package-manager output in the log
+• Windows uses a shell execution path compatible with GUI runtime conditions  
+• install output is streamed into the Services log  
+• if installation fails, the user sees clearer package-manager output in the log  
 
 This fixes the real test failure where the button could fail on Windows even though `pnpm add @supabase/supabase-js` worked in the internal terminal.
 
@@ -1020,17 +1115,17 @@ The Services log for Supabase is now easier to scan.
 
 Current behavior:
 
-• each user action begins a new visible log section
-• log sections are separated visually
-• action names in quotes are highlighted
-• repeated actions are easier to distinguish from older output
+• each user action begins a new visible log section  
+• log sections are separated visually  
+• action names in quotes are highlighted  
+• repeated actions are easier to distinguish from older output  
 
 Examples of highlighted action labels:
 
-• "Check Supabase setup"
-• "Create .env file"
-• "Install Supabase client"
-• "Create Supabase client file"
+• "Check Supabase setup"  
+• "Create .env file"  
+• "Install Supabase client"  
+• "Create Supabase client file"  
 
 This keeps the beginner guidance readable without needing a separate wizard UI.
 
@@ -1044,10 +1139,10 @@ This is a UX-focused improvement on top of the existing Supabase lane, not a new
 
 Primary files:
 
-• src-tauri/src/service.rs
-• src/runtime/serviceRunner.js
-• src/runtime/serviceRegistry.js
-• src/runtime/ServicePanel.jsx
+• src-tauri/src/service.rs  
+• src/runtime/serviceRunner.js  
+• src/runtime/serviceRegistry.js  
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -1055,9 +1150,9 @@ Primary files:
 
 Quick Connect is intended to feel more like:
 
-I want to use Supabase
-→ tell me what is missing
-→ guide me toward a working setup
+I want to use Supabase  
+→ tell me what is missing  
+→ guide me toward a working setup  
 
 This reduces the feeling that the user must manually understand every setup detail before getting started.
 
@@ -1067,12 +1162,12 @@ This reduces the feeling that the user must manually understand every setup deta
 
 Phase 4.9 adds or strengthens:
 
-• one-click guided Supabase setup check
-• clearer log headings for Supabase actions
-• cleaner separation between action blocks
-• timestamps in service log entries
-• faster path toward a usable beginner setup
-• better continuity between setup inspection and guided actions
+• one-click guided Supabase setup check  
+• clearer log headings for Supabase actions  
+• cleaner separation between action blocks  
+• timestamps in service log entries  
+• faster path toward a usable beginner setup  
+• better continuity between setup inspection and guided actions  
 
 Command added:
 
@@ -1088,15 +1183,15 @@ Quick Connect and the existing setup checks now better support both:
 
 Typical connection values:
 
-• project URL from Supabase dashboard
-• anon key from Supabase dashboard
+• project URL from Supabase dashboard  
+• anon key from Supabase dashboard  
 
 ### Local Supabase
 
 Typical connection signals:
 
-• local URL such as `http://127.0.0.1:54321`
-• local project config at `supabase/config.toml`
+• local URL such as `http://127.0.0.1:54321`  
+• local project config at `supabase/config.toml`  
 
 This keeps the Supabase lane useful for both hosted and local development workflows.
 
@@ -1106,10 +1201,10 @@ This keeps the Supabase lane useful for both hosted and local development workfl
 
 Supabase service logging now includes:
 
-• clearer headings
-• clearer separation between log blocks
-• timestamps for entries
-• improved readability during repeated setup steps
+• clearer headings  
+• clearer separation between log blocks  
+• timestamps for entries  
+• improved readability during repeated setup steps  
 
 This makes the guided setup flow easier to understand in real use.
 
@@ -1123,7 +1218,7 @@ This is not a structural phase, but it materially improves clarity.
 
 Primary file:
 
-• src/runtime/ServicePanel.jsx
+• src/runtime/ServicePanel.jsx  
 
 ---
 
@@ -1131,17 +1226,17 @@ Primary file:
 
 Before 4.9.1:
 
-• service activity streamed into a shared log array
-• switching services could show unrelated earlier log output
-• this was confusing during mixed GitHub / Supabase use
+• service activity streamed into a shared log array  
+• switching services could show unrelated earlier log output  
+• this was confusing during mixed GitHub / Supabase use  
 
 After 4.9.1:
 
-• each service keeps its own activity history
-• GitHub shows only GitHub logs
-• Supabase shows only Supabase logs
-• switching services does not mix provider output
-• returning to a service restores its earlier log history
+• each service keeps its own activity history  
+• GitHub shows only GitHub logs  
+• Supabase shows only Supabase logs  
+• switching services does not mix provider output  
+• returning to a service restores its earlier log history  
 
 ---
 
@@ -2385,6 +2480,196 @@ This phase strengthens the Services model by showing it can support AI SDK onboa
 
 ---
 
+# 🟧 5.4 Template Expansion + Expo Preview Flow
+
+Phase 5.4 extends the template and preview architecture into **mobile app generation** with Expo / React Native.
+
+This phase is the first real step beyond web-only template coverage.
+
+Primary files:
+
+• src/runtime/templateRegistry.js
+• src/runtime/previewRunner.js
+• src/runtime/PreviewPanel.jsx
+• src-tauri/src/scaffold.rs
+• src-tauri/src/lib.rs
+• src-tauri/src/command_runner.rs
+• src/runtime/commandRunner.js
+• src/runtime/CommandRunnerPanel.jsx
+• src/ai/capabilities/kforgePreviewWorkflows.js
+
+---
+
+## 5.4 Purpose
+
+The goal of 5.4 is to let users generate a beginner-friendly mobile project and then preview it truthfully without pretending KForge can render mobile apps internally.
+
+Intended flow:
+
+open workspace
+→ Preview → Generate → Expo React Native
+→ Install
+→ Preview (guidance only)
+→ open system terminal outside KForge
+→ `pnpm dev` or tunnel fallback
+→ scan QR in Expo Go
+→ app opens on phone
+
+This phase deliberately avoids fake or misleading “mobile preview inside KForge” behavior.
+
+---
+
+## 5.4 Template Capabilities Added
+
+A new template now exists:
+
+Expo React Native
+
+Registry entry:
+
+`expo-react-native`
+
+New scaffold command:
+
+`scaffold_expo_react_native`
+
+Scaffold behavior now includes:
+
+• `create-expo-app` blank template generation
+• generated project in workspace root
+• post-generation package patch adding:
+
+`"dev": "expo start"`
+
+This makes the generated template consistent with the rest of KForge’s Preview / Terminal guidance model.
+
+---
+
+## 5.4 Preview Product Truth
+
+Expo preview is now handled as a special external flow.
+
+Current product truths:
+
+• no mobile preview inside KForge
+• Expo localhost endpoint is **not** shown as a user-facing preview URL
+• Preview button for Expo shows guidance, not a fake browser launch path
+• Open button remains disabled for Expo
+• Deploy guidance no longer treats Expo as a normal web deploy target
+
+Expanded Expo guidance now tells the user to use a **system terminal outside KForge**, such as:
+
+• PowerShell
+• Windows Terminal
+• macOS Terminal
+
+Current recommended commands shown in Preview are:
+
+• `pnpm dev`
+• `pnpm dev -- --tunnel`
+• `pnpm run web`
+• `pnpm run android`
+• `pnpm run ios`
+
+Browser-preview caveat is also surfaced:
+
+`pnpm run web` may require:
+
+`npx expo install react-dom react-native-web`
+
+---
+
+## 5.4 Real Validation Findings
+
+Real testing confirmed:
+
+### Expo mobile phone preview works
+
+Validated path:
+
+system terminal outside KForge
+→ `pnpm dev -- --tunnel`
+→ QR code appears
+→ Expo Go scans
+→ starter app opens on phone
+
+Observed successful starter-screen meaning:
+
+When Expo Go displays the default “Open up App.js to start working on your app!” screen, the app is running correctly.
+
+### Normal `pnpm dev` may still be the primary path
+
+Preferred first try remains:
+
+`pnpm dev`
+
+Tunnel is now documented as the fallback when local-network phone connection fails.
+
+### `pnpm run web` is optional and may fail until web dependencies are installed
+
+Observed real requirement:
+
+`npx expo install react-dom react-native-web`
+
+### KForge Terminal improved, but is not yet the official Expo phone-preview path
+
+Terminal now:
+
+• supports long-running dev commands
+• supports Stop button
+• streams stdout/stderr correctly
+• can run Expo dev / tunnel commands
+
+But:
+
+• QR rendering inside KForge Terminal is not currently beginner-usable
+• therefore Expo phone-preview guidance must still point users to system terminal outside KForge
+
+This is both a UX truth and an AI-awareness exception that must be preserved.
+
+---
+
+## 5.4 Command Runner Improvement
+
+Expo testing forced a real improvement to the command runner.
+
+New command added:
+
+`command_stop`
+
+Current command-runner behavior now supports:
+
+• long-running dev session behavior
+• PID tracking
+• explicit Stop button
+• better stdout/stderr streaming
+
+This materially improves Terminal professionalism beyond Expo-only use.
+
+---
+
+## 5.4 AI Awareness Follow-Up Required
+
+Preview workflow awareness has already been expanded to include Expo React Native as a supported KForge preview-related workflow.
+
+However, full AI-awareness validation is **not yet complete**.
+
+Important follow-up rule to encode and test:
+
+For Expo mobile preview on a phone, AI should **not** default to KForge Terminal even though Terminal is generally a preferred KForge-native workflow.
+
+Instead AI should guide users to:
+
+Preview → read Expo guidance
+then
+system terminal outside KForge for actual phone preview commands
+
+This is a rare but important workflow exception.
+
+That exception should be validated in the dedicated follow-up testing ship.
+
+---
+
 # 🟡 5️⃣ Stable Development Loop
 
 Canonical workflow:
@@ -2446,6 +2731,12 @@ Terminal-aware AI guidance:
 User asks to run commands, install packages, or use shell workflow
 → AI prefers AI Panel → Terminal if that matches the request
 → AI remains advisory only
+
+Expo exception:
+
+User asks to preview Expo mobile app on a phone
+→ AI should not treat KForge Terminal as the primary beginner path
+→ AI should guide to Preview guidance + system terminal outside KForge
 
 Conceptual-help rule:
 
@@ -2512,18 +2803,25 @@ Important 5.x rule:
 • AI may hand off to real workflows
 • AI must not hijack UI state
 
+Important 5.4 truthfulness rule:
+
+• KForge must not pretend mobile preview happens inside KForge
+• KForge must be explicit when a workflow requires an external surface
+• Expo localhost output must not be promoted as a beginner-facing app preview URL
+
 ---
 
 # 🧠 8️⃣ Current Stability State
 
-As of **Phase 5.3 — OpenAI Adapter complete**:
+As of **Phase 5.4 — Template Expansion + Expo preview flow wrap-up in progress**:
 
 • AI surface stable
 • filesystem tools validated
 • preview runner stable
 • scaffold system operational
 • template registry working
-• command runner operational
+• command runner upgraded for long-running processes
+• command stop flow implemented
 • Terminal panel awareness implemented for AI guidance
 • service integration layer operational
 • GitHub workflow implemented
@@ -2534,6 +2832,7 @@ As of **Phase 5.3 — OpenAI Adapter complete**:
 • Netlify deploy shortcut working
 • template-aware deploy guidance working
 • Next.js deploy recommendation working
+• Expo deploy de-emphasis working
 • Supabase adapter implemented
 • Supabase setup inspection working
 • `.env.example` generation working
@@ -2576,10 +2875,12 @@ As of **Phase 5.3 — OpenAI Adapter complete**:
 • stale tool-result continuation fix working
 • Supabase documentation captured
 • OpenAI documentation captured
+• Expo mobile-preview documentation now in progress
 • agent runtime documentation captured
 • AI workflow-awareness manifests implemented
 • Preview workflow guidance tightened for existing projects vs new template generation
 • Preview template workflow awareness implemented
+• Expo preview workflow awareness partially extended
 • GitHub import-vs-service distinction captured for AI guidance
 • KForge-first handoff behavior implemented for guided workflows
 • capability relevance filtering implemented
@@ -2591,6 +2892,13 @@ As of **Phase 5.3 — OpenAI Adapter complete**:
 • manual-bypass routing tightened
 • truthful post-tool success/failure follow-up behavior improved
 • gratitude / closing-turn workflow restraint added
+• Expo React Native template generation working
+• Expo package patch for `pnpm dev` working
+• Expo guidance-only Preview UX working
+• Expo Open button suppression working
+• Expo phone preview validated via system terminal + tunnel mode
+• KForge Terminal not yet the official phone-preview path for Expo
+• AI exception for Expo terminal routing still needs explicit follow-up testing
 
 Supported workflows now include:
 
@@ -2623,6 +2931,9 @@ OpenAI environment file preparation
 OpenAI SDK installation guidance
 OpenAI client file generation
 OpenAI example generation
+Expo React Native template generation
+Expo external mobile-preview guidance
+Expo phone preview via system terminal
 Per-service persistent activity logs in Services
 Tool-based AI inspection and reasoning
 Agent-style read/inspect/explain loops
@@ -2661,6 +2972,18 @@ Current AI-awareness maintenance discipline:
 • top-level formatting and filtering live in `src/ai/capabilities/kforgeCapabilities.js`
 • routing-state hardening and post-tool truthfulness frequently involve `src/App.js` and `src/ai/panel/AiPanel.jsx`
 
+Important 5.4 addition to this discipline:
+
+When a new template changes the **real preview truth**, update not only template discovery but also the AI’s handoff logic and workflow exceptions.
+
+Expo proved that template discovery alone is not enough.
+The assistant must also know when a template changes:
+
+• preview expectations
+• terminal guidance
+• deploy guidance
+• beginner workflow truths
+
 Possible future integration lanes:
 
 • Firebase
@@ -2676,6 +2999,8 @@ Possible future backend / AI improvements:
 • richer Supabase code generation guidance
 • lightweight Supabase connection test action
 • richer model-routing between fast chat models and stronger tool-driving models
+• better QR / device-link surfacing for mobile preview flows
+• stronger AI exception handling for template-specific preview paths
 
 ---
 
@@ -2828,6 +3153,8 @@ Phase 5.3.2 then added **Generate OpenAI Client**, wiring guided creation of `sr
 
 Phase 5.3.3 then added **Generate OpenAI Example**, wiring guided creation of `src/examples/openaiExample.js` through the same service pipeline and completing the full OpenAI onboarding lane from setup check to first working API call.
 
+Phase 5.4 then expanded KForge’s template surface into **Expo React Native**, added the first mobile template, hardened Preview truthfulness for external mobile preview, improved the command runner for long-running dev sessions, and validated the first real phone-preview flow through Expo Go.
+
 What this now proves:
 
 • the Services layer can support beginner-friendly backend onboarding
@@ -2848,6 +3175,8 @@ What this now proves:
 • post-tool follow-up messaging must be tied to actual tool success, not merely intended calls
 • Supabase setup helpers become much more valuable when paired with tiny generated starter patterns for real reads and writes
 • the service pipeline now supports setup checks, env generation, SDK installs, client generation, and example generation across multiple provider categories
+• KForge can now support a truthful external mobile-preview workflow without pretending mobile apps render inside KForge
+• template expansion now affects preview truth, deploy guidance, terminal guidance, and AI-awareness rules together
 
 Current stable journey:
 
@@ -2860,6 +3189,7 @@ Local Project
 → Supabase Developer Assist starter artifacts
 → Stripe setup and webhook-readiness guidance
 → OpenAI setup, SDK install, client generation, and example generation guidance
+→ Expo React Native scaffold + external preview guidance
 → AI tool-calling agent workflow
 → KForge workflow-aware AI guidance
 → Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
@@ -2867,7 +3197,8 @@ Local Project
 
 This sets up the next major integration lanes:
 
-Phase 5.4 — Future Template Expansion
+Phase 5.4 follow-up — AI awareness + mobile-preview testing hardening
+Phase 5.5 — Future Template Expansion
 
 Important warning for future work:
 
@@ -2885,4 +3216,5 @@ Safe direction is:
 
 AI-awareness only, not UI control.
 
+```
 ```
