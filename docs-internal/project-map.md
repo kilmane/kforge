@@ -4,10 +4,10 @@
 
 Location:
 
-D:\kforge\docs-internal\project-map.md
+`D:\kforge\docs-internal\project-map.md`
 
-Version: **v24**
-Updated: **05/04/2026**
+Version: **v25**
+Updated: **08/04/2026**
 
 Purpose: architectural topology & execution responsibility map.
 
@@ -19,7 +19,9 @@ Purpose: architectural topology & execution responsibility map.
 
 File:
 
+```
 src/App.js
+```
 
 Responsibilities:
 
@@ -44,11 +46,13 @@ App.js is also the **authority for the current project root**.
 
 Defined in:
 
+```
 src/App.js
+```
 
 Structure:
 
-```text
+```
 messages = [{ id, role, content, ts, action?, actions? }]
 ```
 
@@ -64,7 +68,9 @@ There are **no duplicate message systems**.
 
 File:
 
+```
 src/ai/panel/AiPanel.jsx
+```
 
 Filtered projection of message store.
 
@@ -81,7 +87,9 @@ Shows:
 
 File:
 
+```
 src/ai/panel/TranscriptPanel.jsx
+```
 
 Full system log.
 
@@ -102,7 +110,9 @@ Contains Retry + Clear controls.
 
 File:
 
+```
 src/ai/panel/AiPanel.jsx
+```
 
 Detects:
 
@@ -119,7 +129,9 @@ Triggers runtime execution.
 
 File:
 
+```
 src/ai/tools/toolRuntime.js
+```
 
 Handles:
 
@@ -131,7 +143,7 @@ Handles:
 
 Runtime flow:
 
-```text
+```
 detect tool
 → consent
 → handler execution
@@ -144,7 +156,9 @@ detect tool
 
 File:
 
+```
 src/ai/tools/toolSchema.js
+```
 
 Defines the **model-visible tool interface**.
 
@@ -164,7 +178,9 @@ Ensure the model receives a **clean and controlled tool inventory**.
 
 File:
 
+```
 src/ai/tools/handlers/index.js
+```
 
 Current tools:
 
@@ -176,7 +192,9 @@ Current tools:
 
 Filesystem layer:
 
+```
 src/lib/fs.js
+```
 
 Ensures project-root safety.
 
@@ -186,8 +204,10 @@ Ensures project-root safety.
 
 Files:
 
+```
 src/ai/agent/agentRunner.js
 src/ai/panel/AiPanel.jsx
+```
 
 Phase 4.10 introduced a **tool-calling agent loop**.
 
@@ -195,7 +215,7 @@ The runtime now supports **multi-step reasoning with tools**.
 
 Execution flow:
 
-```text
+```
 assistant reasoning
 → tool request
 → runtime executes tool
@@ -210,7 +230,9 @@ The agent loop **does not bypass the existing runtime**.
 
 All tool execution still flows through:
 
+```
 src/ai/tools/toolRuntime.js
+```
 
 ---
 
@@ -220,8 +242,10 @@ Phase 4.10.1 improved reliability when using weaker models.
 
 Primary files:
 
+```
 src/ai/panel/AiPanel.jsx
 src/ai/agent/agentRunner.js
+```
 
 Improvements include:
 
@@ -238,15 +262,21 @@ Improvements include:
 
 Backend:
 
+```
 src-tauri/src/preview.rs
+```
 
 Frontend bridge:
 
+```
 src/runtime/previewRunner.js
+```
 
 UI:
 
+```
 src/runtime/PreviewPanel.jsx
+```
 
 Capabilities:
 
@@ -257,6 +287,7 @@ Capabilities:
 * preview URL detection
 * controlled process shutdown
 * template detection
+* registry-aware project identity detection
 
 ---
 
@@ -264,27 +295,35 @@ Capabilities:
 
 Registry:
 
+```
 src/runtime/templateRegistry.js
+```
 
 Backend:
 
+```
 src-tauri/src/scaffold.rs
+```
 
 UI:
 
+```
 src/runtime/PreviewPanel.jsx
+```
 
 Current templates:
 
 * static-html
 * vite-react
 * nextjs
+* expo-react-native
 
 Scaffold commands:
 
 * scaffold_static_html
 * scaffold_vite_react
 * scaffold_nextjs
+* scaffold_expo_react_native
 
 ---
 
@@ -292,15 +331,21 @@ Scaffold commands:
 
 Backend:
 
+```
 src-tauri/src/command_runner.rs
+```
 
 Frontend bridge:
 
+```
 src/runtime/commandRunner.js
+```
 
 UI:
 
+```
 src/runtime/CommandRunnerPanel.jsx
+```
 
 Capabilities:
 
@@ -325,19 +370,27 @@ User-facing label:
 
 Backend:
 
+```
 src-tauri/src/service.rs
+```
 
 Frontend bridge:
 
+```
 src/runtime/serviceRunner.js
+```
 
 Registry:
 
+```
 src/runtime/serviceRegistry.js
+```
 
 UI:
 
+```
 src/runtime/ServicePanel.jsx
+```
 
 Pattern:
 
@@ -417,19 +470,27 @@ STRIPE_WEBHOOK_SECRET
 
 Primary implementation:
 
+```
 src-tauri/src/service.rs
+```
 
 UI:
 
+```
 src/runtime/ServicePanel.jsx
+```
 
 Frontend bridge:
 
+```
 src/runtime/serviceRunner.js
+```
 
 Registry:
 
+```
 src/runtime/serviceRegistry.js
+```
 
 Purpose:
 
@@ -449,34 +510,23 @@ Capabilities currently implemented:
 * Create `.env` file
 * Install OpenAI SDK (`pnpm add openai`)
 * Create OpenAI client file
+* Create OpenAI example
 
-Generated artifact:
+Generated artifacts:
 
 ```
 src/lib/openai.js
+src/examples/openaiExample.js
 ```
 
-Example client:
-
-```javascript
-import OpenAI from "openai";
-
-export const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY
-});
-```
-
-The adapter allows projects to move from:
+This allows projects to move from:
 
 ```
 AI idea
 → SDK installed
 → reusable OpenAI client
+→ working AI API call
 ```
-
-Future extension:
-
-Phase **5.3.3 — Generate AI Example**
 
 ---
 
@@ -608,7 +658,7 @@ Open folder
 → create .env
 → install SDK
 → create client
-→ generate AI example (future)
+→ generate example
 ```
 
 ---
@@ -631,9 +681,10 @@ Current milestone includes:
 * Supabase Developer Assist
 * Stripe adapter
 * Stripe webhook-readiness guidance
-* OpenAI adapter foundation
+* OpenAI adapter
 * OpenAI SDK installation
 * OpenAI client generation
+* OpenAI example generation
 * per-service log isolation
 * AI capability-awareness system
 * workflow-aware AI guidance
@@ -645,7 +696,6 @@ Current milestone includes:
 Next roadmap phases:
 
 ```
-Phase 5.3.3 — Generate OpenAI AI Example
 Phase 5.4 — Future Template Expansion
 ```
 
@@ -664,4 +714,3 @@ Phase 6 — Model Routing & Guidance
 ```
 
 ---
-
