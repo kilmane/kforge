@@ -433,7 +433,47 @@ function isPreviewIntent(text) {
     s.includes("start the app")
   );
 }
+function isClosingIntent(text) {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+  return (
+    s === "thanks" ||
+    s === "thank you" ||
+    s === "thanks for the help" ||
+    s === "cheers" ||
+    s === "all good" ||
+    s === "that worked" ||
+    s === "perfect"
+  );
+}
 
+function isAdvisoryOnlyIntent(text) {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+  if (!s) return false;
+
+  if (isClosingIntent(s)) return true;
+  if (isPreviewIntent(s)) return true;
+  if (isShowChangesIntent(s)) return true;
+
+  return (
+    s.startsWith("how do i ") ||
+    s.startsWith("how can i ") ||
+    s.startsWith("can i ") ||
+    s.startsWith("should i ") ||
+    s.startsWith("what command should i run") ||
+    s.startsWith("what should i run") ||
+    s.startsWith("what do i run") ||
+    s.startsWith("why ") ||
+    s.startsWith("explain ") ||
+    s.startsWith("show me the commands") ||
+    s.includes("on my phone") ||
+    s.includes("in kforge") ||
+    s.includes("in the browser")
+  );
+}
 function buildPreviewHandoffMessage() {
   return (
     "KForge can help with this through the Preview panel.\n\n" +
@@ -1111,7 +1151,13 @@ export default function AiPanel({
 
           const msgKey = String(msg?.id ?? msg?.ts ?? i);
           const pendingCalls = [];
-
+          const nearestUserText = getNearestUserMessageTextBeforeIndex(
+            messages,
+            i,
+          );
+          if (isAdvisoryOnlyIntent(nearestUserText)) {
+            continue;
+          }
           const queueCall = ({ key, toolName, args, sourceIndex }) => {
             if (
               GLOBAL_SEEN_TOOL_KEYS.has(key) ||
@@ -1321,7 +1367,7 @@ export default function AiPanel({
             );
           } else if (typeof runAi === "function") {
             try {
-              const toolSchemas = getToolSchemas();
+              const continuationTools = [];
 
               const agentResult = await runAgent({
                 prompt: "",
@@ -1339,7 +1385,7 @@ export default function AiPanel({
                         : `Tool result:\n${item.toolName} failed.\n${item.error || "Unknown error"}`,
                   })),
                 ],
-                tools: toolSchemas,
+                tools: continuationTools,
                 initialSeenToolCalls: batchCalls.map((call) => ({
                   name: call.toolName,
                   args: call.args,
@@ -1347,7 +1393,7 @@ export default function AiPanel({
                 callModel: async ({ messages: workingMessages }) => {
                   const input = buildAgentConversationInput(
                     workingMessages,
-                    toolSchemas,
+                    continuationTools,
                     CHAT_CONTEXT_TURNS,
                   );
 
@@ -1359,18 +1405,7 @@ export default function AiPanel({
                   }
 
                   const output = String(r.output || "");
-                  const toolCall = extractSingleAgentToolCall(
-                    output,
-                    activeTab?.path || "",
-                  );
                   const cleaned = stripToolBlocksForChat(output);
-
-                  if (toolCall) {
-                    return {
-                      toolCall,
-                      text: cleaned,
-                    };
-                  }
 
                   return {
                     text: cleaned || output,
