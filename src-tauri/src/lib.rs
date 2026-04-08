@@ -151,6 +151,7 @@ pub fn run() {
             preview::preview_start,
             preview::preview_stop,
             command_runner::command_run,
+            command_runner::command_stop,
             service::service_setup,
             service::github_detect_repo,
             service::github_open_repo,

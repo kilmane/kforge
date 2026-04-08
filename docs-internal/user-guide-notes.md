@@ -1,7 +1,7 @@
 
 # User Guide Notes (development capture)
 
-Last Updated: **April 5th, 2026**
+Last Updated: **April 8th, 2026**
 
 Location:
 `D:\kforge\docs-internal\user-guide-notes.md`
@@ -24,8 +24,10 @@ When the user clicks **Preview**, KForge may switch back to **Focus Mode** so th
 
 User mental model:
 
-Open Folder → Explore files  
+```
+Open Folder → Explore files
 Preview → Focus on running app
+```
 
 ---
 
@@ -43,8 +45,10 @@ KForge automatically inspects the opened folder and determines how it should be 
 
 Detection currently works in two stages:
 
-Project structure → coarse project type  
+```
+Project structure → coarse project type
 package.json signals → framework identification when possible
+```
 
 This allows KForge to both:
 
@@ -53,27 +57,29 @@ This allows KForge to both:
 
 ---
 
-## Static Projects
+# Static Projects
 
 If a project contains:
 
-```text
+```
 index.html
-````
+```
 
 KForge automatically runs a **static preview server**.
 
 Workflow:
 
+```
 Open Folder
 Preview
 Open
+```
 
 No dependency installation is required.
 
 Example static project:
 
-```text
+```
 index.html
 styles.css
 script.js
@@ -83,26 +89,28 @@ For static-only projects the **Install** step is skipped.
 
 ---
 
-## Framework Projects
+# Framework Projects
 
 Framework projects use a **development server**.
 
 Typical indicator:
 
-```text
+```
 package.json
 ```
 
 Workflow:
 
+```
 Open Folder
 Install
 Preview
 Open
+```
 
 Typical commands executed:
 
-```text
+```
 pnpm install
 pnpm dev
 ```
@@ -111,6 +119,161 @@ Currently recognized framework templates include:
 
 * Vite + React
 * Next.js
+
+---
+
+# Mobile Projects (Expo / React Native)
+
+KForge also supports generating **mobile applications** using **Expo React Native**.
+
+Mobile apps behave differently from web apps.
+
+A mobile application **cannot run inside the KForge interface**.
+
+Instead, the app runs on:
+
+* a real phone
+* a simulator
+* an emulator
+* or an optional browser preview
+
+Because of this, KForge Preview for mobile projects provides **guided instructions rather than running the app directly inside KForge**.
+
+---
+
+# Expo Mobile Preview Workflow
+
+Typical workflow for a mobile project:
+
+```
+Open Folder
+Generate Expo template
+Install
+Preview (shows guidance)
+Run commands in system terminal
+Open app on phone
+```
+
+The **Preview button explains how to launch the mobile preview outside KForge**.
+
+---
+
+# Phone Preview (Recommended)
+
+The most common way to preview a mobile app is using **Expo Go on a real phone**.
+
+Steps:
+
+1. Install **Expo Go** from the App Store or Google Play.
+2. Open your **system terminal outside KForge**.
+3. Navigate to the project folder.
+4. Run:
+
+```
+pnpm dev
+```
+
+Your terminal will display a **QR code**.
+
+Scan the QR code with Expo Go to launch the app.
+
+---
+
+# Tunnel Mode (Fallback)
+
+Sometimes a phone cannot connect to the development server due to network restrictions.
+
+In that case run:
+
+```
+pnpm dev -- --tunnel
+```
+
+Tunnel mode allows the phone to connect even if it is on a different network.
+
+Tunnel mode is slower but very reliable.
+
+---
+
+# Browser Preview (Optional)
+
+Expo can also run the mobile project in a web browser.
+
+Some projects require installing additional dependencies first:
+
+```
+npx expo install react-dom react-native-web
+```
+
+Then run:
+
+```
+pnpm run web
+```
+
+This launches a browser preview.
+
+Browser preview is useful for quick testing but **does not fully replicate real device behavior**.
+
+---
+
+# Android Emulator Preview
+
+Android preview can run inside an Android emulator.
+
+Requirements:
+
+* Android Studio
+* Android emulator configured
+
+Command:
+
+```
+pnpm run android
+```
+
+---
+
+# iOS Simulator Preview
+
+iOS preview requires:
+
+* macOS
+* Xcode installed
+
+Command:
+
+```
+pnpm run ios
+```
+
+This launches the iOS simulator.
+
+---
+
+# Important Note About Terminals
+
+KForge includes a built-in **Terminal panel**.
+
+However, **Expo mobile preview commands should currently be run in a system terminal outside KForge**.
+
+Examples of system terminals:
+
+* PowerShell
+* Windows Terminal
+* macOS Terminal
+* Linux terminal
+
+This is because Expo uses advanced terminal features (such as QR rendering) that are not yet fully supported inside the KForge terminal.
+
+The KForge terminal remains useful for:
+
+```
+pnpm install
+git commands
+package installs
+general project commands
+```
 
 ---
 
@@ -123,6 +286,7 @@ Current templates supported:
 * Static HTML/CSS/JS
 * Vite + React
 * Next.js
+* Expo React Native
 
 Template generation is driven by the **Template Registry**.
 
@@ -130,12 +294,14 @@ Generate is available from the **Preview** panel.
 
 Typical flow:
 
+```
 Open Folder
 Preview
 Generate
 Install (if needed)
 Preview
 Open
+```
 
 If no folder is open, Generate is blocked.
 
@@ -152,7 +318,7 @@ Install installs project dependencies.
 
 Command used:
 
-```text
+```
 pnpm install
 ```
 
@@ -162,12 +328,17 @@ Not required for static projects.
 
 # Preview
 
-Preview starts the project runtime.
+Preview starts the project runtime **or displays preview guidance** depending on the project type.
 
+Behavior:
+
+```
 Static → internal static server
-Framework → `pnpm dev`
+Framework → pnpm dev
+Mobile → guided external preview workflow
+```
 
-Preview logs stream into the Preview Runner panel.
+Preview logs stream into the Preview Runner panel when applicable.
 
 ---
 
@@ -177,10 +348,12 @@ Open launches the running preview in the browser.
 
 Example URLs:
 
-```text
+```
 http://localhost:3000
 http://127.0.0.1:4173
 ```
+
+For mobile projects the Open button is disabled.
 
 ---
 
@@ -245,17 +418,21 @@ Each service now maintains **its own activity history**.
 
 Example:
 
+```
 Services → GitHub
 Shows only GitHub activity.
 
 Services → Supabase
 Shows only Supabase activity.
+```
 
 Switching between providers does **not mix logs**.
 
 Returning to a service restores its previous log history.
 
-This behavior was introduced in **Phase 4.9.1 — ServicePanel log isolation**.
+This behavior was introduced in:
+
+**Phase 4.9.1 — ServicePanel log isolation**
 
 ---
 
@@ -265,10 +442,12 @@ Supabase in KForge is a **guided backend onboarding flow** for projects that alr
 
 Typical journey:
 
+```
 Build app first
-→ open **Services → Backend → Supabase**
+→ Services → Backend → Supabase
 → connect Supabase step by step
-→ adapt generated examples to the real app
+→ adapt generated examples
+```
 
 ---
 
@@ -276,23 +455,23 @@ Build app first
 
 OpenAI in KForge provides a **guided AI integration flow** for projects that already exist.
 
-The flow mirrors the Supabase developer assist workflow.
-
 Typical journey:
 
-Build an application first
-→ open **Services → AI → OpenAI**
+```
+Build app first
+→ Services → AI → OpenAI
 → connect OpenAI step by step
 → generate working AI code
+```
 
 ---
 
-## OpenAI Integration Steps
+# OpenAI Integration Steps
 
 The OpenAI helper currently provides:
 
 * Check OpenAI setup
-* Create `.env` file
+* Create `.env`
 * Install OpenAI SDK
 * Create OpenAI client file
 * Create OpenAI example
@@ -309,103 +488,7 @@ to
 AI working inside the application
 ```
 
-without needing to manually configure the SDK.
-
----
-
-## OpenAI `.env` File
-
-KForge can generate:
-
-```
-.env
-```
-
-containing:
-
-```
-OPENAI_API_KEY=
-```
-
-The user pastes their API key from the OpenAI dashboard.
-
----
-
-## Install OpenAI SDK
-
-KForge installs the official OpenAI Node SDK:
-
-```
-pnpm add openai
-```
-
----
-
-## OpenAI Client File
-
-KForge generates:
-
-```
-src/lib/openai.js
-```
-
-Example:
-
-```javascript
-import OpenAI from "openai";
-
-export const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY
-});
-```
-
-Purpose:
-
-* centralize OpenAI setup
-* provide a reusable client
-* reduce repeated configuration in application code
-
----
-
-## OpenAI Example
-
-KForge can generate a minimal working AI example:
-
-```
-src/examples/openaiExample.js
-```
-
-Example:
-
-```javascript
-import { openai } from "../lib/openai";
-
-async function runExample() {
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    input: "Write a one sentence description of KForge."
-  });
-
-  console.log(response.output[0].content[0].text);
-}
-
-runExample();
-```
-
-Purpose of this example:
-
-* confirm the OpenAI connection works
-* demonstrate a minimal API call
-* provide a copyable starting pattern
-
-This verifies that:
-
-* the API key is valid
-* the SDK is installed
-* the OpenAI client works
-* the application can successfully call the OpenAI API
-
-Developers can then adapt this pattern for real features.
+without manual SDK configuration.
 
 ---
 
@@ -416,13 +499,13 @@ Deploy currently supports:
 * Vercel
 * Netlify
 
-Deploy actions open provider flows in the browser.
+Typical deploy path:
 
-The typical deploy path is:
-
+```
 Local project
 → GitHub
 → Deploy
+```
 
 ---
 
@@ -432,23 +515,18 @@ KForge AI increasingly guides users toward **native KForge workflows** instead o
 
 Examples:
 
-Supabase setup →
-Services → Backend → Supabase
+```
+Supabase setup → Services → Backend → Supabase
+OpenAI setup → Services → AI → OpenAI
+GitHub actions → Services → Code → GitHub
+Create starter app → Preview → Generate
+Import GitHub repo → New Project → Import from GitHub
+Run commands → AI Panel → Terminal
+```
 
-OpenAI setup →
-Services → AI → OpenAI
+Special case:
 
-GitHub actions →
-Services → Code → GitHub
-
-Create starter app →
-Preview → Generate
-
-Import GitHub repo →
-New Project → Import from GitHub
-
-Run commands →
-AI Panel → Terminal
+For **Expo mobile preview**, AI should guide users to run commands in a **system terminal outside KForge**.
 
 ---
 
@@ -469,8 +547,4 @@ KForge should avoid:
 * overwhelming dashboards
 * provider-specific complexity walls
 
-```
-
 ---
-
-

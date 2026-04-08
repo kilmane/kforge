@@ -3,6 +3,7 @@ import {
   appendCommandLog,
   clearCommandLogBuffer,
   commandRun,
+  commandStop,
   getCommandLogBuffer,
   getCommandStatusValue,
   onCommandLog,
@@ -135,6 +136,21 @@ export default function CommandRunnerPanel({ projectPath }) {
     }
   }
 
+  async function handleStop() {
+    try {
+      await commandStop();
+      inputRef.current?.focus();
+    } catch (e) {
+      const errorEntry = {
+        kind: "stderr",
+        line: String(e),
+        ts: Date.now(),
+      };
+      appendCommandLog(errorEntry);
+      setLogs(getCommandLogBuffer());
+    }
+  }
+
   function clearLogs() {
     clearCommandLogBuffer();
     setLogs([]);
@@ -172,6 +188,15 @@ export default function CommandRunnerPanel({ projectPath }) {
           >
             Clear
           </button>
+
+          <button
+            className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-sm disabled:opacity-40"
+            disabled={!isRunning}
+            onClick={handleStop}
+            title="Stop running command"
+          >
+            Stop
+          </button>
         </div>
       </div>
 
@@ -202,7 +227,8 @@ export default function CommandRunnerPanel({ projectPath }) {
       </div>
 
       <div className="mt-2 text-xs text-zinc-400">
-        Commands run in the workspace root. Each command runs independently.
+        Commands run in the workspace root. Long-running dev servers can be
+        stopped with the Stop button.
       </div>
 
       <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">

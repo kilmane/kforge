@@ -38,3 +38,7 @@ export async function commandRun(command, cwd) {
     cwd,
   });
 }
+
+export async function commandStop() {
+  return invoke("command_stop");
+}

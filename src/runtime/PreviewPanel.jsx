@@ -531,42 +531,66 @@ export default function PreviewPanel({ projectPath }) {
             <div className="mt-1">
               If you have not run{" "}
               <span className="font-semibold text-yellow-300">Install</span>{" "}
-              yet, do that first. Then open{" "}
-              <span className="text-zinc-200">KForge Terminal</span> in this
-              project folder and run one of these:
+              yet, do that first. Then open your{" "}
+              <span className="text-zinc-200">
+                system terminal outside KForge
+              </span>{" "}
+              in this project folder, such as{" "}
+              <span className="text-zinc-200">PowerShell</span>,{" "}
+              <span className="text-zinc-200">Windows Terminal</span>, or{" "}
+              <span className="text-zinc-200">Terminal</span>, and run one of
+              these:
             </div>
 
             <div className="mt-2 space-y-1 text-zinc-300">
               <div>
                 <span className="font-mono text-blue-300">pnpm dev</span> —
-                phone with Expo Go, scan the QR code in Terminal
+                phone preview using Expo Go
               </div>
 
-              <div>
-                <span className="font-mono text-blue-300">pnpm run web</span> —
-                web browser preview
+              <div className="text-zinc-400">
+                Scan the QR code shown by your system terminal.
+              </div>
+
+              <div className="text-zinc-400">
+                If your phone cannot connect on the same network, try:
               </div>
 
               <div>
                 <span className="font-mono text-blue-300">
+                  pnpm dev -- --tunnel
+                </span>{" "}
+                — tunnel fallback for phone preview
+              </div>
+
+              <div className="mt-1">
+                <span className="font-mono text-blue-300">pnpm run web</span> —
+                browser preview (may require extra setup)
+              </div>
+
+              <div className="text-zinc-500 font-mono text-[11px]">
+                npx expo install react-dom react-native-web
+              </div>
+
+              <div className="mt-1">
+                <span className="font-mono text-blue-300">
                   pnpm run android
                 </span>{" "}
-                — Android Studio or device required
+                — Android emulator or device (Android Studio required)
               </div>
 
               <div>
                 <span className="font-mono text-blue-300">pnpm run ios</span> —
-                macOS with Xcode required
+                iOS simulator (macOS with Xcode required)
               </div>
             </div>
 
             <div className="mt-2 text-zinc-500">
-              Terminal folder:{" "}
+              Project folder:{" "}
               <span className="font-mono text-zinc-400">{projectPath}</span>
             </div>
           </div>
         )}
-
         {projectPath && !isExpoProject && (
           <>
             Click <span className="font-semibold text-yellow-300">Preview</span>{" "}
