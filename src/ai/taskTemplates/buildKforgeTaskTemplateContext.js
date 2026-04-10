@@ -21,59 +21,73 @@ function buildTemplateStructureHints(detectedTemplateName) {
   return [];
 }
 
-function buildExistingProjectBehaviorBlock({
+function buildImplementationTaskTemplateBlock({
   projectOpen,
   detectedTemplateName,
 }) {
   if (!projectOpen) return "";
 
-  return [
-    "=== Existing Project Behavior Rules ===",
+  const lines = [
+    "=== In-Project Implementation Template ===",
     "A project is already open in KForge.",
-    "Treat requests like create/build/add/make/implement a page, feature, UI, component, app, screen, form, table, dashboard, auth flow, or CRUD flow as implementation work inside the current project by default.",
-    "Do not switch into new-project scaffolding mode unless the user explicitly asks to create a new project, generate a template, scaffold a new app, or start from scratch.",
-    "Do not route to Preview -> Generate for ordinary implementation requests inside an already-open project.",
-    "Do not invent generic tutorial file plans that ignore the detected project structure.",
-    "Prefer editing existing project files that match the detected stack and structure.",
-    "When the detected template is Vite + React, default to existing src/ files before suggesting new top-level tutorial files.",
-    "If the user asks to create a simple app inside an existing Vite + React project, interpret that as updating the current React app, usually starting with src/App.jsx or nearby existing files.",
-    "Use truthful, project-aware actions only. Never imply a new scaffold will be generated unless the user explicitly requested one.",
-    "",
-  ].join("\n");
+    "For requests to build, add, create, make, or implement product code inside the current project:",
+    "- inspect the current workspace structure first",
+    "- prefer the smallest responsible existing file(s)",
+    "- follow the detected stack and existing project structure",
+    "- do not switch into new-project scaffolding mode unless the user explicitly asks for it",
+    "- do not route to Preview -> Generate for ordinary in-project implementation work",
+    "- do not invent generic tutorial file plans that ignore the current project",
+    "- use truthful, project-aware actions only",
+    "- do not imply that a new scaffold was generated unless the user explicitly requested one",
+  ];
+
+  if (detectedTemplateName === "Vite + React") {
+    lines.push(
+      "- when the current project is Vite + React, default to existing src/ files before suggesting new top-level tutorial files",
+      "- if the user asks to create a simple app inside an existing Vite + React project, interpret that as updating the current React app, usually starting with src/App.jsx or nearby existing files",
+    );
+  }
+
+  lines.push("");
+
+  return lines.join("\n");
 }
 
-function buildNoProjectBehaviorBlock({ projectOpen }) {
+function buildNoProjectTaskTemplateBlock({ projectOpen }) {
   if (projectOpen) return "";
 
   return [
-    "=== No Project Open Behavior Rules ===",
+    "=== No-Project Task Template ===",
     "No project folder is currently open in KForge.",
-    "If the user says they do not have a project yet, wants to create a new project, wants a starter app, or wants to start from scratch, do not emit file-edit tools against relative paths.",
-    "Do not create ad-hoc starter files manually when KForge can generate a supported template project.",
-    "For no-project new-app requests, answer with a KForge-first handoff: tell the user to create or open a folder first in Explorer, then leave chat and use Preview -> Generate for a supported starter template project.",
-    "If the user is unsure which template to pick, let them stay in chat and recommend the best starter template before sending them to Preview -> Generate.",
-    "Do not say 'let me know once the folder is open so I can create files' as the default next step for a new-project request.",
-    "If the user explicitly says they want to bypass KForge, switch fully into manual-chat mode.",
-    "In manual-chat mode, do not keep describing the path as Preview, Generate, or KForge template creation.",
-    "In manual-chat mode, recommend a concrete stack directly and give commands or steps only.",
-    "For simple interactive web apps with no framework preference, Vite + React is usually the default manual recommendation.",
+    "When the user's next step depends on project files or file edits:",
+    "- tell them to open or create a project first",
+    "- do not emit file-edit tools against relative paths",
+    "- do not invent edits for files that do not exist in an open workspace",
+    "When the user wants a new starter app or scaffold:",
+    "- use a KForge-first handoff",
+    "- tell them to create or open a folder first in Explorer",
+    "- then tell them they can leave chat and use Preview -> Generate for a supported starter template project",
+    "- if they need help choosing a template, recommend one in chat before the handoff",
+    "When the user explicitly asks to bypass KForge:",
+    "- switch fully into manual-chat mode",
+    "- do not mix Preview, Generate, or KForge template-creation handoff into the same answer",
+    "- give direct commands or manual steps only",
     "Do not require an open project folder for advisory-only answers, workflow handoffs, terminal guidance, git guidance, service-routing guidance, or manual setup instructions.",
     "Only mention opening or creating a folder when the requested next step truly depends on project files, previewing the current project, or editing files inside KForge.",
-    "Only fall back to manual chat-only scaffolding if the user explicitly asks to bypass KForge.",
     "",
   ].join("\n");
 }
 
-function buildEmptyFolderBehaviorBlock({ projectOpen, tree }) {
+function buildEmptyFolderTaskTemplateBlock({ projectOpen, tree }) {
   if (!(projectOpen && Array.isArray(tree) && tree.length === 0)) return "";
 
   return [
-    "=== Empty Folder Behavior Rules ===",
+    "=== Empty-Folder Task Template ===",
     "A project folder is open, but it appears to be empty.",
-    "If the user wants a new app, starter, or fresh project in an empty folder, prefer KForge Preview -> Generate for a supported template project.",
-    "Do not default to manually writing index.html, app.js, or other ad-hoc boilerplate into an empty folder unless the user explicitly asks for manual scaffolding or bypasses KForge.",
-    "If helpful, mention that supported starters may include Static HTML, Vite + React, and Next.js.",
-    "If the user does not know which template to choose, recommend one in chat before sending them to Preview -> Generate.",
+    "For new app or starter requests in this empty folder:",
+    "- prefer KForge Preview -> Generate for a supported template project",
+    "- do not default to manually writing ad-hoc starter boilerplate unless the user explicitly asks for manual scaffolding or bypasses KForge",
+    "- if the user does not know which template to choose, recommend one in chat before sending them to Preview -> Generate",
     "",
   ].join("\n");
 }
@@ -153,12 +167,12 @@ export function buildKforgeTaskTemplateContext({
   tree,
 }) {
   return {
-    existingProjectBehaviorBlock: buildExistingProjectBehaviorBlock({
+    existingProjectBehaviorBlock: buildImplementationTaskTemplateBlock({
       projectOpen,
       detectedTemplateName,
     }),
-    noProjectBehaviorBlock: buildNoProjectBehaviorBlock({ projectOpen }),
-    emptyFolderBehaviorBlock: buildEmptyFolderBehaviorBlock({
+    noProjectBehaviorBlock: buildNoProjectTaskTemplateBlock({ projectOpen }),
+    emptyFolderBehaviorBlock: buildEmptyFolderTaskTemplateBlock({
       projectOpen,
       tree,
     }),
