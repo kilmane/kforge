@@ -1811,6 +1811,90 @@ export default function App() {
       s.includes("install the packages")
     );
   }
+  function isExpoTerminalChoiceIntent(
+    text = "",
+    detectedTemplateName = "",
+    detectedKind = "",
+  ) {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+    const template = String(detectedTemplateName || "").toLowerCase();
+    const kind = String(detectedKind || "").toLowerCase();
+
+    const projectLooksExpo = template.includes("expo") || kind.includes("expo");
+
+    const asksTerminalChoice =
+      s.includes("kforge terminal") &&
+      (s.includes("powershell") || s.includes("system terminal"));
+
+    const mentionsExpo = s.includes("expo");
+
+    return asksTerminalChoice && (mentionsExpo || projectLooksExpo);
+  }
+  function isNoProjectImplementationIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+    if (!s) return false;
+
+    const implementationHints = [
+      "add a settings page",
+      "add settings page",
+      "create a settings page",
+      "make a settings page",
+      "implement a settings page",
+      "add a page",
+      "create a page",
+      "make a page",
+      "implement a page",
+      "add a feature",
+      "create a feature",
+      "make a feature",
+      "implement a feature",
+    ];
+
+    const workflowHints = [
+      "preview",
+      "run",
+      "install dependencies",
+      "supabase",
+      "openai",
+      "stripe",
+      "github",
+      "deploy",
+      "manual steps",
+      "don't use kforge",
+      "bypass kforge",
+    ];
+
+    const looksImplementation = implementationHints.some((hint) =>
+      s.includes(hint),
+    );
+    const looksWorkflow = workflowHints.some((hint) => s.includes(hint));
+
+    return looksImplementation && !looksWorkflow;
+  }
+
+  function buildNoProjectImplementationMessage() {
+    return (
+      "Open or create a project first in Explorer.\n\n" +
+      "Once a project folder is open, I can help you add that page or feature inside the current project."
+    );
+  }
+  function buildExpoTerminalChoiceRoutingMessage(projectOpen) {
+    if (!projectOpen) {
+      return (
+        "For Expo phone preview, use a system terminal outside KForge.\n\n" +
+        "KForge Terminal is still useful for normal project commands once a project folder is open."
+      );
+    }
+
+    return (
+      "For Expo phone preview, use a system terminal outside KForge.\n\n" +
+      "KForge Terminal is still useful for normal project commands in the current workspace."
+    );
+  }
   function isCombinedOpenAiSupabaseServiceIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -1913,6 +1997,24 @@ export default function App() {
         projectTemplateInfo?.detectedTemplate?.name || null;
       const detectedKind = projectTemplateInfo?.kind || null;
       const projectOpen = !!projectPath;
+
+      if (
+        isExpoTerminalChoiceIntent(draft, detectedTemplateName, detectedKind)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildExpoTerminalChoiceRoutingMessage(projectOpen),
+        );
+        return;
+      }
+
+      if (!projectOpen && isNoProjectImplementationIntent(draft)) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage("assistant", buildNoProjectImplementationMessage());
+        return;
+      }
+
       if (isCombinedOpenAiSupabaseServiceIntent(draft)) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
@@ -1921,6 +2023,7 @@ export default function App() {
         );
         return;
       }
+
       if (isDependencyInstallWorkflowIntent(draft)) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
