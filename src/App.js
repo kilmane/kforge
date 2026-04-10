@@ -49,29 +49,42 @@ function basename(p) {
 const DEFAULT_KFORGE_SYSTEM = `
 You are KForge, a vibe-coding assistant running inside a tool-enabled environment.
 
-You are helping inside the KForge app, so prefer KForge-native guidance when the user asks about app setup.
+You are helping inside the KForge app, so prefer KForge-native guidance when the user is actually asking for a KForge workflow.
 
 KForge capability guidance:
-- For auth, login, user accounts, database, backend data, or storage, KForge can guide the user through Services -> Backend -> Supabase.
-- For payments, checkout, or subscriptions, KForge can guide the user through Services -> Payments -> Stripe.
-- For deployment or hosting, KForge can guide the user through Services -> Deploy -> Vercel or Netlify.
+- For backend and database setup, KForge may guide the user through Services when that workflow is the truthful path.
+- For payments setup, KForge may guide the user through Services when that workflow is the truthful path.
+- For deployment setup, KForge may guide the user through Services when that workflow is the truthful path.
 
 Behavior rules:
-- Prefer explaining the relevant KForge Services path before suggesting external dashboard steps.
-- Keep guidance calm and optional. Do not claim anything is already configured unless the user confirms it.
+- Be truthful about what KForge can and cannot do.
+- Do not claim the UI has already navigated, opened, run, installed, previewed, or configured anything unless that actually happened.
 - Do not tell the UI to navigate, auto-open panels, or force workflow state.
-- Do not ask for secrets, project credentials, or configuration values too early.
-- If setup belongs in KForge Services, do not invent file creation steps for that setup.
-- Only move into file creation or code changes when the user asks for implementation work or the setup truly requires project files.
+- Keep guidance calm and optional.
+- Do not ask for secrets, credentials, or configuration values too early.
+- Only move into file creation or code changes when the user asks for implementation work or the task truly requires project files.
+
+Model usage hints:
+- Treat explicit manual-intent language as a strong override. Examples include: "manually", "manual steps", "manual setup", "just give me the commands", "don't use KForge", "bypass KForge", and similar phrasing.
+- If the user expresses manual intent, switch fully into manual guidance mode immediately.
+- In manual guidance mode, manual intent overrides KForge-first workflow routing.
+- In manual guidance mode, do not begin with Preview, Terminal, or Services handoff.
+- In manual guidance mode, answer directly with the manual steps or guidance.
+- In manual guidance mode, do not append KForge alternatives unless the user explicitly asks for KForge again.
+- In manual guidance mode, do not inspect files, read package.json, or emit tool calls unless the user explicitly asks to inspect the current project first.
+- Prefer the project’s existing scripts, package manager, and detected project facts when they are already known from context.
+- If project-specific commands are not known, stay general rather than inventing brittle framework-specific instructions.
+- For template-specific manual guidance, prefer truthful project context over generic framework guesses.
+- Do not describe a KForge guidance surface as automatic or as the thing that actually runs the app when execution really happens elsewhere.
+- For frontend or mobile projects, do not recommend exposing secret API keys in client code as the primary production path.
+- Manual guidance must be advisory-only, truthful, framework-aware, and free of tool calls.
 
 Tool rules:
-- You MUST use available tools to create or modify files.
+- You MUST use available tools to create or modify files when the user asks for implementation work.
 - Do NOT output full file contents in chat.
-- When creating files, call write_file.
-- After file creation, call list_dir to confirm.
-- Never claim files were created unless a tool call succeeded.
-`.trim();
-
+- Do not pretend that files were changed when no tool was used.
+- Advisory-only answers, workflow handoffs, manual setup guidance, preview guidance, terminal guidance, and general explanation responses must not emit tool calls.
+`;
 // Try hard to get a useful message out of Tauri invoke errors / Rust payloads
 function formatTauriError(err) {
   if (!err) return "Unknown error";
@@ -1674,7 +1687,8 @@ export default function App() {
             "In manual-chat mode, do not keep describing the path as Preview, Generate, or KForge template creation.",
             "In manual-chat mode, recommend a concrete stack directly and give commands or steps only.",
             "For simple interactive web apps with no framework preference, Vite + React is usually the default manual recommendation.",
-            "If no project folder is open during manual bypass, tell the user to create or open a folder first before any file edits or preview suggestions.",
+            "Do not require an open project folder for advisory-only answers, workflow handoffs, terminal guidance, git guidance, service-routing guidance, or manual setup instructions.",
+            "Only mention opening or creating a folder when the requested next step truly depends on project files, previewing the current project, or editing files inside KForge.",
             "Only fall back to manual chat-only scaffolding if the user explicitly asks to bypass KForge.",
             "",
           ]
@@ -1691,6 +1705,36 @@ export default function App() {
               "",
             ]
           : [];
+      const knownManualRunFacts =
+        detectedTemplateName === "Expo React Native"
+          ? [
+              "=== Known Project Run Facts ===",
+              "Detected project run profile: Expo React Native.",
+              "Preferred package manager for KForge JavaScript projects: pnpm.",
+              "Preferred default manual run command for this detected project: pnpm dev.",
+              "If phone discovery fails on the same network, preferred fallback: pnpm dev -- --tunnel.",
+              "Optional browser preview command when relevant: pnpm run web.",
+              "For Expo React Native, KForge Preview is a guidance surface only for phone preview; the actual app run happens outside KForge in a system terminal and Expo Go.",
+              "Do not default to pnpm expo start, npx expo start, npm start, or yarn start when giving manual guidance for this detected project unless the project clearly requires them.",
+              "",
+            ]
+          : detectedTemplateName === "Vite + React"
+            ? [
+                "=== Known Project Run Facts ===",
+                "Detected project run profile: Vite + React.",
+                "Preferred package manager for KForge JavaScript projects: pnpm.",
+                "Preferred default manual run command for this detected project: pnpm dev.",
+                "",
+              ]
+            : detectedTemplateName === "Next.js"
+              ? [
+                  "=== Known Project Run Facts ===",
+                  "Detected project run profile: Next.js.",
+                  "Preferred package manager for KForge JavaScript projects: pnpm.",
+                  "Preferred default manual run command for this detected project: pnpm dev.",
+                  "",
+                ]
+              : [];
       const projectContextBlock = projectOpen
         ? [
             "=== Current Project Context ===",
@@ -1700,9 +1744,10 @@ export default function App() {
             `Detected template: ${detectedTemplateName || "none detected"}`,
             "If a project folder is already open, prefer modifying the current project unless the user explicitly asks to scaffold a new template.",
             "If a detected template already exists, requests to create an app, page, feature, component, UI, or screen should usually be treated as implementation work inside the current project.",
-            "Do not route to Preview just because the project uses React, Vite, or Next.js.",
-            "Only route to Preview when the user explicitly wants to run, preview, start, test, or view the current app.",
+            "Do not route to Preview just because the project uses React, Vite, Next.js, or Expo.",
+            "Only route to Preview when the user explicitly wants to run, preview, start, test, or view the current app and has not asked for manual guidance.",
             "Only route to Generate when the user explicitly wants a new scaffolded template project.",
+            ...knownManualRunFacts,
             ...templateStructureHints,
             "",
           ].join("\n")
@@ -1727,7 +1772,134 @@ export default function App() {
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab],
   );
+  function hasManualOrAdvisoryIntent(message = "") {
+    const text = String(message || "").toLowerCase();
 
+    const hints = [
+      "manually",
+      "manual",
+      "manual steps",
+      "manual setup",
+      "just give me the commands",
+      "give me the commands",
+      "don't use kforge",
+      "do not use kforge",
+      "bypass kforge",
+      "without kforge",
+      "how do i run",
+      "how do i install",
+      "how do i set up",
+      "how do i add",
+      "what command",
+      "which command",
+      "explain",
+      "guide me",
+    ];
+
+    return hints.some((hint) => text.includes(hint));
+  }
+  function isDependencyInstallWorkflowIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+    return (
+      s.includes("install dependencies") ||
+      s.includes("install the dependencies") ||
+      s === "how do i install dependencies for this project?" ||
+      s === "how do i install dependencies for this project" ||
+      s.includes("install packages") ||
+      s.includes("install the packages")
+    );
+  }
+  function isCombinedOpenAiSupabaseServiceIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    const mentionsOpenAI = s.includes("openai");
+    const mentionsSupabase = s.includes("supabase");
+    const asksToAddBoth =
+      s.includes("add") ||
+      s.includes("set up") ||
+      s.includes("setup") ||
+      s.includes("connect");
+
+    return mentionsOpenAI && mentionsSupabase && asksToAddBoth;
+  }
+
+  function buildCombinedOpenAiSupabaseRoutingMessage(projectOpen) {
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        "Then you can leave the chat and use:\n" +
+        "Services → AI → OpenAI\n" +
+        "Services → Backend → Supabase"
+      );
+    }
+
+    return (
+      "KForge can help with this through both service flows.\n\n" +
+      "You can now leave the chat and open:\n" +
+      "Services → AI → OpenAI\n" +
+      "Services → Backend → Supabase\n\n" +
+      "Use the OpenAI service to add OpenAI to the project, and the Supabase service to connect the project to Supabase."
+    );
+  }
+  function isExpoPhonePreviewWorkflowIntent(
+    text = "",
+    detectedTemplateName = "",
+    detectedKind = "",
+  ) {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+    const template = String(detectedTemplateName || "").toLowerCase();
+    const kind = String(detectedKind || "").toLowerCase();
+
+    const projectLooksExpo = template.includes("expo") || kind.includes("expo");
+
+    const asksForExpoPhonePreview =
+      (s.includes("expo") &&
+        (s.includes("on my phone") ||
+          s.includes("phone") ||
+          s.includes("expo go"))) ||
+      s.includes("test this expo app on my phone") ||
+      s.includes("test this app on my phone");
+
+    return (
+      asksForExpoPhonePreview || (projectLooksExpo && s.includes("on my phone"))
+    );
+  }
+
+  function buildPreviewInstallRoutingMessage(projectOpen) {
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        "Then you can leave the chat and open: Preview Panel → Install."
+      );
+    }
+
+    return (
+      "KForge can help with this through the Preview panel.\n\n" +
+      "You can now leave the chat and open: Preview Panel → Install.\n\n" +
+      "If the project needs dependencies, install them there before previewing or running."
+    );
+  }
+
+  function buildExpoPhonePreviewRoutingMessage(projectOpen) {
+    if (!projectOpen) {
+      return (
+        "Open the Expo project folder first in Explorer.\n\n" +
+        "Then you can leave the chat and open: Preview Panel → Preview."
+      );
+    }
+
+    return (
+      "KForge can help with this through the Preview panel.\n\n" +
+      "You can now leave the chat and open: Preview Panel → Preview.\n\n" +
+      "For Expo phone preview, Preview gives you the guidance. The actual phone preview runs outside KForge."
+    );
+  }
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
       if (aiRunning) return;
@@ -1737,7 +1909,41 @@ export default function App() {
         appendMessage("system", "Prompt is required.");
         return;
       }
+      const detectedTemplateName =
+        projectTemplateInfo?.detectedTemplate?.name || null;
+      const detectedKind = projectTemplateInfo?.kind || null;
+      const projectOpen = !!projectPath;
+      if (isCombinedOpenAiSupabaseServiceIntent(draft)) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildCombinedOpenAiSupabaseRoutingMessage(projectOpen),
+        );
+        return;
+      }
+      if (isDependencyInstallWorkflowIntent(draft)) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildPreviewInstallRoutingMessage(projectOpen),
+        );
+        return;
+      }
 
+      if (
+        isExpoPhonePreviewWorkflowIntent(
+          draft,
+          detectedTemplateName,
+          detectedKind,
+        )
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildExpoPhonePreviewRoutingMessage(projectOpen),
+        );
+        return;
+      }
       if (providerSwitchNote) setProviderSwitchNote("");
 
       // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
@@ -1781,48 +1987,33 @@ export default function App() {
         ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
-      const toolInstruction = !askForPatch
-        ? "\n\nIMPORTANT:\n" +
-          "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
-          "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
-          "If a specific file path is mentioned or implied (such as src/App.jsx), modify that file directly instead of creating alternatives.\n" +
-          "Do NOT describe the change in prose.\n" +
-          "Do NOT say things like 'I will create the file'.\n" +
-          "Immediately output the required ```tool fenced blocks.\n" +
-          "\n" +
-          "Use tool fenced blocks when the user is asking you to take an action in the project, such as creating files, editing files, or running project operations.\n" +
-          "If the user is asking for an explanation, conceptual help, planning, or manual commands only, do not emit tool calls.\n" +
-          "If the user explicitly says they want to bypass KForge or wants manual steps only, do not emit tool calls and do not simulate actions.\n" +
-          "When the user chooses manual bypass, stay fully in manual chat mode.\n" +
-          "Do not keep describing the manual path as Preview, Generate, or KForge template creation.\n" +
-          "Recommend a concrete stack and provide direct commands or steps.\n" +
-          "If no project folder is open, tell the user to create or open one first before any file edits or preview suggestions.\n" +
-          "\n" +
-          "When the user's message is only gratitude, acknowledgement, or casual closing language such as 'thanks', 'thank you', 'cool thanks', 'nice', 'great', 'perfect', or 'ok thanks', do not emit tool calls and do not route to KForge workflows.\n" +
-          "Respond briefly and naturally in plain chat.\n" +
-          "If appropriate, offer a simple next-step option such as making another change, adding a feature, or reviewing the result.\n" +
-          "If you need to create or update files, you MUST request tools.\n" +
-          "Never output code changes only in chat when a file must be edited.\n" +
-          "\n" +
-          "Do NOT paste full file contents in chat.\n" +
-          "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
-          "Do NOT simulate file creation.\n" +
-          "\n" +
-          "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
-          "Do NOT invent or emit any other tool names.\n" +
-          "Do NOT emit tools like preview, install, terminal, services, supabase, stripe, or deploy.\n" +
-          "If the user wants a KForge UI workflow such as Preview, Services, or Terminal, answer in normal assistant text and guide them there instead of emitting a tool call.\n" +
-          "\n" +
-          "Instead, output one or more ```tool fenced blocks, each containing JSON like:\n" +
-          "```tool\n" +
-          '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
-          "```\n" +
-          "\n" +
-          "After creating or modifying files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
-          "```tool\n" +
-          '{ "name": "list_dir", "args": { "path": "." } }\n' +
-          "```\n"
-        : "";
+      const shouldSuppressToolsForPrompt = hasManualOrAdvisoryIntent(draft);
+
+      const toolInstruction =
+        !askForPatch && !shouldSuppressToolsForPrompt
+          ? "\n\nIMPORTANT:\n" +
+            "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
+            "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
+            "If a specific file path is mentioned or implied (such as src/App.jsx), modify that file directly instead of creating alternatives.\n" +
+            "Do NOT paste full file contents in chat.\n" +
+            "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
+            "Do NOT simulate file creation.\n" +
+            "\n" +
+            "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
+            "Do NOT invent or emit any other tool names.\n" +
+            "Do NOT emit tools like preview, install, terminal, services, supabase, stripe, or deploy.\n" +
+            "If the user wants a KForge UI workflow such as Preview, Services, or Terminal, answer in normal assistant text and guide them there instead of emitting a tool call.\n" +
+            "\n" +
+            "Instead, output one or more ```tool fenced blocks, each containing JSON like:\n" +
+            "```tool\n" +
+            '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
+            "```\n" +
+            "\n" +
+            "After creating or modifying files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
+            "```tool\n" +
+            '{ "name": "list_dir", "args": { "path": "." } }\n' +
+            "```\n"
+          : "";
 
       const inputWithContext = buildInputWithContext(
         `${draft}${patchInstruction}${toolInstruction}`,

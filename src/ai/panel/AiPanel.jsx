@@ -423,6 +423,18 @@ function isShowChangesIntent(text) {
   );
 }
 
+function isDependencyInstallIntent(text) {
+  const s = String(text || "").toLowerCase();
+  return (
+    s.includes("install dependencies") ||
+    s.includes("install the dependencies") ||
+    s.includes("how do i install dependencies") ||
+    s.includes("how do i install the dependencies") ||
+    s.includes("install packages") ||
+    s.includes("install the packages")
+  );
+}
+
 function isPreviewIntent(text) {
   const s = String(text || "").toLowerCase();
   return (
@@ -430,7 +442,8 @@ function isPreviewIntent(text) {
     s.includes("run the app") ||
     s.includes("use the kforge preview flow") ||
     s.includes("open preview") ||
-    s.includes("start the app")
+    s.includes("test this expo app on my phone") ||
+    s.includes("on my phone")
   );
 }
 function isClosingIntent(text) {
@@ -474,11 +487,19 @@ function isAdvisoryOnlyIntent(text) {
     s.includes("in the browser")
   );
 }
+function buildInstallHandoffMessage() {
+  return (
+    "KForge can help with this through the Preview panel.\n\n" +
+    "You can now leave the chat and open: Preview Panel → Install.\n\n" +
+    "If the project needs dependencies, install them there before previewing or running."
+  );
+}
+
 function buildPreviewHandoffMessage() {
   return (
     "KForge can help with this through the Preview panel.\n\n" +
-    'You can now leave the chat and open: Preview. Use "Preview" to run the current project. If the project needs dependencies, use "Install" first.\n\n' +
-    "If you prefer to bypass KForge, stay in the chat and I can help you run the project manually instead."
+    "You can now leave the chat and open: Preview Panel → Preview.\n\n" +
+    "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
   );
 }
 function buildAgentConversationInput(messages, tools, maxTurns = 20) {
@@ -1343,6 +1364,12 @@ export default function AiPanel({
               "assistant",
               "Those file changes did not complete. Check the tool errors above. If no project folder is open, open one first in Explorer. I did not create any files.",
             );
+          } else if (
+            isDependencyInstallIntent(latestUserText) &&
+            successfulWritePaths.length === 0 &&
+            successfulDirPaths.length === 0
+          ) {
+            appendMessage("assistant", buildInstallHandoffMessage());
           } else if (
             isPreviewIntent(latestUserText) &&
             successfulWritePaths.length === 0 &&

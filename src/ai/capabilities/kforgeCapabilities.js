@@ -92,6 +92,24 @@ function pushDiscovered(lines, capabilities, options = {}) {
 
   lines.push("");
 }
+function hasManualIntent(message = "") {
+  const text = String(message || "").toLowerCase();
+
+  const manualHints = [
+    "manually",
+    "manual",
+    "manual steps",
+    "manual setup",
+    "just give me the commands",
+    "give me the commands",
+    "don't use kforge",
+    "do not use kforge",
+    "bypass kforge",
+    "without kforge",
+  ];
+
+  return manualHints.some((hint) => text.includes(hint));
+}
 
 function filterRelevantWorkflows(workflows, userMessage) {
   if (!userMessage || userMessage.trim().length < 4) {
@@ -99,6 +117,9 @@ function filterRelevantWorkflows(workflows, userMessage) {
   }
 
   const message = userMessage.toLowerCase().trim();
+  if (hasManualIntent(message)) {
+    return [];
+  }
   const stopWords = new Set([
     "a",
     "an",
@@ -224,7 +245,32 @@ export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {
     "Only continue solving inside chat when the user explicitly chooses to bypass KForge, or when the request is normal in-project implementation work.",
   );
   lines.push("");
-
+  lines.push("=== Model Usage Hints ===");
+  lines.push(
+    "Default to pnpm for install and package commands unless the project clearly indicates npm or yarn.",
+  );
+  lines.push(
+    "For dependency installation guidance, use pnpm install by default.",
+  );
+  lines.push(
+    "For package installation guidance, use pnpm add <package> by default.",
+  );
+  lines.push(
+    "Do not present npm or yarn alternatives unless the user explicitly asks for them or the project clearly requires them.",
+  );
+  lines.push(
+    "For common JavaScript or TypeScript dev server guidance, use pnpm dev by default unless the project clearly indicates another command.",
+  );
+  lines.push(
+    "If the user explicitly says not to use KForge, do not route to KForge panels or Services and stay fully in manual guidance mode.",
+  );
+  lines.push(
+    "In manual guidance mode, avoid extra KForge follow-up suggestions unless the user asks for KForge again.",
+  );
+  lines.push(
+    "Do not require an open project folder for advisory-only answers or manual setup instructions.",
+  );
+  lines.push("");
   for (const workflow of filteredWorkflows) {
     pushWorkflow(lines, workflow);
   }
