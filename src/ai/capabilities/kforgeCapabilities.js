@@ -247,19 +247,19 @@ export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {
   lines.push("");
   lines.push("=== Model Usage Hints ===");
   lines.push(
-    "Default to pnpm for install and package commands unless the project clearly indicates npm or yarn.",
+    "Use known project facts, existing scripts, and detected package-manager context when those are already available.",
   );
   lines.push(
-    "For dependency installation guidance, use pnpm install by default.",
-  );
-  lines.push(
-    "For package installation guidance, use pnpm add <package> by default.",
+    "When the user is asking about the current JavaScript or TypeScript project and package-manager facts are not otherwise known, pnpm is the default KForge assumption unless the project clearly indicates npm or yarn.",
   );
   lines.push(
     "Do not present npm or yarn alternatives unless the user explicitly asks for them or the project clearly requires them.",
   );
   lines.push(
-    "For common JavaScript or TypeScript dev server guidance, use pnpm dev by default unless the project clearly indicates another command.",
+    "Only suggest package-manager commands such as install, add, or dev when the chosen manual path or the known current project actually implies those commands.",
+  );
+  lines.push(
+    "Do not assemble a new-project setup recipe by mixing generic package-manager defaults with an unrelated or invented scaffold path.",
   );
   lines.push(
     "If the user explicitly says not to use KForge, do not route to KForge panels or Services and stay fully in manual guidance mode.",
@@ -270,7 +270,6 @@ export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {
   lines.push(
     "Do not require an open project folder for advisory-only answers or manual setup instructions.",
   );
-  lines.push("");
   for (const workflow of filteredWorkflows) {
     pushWorkflow(lines, workflow);
   }

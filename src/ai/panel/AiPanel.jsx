@@ -554,6 +554,10 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- If no more tools are needed, provide the final assistant answer.\n` +
     `- Do not repeat the full prior conversation unnecessarily.\n` +
     `- You are inspecting or continuing work inside an existing workspace unless the user explicitly asks to create files or folders.\n` +
+    `- If the latest user request is normal in-project implementation work and routine inspection reveals a clear existing target, continue with the next necessary tool or edit step instead of stopping to ask for permission.\n` +
+    `- Do not ask follow-up questions like which file or directory to use after routine inspection unless the request is genuinely ambiguous or multiple existing targets are equally plausible.\n` +
+    `- For ordinary feature requests inside an existing project, prefer the simplest responsible existing file and continue.\n` +
+    `- If the workspace is empty and the latest user asks to add a page, feature, or app, do not start inventing files in the tool loop; answer normally and direct the user toward the supported new-project path instead.\n` +
     `- Do NOT create files or directories unless the user explicitly asks for them.\n` +
     `- When inspecting a workspace, start with the list_dir tool on "." unless the conversation already contains a directory listing.\n` +
     `- If a tool already returned the requested information, DO NOT call the same tool again.\n` +
