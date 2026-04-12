@@ -63,72 +63,75 @@ export default function TranscriptPanel({
   }, [safeMessages.length, transcriptBottomRef]);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wide opacity-70">
-          Transcript
-        </div>
-        {!hideChrome ? (
-          <div className="flex items-center gap-2">
-            {showReqButtons ? (
-              <>
-                <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
-                  Dev tools
-                </span>
+    <div className="min-h-0 flex flex-col gap-2">
+      {!hideChrome ? (
+        <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 pb-2 backdrop-blur">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs uppercase tracking-wide opacity-70">
+              Transcript
+            </div>
 
-                {typeof onRequestToolOk === "function" ? (
-                  <button
-                    className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-                    type="button"
-                    onClick={onRequestToolOk}
-                  >
-                    Tool: OK
-                  </button>
-                ) : null}
+            <div className="flex items-center gap-2">
+              {showReqButtons ? (
+                <>
+                  <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
+                    Dev tools
+                  </span>
 
-                {typeof onRequestToolErr === "function" ? (
-                  <button
-                    className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-                    type="button"
-                    onClick={onRequestToolErr}
-                  >
-                    Tool: Err
-                  </button>
-                ) : null}
+                  {typeof onRequestToolOk === "function" ? (
+                    <button
+                      className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                      type="button"
+                      onClick={onRequestToolOk}
+                    >
+                      Tool: OK
+                    </button>
+                  ) : null}
 
-                <span className="mx-1 h-5 w-px bg-zinc-800" />
-              </>
-            ) : null}
+                  {typeof onRequestToolErr === "function" ? (
+                    <button
+                      className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                      type="button"
+                      onClick={onRequestToolErr}
+                    >
+                      Tool: Err
+                    </button>
+                  ) : null}
 
-            {typeof handleRetryLast === "function" ? (
-              <button
-                className={[
-                  "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm",
-                  canRetry ? "" : "opacity-60 cursor-not-allowed",
-                ].join(" ")}
-                type="button"
-                onClick={canRetry ? handleRetryLast : undefined}
-                disabled={!canRetry}
-                title={lastSend ? "Retry last request" : "Nothing to retry"}
-              >
-                Retry
-              </button>
-            ) : null}
+                  <span className="mx-1 h-5 w-px bg-zinc-800" />
+                </>
+              ) : null}
 
-            {canClear ? (
-              <button
-                className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
-                type="button"
-                onClick={clearConversation}
-              >
-                Clear
-              </button>
-            ) : null}
+              {typeof handleRetryLast === "function" ? (
+                <button
+                  className={[
+                    "px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sm",
+                    canRetry ? "" : "opacity-60 cursor-not-allowed",
+                  ].join(" ")}
+                  type="button"
+                  onClick={canRetry ? handleRetryLast : undefined}
+                  disabled={!canRetry}
+                  title={lastSend ? "Retry last request" : "Nothing to retry"}
+                >
+                  Retry
+                </button>
+              ) : null}
+
+              {canClear ? (
+                <button
+                  className="px-3 py-1.5 rounded bg-transparent border border-zinc-800 hover:bg-zinc-900 text-sm"
+                  type="button"
+                  onClick={clearConversation}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </div>
-        ) : null}
-      </div>
-      {/* Scrollable transcript area only */}
-      <div className="flex-1 min-h-0 overflow-auto pr-1 flex flex-col gap-2">
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-2 pt-1">
         {safeMessages.map((m) => (
           <div key={m.id} className="flex flex-col gap-1">
             <TranscriptBubble
