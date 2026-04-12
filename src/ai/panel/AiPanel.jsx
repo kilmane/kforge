@@ -914,6 +914,7 @@ export default function AiPanel({
   CHAT_CONTEXT_TURNS,
   lastSend,
   aiRunning,
+  activityTick = 0,
   handleRetryLast,
   clearConversation,
 
@@ -971,6 +972,9 @@ export default function AiPanel({
 }) {
   const aiEndpoint = (endpoints?.[aiProvider] || "").trim();
   const isFocusLayout = !!focusLayout;
+  const pendingAssistantText = useMemo(() => {
+    return `Working${".".repeat(activityTick % 4)}`;
+  }, [activityTick]);
 
   // ✅ Advanced settings (power user knobs). Calm by default.
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -1884,7 +1888,14 @@ export default function AiPanel({
 
             {/* CHAT / TRANSCRIPT AREA */}
             <div className="flex-1 min-h-0 overflow-hidden rounded border border-zinc-800/60 bg-zinc-950/30 m-3">
-              <div className="h-full min-h-0 overflow-y-auto p-3">
+              <div
+                className={[
+                  "h-full min-h-0 p-3",
+                  showTranscript
+                    ? "flex flex-col overflow-hidden"
+                    : "overflow-y-auto",
+                ].join(" ")}
+              >
                 {showTranscript ? (
                   <TranscriptPanel
                     messages={messages}
@@ -1893,6 +1904,7 @@ export default function AiPanel({
                     CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
                     lastSend={lastSend}
                     aiRunning={aiRunning}
+                    pendingLabel={pendingAssistantText}
                     handleRetryLast={handleRetryLast}
                     clearConversation={clearConversation}
                     onRequestToolOk={handleRequestToolOk}
@@ -1964,7 +1976,7 @@ export default function AiPanel({
                     {aiRunning ? (
                       <TranscriptBubble
                         role="assistant"
-                        content="Working…"
+                        content={pendingAssistantText}
                         ts={Date.now()}
                       />
                     ) : null}
@@ -2051,11 +2063,8 @@ export default function AiPanel({
             CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
             lastSend={lastSend}
             aiRunning={aiRunning}
+            pendingLabel={pendingAssistantText}
             handleRetryLast={handleRetryLast}
-            clearConversation={clearConversation}
-            onRequestToolOk={handleRequestToolOk}
-            onRequestToolErr={handleRequestToolErr}
-            showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
           />
 
           <PromptPanel

@@ -33,6 +33,7 @@ export default function TranscriptPanel({
   transcriptBottomRef,
   lastSend,
   aiRunning,
+  pendingLabel = "Working",
   handleRetryLast,
   clearConversation,
   onRequestToolOk,
@@ -54,24 +55,23 @@ export default function TranscriptPanel({
     (typeof onRequestToolOk === "function" ||
       typeof onRequestToolErr === "function");
 
-  // ✅ Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     transcriptBottomRef?.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
     });
-  }, [safeMessages.length, transcriptBottomRef]);
+  }, [safeMessages.length, transcriptBottomRef, aiRunning, pendingLabel]);
 
   return (
-    <div className="min-h-0 flex flex-col gap-2">
+    <div className="flex-1 min-h-0 flex flex-col gap-2">
       {!hideChrome ? (
         <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 pb-2 backdrop-blur">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs uppercase tracking-wide opacity-70">
+            <div className="min-w-0 text-xs uppercase tracking-wide opacity-70 truncate">
               Transcript
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {showReqButtons ? (
                 <>
                   <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
@@ -131,7 +131,7 @@ export default function TranscriptPanel({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-2 pt-1">
+      <div className="flex-1 min-h-0 overflow-auto pr-1 flex flex-col gap-2">
         {safeMessages.map((m) => (
           <div key={m.id} className="flex flex-col gap-1">
             <TranscriptBubble
@@ -145,7 +145,14 @@ export default function TranscriptPanel({
           </div>
         ))}
 
-        {/* Scroll anchor */}
+        {aiRunning ? (
+          <TranscriptBubble
+            role="assistant"
+            content={pendingLabel}
+            ts={Date.now()}
+          />
+        ) : null}
+
         <div ref={transcriptBottomRef} />
       </div>
     </div>
