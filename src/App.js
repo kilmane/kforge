@@ -798,6 +798,7 @@ export default function App() {
   // Workspace activity (UI-only)
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const [workspaceBusyLabel, setWorkspaceBusyLabel] = useState("");
+  const [activityTick, setActivityTick] = useState(0);
 
   // Workspace activity helpers (UI-only)
   const beginWorkspaceBusy = useCallback((label = "Working…") => {
@@ -809,7 +810,25 @@ export default function App() {
     setWorkspaceBusy(false);
     setWorkspaceBusyLabel("");
   }, []);
+  useEffect(() => {
+    if (!workspaceBusy && !aiRunning) return;
 
+    const timer = window.setInterval(() => {
+      setActivityTick((prev) => (prev + 1) % 4);
+    }, 450);
+
+    return () => window.clearInterval(timer);
+  }, [workspaceBusy, aiRunning]);
+
+  const animatedActivityText = useCallback(
+    (label = "Working") => {
+      const raw = String(label || "Working").trim();
+      const base = raw.replace(/(?:\.\.\.|…|\.+)\s*$/u, "").trim() || "Working";
+      const dots = ".".repeat(activityTick % 4);
+      return `${base}${dots}`;
+    },
+    [activityTick],
+  );
   // Provider switch feedback (UI-only, ephemeral)
   const [providerSwitchNote, setProviderSwitchNote] = useState("");
 
@@ -2337,6 +2356,8 @@ export default function App() {
       CHAT_CONTEXT_TURNS={CHAT_CONTEXT_TURNS}
       lastSend={lastSend}
       aiRunning={aiRunning}
+      activityTick={activityTick}
+      handleRetryLast={handleRetryLast}
       handleRetryLast={handleRetryLast}
       clearConversation={clearConversation}
       activeTab={activeTab}
@@ -2392,16 +2413,16 @@ export default function App() {
         .replaceAll("\n", " ")
         .slice(0, 240)
     : "";
-const openHelpLink = useCallback(async (url) => {
-  const target = String(url || "").trim();
-  if (!target) return;
+  const openHelpLink = useCallback(async (url) => {
+    const target = String(url || "").trim();
+    if (!target) return;
 
-  try {
-    await invoke("open_url", { url: target });
-  } catch {
-    window.open(target, "_blank", "noopener,noreferrer");
-  }
-}, []);
+    try {
+      await invoke("open_url", { url: target });
+    } catch {
+      window.open(target, "_blank", "noopener,noreferrer");
+    }
+  }, []);
   const topBarEl = (
     <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800 relative z-50 bg-zinc-950">
       <button
@@ -2512,7 +2533,7 @@ const openHelpLink = useCallback(async (url) => {
 
       {workspaceBusy ? (
         <div className="text-xs px-2 py-1 rounded border border-amber-800/70 bg-amber-950/40 text-amber-200 whitespace-nowrap">
-          {workspaceBusyLabel}
+          {animatedActivityText(workspaceBusyLabel)}
         </div>
       ) : null}
 
@@ -2569,7 +2590,7 @@ const openHelpLink = useCallback(async (url) => {
                 activeFilePath={activeFilePath}
                 projectPath={projectPath}
                 busy={workspaceBusy}
-                busyLabel={workspaceBusyLabel}
+                busyLabel={animatedActivityText(workspaceBusyLabel)}
               />
             </div>
           </div>
