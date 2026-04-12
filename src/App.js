@@ -46,7 +46,43 @@ function basename(p) {
   const parts = normalized.split("/");
   return parts[parts.length - 1] || p;
 }
-
+const HELP_LINKS = [
+  {
+    id: "providers_and_models",
+    label: "Providers and Models",
+    url: "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html",
+  },
+  {
+    id: "models_color_labels",
+    label: "Models Color + Labels",
+    url: "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html",
+  },
+  {
+    id: "terminology",
+    label: "Terminology",
+    url: "https://kilmane.github.io/kforge/terminology.html",
+  },
+  {
+    id: "project_memory",
+    label: "What is Project Memory?",
+    url: "https://kilmane.github.io/kforge/project-memory.html",
+  },
+  {
+    id: "custom_providers",
+    label: "Custom Provider (OpenAI-compatible)",
+    url: "https://kilmane.github.io/kforge/custom_provider.html",
+  },
+  {
+    id: "portability",
+    label: "Portability",
+    url: "https://kilmane.github.io/kforge/portability.html",
+  },
+  {
+    id: "presets_inventory",
+    label: "Presets Inventory",
+    url: "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html",
+  },
+];
 const DEFAULT_KFORGE_SYSTEM = `
 You are KForge, a vibe-coding assistant running inside a tool-enabled environment.
 
@@ -892,46 +928,46 @@ export default function App() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
- const handleRefreshTree = useCallback(async () => {
-   if (!projectPath) {
-     setAiTestOutput("No folder open.");
-     setProjectTemplateInfo(null);
-     return;
-   }
+  const handleRefreshTree = useCallback(async () => {
+    if (!projectPath) {
+      setAiTestOutput("No folder open.");
+      setProjectTemplateInfo(null);
+      return;
+    }
 
-   beginWorkspaceBusy("Scanning folder…");
+    beginWorkspaceBusy("Scanning folder…");
 
-   // Try to allow the chosen folder in scope (best-effort)
-   try {
-     await invoke("fs_allow_directory", { path: projectPath });
-   } catch {
-     // ignore
-   }
+    // Try to allow the chosen folder in scope (best-effort)
+    try {
+      await invoke("fs_allow_directory", { path: projectPath });
+    } catch {
+      // ignore
+    }
 
-   try {
-     // Tell fs.js what the official root is
-     setProjectRoot(projectPath);
-     await loadProjectMemoryForCurrentRoot();
+    try {
+      // Tell fs.js what the official root is
+      setProjectRoot(projectPath);
+      await loadProjectMemoryForCurrentRoot();
 
-     const nextTree = await readFolderTree(projectPath);
-     const detectedTemplates = await previewDetectTemplates(projectPath);
+      const nextTree = await readFolderTree(projectPath);
+      const detectedTemplates = await previewDetectTemplates(projectPath);
 
-     setTree(nextTree || []);
-     setProjectTemplateInfo(detectedTemplates || null);
-     setAiTestOutput("");
-   } catch (err) {
-     const msg = formatTauriError ? formatTauriError(err) : String(err);
-     setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
-   } finally {
-     endWorkspaceBusy();
-   }
- }, [
-   projectPath,
-   beginWorkspaceBusy,
-   endWorkspaceBusy,
-   loadProjectMemoryForCurrentRoot,
-   readFolderTree,
- ]);
+      setTree(nextTree || []);
+      setProjectTemplateInfo(detectedTemplates || null);
+      setAiTestOutput("");
+    } catch (err) {
+      const msg = formatTauriError ? formatTauriError(err) : String(err);
+      setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
+    } finally {
+      endWorkspaceBusy();
+    }
+  }, [
+    projectPath,
+    beginWorkspaceBusy,
+    endWorkspaceBusy,
+    loadProjectMemoryForCurrentRoot,
+    readFolderTree,
+  ]);
   useEffect(() => {
     function handleExternalRefresh() {
       handleRefreshTree();
@@ -2356,7 +2392,16 @@ export default function App() {
         .replaceAll("\n", " ")
         .slice(0, 240)
     : "";
+const openHelpLink = useCallback(async (url) => {
+  const target = String(url || "").trim();
+  if (!target) return;
 
+  try {
+    await invoke("open_url", { url: target });
+  } catch {
+    window.open(target, "_blank", "noopener,noreferrer");
+  }
+}, []);
   const topBarEl = (
     <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800 relative z-50 bg-zinc-950">
       <button
@@ -2366,7 +2411,34 @@ export default function App() {
       >
         {focusMode ? "Exit Focus" : "Focus"}
       </button>
+      <details className="relative">
+        <summary
+          className={buttonClass("ghost")}
+          title="Open KForge help links"
+        >
+          Help
+        </summary>
 
+        <div className="absolute left-0 top-full mt-2 w-72 rounded-lg border border-zinc-800 bg-zinc-950 shadow-xl overflow-hidden z-[80]">
+          <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-zinc-400 border-b border-zinc-800 bg-zinc-900/40">
+            KForge Help
+          </div>
+
+          <div className="py-1">
+            {HELP_LINKS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900/60"
+                onClick={() => openHelpLink(item.url)}
+                title={item.label}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </details>
       <button className={buttonClass()} onClick={handleNewProject}>
         New Project
       </button>

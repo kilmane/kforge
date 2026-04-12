@@ -768,8 +768,62 @@ function ProviderMenuButton({
     </div>
   );
 }
-function HelpMenuPlaceholder() {
+const AI_HELP_LINKS = [
+  {
+    id: "providers_and_models",
+    label: "Providers and Models",
+    url: "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html",
+  },
+  {
+    id: "models_color_labels",
+    label: "Models Color + Labels",
+    url: "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html",
+  },
+  {
+    id: "terminology",
+    label: "Terminology",
+    url: "https://kilmane.github.io/kforge/terminology.html",
+  },
+  {
+    id: "project_memory",
+    label: "What is Project Memory?",
+    url: "https://kilmane.github.io/kforge/project-memory.html",
+  },
+  {
+    id: "custom_providers",
+    label: "Custom Provider (OpenAI-compatible)",
+    url: "https://kilmane.github.io/kforge/custom_provider.html",
+  },
+  {
+    id: "portability",
+    label: "Portability",
+    url: "https://kilmane.github.io/kforge/portability.html",
+  },
+  {
+    id: "presets_inventory",
+    label: "Presets Inventory",
+    url: "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html",
+  },
+];
+function HelpMenuPlaceholder({ invoke }) {
   const [open, setOpen] = React.useState(false);
+
+  async function openHelpLink(url) {
+    const target = String(url || "").trim();
+    if (!target) return;
+
+    try {
+      if (typeof invoke === "function") {
+        await invoke("open_url", { url: target });
+      } else {
+        window.open(target, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      window.open(target, "_blank", "noopener,noreferrer");
+    } finally {
+      setOpen(false);
+    }
+  }
 
   return (
     <div className="relative">
@@ -790,12 +844,23 @@ function HelpMenuPlaceholder() {
       </button>
 
       {open ? (
-        <div className="absolute left-0 mt-2 w-64 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg z-50 overflow-hidden">
-          <div className="px-3 py-2 text-sm text-zinc-300 border-b border-zinc-800 bg-zinc-900/40">
-            Help menu placeholder
+        <div className="absolute left-0 mt-2 w-72 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg z-50 overflow-hidden">
+          <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-zinc-400 border-b border-zinc-800 bg-zinc-900/40">
+            KForge Help
           </div>
-          <div className="px-3 py-3 text-sm text-zinc-400">
-            We can move the real Help links here once you like the position.
+
+          <div className="py-1">
+            {AI_HELP_LINKS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900"
+                onClick={() => openHelpLink(item.url)}
+                title={item.label}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
       ) : null}
@@ -1584,7 +1649,7 @@ export default function AiPanel({
               }
             />
 
-            <HelpMenuPlaceholder />
+            <HelpMenuPlaceholder invoke={invoke} />
           </div>
 
           <div className="flex items-center gap-2">
