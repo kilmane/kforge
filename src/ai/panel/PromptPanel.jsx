@@ -39,21 +39,25 @@ export default function PromptPanel({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs uppercase tracking-wide opacity-60">Prompt</div>
+      {advancedOpen ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs uppercase tracking-wide opacity-60">
+            Prompt
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            className={buttonClass("ghost", !activeTab || !providerReady)}
-            onClick={handleUseActiveFileAsPrompt}
-            disabled={!activeTab || !providerReady}
-            title="Copy the current file into the prompt box"
-            type="button"
-          >
-            Use current file
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={buttonClass("ghost", !activeTab || !providerReady)}
+              onClick={handleUseActiveFileAsPrompt}
+              disabled={!activeTab || !providerReady}
+              title="Copy the current file into the prompt box"
+              type="button"
+            >
+              Use current file
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Advanced-only controls */}
       {advancedOpen ? (
