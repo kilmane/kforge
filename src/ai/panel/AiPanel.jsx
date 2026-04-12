@@ -768,7 +768,40 @@ function ProviderMenuButton({
     </div>
   );
 }
+function HelpMenuPlaceholder() {
+  const [open, setOpen] = React.useState(false);
 
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        title="Help"
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          "flex items-center gap-2 px-3 py-1.5 rounded-md border",
+          "text-sm font-semibold text-white",
+          "bg-emerald-600/90 hover:bg-emerald-600 border-emerald-500/60",
+        ].join(" ")}
+      >
+        <span>Help</span>
+        <span className="text-yellow-300 font-extrabold text-xs leading-none">
+          ▼
+        </span>
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 mt-2 w-64 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg z-50 overflow-hidden">
+          <div className="px-3 py-2 text-sm text-zinc-300 border-b border-zinc-800 bg-zinc-900/40">
+            Help menu placeholder
+          </div>
+          <div className="px-3 py-3 text-sm text-zinc-400">
+            We can move the real Help links here once you like the position.
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 export default function AiPanel({
   // layout / open state
   projectPath,
@@ -1538,17 +1571,21 @@ export default function AiPanel({
       {/* AI header: GPT-clean control */}
       <div className="p-3 border-b border-zinc-800 sticky top-0 z-30 bg-zinc-950">
         <div className="flex items-center justify-between gap-2">
-          <ProviderMenuButton
-            provider={aiProvider}
-            model={aiModelStr || "(none)"}
-            configured={providerReady}
-            advancedOpen={advancedOpen}
-            onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
-            onChangeProviderModel={() => setModelPickerOpen(true)}
-            onConfigure={() =>
-              openSettings(aiProvider, "Configure in Settings")
-            }
-          />
+          <div className="flex items-center gap-2 min-w-0">
+            <ProviderMenuButton
+              provider={aiProvider}
+              model={aiModelStr || "(none)"}
+              configured={providerReady}
+              advancedOpen={advancedOpen}
+              onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
+              onChangeProviderModel={() => setModelPickerOpen(true)}
+              onConfigure={() =>
+                openSettings(aiProvider, "Configure in Settings")
+              }
+            />
+
+            <HelpMenuPlaceholder />
+          </div>
 
           <div className="flex items-center gap-2">
             <button
