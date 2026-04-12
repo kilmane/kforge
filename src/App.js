@@ -759,6 +759,21 @@ export default function App() {
   // Debug line
   const [aiTestOutput, setAiTestOutput] = useState("");
 
+  // Workspace activity (UI-only)
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [workspaceBusyLabel, setWorkspaceBusyLabel] = useState("");
+
+  // Workspace activity helpers (UI-only)
+  const beginWorkspaceBusy = useCallback((label = "Working…") => {
+    setWorkspaceBusy(true);
+    setWorkspaceBusyLabel(String(label || "Working…"));
+  }, []);
+
+  const endWorkspaceBusy = useCallback(() => {
+    setWorkspaceBusy(false);
+    setWorkspaceBusyLabel("");
+  }, []);
+
   // Provider switch feedback (UI-only, ephemeral)
   const [providerSwitchNote, setProviderSwitchNote] = useState("");
 
@@ -874,6 +889,7 @@ export default function App() {
       if (trimmed) return cur;
       return presets[0];
     });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
   const handleRefreshTree = useCallback(async () => {
