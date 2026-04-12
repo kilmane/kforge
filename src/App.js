@@ -953,58 +953,69 @@ export default function App() {
     const folder = await openProjectFolder();
     if (!folder) return;
 
-    // Try to allow the chosen folder in scope (best-effort).
+    beginWorkspaceBusy("Opening folder…");
+
     try {
-      await invoke("fs_allow_directory", { path: folder });
-    } catch (err) {
-      console.error("[kforge] Failed to allow folder in FS scope:", err);
-      // We do NOT return here; we still attempt to read the tree.
+      // Try to allow the chosen folder in scope (best-effort).
+      try {
+        await invoke("fs_allow_directory", { path: folder });
+      } catch (err) {
+        console.error("[kforge] Failed to allow folder in FS scope:", err);
+        // We do NOT return here; we still attempt to read the tree.
+      }
+
+      // ✅ App.js is the authority: set root + load memory BEFORE reading tree
+      try {
+        setProjectRoot(folder);
+        await loadProjectMemoryForCurrentRoot();
+      } catch (err) {
+        console.error(
+          "[kforge] Failed to set root / load project memory:",
+          err,
+        );
+        const msg = formatTauriError ? formatTauriError(err) : String(err);
+        setAiTestOutput(`Open folder failed (memory):\n${folder}\n\n${msg}`);
+        return; // keep current project state unchanged
+      }
+
+      // Read folder tree SAFELY — forbidden paths must not crash the UI.
+      let nextTree = null;
+      try {
+        nextTree = await readFolderTree(folder);
+      } catch (err) {
+        console.error("[kforge] Failed to read folder tree:", err);
+        const msg = formatTauriError ? formatTauriError(err) : String(err);
+        setAiTestOutput(
+          `Open folder failed:\n${folder}\n\n${msg}\n\n` +
+            `This usually means the folder is outside the allowed allow-read-dir scope.`,
+        );
+        return; // keep current project state unchanged on failure
+      }
+
+      // Only commit UI state changes after we successfully read the tree
+      setProjectPath(folder);
+      setFocusMode(false);
+      setFocusMode(false);
+      setTabs([]);
+      setActiveFilePath(null);
+      setSaveStatus("");
+      setAiTestOutput("");
+
+      // Phase 3.4.5: safest to turn off file inclusion when switching context
+      setIncludeActiveFile(false);
+
+      setTree(nextTree || []);
+    } finally {
+      endWorkspaceBusy();
     }
-
-    // ✅ App.js is the authority: set root + load memory BEFORE reading tree
-    try {
-      setProjectRoot(folder);
-      await loadProjectMemoryForCurrentRoot();
-    } catch (err) {
-      console.error("[kforge] Failed to set root / load project memory:", err);
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(`Open folder failed (memory):\n${folder}\n\n${msg}`);
-      return; // keep current project state unchanged
-    }
-
-    // Read folder tree SAFELY — forbidden paths must not crash the UI.
-    let nextTree = null;
-    try {
-      nextTree = await readFolderTree(folder);
-    } catch (err) {
-      console.error("[kforge] Failed to read folder tree:", err);
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(
-        `Open folder failed:\n${folder}\n\n${msg}\n\n` +
-          `This usually means the folder is outside the allowed allow-read-dir scope.`,
-      );
-      return; // keep current project state unchanged on failure
-    }
-
-    // Only commit UI state changes after we successfully read the tree
-    setProjectPath(folder);
-    setFocusMode(false);
-    setFocusMode(false);
-    setTabs([]);
-    setActiveFilePath(null);
-    setSaveStatus("");
-    setAiTestOutput("");
-
-    // Phase 3.4.5: safest to turn off file inclusion when switching context
-    setIncludeActiveFile(false);
-
-    setTree(nextTree || []);
   }, [
     invoke,
     openProjectFolder,
     readFolderTree,
     setProjectRoot,
     loadProjectMemoryForCurrentRoot,
+    beginWorkspaceBusy,
+    endWorkspaceBusy,
   ]);
 
   const handleResetWorkspace = useCallback(() => {
