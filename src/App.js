@@ -892,36 +892,46 @@ export default function App() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
-  const handleRefreshTree = useCallback(async () => {
-    if (!projectPath) {
-      setAiTestOutput("No folder open.");
-      setProjectTemplateInfo(null);
-      return;
-    }
+ const handleRefreshTree = useCallback(async () => {
+   if (!projectPath) {
+     setAiTestOutput("No folder open.");
+     setProjectTemplateInfo(null);
+     return;
+   }
 
-    // Try to allow the chosen folder in scope (best-effort)
-    try {
-      await invoke("fs_allow_directory", { path: projectPath });
-    } catch {
-      // ignore
-    }
+   beginWorkspaceBusy("Scanning folder…");
 
-    try {
-      // Tell fs.js what the official root is
-      setProjectRoot(projectPath);
-      await loadProjectMemoryForCurrentRoot();
+   // Try to allow the chosen folder in scope (best-effort)
+   try {
+     await invoke("fs_allow_directory", { path: projectPath });
+   } catch {
+     // ignore
+   }
 
-      const nextTree = await readFolderTree(projectPath);
-      const detectedTemplates = await previewDetectTemplates(projectPath);
+   try {
+     // Tell fs.js what the official root is
+     setProjectRoot(projectPath);
+     await loadProjectMemoryForCurrentRoot();
 
-      setTree(nextTree || []);
-      setProjectTemplateInfo(detectedTemplates || null);
-      setAiTestOutput("");
-    } catch (err) {
-      const msg = formatTauriError ? formatTauriError(err) : String(err);
-      setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
-    }
-  }, [projectPath]);
+     const nextTree = await readFolderTree(projectPath);
+     const detectedTemplates = await previewDetectTemplates(projectPath);
+
+     setTree(nextTree || []);
+     setProjectTemplateInfo(detectedTemplates || null);
+     setAiTestOutput("");
+   } catch (err) {
+     const msg = formatTauriError ? formatTauriError(err) : String(err);
+     setAiTestOutput(`Refresh failed:\n${projectPath}\n\n${msg}`);
+   } finally {
+     endWorkspaceBusy();
+   }
+ }, [
+   projectPath,
+   beginWorkspaceBusy,
+   endWorkspaceBusy,
+   loadProjectMemoryForCurrentRoot,
+   readFolderTree,
+ ]);
   useEffect(() => {
     function handleExternalRefresh() {
       handleRefreshTree();
