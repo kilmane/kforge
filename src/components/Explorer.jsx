@@ -7,11 +7,20 @@ function isDir(node) {
 function sortNodes(nodes) {
   const safe = Array.isArray(nodes) ? nodes : [];
   const dirs = safe.filter(isDir).sort((a, b) => a.name.localeCompare(b.name));
-  const files = safe.filter((n) => !isDir(n)).sort((a, b) => a.name.localeCompare(b.name));
+  const files = safe
+    .filter((n) => !isDir(n))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return [...dirs, ...files];
 }
 
-function NodeRow({ node, depth, expanded, setExpanded, onOpenFile, activeFilePath }) {
+function NodeRow({
+  node,
+  depth,
+  expanded,
+  setExpanded,
+  onOpenFile,
+  activeFilePath,
+}) {
   const dir = isDir(node);
   const open = expanded[node.path] ?? false;
   const active = !dir && activeFilePath === node.path;
@@ -22,7 +31,7 @@ function NodeRow({ node, depth, expanded, setExpanded, onOpenFile, activeFilePat
         className={[
           "w-full text-left flex items-center gap-2 px-2 py-1 rounded",
           "hover:bg-zinc-800/60",
-          active ? "bg-zinc-800" : ""
+          active ? "bg-zinc-800" : "",
         ].join(" ")}
         style={{ paddingLeft: 8 + depth * 12 }}
         onClick={() => {
@@ -36,7 +45,9 @@ function NodeRow({ node, depth, expanded, setExpanded, onOpenFile, activeFilePat
         title={node.path}
         type="button"
       >
-        <span className="opacity-80 w-4 inline-block">{dir ? (open ? "▾" : "▸") : "•"}</span>
+        <span className="opacity-80 w-4 inline-block">
+          {dir ? (open ? "▾" : "▸") : "•"}
+        </span>
         <span className="truncate">{node.name}</span>
       </button>
 
@@ -59,14 +70,24 @@ function NodeRow({ node, depth, expanded, setExpanded, onOpenFile, activeFilePat
   );
 }
 
-export default function Explorer({ tree, onOpenFile, activeFilePath }) {
+export default function Explorer({
+  tree,
+  onOpenFile,
+  activeFilePath,
+  projectPath,
+  busy = false,
+  busyLabel = "",
+}) {
   const [expanded, setExpanded] = useState({});
 
   const rootNodes = useMemo(() => sortNodes(tree), [tree]);
+  const resolvedBusyLabel = String(busyLabel || "Scanning folder…").trim();
 
   return (
     <div className="h-full overflow-auto p-2">
-      {!tree ? (
+      {busy ? (
+        <div className="text-sm opacity-70 p-2">{resolvedBusyLabel}</div>
+      ) : !projectPath ? (
         <div className="text-sm opacity-70 p-2">No folder opened.</div>
       ) : rootNodes.length === 0 ? (
         <div className="text-sm opacity-70 p-2">Folder is empty.</div>

@@ -2438,7 +2438,16 @@ export default function App() {
       {/* Phase 3.6.1/3.6.2: UI-only tool visibility demos (safe + removable) */}
       <div className="hidden md:flex items-center gap-2"></div>
 
-      <div className="text-sm opacity-80 truncate">
+      {workspaceBusy ? (
+        <div className="text-xs px-2 py-1 rounded border border-amber-800/70 bg-amber-950/40 text-amber-200 whitespace-nowrap">
+          {workspaceBusyLabel}
+        </div>
+      ) : null}
+
+      <div
+        className="text-sm opacity-80 truncate"
+        title={projectPath ? projectPath : "No folder opened"}
+      >
         {projectPath ? `Folder: ${projectPath}` : "No folder opened"}
       </div>
 
@@ -2486,6 +2495,9 @@ export default function App() {
                 tree={tree}
                 onOpenFile={handleOpenFile}
                 activeFilePath={activeFilePath}
+                projectPath={projectPath}
+                busy={workspaceBusy}
+                busyLabel={workspaceBusyLabel}
               />
             </div>
           </div>
