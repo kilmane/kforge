@@ -1561,15 +1561,6 @@ export default function AiPanel({
             >
               {showTranscript ? "Back to Chat" : "View Transcript"}
             </button>
-
-            <button
-              className={iconButtonClass(false)}
-              onClick={() => setAiPanelOpen(false)}
-              title="Hide AI panel"
-              type="button"
-            >
-              <span className="text-sm opacity-80">✕</span>
-            </button>
           </div>
         </div>
         {isDevBuild && (
@@ -1867,6 +1858,15 @@ export default function AiPanel({
                           />
                         );
                       })}
+
+                    {aiRunning ? (
+                      <TranscriptBubble
+                        role="assistant"
+                        content="Working…"
+                        ts={Date.now()}
+                      />
+                    ) : null}
+
                     <div ref={transcriptBottomRef} />
                   </>
                 )}
