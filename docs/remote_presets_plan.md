@@ -153,8 +153,8 @@ Constraint:
       "updated_at": "2026-02-01",
       "providers": {
         "openai": [
-          { "id": "gpt-4.1-mini", "cost": "paid_main", "usage": "main", "note": "Day-to-day" },
-          { "id": "gpt-5-mini", "cost": "paid_sandbox", "usage": "sandbox", "note": "Cheap paid testing" }
+          { "id": "gpt-5.4-mini", "cost": "paid_main", "usage": "main", "note": "Day-to-day" },
+          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Cheap paid testing" }
         ],
         "openrouter": [
           {

@@ -1,12 +1,9 @@
 
-
 # Model Update Request — KForge
-
-`D:\kforge\docs-internal\model-update-request.md`
 
 _Last updated: 19/04/2026_
 
-Purpose:
+Purpose:  
 This note is the internal handoff for future model/provider update passes.
 
 Use it whenever:
@@ -142,6 +139,8 @@ Then give me:
 - exact rows/sections to replace
 - any risky models to remove
 - git commands to commit/push the docs
+
+Also check whether docs/index.md needs updating so GitHub Pages still links users to the latest docs from the published docs homepage.
 ```
 
 ---
@@ -215,7 +214,38 @@ git push
 
 ---
 
-## Final reminder
+## GitHub Pages / docs landing page check
+
+After updating model/provider docs, also check whether the GitHub Pages docs landing page needs updating.
+
+Plain English:
+
+* `docs/index.md` is the docs landing page for the published site if GitHub Pages is publishing from the repo `/docs` folder
+* GitHub Pages looks for `index.html`, `index.md`, or `README.md` as the entry file
+* when `docs/index.md` changes and is pushed, the published docs homepage updates after GitHub Pages rebuilds
+
+What to check after a docs update:
+
+* does `docs/index.md` still link to the right documents?
+* are the link titles still accurate?
+* if a new important doc was added, should it be linked from `docs/index.md`?
+* if a doc was renamed or replaced, does `docs/index.md` still point to the correct file?
+* does the published docs homepage still give users a clear path to the latest provider/model information?
+
+Typical repo action:
+
+```powershell
+git add docs/index.md
+git commit -m "Docs: update docs landing page links"
+git push
+```
+
+Useful reminder:
+Updating a doc file alone is not enough if users discover docs through the published GitHub Pages landing page.
+
+---
+
+## Final reminders
 
 Do not only ask:
 
@@ -236,6 +266,6 @@ Then run:
 
 ```powershell
 git add docs-internal/model-update-request.md
-git commit -m "Docs-internal: add model update request handoff"
+git commit -m "Docs-internal: polish model update request handoff"
 git push
 ````
