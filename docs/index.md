@@ -6,7 +6,7 @@
 
 Welcome to the official KForge documentation.
 
-This site contains user guides and reference material for using KForge,
+This site contains user-facing guides and reference material for using KForge,
 understanding providers and models, and configuring the system.
 
 ## User Guides
@@ -19,6 +19,6 @@ understanding providers and models, and configuring the system.
 - [Presets Inventory](PRESETS_INVENTORY.md)
 - [Project Memory](project-memory.md)
 
---
+---
 
 These pages are safe to link from inside the KForge application.
