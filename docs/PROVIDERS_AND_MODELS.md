@@ -1,6 +1,6 @@
 # Understanding LLM Providers & Models in KForge
 
-_Last updated: 01/02/2026_
+_Last updated: 19/04/2026_
 
 This document explains how KForge thinks about AI providers, models, presets, and cost.
 It is intentionally high-level and provider-agnostic.
@@ -14,8 +14,8 @@ This document is a living reference and may be updated over time.
 
 In KForge, **providers and models are separate concepts**.
 
-- **Provider**: where the AI runs (cloud service, gateway, or local runtime)
-- **Model**: the exact identifier that provider expects (case-sensitive)
+- **Provider**: where the AI runs
+- **Model**: the exact identifier that provider expects
 
 KForge does not hardcode pricing, limits, or guarantees.
 You are always in control of which providers and models you configure.
@@ -31,32 +31,33 @@ These companies:
 - run them on their own infrastructure
 - enforce pricing and limits directly
 
-Examples include OpenAI, Anthropic (Claude), Google (Gemini), and Mistral.
+Examples include OpenAI, Anthropic (Claude), Google (Gemini), Mistral, and DeepSeek.
 
 What this means:
-- API key required
-- Billing usually required
-- Most stable and predictable behavior
-- Model names and capabilities may still evolve
+- API key usually required
+- billing or account limits usually apply
+- generally the most predictable direct route
+- model names and capabilities may still evolve
 
 ---
 
-### OpenAI-compatible gateways
+### OpenAI-compatible hosts and gateways
 
-These are independent services that:
+These services:
 - expose APIs compatible with the OpenAI format
-- host their own models or route requests to multiple providers
+- may host their own models or route requests to multiple providers
 
-Examples include OpenRouter, DeepSeek, and Groq.
+Examples include OpenRouter, Groq, and many enterprise or private gateways.
 
 Important:
-“OpenAI-compatible” means **same API shape**, not same models, pricing, or guarantees.
+“OpenAI-compatible” means **similar API shape**, not same models, pricing, or guarantees.
 
 Trade-offs:
-- Often cheaper or temporarily free
-- Free tiers may rotate or disappear
-- Models may change without notice
-- Excellent for experimentation and flexibility
+- often flexible
+- sometimes cheaper
+- sometimes temporarily free
+- free routes may rotate or disappear
+- excellent for experimentation and routing flexibility
 
 ---
 
@@ -66,13 +67,14 @@ The **Custom provider** allows you to connect:
 - self-hosted models
 - enterprise gateways
 - proxies or internal services
+- third-party OpenAI-compatible APIs not baked into KForge
 
 Characteristics:
-- Maximum control
-- No discovery or marketplace
-- KForge does not validate or manage pricing
+- maximum control
+- no automatic discovery
+- KForge does not validate pricing or quotas for you
 
-This option is intended for advanced users who already know what they are connecting to.
+This option is intended for users who already know what they are connecting to.
 
 ---
 
@@ -83,30 +85,29 @@ These run entirely on your own machine.
 Examples include Ollama and LM Studio.
 
 What this means:
-- No API key
-- No per-token billing
-- Cost is hardware, electricity, and time
-- Performance varies by system
+- no API key
+- no per-token cloud billing
+- cost is hardware, electricity, and time
+- performance varies by system
 
 Local models are ideal for:
 - offline use
 - privacy-sensitive workloads
-- experimentation without cloud cost
+- experimentation without cloud billing
 
 ---
 
 ## 3. About models and cost
 
-There is no permanently “free” model.
+There is no universally and permanently free model.
 
-Most cloud providers charge per token:
-- input tokens (what you send)
-- output tokens (what the model replies)
+Some providers offer:
+- free tiers
+- trial credits
+- rotating free routes
+- promotional access
 
-Even models labeled as “free” may:
-- have rate limits
-- expire
-- require paid tiers later
+But these can change, disappear, or become rate-limited.
 
 For this reason, KForge treats all cost information as **advisory only**.
 
@@ -120,7 +121,7 @@ These labels are **guidance**, not enforcement.
 
 ### Cost (color labels)
 
-- 🔵 Free — no billing required
+- 🔵 Free — no billing required on that route / tier
 - 🟢 Paid (low cost)
 - 🟡 Paid (standard)
 - 🔴 Paid (expensive)
@@ -132,8 +133,8 @@ These labels are **guidance**, not enforcement.
 - **Main** — day-to-day default usage
 - **Heavy** — high capability; use sparingly
 
-A model’s color indicates **expected cost**.
-Its usage mode indicates **when it should be used**.
+A model’s color indicates **expected cost guidance**.
+Its usage mode indicates **when it is intended to be used**.
 
 KForge never:
 - modifies model IDs
@@ -144,22 +145,26 @@ KForge never:
 
 ## 5. About presets
 
-Presets are **curated default models** provided by KForge.
+Presets are **curated default model suggestions** provided by KForge.
 
 They exist to:
 - reduce decision fatigue
-- provide safe starting points
+- provide sensible starting points
 - demonstrate recommended usage patterns
 
 Presets:
 - are not exhaustive
 - may overlap across providers
-- can change over time
+- may change over time
 
-The current snapshot of presets is documented in:
+The current readable snapshot is documented in:
 - **Presets Inventory**
 
-Presets are defined in the app today but are expected to move to remote configuration in the future.
+Plain English mechanism:
+- today, KForge may still use built-in compiled presets inside the app
+- the readable markdown docs are maintenance references
+- a future remote `presets.json` system is intended to let preset suggestions update without rebuilding the app
+- until that mechanism is confirmed live in code, do not assume the markdown snapshot is the runtime source
 
 ---
 
@@ -170,10 +175,11 @@ You may see the same model name appear under multiple providers.
 This is intentional.
 
 Examples:
-- the same model via a marketplace vs a direct provider
-- the same model via a custom endpoint vs a hosted service
+- the same model through a direct provider vs a gateway
+- the same model through a marketplace vs a dedicated host
+- the same model through a custom endpoint vs a built-in provider
 
-These options differ in:
+These options may differ in:
 - pricing
 - availability
 - routing
@@ -187,8 +193,9 @@ The capability may be similar, but the tradeoffs are not.
 
 Some models are inherently volatile:
 - preview releases
-- rotating free tiers
-- marketplace-provided “free” models
+- rotating free routes
+- marketplace-provided free models
+- aliases that move to newer snapshots
 
 This is normal.
 
@@ -208,6 +215,7 @@ Instead of asking “what is the best model?”, consider:
 - Am I experimenting or building something serious?
 - Do I care more about speed or reasoning?
 - Is this a temporary task or important logic?
+- Do I want the direct provider or a flexible gateway route?
 
 You can switch models at any time.
 There is no single correct choice.
@@ -219,14 +227,14 @@ There is no single correct choice.
 Provider models, pricing, and policies change constantly.
 
 Embedding this information directly in the app would:
-- become outdated
+- become outdated quickly
 - mislead users
 - require frequent rebuilds
 
-By linking to documentation instead, KForge stays:
+By keeping guidance in docs, KForge stays:
 - honest
 - lightweight
-- future-proof
+- easier to maintain
 
 ---
 

@@ -1,8 +1,14 @@
 # Presets Inventory
 
-This document is a snapshot of the current built-in model presets in KForge.
-It reflects the state at the time of Phase 3.12 and is intended as a reference
-for documentation, maintenance, and future remote presets work.
+_Last reviewed: 19/04/2026_
+
+This document is a snapshot of the current recommended model presets in KForge.
+It is intended as a readable maintenance reference.
+
+Important:
+- this file is documentation
+- it is not, by itself, proof of the current machine source
+- when presets change materially, the actual machine source should be checked and updated in the same pass
 
 Cost is represented by color labels, and usage is represented separately.
 
@@ -24,8 +30,8 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| claude-opus-4-5 | 🔴 Paid | Heavy | Highest capability; use sparingly |
-| claude-sonnet-4-5 | 🟡 Paid | Main | Balanced default for dev + writing |
+| claude-opus-4-7 | 🔴 Paid | Heavy | Highest capability; use sparingly |
+| claude-sonnet-4-6 | 🟡 Paid | Main | Balanced default for dev + writing |
 | claude-haiku-4-5 | 🟢 Paid | Sandbox | Cheap + fast; small tasks |
 
 ✅ No free Claude — consistent with provider pricing.
@@ -36,13 +42,13 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| deepseek-chat | 🔵 Free | Sandbox | Provider-dependent |
-| llama-3.1-8b-instant | 🔵 Free | Sandbox | Provider-dependent |
-| mistral-medium-latest | 🟡 Paid | Main | Paid workhorse |
-| mistral-small-latest | 🟢 Paid | Sandbox | Low-cost paid |
-| openai/gpt-4o-mini | 🟢 Paid | Sandbox | Cheap paid default |
+| openrouter/free | 🔵 Free | Sandbox | Router that selects currently available OpenRouter free models |
+| deepseek-chat | ⚪ Unknown | Sandbox | Endpoint-dependent; paid on DeepSeek API |
+| llama-3.1-8b-instant | ⚪ Unknown | Sandbox | Endpoint-dependent |
+| mistral-small-latest | ⚪ Unknown | Sandbox | Endpoint-dependent |
+| codestral-latest | ⚪ Unknown | Main | Endpoint-dependent |
 
-⚪ “Free” here is endpoint-dependent and not guaranteed.
+⚪ Custom pricing depends on the exact endpoint you connect, not on KForge itself.
 
 ---
 
@@ -55,17 +61,17 @@ Usage:
 
 ---
 
-## Gemini (preview-heavy)
+## Gemini (active + preview mix)
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| gemini-3-pro-preview | 🔴 Paid | Heavy | Preview; high capability |
-| gemini-2.5-pro | 🟡 Paid | Main | Strong reasoning |
-| gemini-3-flash-preview | 🟡 Paid | Main | Preview; may change |
+| gemini-3.1-pro-preview | 🔴 Paid | Heavy | Replaces retired `gemini-3-pro-preview` |
+| gemini-2.5-pro | 🟡 Paid | Main | Strong reasoning; older than Gemini 3.1 Pro Preview |
+| gemini-3-flash-preview | 🟡 Paid | Main | Preview; may change quickly |
 | gemini-2.5-flash | 🟢 Paid | Sandbox | Fast |
 | gemini-2.5-flash-lite | 🟢 Paid | Sandbox | Fast + cheap |
 
-⚠ Preview models are subject to change or removal.
+⚠ Google currently offers free-tier access for several Gemini API models, but labels here remain conservative KForge guidance rather than an exhaustive pricing promise for every account tier.
 
 ---
 
@@ -85,6 +91,8 @@ Usage:
 | codestral-latest | 🟡 Paid | Main | Coding-focused |
 | mistral-small-latest | 🟢 Paid | Sandbox | General starter |
 
+⚠ Exact hosted model aliases can evolve. Re-check provider docs when updating presets.
+
 ---
 
 ## Ollama (Local)
@@ -98,7 +106,7 @@ Usage:
 | mistral:7b | 🟢 Paid* | Sandbox | Fast |
 | qwen2.5-coder:1.5b | 🟢 Paid* | Sandbox | Very fast |
 
-\* Paid refers to local hardware/energy cost, not API billing.
+\* Paid refers to local hardware / energy cost, not API billing.
 
 ---
 
@@ -106,8 +114,9 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| gpt-4.1-mini | 🟡 Paid | Main | Day-to-day |
-| gpt-5-mini | 🟢 Paid | Sandbox | Cheap paid testing |
+| gpt-5.4 | 🔴 Paid | Heavy | Frontier model for complex coding and reasoning |
+| gpt-5.4-mini | 🟡 Paid | Main | Default lower-latency workhorse |
+| gpt-5.4-nano | 🟢 Paid | Sandbox | Cheapest GPT-5.4-class option |
 
 ---
 
@@ -115,12 +124,9 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| meta-llama/llama-3.3-70b-instruct:free | 🔵 Free | Sandbox | Rotating / rate-limited |
-| mistralai/devstral-2512:free | 🔵 Free | Sandbox | Rotating |
-| qwen/qwen3-coder:free | 🔵 Free | Sandbox | Availability may change |
-| xiaomi/mimo-v2-flash:free | 🔵 Free | Sandbox | Availability may change |
+| openrouter/free | 🔵 Free | Sandbox | Router that selects from currently available free models |
 
-⚠ OpenRouter free models are not guaranteed and may disappear without notice.
+⚠ OpenRouter free availability is not guaranteed and may change without notice.
 
 ---
 
@@ -139,14 +145,14 @@ Overlaps are intentional and reflect different tradeoffs (cost, routing, availab
 ## Volatility Watchlist
 
 High risk:
-- OpenRouter `:free` models
+- OpenRouter free routing and individual `:free` models
 - Gemini `*-preview` models
 
 Medium risk:
-- OpenAI model naming changes
-- Groq LLaMA version bumps
+- OpenAI naming shifts
+- Groq model family refreshes
 
 Low risk:
-- Claude family
-- Hosted Mistral stable tags
+- Claude current family
+- Hosted Mistral stable aliases
 - Local Ollama models

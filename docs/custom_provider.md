@@ -1,6 +1,6 @@
 # Custom Provider (OpenAI-compatible Endpoints)
 
-_Last updated: 28/01/2026_
+_Last updated: 19/04/2026_
 
 ---
 
@@ -13,12 +13,12 @@ If your provider supports:
 - `POST /v1/chat/completions`
 - `Authorization: Bearer <API_KEY>`
 
-Then it will work with Custom.
+then it should work with Custom.
 
 This makes KForge **future-proof and vendor-agnostic**:
 
-- You are not locked into specific providers
-- You can use new providers immediately
+- you are not locked into specific providers
+- you can use new providers immediately
 - KForge keeps working even if providers change, rotate, or disappear
 
 Custom is designed for:
@@ -41,6 +41,7 @@ Custom does **not**:
 All of this depends entirely on:
 - your endpoint
 - your provider account
+- your chosen model ID
 
 KForge is honest about this by design.
 
@@ -78,12 +79,12 @@ That’s it.
 
 ---
 
-## Suggested models (examples only)
+## Suggested endpoints and starter models (examples only)
 
-These are **suggestions, not presets**.
+These are **examples, not guarantees**.
 
-Availability, pricing, and limits may change at any time depending on the provider.
-Use them as a starting point, then adjust based on your usage.
+Availability, pricing, limits, and free tiers may change at any time depending on the provider.
+Use them as a starting point, then adjust based on your actual account and provider docs.
 
 ---
 
@@ -95,13 +96,14 @@ Use them as a starting point, then adjust based on your usage.
 
 **Example models:**
 
-- `llama-3.1-8b-instant` — Free / Sandbox
-- `openai/gpt-4o-mini` — Paid / Main
+- `openrouter/free` — Free / Sandbox
+- provider-specific `:free` models — volatile; check current OpenRouter listings
 
 **Notes:**
 
-- Free models may rotate or be deprecated
-- Rate limits can apply
+- the simplest free starting point is `openrouter/free`
+- individual `:free` model IDs rotate frequently
+- rate limits and availability can change
 
 ---
 
@@ -113,13 +115,14 @@ Use them as a starting point, then adjust based on your usage.
 
 **Example models:**
 
-- `llama-3.1-8b-instant` — Free
+- `llama-3.1-8b-instant` — Sandbox
 - `llama-3.3-70b-versatile` — Main
 
 **Notes:**
 
-- Extremely fast inference
-- Pricing depends on your Groq account
+- very fast inference
+- pricing and free-plan limits depend on your Groq account
+- check current Groq docs for latest supported IDs
 
 ---
 
@@ -131,13 +134,14 @@ Use them as a starting point, then adjust based on your usage.
 
 **Example models:**
 
-- `deepseek-chat` — Free
-- `deepseek-reasoner` — Main
+- `deepseek-chat` — Low-cost paid / Sandbox
+- `deepseek-reasoner` — Paid / Main
 
 **Notes:**
 
-- Free tier may have limits
-- Reasoner is slower but stronger
+- DeepSeek API models are billed
+- reasoning mode is slower but stronger
+- check current pricing and limits before heavy usage
 
 ---
 
@@ -154,40 +158,40 @@ Use them as a starting point, then adjust based on your usage.
 
 **Notes:**
 
-- Requires API key
-- Free evaluation tiers may be limited
+- requires API key
+- exact aliases and enabled models may vary over time
+- check the provider’s current model list when updating presets
 
 ---
 
-## Model tags and usage modes (important)
+## Cost labels and usage modes (important)
 
-Model tags in KForge are **organizational hints**, not guarantees.
+KForge uses two separate ideas:
 
-They reflect how *you* intend to use the model — not what the provider promises.
-
-### Suggested interpretation
-
-- **Sandbox**
-  - Cheap or free models
-  - Safe for iteration and experimentation
+### Cost labels
 
 - **Free**
-  - No billing required
-  - Often rate-limited or restricted
-
-- **Main**
-  - Daily-driver models
-  - Reasonable cost and capability
-
-- **Heavy**
-  - Expensive or high-capability models
-  - Use sparingly
-
+  - no billing required on that route / tier
+- **Paid (low cost)**
+  - cheap paid usage
+- **Paid (standard)**
+  - normal day-to-day paid usage
+- **Paid (expensive)**
+  - premium or heavier-cost usage
 - **Unknown**
-  - Pricing or limits unclear
-  - Check provider documentation
+  - pricing unclear or provider-dependent
+
+### Usage modes
+
+- **Sandbox**
+  - cheap, disposable, or experimental work
+- **Main**
+  - daily-driver models
+- **Heavy**
+  - expensive or high-capability models; use sparingly
 
 For Custom endpoints, **you are the source of truth**.
+KForge provides organisational hints, not guarantees.
 
 ---
 
@@ -195,10 +199,10 @@ For Custom endpoints, **you are the source of truth**.
 
 Custom exists so that:
 
-- You are never blocked by missing integrations
-- You can use private, enterprise, or self-hosted endpoints
+- you are never blocked by missing integrations
+- you can use private, enterprise, or self-hosted endpoints
 - KForge survives provider churn
-- Advanced users are not limited by UI assumptions
+- advanced users are not limited by UI assumptions
 
 Many tools hard-code providers.
 KForge deliberately does not.
@@ -210,7 +214,7 @@ KForge deliberately does not.
 Use Custom if:
 
 - your provider is not listed in KForge
-- you run your own OpenAI-compatible server (vLLM, TGI, gateways)
+- you run your own OpenAI-compatible server
 - you want full control over models and endpoints
 - you understand your provider’s pricing and limits
 
