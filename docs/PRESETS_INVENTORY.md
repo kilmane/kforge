@@ -65,7 +65,7 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| gemini-3.1-pro-preview | 🔴 Paid | Heavy | Replaces retired `gemini-3-pro-preview` |
+| gemini-3.1-pro-preview | 🔴 Paid | Heavy | Current high-capability preview model |
 | gemini-2.5-pro | 🟡 Paid | Main | Strong reasoning; older than Gemini 3.1 Pro Preview |
 | gemini-3-flash-preview | 🟡 Paid | Main | Preview; may change quickly |
 | gemini-2.5-flash | 🟢 Paid | Sandbox | Fast |

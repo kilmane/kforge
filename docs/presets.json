@@ -1,17 +1,17 @@
 {
   "version": "1",
-  "updated_at": "2026-02-05",
-  "notes": "Draft generated from PRESETS_INVENTORY.md (Phase 3.12). Labels are advisory only.",
+  "updated_at": "2026-04-19",
+  "notes": "Refreshed from current KForge preset guidance. Labels are advisory only.",
   "providers": {
     "claude": [
       {
-        "id": "claude-opus-4-5",
+        "id": "claude-opus-4-7",
         "cost": "paid_heavy",
         "usage": "heavy",
         "note": "Highest capability; use sparingly"
       },
       {
-        "id": "claude-sonnet-4-5",
+        "id": "claude-sonnet-4-6",
         "cost": "paid_main",
         "usage": "main",
         "note": "Balanced default for dev + writing"
@@ -25,34 +25,34 @@
     ],
     "custom": [
       {
-        "id": "deepseek-chat",
+        "id": "openrouter/free",
         "cost": "free",
         "usage": "sandbox",
-        "note": "Endpoint-dependent; not guaranteed free"
+        "note": "Free route via OpenRouter; availability may change"
+      },
+      {
+        "id": "deepseek-chat",
+        "cost": "unknown",
+        "usage": "sandbox",
+        "note": "Endpoint-dependent; paid on DeepSeek API"
       },
       {
         "id": "llama-3.1-8b-instant",
-        "cost": "free",
+        "cost": "unknown",
         "usage": "sandbox",
-        "note": "Endpoint-dependent; not guaranteed free"
-      },
-      {
-        "id": "mistral-medium-latest",
-        "cost": "paid_main",
-        "usage": "main",
-        "note": "Paid workhorse"
+        "note": "Endpoint-dependent; availability varies by host"
       },
       {
         "id": "mistral-small-latest",
-        "cost": "paid_sandbox",
+        "cost": "unknown",
         "usage": "sandbox",
-        "note": "Low-cost paid"
+        "note": "Endpoint-dependent; often a good low-cost starter"
       },
       {
-        "id": "openai/gpt-4o-mini",
-        "cost": "paid_sandbox",
-        "usage": "sandbox",
-        "note": "Cheap paid default"
+        "id": "codestral-latest",
+        "cost": "unknown",
+        "usage": "main",
+        "note": "Endpoint-dependent coding-focused model"
       }
     ],
     "deepseek": [
@@ -71,10 +71,10 @@
     ],
     "gemini": [
       {
-        "id": "gemini-3-pro-preview",
+        "id": "gemini-3.1-pro-preview",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "Preview; high capability"
+        "note": "Current high-capability preview model"
       },
       {
         "id": "gemini-2.5-pro",
@@ -169,42 +169,30 @@
     ],
     "openai": [
       {
-        "id": "gpt-4.1-mini",
-        "cost": "paid_main",
-        "usage": "main",
-        "note": "Day-to-day"
+        "id": "gpt-5.4",
+        "cost": "paid_heavy",
+        "usage": "heavy",
+        "note": "Frontier model for complex coding and reasoning"
       },
       {
-        "id": "gpt-5-mini",
+        "id": "gpt-5.4-mini",
+        "cost": "paid_main",
+        "usage": "main",
+        "note": "Balanced default for day-to-day dev + general work"
+      },
+      {
+        "id": "gpt-5.4-nano",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Cheap paid testing"
+        "note": "Cheapest GPT-5.4-class option"
       }
     ],
     "openrouter": [
       {
-        "id": "meta-llama/llama-3.3-70b-instruct:free",
+        "id": "openrouter/free",
         "cost": "free",
         "usage": "sandbox",
-        "note": "Rotating / rate-limited"
-      },
-      {
-        "id": "mistralai/devstral-2512:free",
-        "cost": "free",
-        "usage": "sandbox",
-        "note": "Rotating"
-      },
-      {
-        "id": "qwen/qwen3-coder:free",
-        "cost": "free",
-        "usage": "sandbox",
-        "note": "Availability may change"
-      },
-      {
-        "id": "xiaomi/mimo-v2-flash:free",
-        "cost": "free",
-        "usage": "sandbox",
-        "note": "Availability may change"
+        "note": "Free router; selects from currently available free models"
       }
     ]
   }

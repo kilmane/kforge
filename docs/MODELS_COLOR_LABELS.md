@@ -46,7 +46,7 @@ These labels are designed for human decision-making, not billing precision.
 - “Mess around mode (paid)”
 
 **Examples:**
-- `gpt-5-mini`
+- `gpt-5.4-nano`
 - `gpt-4.1-nano`
 
 **Tooltip:**
@@ -67,7 +67,7 @@ Low-cost paid model. Suitable for testing and experimentation.
 - Be mindful, not paranoid
 
 **Examples:**
-- `gpt-4.1-mini`
+- `gpt-5.4-mini``
 - strong gateway / general-purpose models
 
 **Tooltip:**
