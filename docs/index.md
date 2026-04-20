@@ -11,6 +11,7 @@ understanding providers and models, and configuring the system.
 
 ## User Guides
 
+- [User Guide](user-guide.md)
 - [Terminology](terminology.md)
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
 - [Models Color Labels](MODELS_COLOR_LABELS.md)
@@ -18,7 +19,7 @@ understanding providers and models, and configuring the system.
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
 - [Project Memory](project-memory.md)
-- [User Guide](user-guide.md)
+
 
 ---
 
