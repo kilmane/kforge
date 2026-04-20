@@ -770,6 +770,11 @@ function ProviderMenuButton({
 }
 const AI_HELP_LINKS = [
   {
+    id: "user_guide",
+    label: "User Guide",
+    url: "https://kilmane.github.io/kforge/user-guide.html",
+  },
+  {
     id: "providers_and_models",
     label: "Providers and Models",
     url: "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html",
