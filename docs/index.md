@@ -18,6 +18,7 @@ understanding providers and models, and configuring the system.
 - [Portability](portability.md)
 - [Presets Inventory](PRESETS_INVENTORY.md)
 - [Project Memory](project-memory.md)
+- [User Guide](user-guide.md)
 
 ---
 
