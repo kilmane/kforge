@@ -281,6 +281,7 @@ export default function ProviderControlsPanel({
   }, [aiModel]);
 
   const [userModels, setUserModels] = useState([]); // [{id,cost}]
+  const [userModelsProvider, setUserModelsProvider] = useState(null);
   const [draftModel, setDraftModel] = useState("");
   const [filter, setFilter] = useState("All"); // All | Free | Paid
 
@@ -331,10 +332,12 @@ export default function ProviderControlsPanel({
       alive = false;
     };
   }, []);
-
   // Load when provider changes
   useEffect(() => {
-    setUserModels(loadUserModelRecords(aiProvider));
+    const records = loadUserModelRecords(aiProvider);
+    setUserModels(records);
+    setUserModelsProvider(aiProvider);
+
     setDraftModel("");
     setFilter("All");
     setEditingId(null);
@@ -365,10 +368,13 @@ export default function ProviderControlsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProvider]);
 
-  // Persist saved models list
+  // Persist saved models list.
+  // Guard against provider-switch races where the new provider briefly renders
+  // with the previous provider's model list, which can overwrite saved models.
   useEffect(() => {
+    if (userModelsProvider !== aiProvider) return;
     saveUserModelRecords(aiProvider, userModels);
-  }, [aiProvider, userModels]);
+  }, [aiProvider, userModels, userModelsProvider]);
 
   // Persist last selected model, but never while user is editing, and never persist empty
   useEffect(() => {
