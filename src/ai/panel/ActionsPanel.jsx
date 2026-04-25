@@ -1,11 +1,22 @@
 // src/ai/panel/ActionsPanel.jsx
 import React from "react";
 
+function testConnectionLabel(aiTestStatus) {
+  const kind = aiTestStatus?.kind;
+
+  if (kind === "testing") return "Testing...";
+  if (kind === "success") return "Test connection ✅";
+  if (kind === "error") return "Test connection ❌";
+
+  return "Test connection";
+}
+
 export default function ActionsPanel({
   providerReady,
   aiRunning,
   handleSendChat,
   handleAiTest,
+  aiTestStatus,
   guardrailText,
   openSettings,
   aiProvider,
@@ -13,6 +24,10 @@ export default function ActionsPanel({
   showTest = false,
   showGuardrail = false,
 }) {
+  const testTitle =
+    aiTestStatus?.message ||
+    "Quick check that your provider/model config is working";
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -31,9 +46,9 @@ export default function ActionsPanel({
             onClick={handleAiTest}
             disabled={!providerReady || aiRunning}
             type="button"
-            title="Quick check that your provider/model config is working"
+            title={testTitle}
           >
-            Test connection
+            {testConnectionLabel(aiTestStatus)}
           </button>
         ) : null}
       </div>

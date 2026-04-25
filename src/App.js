@@ -758,6 +758,7 @@ export default function App() {
 
   // Debug line
   const [aiTestOutput, setAiTestOutput] = useState("");
+  const [aiTestStatus, setAiTestStatus] = useState(null); // { kind: "testing" | "success" | "error", message: string }
 
   // Workspace activity (UI-only)
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
@@ -1524,7 +1525,12 @@ export default function App() {
   );
 
   const handleAiTest = useCallback(async () => {
-    setAiTestOutput(`Testing ${aiProvider}...`);
+    const providerLabel = aiProvider || "provider";
+    const testingMsg = `Testing ${providerLabel}...`;
+
+    setAiTestOutput(testingMsg);
+    setAiTestStatus({ kind: "testing", message: testingMsg });
+
     const r = await runAi({
       input: "Reply with exactly: PIPELINE_OK",
       system: "You are a concise test bot. Output only the requested token.",
@@ -1533,19 +1539,25 @@ export default function App() {
     });
 
     if (r.ok) {
-      appendMessage("system", `Test succeeded (${aiProvider})`);
+      const msg = `Test succeeded (${providerLabel})`;
+      setAiTestOutput(msg);
+      setAiTestStatus({ kind: "success", message: msg });
+      appendMessage("system", msg);
     } else {
-      appendMessage(
-        "system",
-        `Test failed (${aiProvider}): ${r.error || "Unknown error"}`,
-        {
-          actionLabel: r.kind === "config" ? "→ Open Settings" : null,
-          action:
-            r.kind === "config"
-              ? () => openSettings(aiProvider, "Configure provider")
-              : null,
-        },
-      );
+      const msg = `Test failed (${providerLabel}): ${
+        r.error || "Unknown error"
+      }`;
+
+      setAiTestOutput(msg);
+      setAiTestStatus({ kind: "error", message: msg });
+
+      appendMessage("system", msg, {
+        actionLabel: r.kind === "config" ? "→ Open Settings" : null,
+        action:
+          r.kind === "config"
+            ? () => openSettings(aiProvider, "Configure provider")
+            : null,
+      });
     }
   }, [aiProvider, runAi, appendMessage, openSettings]);
 
@@ -2351,6 +2363,7 @@ export default function App() {
       runAi={runAi}
       handleSendChat={handleSendChat}
       handleAiTest={handleAiTest}
+      aiTestStatus={aiTestStatus}
       guardrailText={guardrailText}
       aiOutput={aiOutput}
       endpoints={endpoints}
@@ -2387,7 +2400,7 @@ export default function App() {
       >
         {focusMode ? "Exit Focus" : "Focus"}
       </button>
-      
+
       <button className={buttonClass()} onClick={handleNewProject}>
         New Project
       </button>

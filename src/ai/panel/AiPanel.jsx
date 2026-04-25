@@ -959,6 +959,7 @@ export default function AiPanel({
   runAi,
   handleSendChat,
   handleAiTest,
+  aiTestStatus,
   guardrailText,
 
   // output + ollama helper
@@ -2022,6 +2023,7 @@ export default function AiPanel({
               aiRunning={aiRunning}
               handleSendChat={handleSendChat}
               handleAiTest={handleAiTest}
+              aiTestStatus={aiTestStatus}
               guardrailText={guardrailText}
               openSettings={openSettings}
               aiProvider={aiProvider}
@@ -2099,6 +2101,7 @@ export default function AiPanel({
             aiRunning={aiRunning}
             handleSendChat={handleSendChat}
             handleAiTest={handleAiTest}
+            aiTestStatus={aiTestStatus}
             guardrailText={guardrailText}
             openSettings={openSettings}
             aiProvider={aiProvider}
