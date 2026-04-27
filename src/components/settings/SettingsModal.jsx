@@ -122,6 +122,7 @@ export default function SettingsModal({
   onClose,
   providers,
   hasKeyMap,
+  apiKeyFingerprints = {},
   endpointsMap,
   onSetEndpoint,
   onSaveKey,
@@ -152,7 +153,9 @@ export default function SettingsModal({
     const list = providers || [];
     return list.find((p) => p.id === activeId) || list[0] || null;
   }, [providers, activeId]);
-
+  const activeKeyFingerprint = activeProvider
+    ? apiKeyFingerprints?.[activeProvider.id] || ""
+    : "";
   const status = useMemo(() => {
     return activeProvider
       ? statusForProvider(activeProvider, hasKeyMap || {}, endpointsMap || {})
@@ -351,7 +354,9 @@ export default function SettingsModal({
                     <div className="text-xs opacity-70">
                       {activeProvider.needsKey
                         ? (hasKeyMap || {})[activeProvider.id]
-                          ? "key set"
+                          ? activeKeyFingerprint
+                            ? `key set: ${activeKeyFingerprint}`
+                            : "key set"
                           : "no key"
                         : "not required"}
                     </div>

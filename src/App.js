@@ -682,6 +682,65 @@ function TranscriptBubble({
     </div>
   );
 }
+function apiKeyFingerprintStorageKey(providerId) {
+  return `kforge.apiKeyFingerprint.v1.${providerId}`;
+}
+
+function maskApiKeyForDisplay(rawKey) {
+  const key = String(rawKey || "").trim();
+  if (!key) return "";
+
+  if (key.length <= 10) return `${key.slice(0, 2)}...${key.slice(-2)}`;
+
+  return `${key.slice(0, 6)}...${key.slice(-4)}`;
+}
+
+function loadApiKeyFingerprints(providers = []) {
+  const out = {};
+
+  try {
+    for (const p of providers || []) {
+      const id = String(p?.id || "").trim();
+      if (!id) continue;
+
+      const value = window.localStorage.getItem(
+        apiKeyFingerprintStorageKey(id),
+      );
+
+      if (value) out[id] = value;
+    }
+  } catch {
+    // ignore
+  }
+
+  return out;
+}
+
+function saveApiKeyFingerprint(providerId, rawKey) {
+  const id = String(providerId || "").trim();
+  const fingerprint = maskApiKeyForDisplay(rawKey);
+  if (!id || !fingerprint) return "";
+
+  try {
+    window.localStorage.setItem(apiKeyFingerprintStorageKey(id), fingerprint);
+  } catch {
+    // ignore
+  }
+
+  return fingerprint;
+}
+
+function clearApiKeyFingerprint(providerId) {
+  const id = String(providerId || "").trim();
+  if (!id) return;
+
+  try {
+    window.localStorage.removeItem(apiKeyFingerprintStorageKey(id));
+  } catch {
+    // ignore
+  }
+}
+
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -744,6 +803,9 @@ export default function App() {
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
+  const [apiKeyFingerprints, setApiKeyFingerprints] = useState(() =>
+    loadApiKeyFingerprints(ALL_PROVIDERS),
+  );
 
   // Runtime reachability (UI-only hint; does not gate providers)
   const [runtimeReachable, setRuntimeReachable] = useState({
@@ -1306,6 +1368,13 @@ export default function App() {
       try {
         await aiSetApiKey(providerId, draft);
         await refreshHasKeys();
+
+        const fingerprint = saveApiKeyFingerprint(providerId, draft);
+        setApiKeyFingerprints((prev) => ({
+          ...prev,
+          ...(fingerprint ? { [providerId]: fingerprint } : {}),
+        }));
+
         setAiTestOutput(`Saved API key for ${providerId}`);
       } catch (err) {
         setAiTestOutput(`Save key failed: ${formatTauriError(err)}`);
@@ -1319,6 +1388,14 @@ export default function App() {
       try {
         await aiClearApiKey(providerId);
         await refreshHasKeys();
+
+        clearApiKeyFingerprint(providerId);
+        setApiKeyFingerprints((prev) => {
+          const next = { ...prev };
+          delete next[providerId];
+          return next;
+        });
+
         setAiTestOutput(`Cleared API key for ${providerId}`);
       } catch (err) {
         setAiTestOutput(`Clear key failed: ${formatTauriError(err)}`);
@@ -2557,6 +2634,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         providers={ALL_PROVIDERS}
         hasKeyMap={hasKey}
+        apiKeyFingerprints={apiKeyFingerprints}
         endpointsMap={endpoints}
         onSetEndpoint={setEndpointForProvider}
         onSaveKey={handleSaveKey}
