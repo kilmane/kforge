@@ -785,6 +785,21 @@ const AI_HELP_LINKS = [
     url: "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html",
   },
   {
+    id: "api_keys_and_billing",
+    label: "API Keys + Billing",
+    url: "https://kilmane.github.io/kforge/api-keys-and-billing.html",
+  },
+  {
+    id: "custom_providers",
+    label: "Custom Provider (OpenAI-compatible)",
+    url: "https://kilmane.github.io/kforge/custom_provider.html",
+  },
+  {
+    id: "presets_inventory",
+    label: "Presets Inventory",
+    url: "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html",
+  },
+  {
     id: "terminology",
     label: "Terminology",
     url: "https://kilmane.github.io/kforge/terminology.html",
@@ -795,19 +810,9 @@ const AI_HELP_LINKS = [
     url: "https://kilmane.github.io/kforge/project-memory.html",
   },
   {
-    id: "custom_providers",
-    label: "Custom Provider (OpenAI-compatible)",
-    url: "https://kilmane.github.io/kforge/custom_provider.html",
-  },
-  {
     id: "portability",
     label: "Portability",
     url: "https://kilmane.github.io/kforge/portability.html",
-  },
-  {
-    id: "presets_inventory",
-    label: "Presets Inventory",
-    url: "https://kilmane.github.io/kforge/PRESETS_INVENTORY.html",
   },
 ];
 function HelpMenuPlaceholder({ invoke }) {
