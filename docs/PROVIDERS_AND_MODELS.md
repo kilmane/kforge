@@ -31,7 +31,7 @@ These companies:
 - run them on their own infrastructure
 - enforce pricing and limits directly
 
-Examples include OpenAI, Anthropic (Claude), Google (Gemini), Mistral, and DeepSeek.
+Examples include OpenAI, Anthropic (Claude), Google (Gemini), Mistral, DeepSeek, and Ollama Cloud.
 
 What this means:
 - API key usually required
@@ -78,24 +78,37 @@ This option is intended for users who already know what they are connecting to.
 
 ---
 
-### Local runtimes
 
-These run entirely on your own machine.
+### Local runtimes and endpoint providers
 
-Examples include Ollama and LM Studio.
+These normally run on your own machine or on an endpoint you control.
+
+Examples include **Ollama endpoint** and **LM Studio**.
+
+For **Ollama endpoint**, KForge connects to an Ollama server endpoint, normally the local Ollama app at `http://localhost:11434`.
+
+It can also point to a remote or self-hosted Ollama endpoint.
 
 What this means:
-- no API key
-- no per-token cloud billing
-- cost is hardware, electricity, and time
-- performance varies by system
 
-Local models are ideal for:
-- offline use
-- privacy-sensitive workloads
-- experimentation without cloud billing
+* no API key required in KForge for normal local endpoint use
+* no per-token KForge billing
+* cost is hardware, electricity, hosting, and time
+* performance varies by system or endpoint
+
+Ollama cloud models can also be used indirectly through the local Ollama app after signing in with `ollama signin`.
+
+That is still different from the separate **Ollama Cloud** provider, which connects directly to Ollama's hosted API and requires an Ollama API key.
+
+Local or endpoint models are ideal for:
+
+* offline use, when local
+* privacy-sensitive workloads, when local
+* experimentation without direct cloud API billing
+* connecting to your own model endpoint
 
 ---
+
 
 ## 3. About models and cost
 

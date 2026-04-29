@@ -211,21 +211,28 @@ Free routes can rotate, disappear, or become rate-limited. They are best treated
 
 ## 8. Ollama
 
-Ollama can be used locally, and it also has cloud-related features.
+KForge now treats Ollama as two separate provider choices:
 
-This is the provider where wording can be confusing, because “Ollama” may mean different things depending on how it is used.
+* **Ollama endpoint**
+* **Ollama Cloud**
 
-### Local Ollama
+This split is intentional because local/endpoint Ollama access and direct Ollama Cloud API access work differently.
 
-For normal KForge use with the local Ollama app, no API key is required.
+### Ollama endpoint
+
+Use **Ollama endpoint** when KForge should connect to an Ollama server endpoint.
+
+Common examples:
+
+* the local Ollama app on your computer
+* a remote or self-hosted Ollama endpoint
+* Ollama cloud models accessed through the local Ollama app after signing in
+
+For normal local Ollama use, no API key is required in KForge.
 
 Ollama usually runs locally at:
 
-
 http://localhost:11434
-
-
-### Ollama cloud models through the local app
 
 If you use Ollama cloud models through the local Ollama app, you may sign in through your system terminal:
 
@@ -233,29 +240,35 @@ If you use Ollama cloud models through the local Ollama app, you may sign in thr
 ollama signin
 ```
 
-In that setup, KForge may still connect to the local Ollama endpoint and does not need an API key field inside KForge.
+In that setup, KForge may still connect to the local Ollama endpoint and does not need an Ollama API key inside KForge.
 
-### Direct Ollama Cloud API
 
-Direct Ollama Cloud API access is different.
+### Ollama Cloud
 
-If connecting directly to Ollama’s cloud API, an API key is required.
+Use **Ollama Cloud** when KForge should connect directly to Ollama’s hosted cloud API.
+
+This does **not** require the local Ollama app to be running.
+
+Direct Ollama Cloud API access requires an Ollama API key.
 
 ### API key page
 
-
+```text
 https://ollama.com/settings/keys
-
+```
 
 ### KForge note
 
-KForge’s current Ollama provider is best understood as:
+Choose the provider based on the route you want:
 
+Ollama endpoint
+API key: not required in KForge
+Purpose: local Ollama, remote/self-hosted Ollama endpoint, or local app cloud access after `ollama signin`
 
-Ollama local endpoint (API key not required)
+Ollama Cloud
+API key: required
+Purpose: direct ollama.com cloud API access, no local Ollama app required
 
-
----
 
 ## 9. LM Studio
 

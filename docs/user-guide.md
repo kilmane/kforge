@@ -245,13 +245,16 @@ The current build shows providers grouped into categories such as:
 * **OpenAI-Compatible**
 * **Local**
 
-Examples visible in the current screenshots include:
+Examples visible in the current build include:
 
 ### Cloud (Native)
 
 * OpenAI
 * Gemini
 * Claude
+* Ollama Cloud
+
+Use **Ollama Cloud** for direct Ollama hosted API access. It requires an Ollama API key.
 
 ### OpenAI-Compatible
 
@@ -259,6 +262,13 @@ Examples visible in the current screenshots include:
 * Groq
 * Mistral
 * OpenRouter
+
+### Local runtimes and endpoints
+
+* Ollama endpoint
+* LM Studio
+
+Use **Ollama endpoint** for the local Ollama app, a remote/self-hosted Ollama endpoint, or Ollama cloud models through the local app after `ollama signin`.
 
 There may be additional providers lower in the list depending on the build.
 

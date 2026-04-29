@@ -25,14 +25,14 @@ function endpointFieldSpec(providerId) {
     return {
       title: "Endpoint URL (optional)",
       placeholder: "http://localhost:11434",
-      help: "Optional for Ollama. Leave blank to use the default local endpoint. Use this to point at a remote Ollama host.",
+      help: "Optional for Ollama. Leave blank to use the default local endpoint. KForge connects to an Ollama endpoint, normally the local app. For Ollama cloud models through the local app, sign in with `ollama signin`. Direct Ollama Cloud API access is separate and requires an API key.",
     };
   }
   if (providerId === "lmstudio") {
     return {
       title: "Endpoint URL (optional)",
       placeholder: "http://localhost:1234",
-      help: "Optional for LM Studio. Leave blank to use the default local endpoint, or set it to your LM Studio server URL.",
+      help: "Optional for local LM Studio. Leave blank to use the default local endpoint, or set it to your LM Studio server URL.",
     };
   }
   return {
@@ -358,7 +358,11 @@ export default function SettingsModal({
                             ? `key set: ${activeKeyFingerprint}`
                             : "key set"
                           : "no key"
-                        : "not required"}
+                        : activeProvider.id === "ollama"
+                          ? "not required locally"
+                          : activeProvider.id === "lmstudio"
+                            ? "not required by default"
+                            : "not required"}
                     </div>
                   </div>
 
@@ -406,12 +410,18 @@ export default function SettingsModal({
                       </div>
 
                       <div className="text-xs opacity-60">
-                        Keys are stored securely in the OS keychain via Tauri.
+                        {activeProvider.id === "ollama_cloud"
+                          ? "Direct Ollama Cloud API access requires an Ollama API key from ollama.com/settings/keys. Keys are stored securely in the OS keychain via Tauri."
+                          : "Keys are stored securely in the OS keychain via Tauri."}
                       </div>
                     </>
                   ) : (
                     <div className="text-xs opacity-60">
-                      This provider does not require an API key.
+                      {activeProvider.id === "ollama"
+                        ? "Local Ollama does not need an API key. For Ollama cloud models through the local app, sign in with `ollama signin`. Direct Ollama Cloud API access uses an API key and is separate from this local endpoint provider."
+                        : activeProvider.id === "lmstudio"
+                          ? "Local LM Studio does not require an API key by default. If you enable API-token authentication in LM Studio, use an advanced/custom endpoint setup."
+                          : "This provider does not require an API key."}
                     </div>
                   )}
                 </div>

@@ -780,6 +780,11 @@ const AI_HELP_LINKS = [
     url: "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html",
   },
   {
+    id: "ollama_cloud",
+    label: "How to Use Ollama Cloud",
+    url: "https://kilmane.github.io/kforge/ollama_cloud.html",
+  },
+  {
     id: "models_color_labels",
     label: "Models Color + Labels",
     url: "https://kilmane.github.io/kforge/MODELS_COLOR_LABELS.html",

@@ -171,7 +171,14 @@ const ALL_PROVIDERS = [
     needsEndpoint: false,
     alwaysEnabled: false,
   },
-
+  {
+    id: "ollama_cloud",
+    label: "Ollama Cloud",
+    group: "cloud",
+    needsKey: true,
+    needsEndpoint: false,
+    alwaysEnabled: false,
+  },
   {
     id: "deepseek",
     label: "DeepSeek",
@@ -216,7 +223,7 @@ const ALL_PROVIDERS = [
   // Phase 3.3 UI prep
   {
     id: "ollama",
-    label: "Ollama (local/remote)",
+    label: "Ollama endpoint",
     group: "local",
     needsKey: false,
     needsEndpoint: false,
@@ -302,10 +309,10 @@ function manualModelProviders(providerId) {
   return (
     providerId === "openrouter" ||
     providerId === "custom" ||
-    providerId === "lmstudio"
+    providerId === "lmstudio" ||
+    providerId === "ollama_cloud"
   );
 }
-
 function modelPlaceholder(providerId) {
   return "Enter model ID…";
 }
@@ -327,18 +334,28 @@ function modelHelperText(providerId) {
       legend
     );
   }
+
   if (providerId === "custom") {
     return (
       "No presets for custom endpoints. Enter the model name required by your endpoint." +
       legend
     );
   }
+
+  if (providerId === "ollama_cloud") {
+    return (
+      "Direct Ollama Cloud API access. Enter an Ollama Cloud model ID, for example gpt-oss:120b." +
+      legend
+    );
+  }
+
   if (providerId === "lmstudio") {
     return (
       "No presets for LM Studio. Enter the model ID your server expects." +
       legend
     );
   }
+
   return "This provider has no presets. Enter a model ID." + legend;
 }
 

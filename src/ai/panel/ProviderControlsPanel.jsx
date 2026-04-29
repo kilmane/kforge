@@ -22,7 +22,13 @@ async function openExternal(url) {
 
 function providerType(providerId) {
   const id = String(providerId || "").toLowerCase();
-  if (id === "openai" || id === "gemini" || id === "claude") return "Stable";
+  if (
+    id === "openai" ||
+    id === "gemini" ||
+    id === "claude" ||
+    id === "ollama_cloud"
+  )
+    return "Stable";
   if (id === "deepseek" || id === "groq") return "Compatible";
   if (id === "openrouter") return "Aggregator";
   if (id === "ollama" || id === "lmstudio" || id === "mock") return "Local";

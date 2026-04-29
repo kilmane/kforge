@@ -2,55 +2,97 @@
 
 use crate::ai::{
     error::AiError,
+    secret_store,
     types::{AiRequest, AiResponse, AiUsage},
 };
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical default base URL for Ollama (local).
+/// Canonical default base URL for Ollama endpoint access.
 pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
 
-/// Normalize Ollama base URLs so "local default" and "remote override" behave consistently.
+/// Canonical default base URL for direct Ollama Cloud API access.
+///
+/// The Ollama native API path is appended by this provider:
+/// - POST {base}/api/chat
+/// - GET  {base}/api/tags
+///
+/// So this value must NOT include `/api`.
+pub const OLLAMA_CLOUD_DEFAULT_BASE_URL: &str = "https://ollama.com";
+
+/// Normalize Ollama base URLs so local, remote, and cloud endpoints behave consistently.
 ///
 /// Rules:
 /// - trim whitespace
 /// - trim trailing slash
 /// - if user pasted `/v1` out of habit, strip it
+/// - if user pasted `/api`, strip it because this adapter appends `/api/chat`
 pub fn normalize_ollama_base_url(raw: &str) -> String {
     let mut s = raw.trim().trim_end_matches('/').to_string();
 
-    if s.ends_with("/v1") {
-        s.truncate(s.len().saturating_sub(3));
-        s = s.trim_end_matches('/').to_string();
+    loop {
+        let before = s.clone();
+
+        if s.ends_with("/v1") {
+            s.truncate(s.len().saturating_sub(3));
+            s = s.trim_end_matches('/').to_string();
+        }
+
+        if s.ends_with("/api") {
+            s.truncate(s.len().saturating_sub(4));
+            s = s.trim_end_matches('/').to_string();
+        }
+
+        if s == before {
+            break;
+        }
     }
 
     s
 }
 
-/// Ollama provider (local).
+/// Ollama provider.
+///
+/// Variants:
+/// - `ollama`: endpoint-based access, normally local Ollama, no API key required.
+/// - `ollama_cloud`: direct Ollama Cloud API access, API key required.
 ///
 /// Notes:
 /// - Sync provider to match the current AiProvider trait.
 /// - Uses `reqwest::blocking`.
-/// - Default endpoint: http://localhost:11434
-/// - Supports `AiRequest.endpoint` override (treated as base URL).
+/// - Supports `AiRequest.endpoint` override, although the UI only exposes this for endpoint mode.
 ///
 /// API:
 /// - POST {base}/api/chat
-///   https://github.com/ollama/ollama/blob/main/docs/api.md (reference)
 pub struct OllamaProvider {
+    provider_id: &'static str,
+    display_name: &'static str,
     base_url: String,
+    needs_api_key: bool,
 }
 
 impl OllamaProvider {
-    pub fn new() -> Self {
+
+    pub fn new_endpoint() -> Self {
         Self {
+            provider_id: "ollama",
+            display_name: "Ollama endpoint",
             base_url: OLLAMA_DEFAULT_BASE_URL.to_string(),
+            needs_api_key: false,
+        }
+    }
+
+    pub fn new_cloud() -> Self {
+        Self {
+            provider_id: "ollama_cloud",
+            display_name: "Ollama Cloud",
+            base_url: OLLAMA_CLOUD_DEFAULT_BASE_URL.to_string(),
+            needs_api_key: true,
         }
     }
 
     fn provider_id(&self) -> &'static str {
-        "ollama"
+        self.provider_id
     }
 
     fn resolve_base_url(&self, req: &AiRequest) -> String {
@@ -62,13 +104,32 @@ impl OllamaProvider {
         normalize_ollama_base_url(&raw)
     }
 
+    fn resolve_api_key(&self) -> Result<Option<String>, AiError> {
+        if !self.needs_api_key {
+            return Ok(None);
+        }
+
+        match secret_store::get_api_key(self.provider_id())? {
+            Some(key) if !key.trim().is_empty() => Ok(Some(key)),
+            _ => Err(AiError::provider(
+                "No Ollama Cloud API key set. Add it in Settings first.",
+            )),
+        }
+    }
+
     fn friendly_network_error(&self, base_url: &str, e: &reqwest::Error) -> AiError {
-        // Common “Ollama not running” case on localhost
         if e.is_connect() {
+            if self.needs_api_key {
+                return AiError::provider(format!(
+                    "Could not connect to Ollama Cloud at {}. Check your internet connection, then retry.",
+                    base_url
+                ));
+            }
+
             return AiError::provider(format!(
-        "Could not connect to Ollama at {}. Is Ollama running? Try starting Ollama, then retry.",
-        base_url
-      ));
+                "Could not connect to Ollama endpoint at {}. Is Ollama running? Try starting Ollama, then retry.",
+                base_url
+            ));
         }
 
         AiError::unknown(format!("Network error: {e}"))
@@ -84,11 +145,12 @@ impl OllamaProvider {
 
 impl super::AiProvider for OllamaProvider {
     fn id(&self) -> &'static str {
-        "ollama"
+        self.provider_id()
     }
 
     fn generate(&self, req: &AiRequest) -> Result<AiResponse, AiError> {
         let base_url = self.resolve_base_url(req);
+        let api_key = self.resolve_api_key()?;
 
         let url = format!("{}/api/chat", base_url.trim_end_matches('/'));
 
@@ -129,9 +191,13 @@ impl super::AiProvider for OllamaProvider {
             .build()
             .map_err(|e| AiError::unknown(format!("HTTP client build failed: {e}")))?;
 
-        let resp = client
-            .post(url)
-            .json(&body)
+        let mut request = client.post(url).json(&body);
+
+        if let Some(key) = api_key {
+            request = request.bearer_auth(key);
+        }
+
+        let resp = request
             .send()
             .map_err(|e| self.friendly_network_error(&base_url, &e))?;
 
@@ -151,8 +217,18 @@ impl super::AiProvider for OllamaProvider {
                 return Err(AiError::invalid(msg));
             }
 
+            if self.needs_api_key && matches!(status.as_u16(), 401 | 403) {
+                return Err(AiError::provider(format!(
+                    "{} authentication failed (HTTP {}): {}. Check your Ollama API key.",
+                    self.display_name,
+                    status.as_u16(),
+                    msg
+                )));
+            }
+
             return Err(AiError::provider(format!(
-                "Ollama HTTP {}: {}",
+                "{} HTTP {}: {}",
+                self.display_name,
                 status.as_u16(),
                 msg
             )));
@@ -163,10 +239,7 @@ impl super::AiProvider for OllamaProvider {
 
         let output_text = Self::extract_output_text(&parsed);
 
-        // Token-ish counts (if Ollama provides them)
-        // Ollama typically returns:
-        // - prompt_eval_count
-        // - eval_count
+        // Token-ish counts if Ollama provides them.
         let usage = match (parsed.prompt_eval_count, parsed.eval_count) {
             (None, None) => None,
             (p, c) => Some(AiUsage {
@@ -180,7 +253,7 @@ impl super::AiProvider for OllamaProvider {
         };
 
         Ok(AiResponse {
-            id: parsed.id.clone().unwrap_or_else(|| "ollama".to_string()),
+            id: parsed.id.clone().unwrap_or_else(|| self.provider_id().to_string()),
             provider_id: self.provider_id().to_string(),
             model: parsed.model.clone().unwrap_or_else(|| req.model.clone()),
             output_text,
@@ -214,20 +287,20 @@ struct OllamaOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
 
-    /// Max tokens to generate
+    /// Max tokens to generate.
     #[serde(skip_serializing_if = "Option::is_none")]
     num_predict: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OllamaChatResponse {
-    // Present in many Ollama responses (not guaranteed)
+    // Present in many Ollama responses, but not guaranteed.
     id: Option<String>,
     model: Option<String>,
 
     message: Option<OllamaAssistantMessage>,
 
-    // Token-ish counters (if available)
+    // Token-ish counters, if available.
     #[serde(default)]
     prompt_eval_count: Option<u32>,
     #[serde(default)]

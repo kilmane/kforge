@@ -110,6 +110,22 @@ Usage:
 
 ---
 
+## Ollama Cloud
+
+No compiled presets are currently listed for **Ollama Cloud**.
+
+In the current app, Ollama Cloud should be treated as a manual model-ID provider. Enter the model ID supported by Ollama Cloud directly in KForge.
+
+Example starter model ID:
+
+| Model | Cost | Usage | Notes |
+|---|---|---|---|
+| gpt-oss:120b | ⚪ Unknown | Main | Direct Ollama Cloud model ID example; verify availability in Ollama Cloud |
+
+⚠ Ollama Cloud availability, pricing, and model IDs may change. Re-check Ollama's current cloud model list before adding compiled presets.
+
+---
+
 ## OpenAI
 
 | Model | Cost | Usage | Notes |
