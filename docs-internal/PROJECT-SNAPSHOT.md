@@ -303,6 +303,15 @@ The best live React-owned home for a styled Help dropdown is the AI panel header
 
 This is where the Help UI now belongs in the live app shell.
 
+Provider/help note:
+
+Ollama is now split into two first-class KForge chat providers:
+
+• **Ollama endpoint** — local, remote, or self-hosted Ollama endpoint. No KForge API key required.
+• **Ollama Cloud** — direct `ollama.com` native API access. Requires an Ollama API key, uses manual model IDs, and does not ship fixed compiled presets.
+
+The live Help dropdown includes a dedicated **How to Use Ollama Cloud** guide.
+
 ---
 
 ## Legacy / Non-Authority UI Files

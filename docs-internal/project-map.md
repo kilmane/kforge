@@ -284,6 +284,15 @@ src/ai/panel/AiPanel.jsx
 
 not the native window chrome and not legacy layout files.
 
+Provider/help note:
+
+Ollama is now split into two first-class KForge chat providers:
+
+* **Ollama endpoint** — local, remote, or self-hosted Ollama endpoint. No KForge API key required.
+* **Ollama Cloud** — direct `ollama.com` native API access. Requires an Ollama API key, uses manual model IDs, and does not ship fixed compiled presets.
+
+The live Help dropdown includes a dedicated **How to Use Ollama Cloud** guide.
+
 ---
 
 ## Legacy / Non-Authority Layout Files
