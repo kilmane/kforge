@@ -14,6 +14,7 @@ understanding providers and models, and configuring the system.
 - [User Guide](user-guide.md)
 - [Terminology](terminology.md)
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
+- [How to Use Ollama Cloud](ollama_cloud.md)
 - [Models Color Labels](MODELS_COLOR_LABELS.md)
 - [API Keys and Billing](api-keys-and-billing.md)
 - [Custom Providers](custom_provider.md)
