@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Understanding LLM Providers & Models in KForge
 
 _Last updated: 19/04/2026_
@@ -256,3 +260,6 @@ By keeping guidance in docs, KForge stays:
 KForge does not sell models.  
 KForge does not guarantee cost.  
 KForge gives you control.
+---
+
+[← Docs home](index.md)

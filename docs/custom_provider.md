@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Custom Provider (OpenAI-compatible Endpoints)
 
 _Last updated: 19/04/2026_
@@ -45,6 +49,32 @@ All of this depends entirely on:
 
 KForge is honest about this by design.
 
+## One Custom provider slot
+
+KForge currently has **one Custom provider slot**.
+
+That means the Custom provider stores one active setup at a time:
+
+* one Custom API key
+* one Custom endpoint URL
+* one saved Custom model list
+
+If you change the Custom endpoint or API key, you are replacing the current Custom provider setup.
+
+Important:
+
+* saved model IDs may remain under **My Models**
+* those model IDs will be sent to the newly configured Custom endpoint
+* if the new endpoint does not support the old model IDs, requests may fail
+
+After changing the Custom endpoint, remove any old model IDs that belonged to the previous provider.
+
+Example:
+
+If Custom was using Moonshot/Kimi with `kimi-k2.6`, and you later change Custom to another OpenAI-compatible endpoint, remove `kimi-k2.6` unless the new endpoint supports it.
+
+KForge may add richer Custom profiles in the future if there is a clear need, but the current design keeps Custom simple: one advanced endpoint slot at a time.
+
 ---
 
 ## Endpoint requirements
@@ -79,91 +109,138 @@ That’s it.
 
 ---
 
-## Suggested endpoints and starter models (examples only)
+## Suggested endpoint types and starter examples
 
 These are **examples, not guarantees**.
 
-Availability, pricing, limits, and free tiers may change at any time depending on the provider.
-Use them as a starting point, then adjust based on your actual account and provider docs.
+The Custom provider is mainly for endpoints that are **not already built into KForge**.
+
+If a provider already appears in KForge, prefer the built-in provider first. Built-in providers usually have clearer labels, safer defaults, and better beginner guidance.
+
+Use Custom when you are connecting something more advanced or specific to your setup.
 
 ---
 
-### OpenRouter
+### Private or company AI gateways
 
-**Endpoint:**
+Use Custom if your workplace, team, or organisation gives you an OpenAI-compatible endpoint.
 
-- `https://openrouter.ai/api`
+Example endpoint shapes:
 
-**Example models:**
+* `https://ai.your-company.example`
+* `https://gateway.your-team.example`
+* `https://llm.internal.example`
 
-- `openrouter/free` — Free / Sandbox
-- provider-specific `:free` models — volatile; check current OpenRouter listings
+Example model IDs:
 
-**Notes:**
+* `company/default`
+* `company/coder`
+* `team-main`
+* whatever model ID your gateway documents
 
-- the simplest free starting point is `openrouter/free`
-- individual `:free` model IDs rotate frequently
-- rate limits and availability can change
+Notes:
 
----
-
-### Groq
-
-**Endpoint:**
-
-- `https://api.groq.com/openai`
-
-**Example models:**
-
-- `llama-3.1-8b-instant` — Sandbox
-- `llama-3.3-70b-versatile` — Main
-
-**Notes:**
-
-- very fast inference
-- pricing and free-plan limits depend on your Groq account
-- check current Groq docs for latest supported IDs
+* KForge cannot know the pricing, limits, or model list for private gateways
+* your organisation is the source of truth
+* ask your admin for the correct endpoint, API key, and model ID
 
 ---
 
-### DeepSeek
+### Self-hosted OpenAI-compatible servers
 
-**Endpoint:**
+Use Custom if you run your own OpenAI-compatible model server.
 
-- `https://api.deepseek.com`
+Common self-hosted setups may include OpenAI-compatible servers powered by tools such as vLLM, LocalAI, llama.cpp server, LiteLLM, or other gateway software.
 
-**Example models:**
+Example endpoint shapes:
 
-- `deepseek-chat` — Low-cost paid / Sandbox
-- `deepseek-reasoner` — Paid / Main
+* `http://localhost:8000`
+* `http://192.168.1.50:8000`
+* `https://your-server.example`
 
-**Notes:**
+Example model IDs:
 
-- DeepSeek API models are billed
-- reasoning mode is slower but stronger
-- check current pricing and limits before heavy usage
+* `local-model`
+* `qwen-coder`
+* `llama-local`
+* whatever your server exposes
 
----
+Notes:
 
-### Mistral
-
-**Endpoint:**
-
-- `https://api.mistral.ai`
-
-**Example models:**
-
-- `mistral-small-latest` — Sandbox / Main
-- `codestral-latest` — Main (coding-focused)
-
-**Notes:**
-
-- requires API key
-- exact aliases and enabled models may vary over time
-- check the provider’s current model list when updating presets
+* your server must support `POST /v1/chat/completions`
+* your endpoint should be entered as the base URL, without `/v1`
+* KForge’s Custom provider expects a Bearer-token style API key. If your server has no authentication, you may need to configure your server or proxy to accept the key KForge sends.
 
 ---
 
+### Hosted GPU or rented server endpoints
+
+Use Custom if you rent GPU infrastructure and expose an OpenAI-compatible endpoint from it.
+
+Example endpoint shapes:
+
+* `https://your-instance.example`
+* `https://your-gpu-host.example`
+* a temporary HTTPS endpoint from your hosting provider
+
+Example model IDs:
+
+* `served-model`
+* `coder-main`
+* `instruct-model`
+* whatever your hosted server exposes
+
+Notes:
+
+* endpoint URLs may change when instances are recreated
+* pricing depends on the GPU host, not KForge
+* model IDs depend on the server image or framework you deploy
+
+---
+
+### Proxy or routing layers
+
+Use Custom if you run a proxy layer that presents one OpenAI-compatible endpoint to KForge.
+
+This can be useful when you want one endpoint to route requests behind the scenes.
+
+Example endpoint shapes:
+
+* `http://localhost:4000`
+* `https://llm-router.example`
+* `https://proxy.your-team.example`
+
+Example model IDs:
+
+* `router/default`
+* `router/coding`
+* `fallback-main`
+* whatever your proxy expects
+
+Notes:
+
+* KForge sends the model ID you choose
+* the proxy decides what happens behind that endpoint
+* pricing, fallback behavior, logging, and privacy depend on your proxy setup
+
+---
+
+### New OpenAI-compatible providers not yet built into KForge
+
+Use Custom when a new provider supports OpenAI-compatible chat completions but KForge does not yet have a first-class provider for it.
+
+Before using it, check the provider’s own documentation for:
+
+* base URL
+* API key format
+* model IDs
+* pricing
+* rate limits
+* whether `/v1/chat/completions` is supported
+
+If that provider later becomes first-class in KForge, prefer the built-in provider unless you specifically need custom routing.
+
+---
 ## Cost labels and usage modes (important)
 
 KForge uses two separate ideas:
@@ -229,3 +306,6 @@ Custom is powerful by design.
 With power comes responsibility — **and flexibility**.
 
 That trade-off is intentional.
+---
+
+[← Docs home](index.md)

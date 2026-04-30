@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Model Colour + Label System
 
 KForge uses a simple colour-based labelling system to help users quickly understand
@@ -118,3 +122,6 @@ High-cost model. Use when accuracy matters.
 
 KForge does not enforce cost or block usage.
 The goal is clarity, not restriction.
+---
+
+[← Docs home](index.md)

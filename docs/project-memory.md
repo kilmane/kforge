@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 📘 Project Memory (v1) — Keep the AI on track
 
 Advanced feature · Optional · User-controlled
@@ -245,3 +249,6 @@ Project Memory exists to **reduce repetition**, not add complexity.
 
 
 You are always in control.
+---
+
+[← Docs home](index.md)

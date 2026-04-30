@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # KForge User Guide — Beta V1
 
 Welcome to KForge.
@@ -1130,3 +1134,6 @@ As KForge evolves, the exact labels and supported providers may change, but the 
 * use chat for guidance
 * use the right KForge surface for the job
 * let KForge help you stay in the truthful workflow
+---
+
+[← Docs home](index.md)

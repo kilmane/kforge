@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # API Keys & Billing Guide
 
 _Last updated: 28 April 2026_
@@ -358,3 +362,6 @@ It does not guarantee pricing, free access, limits, or availability. Providers c
 When in doubt, check the provider’s own dashboard first.
 
 ````
+---
+
+[← Docs home](index.md)

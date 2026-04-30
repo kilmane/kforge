@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Portability and Safety
 
 KForge is designed to be **portable, local-first, and safe by default**.
@@ -53,3 +57,6 @@ Your work is **your work**.
 The app is replaceable.
 
 That separation is a core design principle.
+---
+
+[← Docs home](index.md)

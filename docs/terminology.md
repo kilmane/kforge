@@ -1,157 +1,274 @@
-This is a **really solid document already** 👍
-What I’ll do now is:
-
-* clean the language (basic, user-friendly English)
-* improve **structure**
-* make headings **bold and visually clear**
-* keep it **Markdown-friendly** (easy to read on GitHub Pages)
-* avoid jargon where possible
-
-Below is a **polished version you can copy-paste directly** into
-`docs/terminology.md`.
+[← Docs home](index.md)
 
 ---
 
-# 🧭 Terminology: Pills, Notes, Tiers, Usage, Cost
+# KForge Terminology
 
-This document explains the words used in the **Presets / Suggestions UI** in simple terms.
+This page explains common KForge words used around AI providers, models, presets, labels, API keys, and endpoints.
 
----
-
-## 🏷️ Pills (Labels)
-
-**“Pills”** is developer slang.
-It simply means **small rounded labels** shown in the UI.
-
-They are used to show **quick information at a glance**.
-
-### Examples of pills
-
-* Sandbox
-* Main
-* Heavy
-* Free
-* Paid
-
-There are **three types of pills** in KForge:
-
-* **Tier pills**
-* **Usage pills**
-* **Cost pills**
-
-> ⚠️ They may look similar in the UI, but they represent **different ideas**.
+The goal is simple: help you understand what KForge is asking you to choose or configure.
 
 ---
 
-## 📝 Notes
+## Provider
 
-**Notes** are short text lines shown **under a suggested (preset) model**.
+A **provider** is the service, company, local runtime, or endpoint that powers KForge chat.
 
-### Examples
+Examples include:
 
-* “Rotating”
-* “Rotating / rate-limited”
-* “Availability may change”
+* OpenAI
+* Gemini
+* Claude
+* DeepSeek
+* Groq
+* Mistral
+* OpenRouter
+* Ollama endpoint
+* Ollama Cloud
+* LM Studio
+* Custom Endpoint
 
-Notes explain **what to expect from the model**.
+A provider answers the question:
 
-### What the notes mean
-
-#### **Rotating**
-
-* The model endpoint is part of a shared pool
-* The actual backend model may change
-* Speed and behavior may vary
-
-#### **Rotating / rate-limited**
-
-* Same as *Rotating*
-* Plus: you may hit usage limits or throttling
-* Very common on free models
-
-#### **Availability may change**
-
-* The model may disappear or be renamed
-* It may be temporarily unavailable
-* Typical for free or experimental models
-
-> ℹ️ Notes are **warnings and expectations**, not errors.
+**Where is the AI request being sent?**
 
 ---
 
-## 🧱 Tier Pills
+## Model
 
-**Tier pills** describe how the model is positioned in the system.
+A **model** is the specific AI model you choose inside a provider.
 
-### Examples
+Examples:
 
-* Sandbox
-* Main
-* Heavy
+* `gpt-5.4-mini`
+* `claude-sonnet-4-6`
+* `mistral-small-latest`
+* `gpt-oss:120b`
+* `kimi-k2.6`
 
-### What tiers mean (simple view)
+A model answers the question:
 
-* **Sandbox** → experimental, free, unstable, or limited
-* **Main** → normal, stable, general-purpose usage
-* **Heavy** → powerful, expensive, or resource-heavy
-
-> ✅ Tier pills are **always shown** in the UI.
+**Which AI brain should this provider use?**
 
 ---
 
-## 🛠️ Usage Pills (Usage Modes)
+## Model ID
 
-**Usage pills** describe **how a model is intended to be used**.
+A **model ID** is the exact text the provider expects.
 
-### Examples
+KForge sends the model ID to the provider.
 
-* **Sandbox** — testing, quick experiments, throwaway work
-* **Main** — day-to-day default usage
-* **Heavy** — high capability; use sparingly
+That means model IDs should be entered exactly as the provider documents them.
 
-### Important note
+Examples:
 
-* In the current UI, **usage and tier often use the same words**
-* Usage is sometimes **mapped into tier**
-* So yes: right now, **usage pills and tier pills may look the same**
+* `gpt-oss:120b`
+* `deepseek-chat`
+* `mistral-small-latest`
+* `openai/gpt-4o-mini`
 
-Internally, however:
-
-* **Tier** and **Usage** are **separate concepts**
-* This separation allows **future UI improvements**
+KForge does not invent or rewrite provider model IDs.
 
 ---
 
-## 💰 Cost Pills
+## Presets
 
-**Cost pills** describe whether a model is free or paid.
+**Presets** are KForge’s suggested starting models for a provider.
 
-They may also use **colors** to give a quick visual hint.
+They are meant to reduce decision fatigue.
 
-### Cost labels (with colors)
+Presets are not a complete list of every model available from a provider.
 
-* 🔵 **Free** — no cost, often limited or rotating
-* 🟢 **Paid (low cost)**
-* 🟡 **Paid (standard)**
-* 🔴 **Paid (expensive)**
-* ⚪ **Unknown** — provider-dependent or unclear
+A provider may support more models than KForge shows by default.
 
 ---
 
-## ✅ Important Summary
+## My Models
 
-* **Pills** = small labels in the UI
-* **Tier** = system level (sandbox / main / heavy)
-* **Usage** = intended use of the model
-* **Cost** = free or paid
-* **Notes** = human-readable warnings and expectations
+**My Models** are model IDs you add yourself.
+
+Use My Models when:
+
+* the provider supports a model that is not in KForge’s presets
+* you are using a Custom Endpoint
+* you are using a manual model-ID provider such as Ollama Cloud
+* you want to keep your own preferred model list
+
+My Models are saved per provider.
+
+That means a model you save for Ollama Cloud does not automatically appear under OpenAI, Mistral, or another provider.
 
 ---
 
-If you want, next time we can:
+## Labels
 
-* add screenshots
-* simplify it even further for non-technical users
-* or link each section directly from the Help menu
+KForge may show labels beside models to help you choose.
 
-This is **excellent documentation** — clear, honest, and user-friendly 👏
+Labels are guidance only.
+
+They do not change billing, provider behavior, or model capability.
+
+Common label ideas include:
+
+* cost
+* usage
+* notes
+
+---
+
+## Cost labels
+
+Cost labels are a quick reminder about likely cost.
+
+Examples:
+
+* 🔵 **Free** — no direct charge expected on that route, but limits may apply
+* 🟢 **Paid / Sandbox** — low-cost paid use or safe testing
+* 🟡 **Paid / Main** — normal day-to-day paid use
+* 🔴 **Paid / Heavy** — expensive, large, or high-capability use
+* ⚪ **Unknown** — pricing is unclear, provider-dependent, or account-dependent
+
+Cost labels are advisory.
+
+Always check the provider’s own pricing page before spending money.
+
+---
+
+## Usage labels
+
+Usage labels describe how a model is intended to be used.
+
+Examples:
+
+* **Sandbox** — testing, quick experiments, low-risk prompts
+* **Main** — normal day-to-day work
+* **Heavy** — large, expensive, slow, or high-capability tasks
+
+A Heavy label does not block you from using a model.
+
+It is only a reminder to use it carefully.
+
+---
+
+## Notes
+
+Notes are short explanations shown with some model suggestions or documentation.
+
+They may explain things such as:
+
+* the model is good for coding
+* the model is a cheap starter option
+* availability may change
+* pricing depends on the provider
+* the model is best used sparingly
+
+Notes are not error messages.
+
+They are human-readable guidance.
+
+---
+
+## API key
+
+An **API key** is a secret token from a provider.
+
+KForge uses it to authenticate with that provider.
+
+Examples:
+
+* OpenAI API key
+* Claude / Anthropic API key
+* Mistral API key
+* Ollama Cloud API key
+
+API keys belong in **Settings**, not in the main chat.
+
+KForge stores provider API keys through the operating system keychain.
+
+---
+
+## Endpoint
+
+An **endpoint** is the base URL KForge connects to.
+
+Examples:
+
+* `http://localhost:11434`
+* `http://localhost:1234`
+* `https://api.openai-compatible-provider.example`
+
+Some providers have a fixed endpoint built into KForge.
+
+Some providers let you configure an endpoint yourself.
+
+For example:
+
+* **Ollama endpoint** can use the local Ollama app or another Ollama server endpoint
+* **LM Studio** can use a local LM Studio server URL
+* **Custom Endpoint** requires you to enter an OpenAI-compatible base URL
+
+---
+
+## OpenAI-compatible
+
+**OpenAI-compatible** means an endpoint uses an API shape similar to OpenAI’s chat completions API.
+
+It does not mean:
+
+* the provider is OpenAI
+* the models are OpenAI models
+* pricing is the same as OpenAI
+* every OpenAI feature is supported
+
+For Custom Endpoint, KForge expects an OpenAI-compatible chat endpoint.
+
+---
+
+## Local runtime
+
+A **local runtime** runs on your own computer.
+
+Examples:
+
+* Ollama endpoint using the local Ollama app
+* LM Studio using a local server
+
+Local runtimes usually do not need a cloud API key.
+
+They may still need your computer to have enough memory, CPU, or GPU power for the model.
+
+---
+
+## Cloud provider
+
+A **cloud provider** runs the model on remote provider infrastructure.
+
+Examples:
+
+* OpenAI
+* Claude
+* Gemini
+* Mistral
+* Ollama Cloud
+
+Cloud providers usually need an API key.
+
+Billing, quotas, and rate limits are controlled by the provider.
+
+---
+
+## Important summary
+
+* **Provider** = where the AI request goes
+* **Model** = which AI model to use
+* **Model ID** = exact model name sent to the provider
+* **Presets** = KForge suggestions
+* **My Models** = your saved model IDs
+* **Labels** = advisory hints
+* **API key** = secret provider credential
+* **Endpoint** = base URL KForge connects to
+
+KForge tries to keep these concepts separate so you can choose providers and models clearly.
+---
+
+[← Docs home](index.md)

@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Presets Inventory
 
 _Last reviewed: 19/04/2026_
@@ -172,3 +176,6 @@ Low risk:
 - Claude current family
 - Hosted Mistral stable aliases
 - Local Ollama models
+---
+
+[← Docs home](index.md)

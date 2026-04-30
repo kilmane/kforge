@@ -1,3 +1,7 @@
+[← Docs home](index.md)
+
+---
+
 # Ollama Cloud in KForge
 
 _Last updated: 29/04/2026_
@@ -210,3 +214,6 @@ After saving your Ollama Cloud API key in KForge:
 5. Click **Test connection**
 
 If the test turns green, KForge can reach Ollama Cloud directly.
+---
+
+[← Docs home](index.md)
