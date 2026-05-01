@@ -2,7 +2,7 @@
 
 _Last updated: 28 April 2026_
 
-Behavior templates are optional instructions you can paste into KForge’s **System (optional)** field.
+Behavior templates are optional instructions you can paste into KForge’s **System (optional)** field in the **Advanced settings** section.
 
 They help guide how the AI should behave during a chat.
 
