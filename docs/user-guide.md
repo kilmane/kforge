@@ -578,15 +578,37 @@ The current advanced area also shows several useful AI controls.
 
 ## System (optional)
 
-There is a field for:
+The **System (optional)** field is available in **Advanced settings**.
+
+It lets you give the AI a higher-level instruction about how it should behave during the chat.
+
+A normal prompt tells the AI what you want now.  
+A system instruction tells the AI how you want it to behave while helping.
+
+Use it for stable behaviour, workflow rules, tone, or caution level.
+
+Examples:
 
 ```text
-Optional system instruction
+Work one step at a time. Do not jump ahead. Wait for my result before continuing.
+
 ```
 
-This is for higher-level assistant guidance.
+```text
+Do not claim that you created, edited, saved, committed, pushed, or deleted any file unless the action actually happened through a tool or I confirmed it.
+```
 
-Use it for stable behavioral direction, not for every one-off request.
+```text
+Explain things for a beginner. Avoid jargon where possible. Use short steps.
+```
+
+System instructions can help reduce confusion and improve consistency, but they do not guarantee perfect behaviour. Always check important file changes, commands, provider settings, and generated code yourself.
+
+For ready-made examples, use the **Behavior Templates** link beside the System field, or open:
+
+```text
+https://kilmane.github.io/kforge/behavior-templates.html
+```
 
 ## Parameters
 
@@ -1137,3 +1159,4 @@ As KForge evolves, the exact labels and supported providers may change, but the 
 ---
 
 [← Docs home](index.md)
+
