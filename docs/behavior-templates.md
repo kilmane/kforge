@@ -1,3 +1,5 @@
+[← Docs home](index.md)
+
 # Behavior Templates
 
 _Last updated: 28 April 2026_
@@ -253,3 +255,8 @@ Use **System (optional)** when you want the AI to follow a steady behaviour acro
 Behavior templates are guidance, not magic.
 
 They help the AI stay aligned with your workflow, but you should still check important results yourself.
+
+---
+
+[← Docs home](index.md)
+

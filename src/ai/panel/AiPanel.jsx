@@ -1876,6 +1876,7 @@ export default function AiPanel({
                   aiSystem={aiSystem}
                   setAiSystem={setAiSystem}
                   providerReady={providerReady}
+                  invoke={invoke}
                 />
 
                 <ParametersPanel
@@ -2126,6 +2127,7 @@ export default function AiPanel({
                 aiSystem={aiSystem}
                 setAiSystem={setAiSystem}
                 providerReady={providerReady}
+                invoke={invoke}
               />
 
               <ParametersPanel
@@ -2204,3 +2206,4 @@ export default function AiPanel({
     </div>
   );
 }
+
