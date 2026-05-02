@@ -1949,6 +1949,15 @@ export default function App() {
       "Once a project folder is open, I can help you add that page or feature inside the current project."
     );
   }
+  function buildEmptyFolderImplementationRoutingMessage() {
+    return (
+      "The project folder is currently empty, so there is no existing app to modify.\n\n" +
+      "A good default here is Vite + React.\n\n" +
+      'You can now leave the chat and open: Preview -> Generate.' + "\n" +
+      'Select "Vite + React" to create a supported starter project.' + "\n\n" +
+      "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
+    );
+  }
   function buildExpoTerminalChoiceRoutingMessage(projectOpen) {
     if (!projectOpen) {
       return (
@@ -2079,6 +2088,20 @@ export default function App() {
       if (!projectOpen && isNoProjectImplementationIntent(draft)) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage("assistant", buildNoProjectImplementationMessage());
+        return;
+      }
+
+      if (
+        projectOpen &&
+        Array.isArray(tree) &&
+        tree.length === 0 &&
+        isNoProjectImplementationIntent(draft)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildEmptyFolderImplementationRoutingMessage(),
+        );
         return;
       }
 
@@ -2687,6 +2710,11 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
 
 
 

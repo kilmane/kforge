@@ -41,6 +41,9 @@ export function buildKforgePreviewWorkflowManifest() {
       "After recommending Preview for run or preview actions, explicitly tell the user they can leave the chat and continue in Preview.",
       "When Preview -> Generate is the truthful handoff, give the handoff directly and do not ask a follow-up question about whether to proceed.",
       "If template choice help is useful, include a brief suggestion in the same answer instead of blocking the handoff on a question.",
+      "Phrase template suggestions as recommendations, not decisions already made.",
+      'Avoid first-person commitment wording such as "Let\'s use...", "Let\'s proceed with that.", "I\'ll guide you through it now", or anything that implies the workflow has already been started.',
+      "Do not frame the template recommendation as a decision already accepted on the user's behalf.",
       "Only move into manual run guidance if the user explicitly says they want to bypass KForge or asks for manual steps.",
     ],
     first_response_template: [
@@ -64,3 +67,5 @@ export function buildKforgePreviewWorkflowManifest() {
     ],
   };
 }
+
+
