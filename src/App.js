@@ -2210,12 +2210,24 @@ export default function App() {
 
         cleaned = String(cleaned || "").trim();
 
+        const cleanedLower = cleaned.toLowerCase();
+        const shouldSuppressReturnedToolBlocks =
+          toolBlocks.length > 0 &&
+          (
+            cleanedLower.includes("you can now leave the chat and open:") ||
+            cleanedLower.includes("if you prefer to bypass kforge") ||
+            cleanedLower.includes("stay in the chat and i can help you manually instead") ||
+            cleanedLower.includes("open or create a project first in explorer") ||
+            cleanedLower.includes("open a project folder first in explorer") ||
+            cleanedLower.includes("kforge can help with this through")
+          );
+
         // Append cleaned assistant output (keeps transcript readable)
         if (cleaned) {
           appendMessage("assistant", cleaned);
         } else {
           // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
-          if (toolBlocks.length > 0) {
+          if (toolBlocks.length > 0 && !shouldSuppressReturnedToolBlocks) {
             appendMessage("assistant", "(Model requested one or more tools.)");
           } else {
             appendMessage("assistant", "");
@@ -2226,8 +2238,10 @@ export default function App() {
         maybeCapturePatchPreview(out);
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
-        for (const tb of toolBlocks) {
-          appendMessage("assistant", tb);
+        if (!shouldSuppressReturnedToolBlocks) {
+          for (const tb of toolBlocks) {
+            appendMessage("assistant", tb);
+          }
         }
       } else {
         appendMessage("system", r.error || "Unknown error", {
@@ -2673,3 +2687,8 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+

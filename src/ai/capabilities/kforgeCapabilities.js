@@ -233,10 +233,22 @@ export function buildKforgeCapabilitySummary(userMessage = "", options = {}) {
     "Only hand off when the user is actually asking for that workflow, or when the workflow is the most truthful path for the requested action.",
   );
   lines.push(
+    "If the user's request sounds like implementation work but there is no current implementation target yet (for example an open empty folder), use the truthful KForge handoff instead of continuing as normal in-project implementation.",
+  );
+  lines.push(
+    "When Preview -> Generate is the truthful next step, hand off directly in normal assistant text.",
+  );
+  lines.push(
     "When handing off to a KForge workflow, do not ask how the user would like to proceed.",
   );
   lines.push(
+    "Do not turn a truthful KForge handoff into a chat-driven confirmation loop such as asking whether to proceed.",
+  );
+  lines.push(
     "Do not append a chat-style follow-up question after the KForge handoff.",
+  );
+  lines.push(
+    "If template choice help is useful, include a brief recommendation in the same answer instead of blocking the handoff on a question.",
   );
   lines.push(
     "End the response after the KForge handoff and the manual-bypass note.",
