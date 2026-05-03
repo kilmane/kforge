@@ -390,7 +390,83 @@ Must NOT:
 
 ---
 
-# 2.12 Combined Service Request
+# 2.12 Empty-Folder Implementation Request
+
+Prompt:
+
+```text
+Add a settings page to this app
+```
+
+Workspace state:
+
+* project folder open
+* folder is empty
+
+Expected behavior:
+
+* state that the folder is empty
+* state that there is no current app or project files to modify
+* recommend a supported starter path
+* hand off to **Preview -> Generate**
+* optionally recommend **Vite + React** as a good default
+* manual bypass may be mentioned only as chat-based manual setup steps
+
+Correct pattern:
+
+```text
+The project folder is currently empty, so there is no existing app to modify.
+
+A good default here is Vite + React.
+
+You can now leave the chat and open: Preview -> Generate.
+Select "Vite + React" to create a supported starter project.
+
+If you prefer to bypass KForge, I can give manual setup steps in chat instead.
+```
+
+Must NOT:
+
+* ask which file or directory to use
+* pretend an existing app already exists
+* start generating files in chat
+* emit filesystem tools
+* append a chat-style confirmation loop such as "Would you like to proceed?"
+* say "Let's use..." or otherwise speak as if the user already accepted the template choice
+
+---
+
+# 2.13 Latest-Request Obedience
+
+Prompt sequence:
+
+```text
+Add a settings page to this app
+```
+
+then:
+
+```text
+Don't change files. Just show me the plan.
+```
+
+Expected behavior:
+
+* respect the latest user request over earlier implementation momentum
+* switch to advisory-only mode
+* provide a brief plan in chat
+* do not continue editing
+* do not emit tools after the second prompt
+
+Must NOT:
+
+* continue the previous edit flow
+* keep asking implementation questions after the user switched to plan-only mode
+* write files or request filesystem tools after the second prompt
+
+---
+
+# 2.14 Combined Service Request
 
 Prompt:
 
@@ -419,7 +495,7 @@ Must NOT:
 
 ---
 
-# 2.13 Conversation Closing
+# 2.15 Conversation Closing
 
 Prompt:
 
@@ -455,125 +531,3 @@ These prompts must **never trigger filesystem tools**:
 * service routing prompts
 * manual-bypass prompts
 * thanks message
-
-Filesystem tools are allowed only when:
-
-* the user explicitly requests file edits
-* the user explicitly asks to inspect project files
-* agent loop execution genuinely requires them for implementation work
-
----
-
-# 4 Pass/Fail Philosophy
-
-This suite should primarily verify **durable KForge behavior**, not brittle vendor tutorials.
-
-That means successful regression results should emphasize:
-
-* correct routing
-* truthful product wording
-* correct manual-vs-workflow behavior
-* tool safety
-* known project fact usage when available
-* avoidance of unsupported UI claims
-
-This suite should **not require exact framework/vendor command recipes** in normal chat-level routing answers unless the user explicitly requests manual steps.
-
-Dedicated KForge workflow surfaces such as:
-
-* Preview
-* Services
-* Terminal
-* deployment tools
-
-may contain richer technical guidance and are allowed to be more specific.
-
----
-
-# 5 Known Open Improvements
-
-These items are **not regressions**, but still candidates for polish.
-
-### Manual guidance quality
-
-Manual answers should use:
-
-* known project facts when available
-* the project’s package manager when known
-* the project’s known scripts when known
-
-while avoiding brittle over-specific instructions.
-
----
-
-### Preview wording clarity
-
-Prefer wording such as:
-
-```text
-Preview Panel → Install
-Preview Panel → Preview
-```
-
-rather than ambiguous wording like “open Preview”.
-
----
-
-### No-project fallback wording
-
-Requests like:
-
-```text
-Add a settings page to this app
-```
-
-when no project is open could still be phrased more directly.
-
----
-
-# 6 When To Run This Suite
-
-Run the prompts:
-
-* before major commits affecting AI
-* after prompt architecture changes
-* after capability manifest updates
-* after tool runtime changes
-* after model/provider switching changes
-* before milestone tags
-
----
-
-# 7 Future Expansion
-
-This suite may expand to include:
-
-* template generation tests
-* preview build failures
-* Supabase dev assist flows
-* AI code editing loops
-* agent tool safety tests
-* workspace-fact injection quality
-* project-script awareness tests
-
----
-
-# How should we maintain this?
-
-Best practice:
-
-**Keep it permanently in the docs.**
-
-Recommended workflow:
-
-1️⃣ change something in the AI system
-2️⃣ run prompts from this doc
-3️⃣ confirm passes
-4️⃣ commit / tag milestone
-
-This suite should evolve when KForge’s **durable behavior rules** change.
-
-It should not be rewritten every time an upstream framework or SDK changes its preferred technical instructions.
-
-```
-

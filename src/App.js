@@ -1842,9 +1842,8 @@ export default function App() {
   function hasManualOrAdvisoryIntent(message = "") {
     const text = String(message || "").toLowerCase();
 
-    const hints = [
+    const manualHints = [
       "manually",
-      "manual",
       "manual steps",
       "manual setup",
       "just give me the commands",
@@ -1856,14 +1855,27 @@ export default function App() {
       "how do i run",
       "how do i install",
       "how do i set up",
-      "how do i add",
       "what command",
       "which command",
-      "explain",
-      "guide me",
     ];
 
-    return hints.some((hint) => text.includes(hint));
+    const advisoryHints = [
+      "just explain",
+      "explain only",
+      "guide only",
+      "plan only",
+      "show me the plan",
+      "don't change files",
+      "do not change files",
+      "no file changes",
+      "read only",
+      "read-only",
+    ];
+
+    return (
+      manualHints.some((hint) => text.includes(hint)) ||
+      advisoryHints.some((hint) => text.includes(hint))
+    );
   }
   function isDependencyInstallWorkflowIntent(text = "") {
     const s = String(text || "")
@@ -1955,6 +1967,18 @@ export default function App() {
       "A good default here is Vite + React.\n\n" +
       'You can now leave the chat and open: Preview -> Generate.' + "\n" +
       'Select "Vite + React" to create a supported starter project.' + "\n\n" +
+      "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
+    );
+  }
+  function buildEmptyFolderPlanMessage() {
+    return (
+      "The project folder is currently empty, so there is no existing app to modify yet.\n\n" +
+      "Plan:\n" +
+      "1. Create a starter project.\n" +
+      "2. Use Vite + React as the default option.\n" +
+      "3. Add a settings page inside the generated app structure.\n" +
+      "4. Then continue with the actual file edits.\n\n" +
+      "If you want the KForge path, use Preview -> Generate -> Vite + React.\n" +
       "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
     );
   }
@@ -2102,6 +2126,28 @@ export default function App() {
           "assistant",
           buildEmptyFolderImplementationRoutingMessage(),
         );
+        return;
+      }
+
+      if (
+        projectOpen &&
+        Array.isArray(tree) &&
+        tree.length === 0 &&
+        (
+          draft.toLowerCase().includes("show me the plan") ||
+          draft.toLowerCase().includes("plan only") ||
+          draft.toLowerCase().includes("just explain") ||
+          draft.toLowerCase().includes("explain only") ||
+          draft.toLowerCase().includes("guide only") ||
+          draft.toLowerCase().includes("don't change files") ||
+          draft.toLowerCase().includes("do not change files") ||
+          draft.toLowerCase().includes("no file changes") ||
+          draft.toLowerCase().includes("read only") ||
+          draft.toLowerCase().includes("read-only")
+        )
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage("assistant", buildEmptyFolderPlanMessage());
         return;
       }
 
@@ -2710,6 +2756,10 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
 
 
 
