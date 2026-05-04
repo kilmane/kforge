@@ -549,6 +549,16 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- If the latest user asks to see changes, prefer read_file on the active file or most recently written file.\n` +
     `- Do NOT use list_dir for a "show changes" request unless the user explicitly asked for a directory listing.\n` +
     `- If a file was already written successfully, do NOT repeat the same write_file call unless the user explicitly asks for another edit.\n` +
+    `- If the latest user request is still an unfinished implementation task, do NOT stop after a partial file creation or partial edit just to ask for permission to continue.\n` +
+    `- After creating a new component or file that obviously still needs integration, continue with the next necessary inspection or edit step.\n` +
+    `- Do NOT ask questions like "Would you like to integrate it?" when the integration is an obvious part of the still-active request.\n` +
+    `- Only stop and ask a follow-up question when the next implementation step is genuinely ambiguous or there are multiple equally plausible directions.\n` +
+    `- If the core user request has already been implemented, stop the tool loop and provide the final assistant answer instead of continuing into extra inspections or polish.\n` +
+    `- Do NOT inspect or modify adjacent files like main entry files, global CSS, routing, or app shell files unless the user asked for that work or inspection has already confirmed it is truly required for the requested feature.\n` +
+    `- Do NOT add styling, polish, refactors, or extra integrations after the requested feature is already working unless the user explicitly asked for them.\n` +
+    `- For unfinished implementation work, do NOT stop at narrative progress updates such as saying you will integrate the new file next.\n` +
+    `- If the task is still unfinished and the next implementation step is clear, the same continuation answer must emit the next single tool call instead of stopping after prose.\n` +
+    `- After creating one required file, continue directly to the next obvious integration edit when it is still part of the same active request.\n` +
     `- If you need a tool, request exactly one tool call.\n` +
     `- Prefer a single tool call at a time.\n` +
     `- If no more tools are needed, provide the final assistant answer.\n` +
@@ -557,17 +567,22 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- If the latest user request is normal in-project implementation work and routine inspection reveals a clear existing target, continue with the next necessary tool or edit step instead of stopping to ask for permission.\n` +
     `- Do not ask follow-up questions like which file or directory to use after routine inspection unless the request is genuinely ambiguous or multiple existing targets are equally plausible.\n` +
     `- For ordinary feature requests inside an existing project, prefer the simplest responsible existing file and continue.\n` +
+    `- Do NOT introduce a router, routing library, navigation framework, or URL-based page structure unless inspection confirms the project already uses routing or the user explicitly asks for it.\n` +
+    `- If the user asks for a "page" in a simple single-view app, prefer the simplest responsible in-app settings view, panel, section, or toggle before converting the app to routed navigation.\n` +
+    `- If the next edit may require a new dependency, inspect package.json first and do NOT assume that dependency is already installed.\n` +
     `- If the workspace is empty and the latest user asks to add a page, feature, or app, do not start inventing files in the tool loop; answer normally and direct the user toward the supported new-project path instead.\n` +
     `- Do NOT create files or directories unless the user explicitly asks for them.\n` +
     `- When inspecting a workspace, start with the list_dir tool on "." unless the conversation already contains a directory listing.\n` +
     `- If a tool already returned the requested information, DO NOT call the same tool again.\n` +
-    `- Instead, summarize the tool result for the user.\n` +
-    `- Only call another tool if new information is required.\n` +
-    `- If the directory listing is already available, explain the project structure based on that result.\n` +
+    `- For inspection-only or explanation requests, summarize the tool result for the user once enough information is available.\n` +
+    `- For normal in-project implementation work, do NOT stop after the first inspection result just to summarize it.\n` +
+    `- After a top-level directory listing, use that result to choose the next necessary inspection tool or edit step.\n` +
+    `- If the directory listing already shows a likely app target such as src/, app/, pages/, or package.json, continue with the next tool instead of narrating the structure.\n` +
+    `- Only call another tool if new information is required for the current implementation step.\n` +
     `- For workspace inspection tasks, use at most 3 tool calls before answering.\n` +
-    `- Prefer this order for inspection: list_dir("."), then optionally read_file("package.json") or read_file("README.md"), then answer.\n` +
+    `- Prefer this order for implementation-oriented inspection: list_dir("."), then list_dir("src") or read_file("package.json"), then read_file on the most likely existing target.\n` +
     `- Do NOT inspect subdirectories like node_modules unless the user explicitly asks.\n` +
-    `- Do NOT read more files once you have enough information to summarize the project.\n` +
+    `- Do NOT read more files once you have enough information to continue the edit or provide the final answer.\n` +
     `- If you need a tool, output ONLY a tool request in the exact fenced format.\n` +
     `- Do NOT describe the tool call in plain English.\n` +
     `- Do NOT write list_dir(path) or read_file(path).\n` +
@@ -952,6 +967,7 @@ export default function AiPanel({
   appendMessage,
   updateMessage,
   onWorkspaceTreeRefresh,
+  setWorkflowContext,
 
   aiPrompt,
   setAiPrompt,
@@ -1516,7 +1532,31 @@ export default function AiPanel({
             );
           } else if (typeof runAi === "function") {
             try {
-              const continuationTools = [];
+              const continuationTools = [
+                {
+                  name: "list_dir",
+                  description: "List files and directories for a given path.",
+                },
+                {
+                  name: "read_file",
+                  description: "Read the contents of a file.",
+                },
+                {
+                  name: "search_in_file",
+                  description: "Search for text inside a file.",
+                },
+                {
+                  name: "write_file",
+                  description: "Write or replace a file when an edit is required.",
+                },
+                {
+                  name: "mkdir",
+                  description: "Create a directory when a new folder is required.",
+                },
+              ];
+
+              const agentSuccessfulWritePaths = [];
+              const agentSuccessfulDirPaths = [];
 
               const agentResult = await runAgent({
                 prompt: "",
@@ -1555,24 +1595,57 @@ export default function AiPanel({
 
                   const output = String(r.output || "");
                   const cleaned = stripToolBlocksForChat(output);
+                  const toolCall = extractSingleAgentToolCall(
+                    output,
+                    activeTab?.path,
+                  );
 
                   return {
                     text: cleaned || output,
+                    toolCall,
                   };
                 },
                 executeTool: async (toolCall) => {
                   const toolName = String(toolCall?.name || "").trim();
                   const args = toolCall?.args || {};
-                  return await runTool({ toolName, args });
+                  const result = await runTool({ toolName, args });
+
+                  if (result?.ok && toolName === "write_file") {
+                    const path = String(args?.path || "").trim();
+                    if (path) agentSuccessfulWritePaths.push(path);
+                  }
+
+                  if (result?.ok && toolName === "mkdir") {
+                    const path = String(args?.path || "").trim();
+                    if (path) agentSuccessfulDirPaths.push(path);
+                  }
+
+                  return result;
                 },
                 appendTranscript: () => {},
                 appendToolResult: () => {},
                 maxSteps: 6,
               });
 
+              const latestAgentWrittenPath =
+                agentSuccessfulWritePaths.length > 0
+                  ? agentSuccessfulWritePaths[agentSuccessfulWritePaths.length - 1]
+                  : "";
+
               const finalText = String(agentResult?.text || "").trim();
               if (finalText) {
                 appendMessage("assistant", finalText);
+              } else if (
+                agentResult?.stopReason === "max_steps_reached" &&
+                (agentSuccessfulWritePaths.length > 0 ||
+                  agentSuccessfulDirPaths.length > 0)
+              ) {
+                appendMessage(
+                  "assistant",
+                  latestAgentWrittenPath
+                    ? `Done — updated ${latestAgentWrittenPath}.\n\n${buildPreviewHandoffMessage()}`
+                    : `The requested implementation changes are in place.\n\n${buildPreviewHandoffMessage()}`,
+                );
               } else if (
                 agentResult?.stopReason &&
                 agentResult.stopReason !== "final_text" &&
@@ -2206,4 +2279,12 @@ export default function AiPanel({
     </div>
   );
 }
+
+
+
+
+
+
+
+
 

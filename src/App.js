@@ -10,6 +10,7 @@ import "./index.css";
 import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTaskTemplateContext";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
+import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 
 import { invoke } from "@tauri-apps/api/core";
 
@@ -817,6 +818,7 @@ export default function App() {
 
   // For retry: remember last “send” details
   const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit, includeActiveFile, fileSnapshot }
+  const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, nextStep }
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
@@ -1954,6 +1956,74 @@ export default function App() {
 
     return looksImplementation && !looksWorkflow;
   }
+  function isWorkflowContinuationIntent(text = "") {
+    const s = String(text || "").toLowerCase().trim();
+    if (!s) return false;
+
+    if ([
+      "yes",
+      "yeah",
+      "yep",
+      "ok",
+      "okay",
+      "sure",
+      "go ahead",
+      "please do",
+    ].includes(s)) {
+      return true;
+    }
+
+    return (
+      s.includes("run") ||
+      s.includes("test") ||
+      s.includes("preview") ||
+      s.includes("start") ||
+      s.includes("open it") ||
+      s.includes("show me") ||
+      s.includes("launch")
+    );
+  }
+
+
+  function isPreviewIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("preview") ||
+      s.includes("run it") ||
+      s.includes("run the app") ||
+      s.includes("start it") ||
+      s.includes("start the app") ||
+      s.includes("launch it") ||
+      s.includes("launch the app") ||
+      s.includes("open it") ||
+      s.includes("open the app") ||
+      s.includes("test it") ||
+      s.includes("see it") ||
+      s.includes("show it")
+    );
+  }
+
+  function isDependencyInstallIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("install") ||
+      s.includes("dependencies") ||
+      s.includes("dependency") ||
+      s.includes("npm install") ||
+      s.includes("pnpm install") ||
+      s.includes("yarn install")
+    );
+  }
 
   function buildNoProjectImplementationMessage() {
     return (
@@ -1980,6 +2050,13 @@ export default function App() {
       "4. Then continue with the actual file edits.\n\n" +
       "If you want the KForge path, use Preview -> Generate -> Vite + React.\n" +
       "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
+    );
+  }
+  function buildAdvisoryOnlyImplementationMessage() {
+    return (
+      "This current model is being used in a safer chat mode to keep KForge reliable.\n\n" +
+      "For direct project edits, switch to a stronger provider/model first.\n\n" +
+      "I can still explain the plan or give manual steps in chat instead."
     );
   }
   function buildExpoTerminalChoiceRoutingMessage(projectOpen) {
@@ -2097,6 +2174,10 @@ export default function App() {
         projectTemplateInfo?.detectedTemplate?.name || null;
       const detectedKind = projectTemplateInfo?.kind || null;
       const projectOpen = !!projectPath;
+      const modelWorkflowPolicy = getModelWorkflowPolicy({
+        providerId: aiProvider,
+        modelId: aiModel,
+      });
 
       if (
         isExpoTerminalChoiceIntent(draft, detectedTemplateName, detectedKind)
@@ -2151,6 +2232,18 @@ export default function App() {
         return;
       }
 
+      if (
+        modelWorkflowPolicy.mode === "advisory_only" &&
+        isNoProjectImplementationIntent(draft)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildAdvisoryOnlyImplementationMessage(),
+        );
+        return;
+      }
+
       if (isCombinedOpenAiSupabaseServiceIntent(draft)) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
@@ -2183,6 +2276,18 @@ export default function App() {
         );
         return;
       }
+      if (
+        projectOpen &&
+        isNoProjectImplementationIntent(draft) &&
+        !isPreviewIntent(draft) &&
+        !isDependencyInstallIntent(draft)
+      ) {
+        setWorkflowContext({
+          taskKind: "implementation",
+          nextStep: "preview",
+        });
+      }
+
       if (providerSwitchNote) setProviderSwitchNote("");
 
       // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
@@ -2205,6 +2310,10 @@ export default function App() {
 
       // Save last-send for retry (captures the exact “inputs” and provider settings)
       const ep = (endpoints[aiProvider] || "").trim();
+      const effectiveAskForPatch =
+        !!askForPatch ||
+        (modelWorkflowPolicy.allowPatchPreview &&
+          modelWorkflowPolicy.forcePatchPreview);
       setLastSend({
         prompt: draft,
         providerId: aiProvider,
@@ -2217,19 +2326,20 @@ export default function App() {
         contextLimit: CHAT_CONTEXT_TURNS,
         includeActiveFile: !!fileSnapshot,
         fileSnapshot: fileSnapshot ? { ...fileSnapshot } : null,
-        askForPatch: !!askForPatch,
+        askForPatch: !!effectiveAskForPatch,
       });
 
       if (!opts.silentUserAppend) appendMessage("user", draft);
 
-      const patchInstruction = askForPatch
+      const patchInstruction = effectiveAskForPatch
         ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
-      const shouldSuppressToolsForPrompt = hasManualOrAdvisoryIntent(draft);
+      const shouldSuppressToolsForPrompt =
+        hasManualOrAdvisoryIntent(draft) || !modelWorkflowPolicy.allowToolCalls;
 
       const toolInstruction =
-        !askForPatch && !shouldSuppressToolsForPrompt
+        !effectiveAskForPatch && !shouldSuppressToolsForPrompt
           ? "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
@@ -2242,16 +2352,25 @@ export default function App() {
             "Do NOT invent or emit any other tool names.\n" +
             "Do NOT emit tools like preview, install, terminal, services, supabase, stripe, or deploy.\n" +
             "If the user wants a KForge UI workflow such as Preview, Services, or Terminal, answer in normal assistant text and guide them there instead of emitting a tool call.\n" +
+            "For normal in-project implementation work, inspect the existing project before any write_file call unless the exact target file is already known from prior tool results in this conversation.\n" +
+            "Do NOT assume framework structure, routing libraries, file names, or dependencies before inspection confirms them.\n" +
+            "Do NOT introduce a router, routing library, navigation framework, or URL-based page structure unless inspection confirms the project already uses routing or the user explicitly asks for it.\n" +
+            "If the user asks for a page in a simple single-view app, prefer the simplest responsible in-app settings view, panel, section, or toggle before converting the app to routed navigation.\n" +
+            "If the next edit may require a new dependency, inspect package.json first and do NOT assume that dependency is already installed.\n" +
+            "If the request implies a named page, component, or feature file such as Settings, inspect the relevant directory for a plausible existing file before creating a new one.\n" +
+            "If a plausible existing file already exists, read and reuse that file instead of creating a duplicate new file.\n" +
             "\n" +
-            "Instead, output one or more ```tool fenced blocks, each containing JSON like:\n" +
+            "For implementation requests, do NOT stop at narrative intent such as saying you will inspect or modify files.\n" +
+            "After a brief explanation, actually emit exactly one tool block when inspection or editing is needed.\n" +
+            "If inspection is needed, the same answer must include the single tool request instead of stopping after prose.\n" +
+            "Instead, output exactly one ```tool fenced block containing JSON like:\n" +
             "```tool\n" +
             '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
             "```\n" +
             "\n" +
-            "After creating or modifying files, output a final tool call to list the folder only when listing the folder is actually useful for the requested action.\n" +
-            "```tool\n" +
-            '{ "name": "list_dir", "args": { "path": "." } }\n' +
-            "```\n"
+            "Request exactly one tool call at a time.\n" +
+            "Do NOT emit multiple tool calls in one answer.\n" +
+            "Do NOT add a follow-up list_dir call after a write unless the user explicitly asked for a directory listing.\n"
           : "";
 
       const inputWithContext = buildInputWithContext(
@@ -2333,6 +2452,7 @@ export default function App() {
       aiTemperature,
       aiMaxTokens,
       endpoints,
+      workflowContext,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
@@ -2528,6 +2648,7 @@ export default function App() {
       appendMessage={appendMessage}
       updateMessage={updateMessage}
       onWorkspaceTreeRefresh={handleRefreshTree}
+      setWorkflowContext={setWorkflowContext}
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}
@@ -2756,6 +2877,18 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
