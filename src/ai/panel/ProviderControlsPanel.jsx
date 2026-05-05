@@ -258,6 +258,7 @@ export default function ProviderControlsPanel({
 
   aiProvider,
   providerReady,
+  modelWorkflowPolicy,
   openSettings,
 
   aiModel,
@@ -707,6 +708,14 @@ export default function ProviderControlsPanel({
         </div>
       )}
 
+      {providerReady && modelWorkflowPolicy?.userHint ? (
+        <div className="text-xs opacity-75 border border-zinc-800 rounded p-2 bg-zinc-900/30 leading-snug">
+          <div className="uppercase tracking-wide opacity-60 mb-1">
+            Model safety
+          </div>
+          <div>{modelWorkflowPolicy.userHint}</div>
+        </div>
+      ) : null}
       {/* Filter row */}
       <div className="flex items-center justify-end mt-3">
         <div className="flex items-center gap-2">
@@ -998,3 +1007,8 @@ export default function ProviderControlsPanel({
     </div>
   );
 }
+
+
+
+
+

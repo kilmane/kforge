@@ -949,6 +949,15 @@ export default function App() {
     [aiProvider, isProviderEnabled],
   );
 
+  
+  const displayModelWorkflowPolicy = useMemo(
+    () =>
+      getModelWorkflowPolicy({
+        providerId: aiProvider,
+        modelId: aiModel,
+      }),
+    [aiProvider, aiModel],
+  );
   const openSettings = useCallback((focusProviderId = null, msg = "") => {
     setSettingsFocusProviderId(focusProviderId);
     setSettingsMessage(msg || "");
@@ -2818,6 +2827,7 @@ export default function App() {
       setFocusMode={setFocusMode}
       providerMeta={providerMeta}
       providerReady={providerReady}
+      modelWorkflowPolicy={displayModelWorkflowPolicy}
       disabledExplainer={disabledExplainer}
       headerStatus={headerStatus}
       providerGroupLabel={providerGroupLabel}
@@ -3090,6 +3100,10 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
 
 
 

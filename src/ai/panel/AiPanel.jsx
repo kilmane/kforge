@@ -939,6 +939,7 @@ export default function AiPanel({
   // provider header surface
   providerMeta,
   providerReady,
+  modelWorkflowPolicy,
   disabledExplainer,
   headerStatus,
   providerGroupLabel,
@@ -2190,6 +2191,7 @@ export default function AiPanel({
             disabledProviderMessage={disabledProviderMessage}
             aiProvider={aiProvider}
             providerReady={providerReady}
+            modelWorkflowPolicy={modelWorkflowPolicy}
             openSettings={openSettings}
             aiModel={aiModel}
             setAiModel={setAiModel}
@@ -2325,6 +2327,7 @@ export default function AiPanel({
                 disabledProviderMessage={disabledProviderMessage}
                 aiProvider={aiProvider}
                 providerReady={providerReady}
+                modelWorkflowPolicy={modelWorkflowPolicy}
                 openSettings={openSettings}
                 aiModel={aiModel}
                 setAiModel={setAiModel}
@@ -2342,6 +2345,9 @@ export default function AiPanel({
     </div>
   );
 }
+
+
+
 
 
 
