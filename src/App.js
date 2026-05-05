@@ -2302,6 +2302,150 @@ export default function App() {
     );
   }
 
+  // Phase 6.5 Part 2: staged task-kind classifier; wired incrementally in later slices.
+  // eslint-disable-next-line no-unused-vars
+  function inferPromptTaskKind(
+    draft = "",
+    {
+      projectOpen = false,
+      tree = null,
+      workflowContext = null,
+      detectedTemplateName = "",
+      detectedKind = "",
+    } = {},
+  ) {
+    const text = String(draft || "");
+    const s = text.toLowerCase().trim();
+    const emptyProjectFolder =
+      projectOpen && Array.isArray(tree) && tree.length === 0;
+
+    if (!s) {
+      return {
+        kind: "unknown",
+        confidence: "low",
+        source: "empty_prompt",
+      };
+    }
+
+    if (
+      isCompletedImplementationWorkflow(workflowContext) &&
+      isWorkflowSuccessAckIntent(text)
+    ) {
+      return {
+        kind: "success_ack",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (
+      isCompletedImplementationWorkflow(workflowContext) &&
+      isWorkflowShowChangesIntent(text)
+    ) {
+      return {
+        kind: "show_changes",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (isWorkflowBugfixIntent(text)) {
+      return {
+        kind: "broken_preview_debug",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (isWorkflowPreviewFollowupIntent(text, workflowContext)) {
+      return {
+        kind: "preview_followup",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (
+      isExpoPhonePreviewWorkflowIntent(
+        text,
+        detectedTemplateName,
+        detectedKind,
+      )
+    ) {
+      return {
+        kind: "expo_phone_preview",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (isDependencyInstallWorkflowIntent(text)) {
+      return {
+        kind: "dependency_install",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (isCombinedOpenAiSupabaseServiceIntent(text)) {
+      return {
+        kind: "provider_setup",
+        confidence: "medium",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (hasManualOrAdvisoryIntent(text)) {
+      return {
+        kind: "manual_steps",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (!projectOpen && isNoProjectImplementationIntent(text)) {
+      return {
+        kind: "no_project_implementation",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (emptyProjectFolder && isNoProjectImplementationIntent(text)) {
+      return {
+        kind: "empty_folder_implementation",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (
+      projectOpen &&
+      isNoProjectImplementationIntent(text) &&
+      !isPreviewIntent(text) &&
+      !isDependencyInstallIntent(text)
+    ) {
+      return {
+        kind: "project_edit",
+        confidence: "high",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    if (isPreviewIntent(text)) {
+      return {
+        kind: "preview_followup",
+        confidence: "medium",
+        source: "existing_intent_helpers",
+      };
+    }
+
+    return {
+      kind: "simple_qa",
+      confidence: "low",
+      source: "fallback",
+    };
+  }
   function buildWorkflowShowChangesMessage(context = null) {
     const lastEditedPath = String(context?.lastEditedPath || "").trim();
 
@@ -3111,4 +3255,3 @@ export default function App() {
     </div>
   );
 }
-
