@@ -2608,7 +2608,7 @@ export default function App() {
         return;
       }
 
-      if (isCombinedOpenAiSupabaseServiceIntent(draft)) {
+      if (promptTask.kind === "provider_setup") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
@@ -2617,7 +2617,7 @@ export default function App() {
         return;
       }
 
-      if (isDependencyInstallWorkflowIntent(draft)) {
+      if (promptTask.kind === "dependency_install") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
@@ -2626,13 +2626,7 @@ export default function App() {
         return;
       }
 
-      if (
-        isExpoPhonePreviewWorkflowIntent(
-          draft,
-          detectedTemplateName,
-          detectedKind,
-        )
-      ) {
+      if (promptTask.kind === "expo_phone_preview") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
