@@ -2365,6 +2365,14 @@ export default function App() {
         };
       }
 
+      if (isExpoTerminalChoiceIntent(text, detectedTemplateName, detectedKind)) {
+        return {
+          kind: "expo_terminal_choice",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
       if (
         isExpoPhonePreviewWorkflowIntent(
           text,
@@ -2548,9 +2556,7 @@ export default function App() {
         }
       }
 
-      if (
-        isExpoTerminalChoiceIntent(draft, detectedTemplateName, detectedKind)
-      ) {
+      if (promptTask.kind === "expo_terminal_choice") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
