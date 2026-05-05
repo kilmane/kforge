@@ -461,6 +461,30 @@ function isClosingIntent(text) {
   );
 }
 
+function isBrokenPreviewOrBugfixIntent(text) {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+
+  if (!s) return false;
+
+  return (
+    s.includes("blank page") ||
+    s.includes("page is blank") ||
+    s.includes("nothing to preview") ||
+    s.includes("dead link") ||
+    s.includes("not clickable") ||
+    s.includes("is not clickable") ||
+    s.includes("not working") ||
+    s.includes("doesn't work") ||
+    s.includes("does not work") ||
+    s.includes("broken") ||
+    s.includes("bug") ||
+    s.includes("error upon preview") ||
+    s.includes("blank upon preview")
+  );
+}
+
 function isAdvisoryOnlyIntent(text) {
   const s = String(text || "")
     .toLowerCase()
@@ -468,6 +492,7 @@ function isAdvisoryOnlyIntent(text) {
   if (!s) return false;
 
   if (isClosingIntent(s)) return true;
+  if (isBrokenPreviewOrBugfixIntent(s)) return false;
   if (isPreviewIntent(s)) return true;
   if (isShowChangesIntent(s)) return true;
 
@@ -559,6 +584,10 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- For unfinished implementation work, do NOT stop at narrative progress updates such as saying you will integrate the new file next.\n` +
     `- If the task is still unfinished and the next implementation step is clear, the same continuation answer must emit the next single tool call instead of stopping after prose.\n` +
     `- After creating one required file, continue directly to the next obvious integration edit when it is still part of the same active request.\n` +
+    `- Never write placeholder, abbreviated, or comment-only file contents such as "/* Updated content ... */". write_file content must be the full intended file text.\n` +
+    `- If the user reports a blank page, dead link, broken UI, or not-working app, treat that as a bugfix request, not a preview request.\n` +
+    `- If inspection shows a source/app file contains only placeholder or comment-only content, that file is broken. Do not ask the user for requirements; repair it with a minimal working implementation that fits the prior request.\n` +
+    `- If a React App.jsx/App.tsx file is placeholder-only and the app is blank, write a complete minimal React component that renders visible UI.\n` +
     `- If you need a tool, request exactly one tool call.\n` +
     `- Prefer a single tool call at a time.\n` +
     `- If no more tools are needed, provide the final assistant answer.\n` +
@@ -1524,6 +1553,17 @@ export default function AiPanel({
               args: { path: fallbackReadPath },
             });
           } else if (successfulWritePaths.length > 0) {
+            if (typeof setWorkflowContext === "function") {
+              setWorkflowContext({
+                taskKind: "implementation",
+                status: "completed",
+                nextStep: "preview",
+                lastEditedPath: latestWrittenPath || "",
+                updatedAt: Date.now(),
+                source: "tool_batch",
+              });
+            }
+
             appendMessage(
               "assistant",
               latestWrittenPath
@@ -1632,6 +1672,21 @@ export default function AiPanel({
                   ? agentSuccessfulWritePaths[agentSuccessfulWritePaths.length - 1]
                   : "";
 
+              if (
+                typeof setWorkflowContext === "function" &&
+                (agentSuccessfulWritePaths.length > 0 ||
+                  agentSuccessfulDirPaths.length > 0)
+              ) {
+                setWorkflowContext({
+                  taskKind: "implementation",
+                  status: "completed",
+                  nextStep: "preview",
+                  lastEditedPath: latestAgentWrittenPath || "",
+                  updatedAt: Date.now(),
+                  source: "agent_continuation",
+                });
+              }
+
               const finalText = String(agentResult?.text || "").trim();
               if (finalText) {
                 appendMessage("assistant", finalText);
@@ -1672,7 +1727,15 @@ export default function AiPanel({
     };
 
     processAssistantToolCalls();
-  }, [messages, activeTab, appendMessage, runTool, runAi, CHAT_CONTEXT_TURNS]);
+  }, [
+    messages,
+    activeTab,
+    appendMessage,
+    runTool,
+    runAi,
+    CHAT_CONTEXT_TURNS,
+    setWorkflowContext,
+  ]);
 
   const handleRequestToolOk = useCallback(() => {
     if (!activeTab?.path) {

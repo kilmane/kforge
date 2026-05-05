@@ -28,6 +28,70 @@ function basenameOfPath(p) {
   return parts[parts.length - 1] || raw;
 }
 
+
+function isSourceLikeFile(path = "") {
+  const p = String(path || "").toLowerCase();
+  return /\.(js|jsx|ts|tsx|css|html|json|md|mjs|cjs)$/.test(p);
+}
+
+function looksLikePlaceholderWrite(content = "") {
+  const s = String(content || "").trim();
+  const lower = s.toLowerCase();
+
+  if (!s) return true;
+
+  const placeholderPatterns = [
+    /^\/\*\s*updated content\b[\s\S]*\*\/$/i,
+    /^\/\/\s*updated content\b/i,
+    /^\/\*\s*todo\b[\s\S]*\*\/$/i,
+    /^<file text>$/i,
+    /^<file contents?>$/i,
+    /^updated content with\b/i,
+    /^placeholder\b/i,
+    /^todo\b/i,
+  ];
+
+  return (
+    placeholderPatterns.some((re) => re.test(s)) ||
+    lower.includes("updated content with a clickable link") ||
+    lower.includes("replace with actual") ||
+    lower.includes("rest of file unchanged")
+  );
+}
+
+function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
+  const next = String(nextContent ?? "");
+  const existing =
+    existingContent == null ? null : String(existingContent ?? "");
+
+  if (looksLikePlaceholderWrite(next)) {
+    return "write_file blocked: content looks like placeholder text, not real file contents.";
+  }
+
+  if (!isSourceLikeFile(path) || existing == null) {
+    return "";
+  }
+
+  const existingBytes = new TextEncoder().encode(existing).length;
+  const nextBytes = new TextEncoder().encode(next).length;
+
+  if (existingBytes >= 500 && nextBytes < 120) {
+    return (
+      "write_file blocked: this would replace an existing substantial source file " +
+      `(${existingBytes} bytes) with only ${nextBytes} bytes. ` +
+      "Read the file first and provide the full intended file contents."
+    );
+  }
+
+  if (existingBytes >= 1000 && nextBytes < existingBytes * 0.2) {
+    return (
+      "write_file blocked: this would shrink an existing source file by more than 80%. " +
+      "Read the file first and provide the full intended file contents."
+    );
+  }
+
+  return "";
+}
 function isDirNode(node) {
   if (!node || typeof node !== "object") return false;
   if (node.type === "dir" || node.kind === "dir") return true;
@@ -127,13 +191,29 @@ export async function write_file(args = {}) {
   }
 
   const filePath = resolvePathWithinProject(rawPath);
+  let existingContent = null;
+
+  try {
+    existingContent = await openFile(filePath);
+  } catch {
+    existingContent = null;
+  }
+
+  const blockedReason = shouldBlockSuspiciousWrite({
+    path: filePath,
+    existingContent,
+    nextContent: content,
+  });
+
+  if (blockedReason) {
+    throw new Error(blockedReason);
+  }
 
   await saveFile(filePath, String(content));
 
   const byteLen = new TextEncoder().encode(String(content)).length;
   return `Wrote ${byteLen} bytes (Path: ${filePath})`;
 }
-
 /**
  * mkdir
  * args: { path }

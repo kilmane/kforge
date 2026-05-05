@@ -818,7 +818,7 @@ export default function App() {
 
   // For retry: remember last “send” details
   const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit, includeActiveFile, fileSnapshot }
-  const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, nextStep }
+  const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, status, nextStep, lastEditedPath, updatedAt, source }
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
@@ -1123,6 +1123,7 @@ export default function App() {
     // --- AI session: hard clear (no "Conversation cleared." bubble) ---
     setMessages([]);
     setLastSend(null);
+    setWorkflowContext(null);
     setPatchPreview(null);
     setPatchPreviewVisible(false);
 
@@ -1148,6 +1149,7 @@ export default function App() {
   const handleCloseFolder = useCallback(() => {
     setFocusMode(true);
     setProjectPath(null);
+    setWorkflowContext(null);
     setTree([]);
 
     // Close any open file tabs too (matches the old “close folder tab clears everything” behavior)
@@ -1534,6 +1536,10 @@ export default function App() {
       aiSystem,
       aiTemperature,
       aiMaxTokens,
+      projectPath,
+      projectTemplateInfo?.detectedTemplate?.name,
+      projectTemplateInfo?.kind,
+      tree,
       endpoints,
     ],
   );
@@ -1785,6 +1791,7 @@ export default function App() {
   const clearConversation = useCallback(() => {
     setMessages([]);
     setLastSend(null);
+    setWorkflowContext(null);
     setPatchPreview(null);
     setPatchPreviewVisible(true);
     appendMessage("system", "Conversation cleared.");
@@ -1792,6 +1799,7 @@ export default function App() {
   const clearConversationHard = useCallback(() => {
     setMessages([]);
     setLastSend(null);
+    setWorkflowContext(null);
     setPatchPreview(null);
     setPatchPreviewVisible(false);
   }, []);
@@ -1827,6 +1835,24 @@ export default function App() {
         projectPath,
       );
 
+      const workflowStateBlock = workflowContext?.taskKind
+        ? [
+            "KForge workflow state:",
+            `- taskKind: ${String(workflowContext.taskKind || "")}`,
+            `- status: ${String(workflowContext.status || "")}`,
+            `- nextStep: ${String(workflowContext.nextStep || "")}`,
+            workflowContext.lastEditedPath
+              ? `- lastEditedPath: ${String(workflowContext.lastEditedPath || "")}`
+              : "",
+            "",
+            "Use this state for ambiguous follow-ups before guessing from wording.",
+            "If implementation is completed and nextStep is preview, a vague yes/run/test/what now follow-up means guide to Preview, not another file edit.",
+            "If the user reports a broken result, dead link, blank page, non-clickable UI, or anything not working after implementation, inspect and fix the files instead of routing to Preview.",
+          ]
+            .filter(Boolean)
+            .join("\n") + "\n\n"
+        : "";
+
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
       const fileBlock = fileSnapshot
@@ -1837,9 +1863,9 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
-    [messages, projectPath, projectTemplateInfo, tree, activeTab],
+    [messages, projectPath, projectTemplateInfo, tree, activeTab, workflowContext],
   );
   function hasManualOrAdvisoryIntent(message = "") {
     const text = String(message || "").toLowerCase();
@@ -2161,6 +2187,147 @@ export default function App() {
       "For Expo phone preview, Preview gives you the guidance. The actual phone preview runs outside KForge."
     );
   }
+  function isCompletedImplementationWorkflow(context = null) {
+    return (
+      context?.taskKind === "implementation" &&
+      context?.status === "completed"
+    );
+  }
+
+  function isWorkflowShowChangesIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("show me the changes") ||
+      s.includes("show changes") ||
+      s.includes("show the changes") ||
+      s.includes("what changed") ||
+      s.includes("what did you change") ||
+      s === "changes"
+    );
+  }
+
+  function isWorkflowBugfixIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("not working") ||
+      s.includes("doesn't work") ||
+      s.includes("does not work") ||
+      s.includes("broken") ||
+      s.includes("bug") ||
+      s.includes("fix") ||
+      s.includes("dead link") ||
+      s.includes("blank page") ||
+      s.includes("page is blank") ||
+      s.includes("nothing to preview") ||
+      s.includes("can't check") ||
+      s.includes("cannot check") ||
+      s.includes("not clickable") ||
+      s.includes("is not clickable") ||
+      s.includes("doesn't open") ||
+      s.includes("does not open") ||
+      s.includes("error")
+    );
+  }
+
+  function isWorkflowPreviewFollowupIntent(text = "", context = null) {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+    if (!isCompletedImplementationWorkflow(context)) return false;
+    if (context?.nextStep !== "preview") return false;
+    if (hasManualOrAdvisoryIntent(s)) return false;
+    if (isWorkflowShowChangesIntent(s)) return false;
+    if (isWorkflowBugfixIntent(s)) return false;
+
+    return (
+      isPreviewIntent(s) ||
+      isWorkflowContinuationIntent(s) ||
+      s === "what now" ||
+      s === "what next" ||
+      s === "next" ||
+      s === "next step" ||
+      s === "next steps" ||
+      s.includes("what now") ||
+      s.includes("what next")
+    );
+  }
+
+  function isWorkflowSuccessAckIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s === "success" ||
+      s === "thanks" ||
+      s === "thank you" ||
+      s === "cool" ||
+      s === "great" ||
+      s === "perfect" ||
+      s.includes("success") ||
+      s.includes("it works") ||
+      s.includes("works now") ||
+      s.includes("worked") ||
+      s.includes("all good") ||
+      s.includes("that worked") ||
+      s.includes("link works") ||
+      s.includes("now clickable")
+    );
+  }
+
+  function buildWorkflowShowChangesMessage(context = null) {
+    const lastEditedPath = String(context?.lastEditedPath || "").trim();
+
+    if (lastEditedPath) {
+      return (
+        "The last implementation updated:\n\n" +
+        `${lastEditedPath}\n\n` +
+        "Open that file in the editor to review the change, or ask for another edit."
+      );
+    }
+
+    return (
+      "The last implementation completed successfully.\n\n" +
+      "Open the changed files in the editor to review them, or ask for another edit."
+    );
+  }
+
+  function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
+    const lastEditedPath = String(context?.lastEditedPath || "").trim();
+    const prefix = lastEditedPath
+      ? `Done — updated ${lastEditedPath}.\n\n`
+      : "The requested implementation changes are in place.\n\n";
+
+    if (!projectOpen) {
+      return (
+        prefix +
+        "Open the project folder first in Explorer.\n\n" +
+        "Then you can leave the chat and open: Preview Panel → Preview."
+      );
+    }
+
+    return (
+      prefix +
+      "KForge can help with this through the Preview panel.\n\n" +
+      "You can now leave the chat and open: Preview Panel → Preview.\n\n" +
+      "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
+    );
+  }
+
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
       if (aiRunning) return;
@@ -2178,6 +2345,40 @@ export default function App() {
         providerId: aiProvider,
         modelId: aiModel,
       });
+
+      if (isCompletedImplementationWorkflow(workflowContext)) {
+        if (isWorkflowSuccessAckIntent(draft)) {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage("assistant", "Great — glad it is working now.");
+          return;
+        }
+
+        if (isWorkflowBugfixIntent(draft)) {
+          setWorkflowContext({
+            ...workflowContext,
+            status: "in_progress",
+            nextStep: "fix",
+            updatedAt: Date.now(),
+            source: "bugfix_followup",
+          });
+        } else if (isWorkflowShowChangesIntent(draft)) {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage(
+            "assistant",
+            buildWorkflowShowChangesMessage(workflowContext),
+          );
+          return;
+        }
+
+        if (isWorkflowPreviewFollowupIntent(draft, workflowContext)) {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage(
+            "assistant",
+            buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+          );
+          return;
+        }
+      }
 
       if (
         isExpoTerminalChoiceIntent(draft, detectedTemplateName, detectedKind)
@@ -2284,7 +2485,10 @@ export default function App() {
       ) {
         setWorkflowContext({
           taskKind: "implementation",
+          status: "in_progress",
           nextStep: "preview",
+          updatedAt: Date.now(),
+          source: "send_with_prompt",
         });
       }
 
@@ -2347,6 +2551,7 @@ export default function App() {
             "Do NOT paste full file contents in chat.\n" +
             "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
             "Do NOT simulate file creation.\n" +
+            "Do NOT call write_file with placeholder, abbreviated, or comment-only content. write_file content must be the full intended file text.\n" +
             "\n" +
             "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
             "Do NOT invent or emit any other tool names.\n" +
@@ -2451,8 +2656,13 @@ export default function App() {
       aiSystem,
       aiTemperature,
       aiMaxTokens,
+      projectPath,
+      projectTemplateInfo?.detectedTemplate?.name,
+      projectTemplateInfo?.kind,
+      tree,
       endpoints,
       workflowContext,
+      isWorkflowPreviewFollowupIntent,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
@@ -2630,7 +2840,6 @@ export default function App() {
       lastSend={lastSend}
       aiRunning={aiRunning}
       activityTick={activityTick}
-      handleRetryLast={handleRetryLast}
       handleRetryLast={handleRetryLast}
       clearConversation={clearConversation}
       activeTab={activeTab}
