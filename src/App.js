@@ -2559,18 +2559,13 @@ export default function App() {
         return;
       }
 
-      if (!projectOpen && isNoProjectImplementationIntent(draft)) {
+      if (promptTask.kind === "no_project_implementation") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage("assistant", buildNoProjectImplementationMessage());
         return;
       }
 
-      if (
-        projectOpen &&
-        Array.isArray(tree) &&
-        tree.length === 0 &&
-        isNoProjectImplementationIntent(draft)
-      ) {
+      if (promptTask.kind === "empty_folder_implementation") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
@@ -2603,7 +2598,7 @@ export default function App() {
 
       if (
         modelWorkflowPolicy.mode === "advisory_only" &&
-        isNoProjectImplementationIntent(draft)
+        promptTask.kind === "project_edit"
       ) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
