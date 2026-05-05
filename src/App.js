@@ -2490,12 +2490,13 @@ export default function App() {
         );
         return;
       }
-      if (
+      const isProjectImplementationPrompt =
         projectOpen &&
         isNoProjectImplementationIntent(draft) &&
         !isPreviewIntent(draft) &&
-        !isDependencyInstallIntent(draft)
-      ) {
+        !isDependencyInstallIntent(draft);
+
+      if (isProjectImplementationPrompt) {
         setWorkflowContext({
           taskKind: "implementation",
           status: "in_progress",
@@ -2505,7 +2506,17 @@ export default function App() {
         });
       }
 
-      if (providerSwitchNote) setProviderSwitchNote("");
+      if (
+        isProjectImplementationPrompt &&
+        modelWorkflowPolicy.mode === "guarded_edit"
+      ) {
+        setProviderSwitchNote(
+          modelWorkflowPolicy.userHint ||
+            "This provider/model is in guarded mode. KForge will prefer patch preview before direct project edits.",
+        );
+      } else if (providerSwitchNote) {
+        setProviderSwitchNote("");
+      }
 
       // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
       let fileSnapshot = null;
@@ -3100,33 +3111,4 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
