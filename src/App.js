@@ -2285,6 +2285,10 @@ export default function App() {
       s.includes("all good") ||
       s.includes("that worked") ||
       s.includes("link works") ||
+      s.includes("links work") ||
+      s.includes("preview working") ||
+      s.includes("preview works") ||
+      s.includes("working now") ||
       s.includes("now clickable")
     );
   }
