@@ -2515,13 +2515,13 @@ export default function App() {
       });
 
       if (isCompletedImplementationWorkflow(workflowContext)) {
-        if (isWorkflowSuccessAckIntent(draft)) {
+        if (promptTask.kind === "success_ack") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage("assistant", "Great — glad it is working now.");
           return;
         }
 
-        if (isWorkflowBugfixIntent(draft)) {
+        if (promptTask.kind === "broken_preview_debug") {
           setWorkflowContext({
             ...workflowContext,
             status: "in_progress",
@@ -2529,7 +2529,7 @@ export default function App() {
             updatedAt: Date.now(),
             source: "bugfix_followup",
           });
-        } else if (isWorkflowShowChangesIntent(draft)) {
+        } else if (promptTask.kind === "show_changes") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
@@ -2538,7 +2538,7 @@ export default function App() {
           return;
         }
 
-        if (isWorkflowPreviewFollowupIntent(draft, workflowContext)) {
+        if (promptTask.kind === "preview_followup") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
@@ -2826,7 +2826,6 @@ export default function App() {
       tree,
       endpoints,
       workflowContext,
-      isWorkflowPreviewFollowupIntent,
       inferPromptTaskKind,
       buildInputWithContext,
       openSettings,
