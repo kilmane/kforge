@@ -2075,6 +2075,26 @@ export default function App() {
       "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
     );
   }
+  function isEmptyFolderPlanIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("show me the plan") ||
+      s.includes("plan only") ||
+      s.includes("just explain") ||
+      s.includes("explain only") ||
+      s.includes("guide only") ||
+      s.includes("don't change files") ||
+      s.includes("do not change files") ||
+      s.includes("no file changes") ||
+      s.includes("read only") ||
+      s.includes("read-only")
+    );
+  }
   function buildEmptyFolderPlanMessage() {
     return (
       "The project folder is currently empty, so there is no existing app to modify yet.\n\n" +
@@ -2427,6 +2447,14 @@ export default function App() {
         };
       }
 
+      if (emptyProjectFolder && isEmptyFolderPlanIntent(text)) {
+        return {
+          kind: "empty_folder_plan",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
       if (
         projectOpen &&
         isNoProjectImplementationIntent(text) &&
@@ -2580,23 +2608,7 @@ export default function App() {
         return;
       }
 
-      if (
-        projectOpen &&
-        Array.isArray(tree) &&
-        tree.length === 0 &&
-        (
-          draft.toLowerCase().includes("show me the plan") ||
-          draft.toLowerCase().includes("plan only") ||
-          draft.toLowerCase().includes("just explain") ||
-          draft.toLowerCase().includes("explain only") ||
-          draft.toLowerCase().includes("guide only") ||
-          draft.toLowerCase().includes("don't change files") ||
-          draft.toLowerCase().includes("do not change files") ||
-          draft.toLowerCase().includes("no file changes") ||
-          draft.toLowerCase().includes("read only") ||
-          draft.toLowerCase().includes("read-only")
-        )
-      ) {
+      if (promptTask.kind === "empty_folder_plan") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage("assistant", buildEmptyFolderPlanMessage());
         return;
