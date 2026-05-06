@@ -2107,13 +2107,24 @@ export default function App() {
       "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
     );
   }
-  function buildAdvisoryOnlyImplementationMessage() {
+  const buildSmartProviderSwitchMessage = useCallback((promptTask, modelWorkflowPolicy) => {
+    const taskKind = promptTask?.kind || "unknown";
+    const mode = modelWorkflowPolicy?.mode || "unknown";
+
+    if (taskKind === "project_edit" && mode === "advisory_only") {
+      return (
+        "This looks like a project edit.\n\n" +
+        "The selected provider/model is in advisory-only mode, so KForge will not allow direct file edits with it.\n\n" +
+        "Switch to a full-agent model for project edits, or ask for a plan/manual steps instead."
+      );
+    }
+
     return (
       "This current model is being used in a safer chat mode to keep KForge reliable.\n\n" +
       "For direct project edits, switch to a stronger provider/model first.\n\n" +
       "I can still explain the plan or give manual steps in chat instead."
     );
-  }
+  }, []);
   function buildExpoTerminalChoiceRoutingMessage(projectOpen) {
     if (!projectOpen) {
       return (
@@ -2621,7 +2632,7 @@ export default function App() {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
-          buildAdvisoryOnlyImplementationMessage(),
+          buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy),
         );
         return;
       }
@@ -2845,6 +2856,7 @@ export default function App() {
       endpoints,
       workflowContext,
       inferPromptTaskKind,
+      buildSmartProviderSwitchMessage,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
