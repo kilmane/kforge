@@ -2119,6 +2119,13 @@ export default function App() {
       );
     }
 
+    if (taskKind === "project_edit" && mode === "guarded_edit") {
+      return (
+        "This looks like a project edit.\n\n" +
+        "The selected provider/model is in guarded-edit mode, so KForge will prefer patch preview before applying project changes."
+      );
+    }
+
     return (
       "This current model is being used in a safer chat mode to keep KForge reliable.\n\n" +
       "For direct project edits, switch to a stronger provider/model first.\n\n" +
@@ -2680,8 +2687,7 @@ export default function App() {
         modelWorkflowPolicy.mode === "guarded_edit"
       ) {
         setProviderSwitchNote(
-          modelWorkflowPolicy.userHint ||
-            "This provider/model is in guarded mode. KForge will prefer patch preview before direct project edits.",
+          buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy),
         );
       } else if (providerSwitchNote) {
         setProviderSwitchNote("");
