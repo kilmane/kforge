@@ -192,6 +192,7 @@ export async function runAgent({
           steps: step,
           messages: workingMessages,
           stopReason: "tool_cancelled",
+          cancelledToolName: toolLabel,
         };
       }
 

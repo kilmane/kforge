@@ -1715,6 +1715,15 @@ export default function AiPanel({
                     ? `Done — updated ${latestAgentWrittenPath}.\n\n${buildPreviewHandoffMessage()}`
                     : `The requested implementation changes are in place.\n\n${buildPreviewHandoffMessage()}`,
                 );
+              } else if (agentResult?.stopReason === "tool_cancelled") {
+                const cancelledToolName = String(
+                  agentResult?.cancelledToolName || "tool",
+                ).trim();
+
+                appendMessage(
+                  "assistant",
+                  `Cancelled — stopped ${cancelledToolName}. I did not continue after the denied tool request.`,
+                );
               } else if (
                 agentResult?.stopReason &&
                 agentResult.stopReason !== "final_text" &&
