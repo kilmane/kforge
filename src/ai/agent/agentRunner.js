@@ -185,6 +185,16 @@ export async function runAgent({
         },
       });
 
+      if (toolResult?.cancelled) {
+        return {
+          ok: false,
+          text: "",
+          steps: step,
+          messages: workingMessages,
+          stopReason: "tool_cancelled",
+        };
+      }
+
       continue;
     }
 

@@ -1489,6 +1489,19 @@ export default function AiPanel({
             });
           }
 
+          const cancelledToolNames = executedBatchResults
+            .filter((item) => item?.cancelled)
+            .map((item) => item.toolName || "tool");
+
+          if (cancelledToolNames.length > 0) {
+            const cancelledList = Array.from(new Set(cancelledToolNames)).join(", ");
+            appendMessage(
+              "assistant",
+              `Cancelled — stopped ${cancelledList}. I did not continue after the denied tool request.`,
+            );
+            return;
+          }
+
           const doneMessage = buildToolBatchDoneMessage(executedBatchResults);
           if (doneMessage) {
             appendMessage("assistant", doneMessage);
