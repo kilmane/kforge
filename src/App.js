@@ -2132,6 +2132,53 @@ export default function App() {
       "I can still explain the plan or give manual steps in chat instead."
     );
   }, []);
+
+  const isBlockedByModelPolicyWorkflow = useCallback((context) => {
+    return (
+      context?.status === "blocked_by_model_policy" &&
+      context?.taskKind === "project_edit"
+    );
+  }, []);
+
+  const isExplicitNewWorkflowIntent = useCallback((text = "") => {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      s.includes("supabase") ||
+      s.includes("openai") ||
+      s.includes("stripe") ||
+      s.includes("github") ||
+      s.includes("deploy") ||
+      s.includes("preview") ||
+      s.includes("install") ||
+      s.includes("dependencies") ||
+      s.includes("expo") ||
+      s.includes("phone preview") ||
+      s.includes("new project") ||
+      s.includes("open folder")
+    );
+  }, []);
+
+
+  const buildBlockedModelPolicyFollowupMessage = useCallback(
+    (workflowContext, modelWorkflowPolicy) => {
+      const promptTask = {
+        kind: workflowContext?.taskKind || "project_edit",
+      };
+
+      return (
+        buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy) +
+        "\n\n" +
+        "Your previous project-edit request is still blocked by the selected model safety mode. " +
+        "You can switch to a full-agent model, or ask for a plan/manual steps instead."
+      );
+    },
+    [buildSmartProviderSwitchMessage],
+  );
   function buildExpoTerminalChoiceRoutingMessage(projectOpen) {
     if (!projectOpen) {
       return (
@@ -2524,8 +2571,8 @@ export default function App() {
   function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
     const lastEditedPath = String(context?.lastEditedPath || "").trim();
     const prefix = lastEditedPath
-      ? `Done — updated ${lastEditedPath}.\n\n`
-      : "The requested implementation changes are in place.\n\n";
+      ? `Last completed edit: ${lastEditedPath}.\n\n`
+      : "Last implementation completed.\n\n";
 
     if (!projectOpen) {
       return (
@@ -2567,6 +2614,60 @@ export default function App() {
         detectedTemplateName,
         detectedKind,
       });
+      const isAdvisoryTestOverride =
+        !!opts.forceAdvisoryTestOverride &&
+        modelWorkflowPolicy.mode === "advisory_only";
+
+      if (
+        isBlockedByModelPolicyWorkflow(workflowContext) &&
+        modelWorkflowPolicy.mode === "advisory_only" &&
+        !isAdvisoryTestOverride &&
+        promptTask.kind !== "manual_steps" &&
+        !isExplicitNewWorkflowIntent(draft)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+        appendMessage(
+          "assistant",
+          buildBlockedModelPolicyFollowupMessage(
+            workflowContext,
+            modelWorkflowPolicy,
+          ),
+          {
+            actions: [
+              {
+                label: "Continue in test mode",
+                onClick: () => {
+                  const goal = String(
+                    workflowContext?.lastUserGoal || draft,
+                  ).trim();
+
+                  appendMessage(
+                    "assistant",
+                    "Continuing in test mode. File writes still require approval, and Cancel will stop the tool flow.",
+                  );
+
+                  sendWithPrompt(goal || draft, {
+                    silentUserAppend: true,
+                    forceAdvisoryTestOverride: true,
+                  });
+                },
+              },
+            ],
+          },
+        );
+        return;
+      }
+
+      if (isAdvisoryTestOverride) {
+        setWorkflowContext({
+          ...workflowContext,
+          status: "advisory_test_override",
+          nextStep: "tool_approval_test_mode",
+          overrideReason: "user_explicit_test_current_model",
+          updatedAt: Date.now(),
+          source: "model_policy_advisory_override",
+        });
+      }
 
       if (isCompletedImplementationWorkflow(workflowContext)) {
         if (promptTask.kind === "success_ack") {
@@ -2634,12 +2735,43 @@ export default function App() {
 
       if (
         modelWorkflowPolicy.mode === "advisory_only" &&
-        promptTask.kind === "project_edit"
+        promptTask.kind === "project_edit" &&
+        !isAdvisoryTestOverride
       ) {
+        setWorkflowContext({
+          taskKind: "project_edit",
+          status: "blocked_by_model_policy",
+          nextStep: "switch_model_or_plan",
+          blockedReason: "advisory_only",
+          lastUserGoal: draft,
+          updatedAt: Date.now(),
+          source: "model_policy_advisory_only",
+        });
+
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
-          buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy),
+          "This model is in advisory-only mode. Results may be unreliable for project edits.\n\n" +
+            "Recommended: switch to a stronger model.\n\n" +
+            "If you still want to test this model, you can continue in test mode. KForge will still require approval before file writes, and Cancel will stop the tool flow.",
+          {
+            actions: [
+              {
+                label: "Continue in test mode",
+                onClick: () => {
+                  appendMessage(
+                    "assistant",
+                    "Continuing in test mode. File writes still require approval, and Cancel will stop the tool flow.",
+                  );
+
+                  sendWithPrompt(draft, {
+                    silentUserAppend: true,
+                    forceAdvisoryTestOverride: true,
+                  });
+                },
+              },
+            ],
+          },
         );
         return;
       }
@@ -2739,11 +2871,19 @@ export default function App() {
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
       const shouldSuppressToolsForPrompt =
-        hasManualOrAdvisoryIntent(draft) || !modelWorkflowPolicy.allowToolCalls;
+        hasManualOrAdvisoryIntent(draft) ||
+        (!modelWorkflowPolicy.allowToolCalls && !isAdvisoryTestOverride);
+
+      const advisoryOverrideInstruction = isAdvisoryTestOverride
+        ? "\n\nADVISORY MODEL TEST MODE:\n" +
+          "The user explicitly clicked Continue in test mode for this advisory-only model.\n" +
+          "You may request normal KForge tools for this test, but every file write still requires user approval.\n" +
+          "Inspect before writing and keep changes small.\n"
+        : "";
 
       const toolInstruction =
         !effectiveAskForPatch && !shouldSuppressToolsForPrompt
-          ? "\n\nIMPORTANT:\n" +
+          ? advisoryOverrideInstruction + "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
             "If a specific file path is mentioned or implied (such as src/App.jsx), modify that file directly instead of creating alternatives.\n" +
@@ -2863,6 +3003,9 @@ export default function App() {
       workflowContext,
       inferPromptTaskKind,
       buildSmartProviderSwitchMessage,
+      isBlockedByModelPolicyWorkflow,
+      isExplicitNewWorkflowIntent,
+      buildBlockedModelPolicyFollowupMessage,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
@@ -3070,6 +3213,7 @@ export default function App() {
       setAiMaxTokens={setAiMaxTokens}
       runAi={runAi}
       handleSendChat={handleSendChat}
+      sendWithPrompt={sendWithPrompt}
       handleAiTest={handleAiTest}
       aiTestStatus={aiTestStatus}
       guardrailText={guardrailText}

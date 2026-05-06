@@ -15,6 +15,8 @@ import {
 } from "../../../lib/fs";
 import { search_in_file } from "./search_in_file.js";
 
+const ABSOLUTE_PATH_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
+
 function summarizeText(text, maxChars = 700) {
   const s = String(text ?? "");
   if (s.length <= maxChars) return s;
@@ -27,7 +29,6 @@ function basenameOfPath(p) {
   const parts = normalized.split("/");
   return parts[parts.length - 1] || raw;
 }
-
 
 function isSourceLikeFile(path = "") {
   const p = String(path || "").toLowerCase();
@@ -92,6 +93,7 @@ function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
 
   return "";
 }
+
 function isDirNode(node) {
   if (!node || typeof node !== "object") return false;
   if (node.type === "dir" || node.kind === "dir") return true;
@@ -114,20 +116,51 @@ function ensureProjectRootForRelativeHelp() {
   return null;
 }
 
+function validateToolPath(rawPath, toolName) {
+  const p = String(rawPath || "").trim();
+
+  if (!p) {
+    throw new Error(`${toolName}: missing required arg: path`);
+  }
+
+  const malformedReason =
+    /^(?:path|dirpath|filepath|file|folder|directory)\s*[:=]/i.test(p)
+      ? "looks like an assignment instead of a path value"
+      : p.startsWith("{") || p.startsWith("[") || p.endsWith("}") || p.endsWith("]")
+        ? "looks like a JSON/object fragment instead of a path value"
+        : /[\r\n]/.test(p)
+          ? "contains a line break"
+          : /^<[^>]+>$/.test(p)
+            ? "looks like a placeholder instead of a real path"
+            : "";
+
+  if (malformedReason) {
+    throw new Error(
+      `${toolName}: malformed path argument "${p}" (${malformedReason}). ` +
+        'Pass only the path value, for example "src/App.jsx" or "src".',
+    );
+  }
+
+  return p;
+}
+
+function ensurePathCanResolve(rawPath, toolName) {
+  const p = validateToolPath(rawPath, toolName);
+
+  if (!ABSOLUTE_PATH_RE.test(p)) {
+    const hint = ensureProjectRootForRelativeHelp();
+    if (hint) throw new Error(`${toolName}: forbidden path: ${p}\n${hint}`);
+  }
+
+  return p;
+}
+
 /**
  * read_file
  * args: { path }
  */
 export async function read_file(args = {}) {
-  const rawPath = String(args?.path || "").trim();
-  if (!rawPath) throw new Error("read_file: missing required arg: path");
-
-  // Helpful error when relative path is used but no root selected
-  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
-    const hint = ensureProjectRootForRelativeHelp();
-    if (hint) throw new Error(`read_file: forbidden path: ${rawPath}\n${hint}`);
-  }
-
+  const rawPath = ensurePathCanResolve(args?.path, "read_file");
   const filePath = resolvePathWithinProject(rawPath);
 
   const content = await openFile(filePath);
@@ -143,15 +176,7 @@ export async function read_file(args = {}) {
  * args: { path } or { dirPath }
  */
 export async function list_dir(args = {}) {
-  const rawPath = String(args?.path || args?.dirPath || "").trim();
-  if (!rawPath) throw new Error("list_dir: missing required arg: path");
-
-  // Helpful error when relative path is used but no root selected
-  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
-    const hint = ensureProjectRootForRelativeHelp();
-    if (hint) throw new Error(`list_dir: forbidden path: ${rawPath}\n${hint}`);
-  }
-
+  const rawPath = ensurePathCanResolve(args?.path || args?.dirPath, "list_dir");
   const dp = resolvePathWithinProject(rawPath);
 
   const tree = await readFolderTree(dp);
@@ -178,17 +203,8 @@ export async function list_dir(args = {}) {
  * args: { path, content }
  */
 export async function write_file(args = {}) {
-  const rawPath = String(args?.path || "").trim();
+  const rawPath = ensurePathCanResolve(args?.path, "write_file");
   const content = args?.content ?? "";
-
-  if (!rawPath) throw new Error("write_file: missing required arg: path");
-
-  // Helpful error when relative path is used but no root selected
-  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
-    const hint = ensureProjectRootForRelativeHelp();
-    if (hint)
-      throw new Error(`write_file: forbidden path: ${rawPath}\n${hint}`);
-  }
 
   const filePath = resolvePathWithinProject(rawPath);
   let existingContent = null;
@@ -214,20 +230,13 @@ export async function write_file(args = {}) {
   const byteLen = new TextEncoder().encode(String(content)).length;
   return `Wrote ${byteLen} bytes (Path: ${filePath})`;
 }
+
 /**
  * mkdir
  * args: { path }
  */
 export async function mkdir(args = {}) {
-  const rawPath = String(args?.path || "").trim();
-  if (!rawPath) throw new Error("mkdir: missing required arg: path");
-
-  // Helpful error when relative path is used but no root selected
-  if (!rawPath.match(/^[A-Za-z]:[\\/]|^\\\\|^\//)) {
-    const hint = ensureProjectRootForRelativeHelp();
-    if (hint) throw new Error(`mkdir: forbidden path: ${rawPath}\n${hint}`);
-  }
-
+  const rawPath = ensurePathCanResolve(args?.path, "mkdir");
   const dirPath = resolvePathWithinProject(rawPath);
 
   await makeDir(dirPath);

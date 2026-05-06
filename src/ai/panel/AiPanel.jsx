@@ -138,6 +138,17 @@ function extractFencedBlocks(text) {
     blocks.push({ payload: (m[1] || "").trim(), source: "tool_fence" });
   }
 
+  // 1b) Loose/malformed tool fence, common from weaker models:
+  // ```tool
+  // { "name": "list_dir", "args": { "path": "src" } }
+  // </tool_call>
+  const looseToolRe = /```(?:tool|tool_call)\s*([\s\S]*?)(?:<\/tool_call>|```|$)/g;
+  while ((m = looseToolRe.exec(text)) !== null) {
+    const payload = (m[1] || "").trim();
+    if (payload.startsWith("{") && payload.endsWith("}")) {
+      blocks.push({ payload, source: "loose_tool_fence" });
+    }
+  }
   // 2️⃣ ```json blocks
   const reJson = /```json\s*([\s\S]*?)```/g;
   while ((m = reJson.exec(text)) !== null) {
@@ -673,10 +684,86 @@ function extractSingleAgentToolCall(text, activeFilePath) {
  */
 function extractXmlToolCalls(text) {
   const s = String(text || "");
-  if (!s.includes("<tool_call")) return [];
+  const hasDirectToolTag = Array.from(ALLOWED_MODEL_TOOLS).some((toolName) =>
+    s.includes(`<${toolName}>`),
+  );
+  if (!s.includes("<tool_call") && !hasDirectToolTag) return [];
 
   const calls = [];
+  // Variant 0: <tool_call>list_dir
+  // { "path": "src" }
+  const simpleToolCallRe =
+    /<tool_call>\s*([A-Za-z0-9_:-]+)\s*([\s\S]*?)(?=<\/tool_call>|<tool_call>|$)/gi;
+  let simpleMatch;
+  while ((simpleMatch = simpleToolCallRe.exec(s)) !== null) {
+    const name = String(simpleMatch[1] || "").trim();
+    const body = String(simpleMatch[2] || "").trim();
 
+    if (!ALLOWED_MODEL_TOOLS.has(name)) continue;
+
+    let args = {};
+    const jsonMatch = body.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      try {
+        const parsedArgs = JSON.parse(jsonMatch[0]);
+        if (parsedArgs && typeof parsedArgs === "object") {
+          args = parsedArgs;
+        }
+      } catch {
+        // Ignore malformed near-tool JSON.
+      }
+    }
+
+    calls.push({ name, args, source: "xml_simple_tool_call" });
+  }
+
+  // Variant Direct: <read_file><path>src/App.jsx</path></read_file>
+  // Also supports any allowed tool name as the outer tag.
+  for (const directToolName of ALLOWED_MODEL_TOOLS) {
+    const directRe = new RegExp(
+      `<${directToolName}>\\s*([\\s\\S]*?)\\s*</${directToolName}>`,
+      "gi",
+    );
+
+    let directMatch;
+    while ((directMatch = directRe.exec(s)) !== null) {
+      const body = String(directMatch[1] || "").trim();
+      let args = {};
+
+      if (body.startsWith("{") && body.endsWith("}")) {
+        try {
+          const parsedArgs = JSON.parse(body);
+          if (parsedArgs && typeof parsedArgs === "object") {
+            args = parsedArgs;
+          }
+        } catch {
+          // Ignore malformed direct-tool JSON.
+        }
+      } else {
+        const childRe = /<([A-Za-z0-9_:-]+)>\s*([\s\S]*?)\s*<\/\1>/g;
+        let childMatch;
+        while ((childMatch = childRe.exec(body)) !== null) {
+          const rawKey = String(childMatch[1] || "").trim();
+          const val = String(childMatch[2] || "").trim();
+          if (!rawKey) continue;
+
+          const kLower = rawKey.toLowerCase();
+          let key = rawKey;
+          if (
+            kLower === "search_term" ||
+            kLower === "term" ||
+            kLower === "search"
+          ) {
+            key = "query";
+          }
+
+          args[key] = val;
+        }
+      }
+
+      calls.push({ name: directToolName, args, source: "xml_direct_tool_tag" });
+    }
+  }
   // Variant A: <invoke name="..."> ... </invoke>
   const invokeRe = /<invoke\s+name="([^"]+)"\s*>([\s\S]*?)<\/invoke>/g;
   let m;
@@ -1014,6 +1101,7 @@ export default function AiPanel({
   // actions
   runAi,
   handleSendChat,
+  sendWithPrompt,
   handleAiTest,
   aiTestStatus,
   guardrailText,
@@ -1701,8 +1789,47 @@ export default function AiPanel({
                 });
               }
 
+              const agentMadeProjectChanges =
+                agentSuccessfulWritePaths.length > 0 ||
+                agentSuccessfulDirPaths.length > 0;
+
               const finalText = String(agentResult?.text || "").trim();
-              if (finalText) {
+              if (finalText && !agentMadeProjectChanges) {
+                appendMessage(
+                  "assistant",
+                  "I inspected the project, but I did not change any files yet. The settings page has not been added yet.",
+                  {
+                    actions: [
+                      {
+                        label: "Continue editing",
+                        onClick: () => {
+                          const originalGoal = String(
+                            latestUserText || "Continue the previous project edit.",
+                          ).trim();
+
+                          appendMessage(
+                            "assistant",
+                            "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
+                          );
+
+                          if (typeof sendWithPrompt === "function") {
+                            sendWithPrompt(
+                              "Continue the previous project edit.\n\n" +
+                                `Original request: ${originalGoal}\n\n` +
+                                "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.",
+                              {
+                                silentUserAppend: true,
+                                forceAdvisoryTestOverride: true,
+                              },
+                            );
+                          }
+                        },
+                      },
+                    ],
+                  },
+                );
+              } else if (finalText) {
                 appendMessage("assistant", finalText);
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&
@@ -1723,6 +1850,41 @@ export default function AiPanel({
                 appendMessage(
                   "assistant",
                   `Cancelled — stopped ${cancelledToolName}. I did not continue after the denied tool request.`,
+                );
+              } else if (agentResult?.stopReason === "empty_response") {
+                appendMessage(
+                  "assistant",
+                  "The model stopped after inspection and did not request the next edit. No further files were changed.",
+                  {
+                    actions: [
+                      {
+                        label: "Continue fixing",
+                        onClick: () => {
+                          const originalGoal = String(
+                            latestUserText || "Continue the previous project fix.",
+                          ).trim();
+
+                          appendMessage(
+                            "assistant",
+                            "Continuing the fix attempt. I will ask the model to request one concrete tool call next.",
+                          );
+
+                          if (typeof sendWithPrompt === "function") {
+                            sendWithPrompt(
+                              "Continue the previous project fix.\n\n" +
+                                `Original request: ${originalGoal}\n\n` +
+                                "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only.",
+                              {
+                                silentUserAppend: true,
+                                forceAdvisoryTestOverride: true,
+                              },
+                            );
+                          }
+                        },
+                      },
+                    ],
+                  },
                 );
               } else if (
                 agentResult?.stopReason &&
@@ -1756,6 +1918,7 @@ export default function AiPanel({
     appendMessage,
     runTool,
     runAi,
+    sendWithPrompt,
     CHAT_CONTEXT_TURNS,
     setWorkflowContext,
   ]);
