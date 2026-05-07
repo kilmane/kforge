@@ -2136,7 +2136,7 @@ export default function App() {
       return (
         "This looks like a project edit.\n\n" +
         "The selected provider/model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-        "Recommended: switch to a stronger full-agent model.\n\n" +
+        "Recommended: switch to a stronger coding-capable model.\n\n" +
         "If you continue with this model, you are testing it at your own risk. KForge will still keep file-write approval and path safety active."
       );
     }
@@ -2196,7 +2196,7 @@ export default function App() {
         buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy) +
         "\n\n" +
         "Your previous project-edit request is still blocked by the selected model safety mode. " +
-        "You can switch to a full-agent model, or ask for a plan/manual steps instead."
+        "You can switch to a stronger coding-capable model, or ask for a plan/manual steps instead."
       );
     },
     [buildSmartProviderSwitchMessage],
