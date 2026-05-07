@@ -2144,7 +2144,7 @@ export default function App() {
     if (taskKind === "project_edit" && mode === "guarded_edit") {
       return (
         "This looks like a project edit.\n\n" +
-        "The selected provider/model is in guarded-edit mode, so KForge will prefer patch preview before applying project changes."
+        "The selected provider/model is in guarded-edit mode, so KForge will prefer Patch Preview before applying project changes."
       );
     }
 
