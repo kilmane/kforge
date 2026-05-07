@@ -414,6 +414,27 @@ function formatTranscriptTime(ts) {
   }
 }
 
+const WORKFLOW_TASK_KIND = Object.freeze({
+  PROJECT_EDIT: "project_edit",
+  IMPLEMENTATION: "implementation",
+});
+
+const WORKFLOW_STATUS = Object.freeze({
+  BLOCKED_BY_MODEL_POLICY: "blocked_by_model_policy",
+  ADVISORY_TEST_OVERRIDE: "advisory_test_override",
+  IN_PROGRESS: "in_progress",
+  TOOL_WAITING: "tool_waiting",
+  COMPLETED: "completed",
+});
+
+const WORKFLOW_NEXT_STEP = Object.freeze({
+  SWITCH_MODEL_OR_PLAN: "switch_model_or_plan",
+  TOOL_APPROVAL_TEST_MODE: "tool_approval_test_mode",
+  FIX: "fix",
+  PREVIEW: "preview",
+  SHOW_CHANGES: "show_changes",
+  ANOTHER_EDIT: "another_edit",
+});
 // Build a compact context prefix (UI-only; no backend changes).
 function buildChatContextPrefix(messages, limit) {
   const relevant = messages
@@ -2157,8 +2178,8 @@ export default function App() {
 
   const isBlockedByModelPolicyWorkflow = useCallback((context) => {
     return (
-      context?.status === "blocked_by_model_policy" &&
-      context?.taskKind === "project_edit"
+      context?.status === WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY &&
+      context?.taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT
     );
   }, []);
 
@@ -2305,8 +2326,8 @@ export default function App() {
   }
   function isCompletedImplementationWorkflow(context = null) {
     return (
-      context?.taskKind === "implementation" &&
-      context?.status === "completed"
+      context?.taskKind === WORKFLOW_TASK_KIND.IMPLEMENTATION &&
+      context?.status === WORKFLOW_STATUS.COMPLETED
     );
   }
 
@@ -2400,7 +2421,7 @@ export default function App() {
 
     if (!s) return false;
     if (!isCompletedImplementationWorkflow(context)) return false;
-    if (context?.nextStep !== "preview") return false;
+    if (context?.nextStep !== WORKFLOW_NEXT_STEP.PREVIEW) return false;
     if (hasManualOrAdvisoryIntent(s)) return false;
     if (isWorkflowShowChangesIntent(s)) return false;
     if (isWorkflowBugfixIntent(s)) return false;
@@ -2711,8 +2732,8 @@ export default function App() {
       if (isAdvisoryTestOverride) {
         setWorkflowContext({
           ...workflowContext,
-          status: "advisory_test_override",
-          nextStep: "tool_approval_test_mode",
+          status: WORKFLOW_STATUS.ADVISORY_TEST_OVERRIDE,
+          nextStep: WORKFLOW_NEXT_STEP.TOOL_APPROVAL_TEST_MODE,
           overrideReason: "user_explicit_test_current_model",
           updatedAt: Date.now(),
           source: "model_policy_advisory_override",
@@ -2729,8 +2750,8 @@ export default function App() {
         if (promptTask.kind === "broken_preview_debug") {
           setWorkflowContext({
             ...workflowContext,
-            status: "in_progress",
-            nextStep: "fix",
+            status: WORKFLOW_STATUS.IN_PROGRESS,
+            nextStep: WORKFLOW_NEXT_STEP.FIX,
             updatedAt: Date.now(),
             source: "bugfix_followup",
           });
@@ -2801,8 +2822,8 @@ export default function App() {
                   onClick: () => {
                     setWorkflowContext({
                       ...workflowContext,
-                      status: "in_progress",
-                      nextStep: "fix",
+                      status: WORKFLOW_STATUS.IN_PROGRESS,
+                      nextStep: WORKFLOW_NEXT_STEP.FIX,
                       updatedAt: Date.now(),
                       source: "completed_workflow_followup_choice",
                     });
@@ -2873,9 +2894,9 @@ export default function App() {
         !isAdvisoryTestOverride
       ) {
         setWorkflowContext({
-          taskKind: "project_edit",
-          status: "blocked_by_model_policy",
-          nextStep: "switch_model_or_plan",
+          taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          status: WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY,
+          nextStep: WORKFLOW_NEXT_STEP.SWITCH_MODEL_OR_PLAN,
           blockedReason: "advisory_only",
           lastUserGoal: draft,
           updatedAt: Date.now(),
@@ -2940,9 +2961,9 @@ export default function App() {
 
       if (isProjectImplementationPrompt) {
         setWorkflowContext({
-          taskKind: "implementation",
-          status: "in_progress",
-          nextStep: "preview",
+          taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+          status: WORKFLOW_STATUS.IN_PROGRESS,
+          nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
           updatedAt: Date.now(),
           source: "send_with_prompt",
         });
