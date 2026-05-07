@@ -687,7 +687,10 @@ function extractXmlToolCalls(text) {
   const hasDirectToolTag = Array.from(ALLOWED_MODEL_TOOLS).some((toolName) =>
     s.includes(`<${toolName}>`),
   );
-  if (!s.includes("<tool_call") && !hasDirectToolTag) return [];
+  const hasInvokeToolCall = /<invoke\s+name="[^"]+"\s*>/i.test(s);
+  if (!s.includes("<tool_call") && !hasDirectToolTag && !hasInvokeToolCall) {
+    return [];
+  }
 
   const calls = [];
   // Variant 0: <tool_call>list_dir
@@ -1776,8 +1779,7 @@ export default function AiPanel({
 
               if (
                 typeof setWorkflowContext === "function" &&
-                (agentSuccessfulWritePaths.length > 0 ||
-                  agentSuccessfulDirPaths.length > 0)
+                agentSuccessfulWritePaths.length > 0
               ) {
                 setWorkflowContext({
                   taskKind: "implementation",
@@ -1790,8 +1792,7 @@ export default function AiPanel({
               }
 
               const agentMadeProjectChanges =
-                agentSuccessfulWritePaths.length > 0 ||
-                agentSuccessfulDirPaths.length > 0;
+                agentSuccessfulWritePaths.length > 0;
 
               const finalText = String(agentResult?.text || "").trim();
               if (finalText && !agentMadeProjectChanges) {
@@ -1833,8 +1834,7 @@ export default function AiPanel({
                 appendMessage("assistant", finalText);
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&
-                (agentSuccessfulWritePaths.length > 0 ||
-                  agentSuccessfulDirPaths.length > 0)
+                agentSuccessfulWritePaths.length > 0
               ) {
                 appendMessage(
                   "assistant",
@@ -1858,20 +1858,20 @@ export default function AiPanel({
                   {
                     actions: [
                       {
-                        label: "Continue fixing",
+                        label: "Continue editing",
                         onClick: () => {
                           const originalGoal = String(
-                            latestUserText || "Continue the previous project fix.",
+                            latestUserText || "Continue the previous project edit.",
                           ).trim();
 
                           appendMessage(
                             "assistant",
-                            "Continuing the fix attempt. I will ask the model to request one concrete tool call next.",
+                            "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
-                              "Continue the previous project fix.\n\n" +
+                              "Continue the previous project edit.\n\n" +
                                 `Original request: ${originalGoal}\n\n` +
                                 "The project has already been inspected. Do not repeat broad inspection.\n" +
                                 "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only.",

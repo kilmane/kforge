@@ -1954,20 +1954,38 @@ export default function App() {
       .trim();
     if (!s) return false;
 
-    const implementationHints = [
-      "add a settings page",
-      "add settings page",
-      "create a settings page",
-      "make a settings page",
-      "implement a settings page",
-      "add a page",
-      "create a page",
-      "make a page",
-      "implement a page",
-      "add a feature",
-      "create a feature",
-      "make a feature",
-      "implement a feature",
+    const implementationVerbs = [
+      "add",
+      "create",
+      "make",
+      "implement",
+      "build",
+      "generate",
+      "wire up",
+    ];
+
+    const implementationTargets = [
+      "settings page",
+      "settings screen",
+      "settings view",
+      "page",
+      "route",
+      "screen",
+      "view",
+      "component",
+      "feature",
+      "form",
+      "button",
+      "link",
+      "nav",
+      "navbar",
+      "navigation",
+      "menu",
+      "layout",
+      "dashboard",
+      "sidebar",
+      "modal",
+      "dialog",
     ];
 
     const workflowHints = [
@@ -1984,12 +2002,15 @@ export default function App() {
       "bypass kforge",
     ];
 
-    const looksImplementation = implementationHints.some((hint) =>
+    const hasImplementationVerb = implementationVerbs.some((hint) =>
+      s.includes(hint),
+    );
+    const hasImplementationTarget = implementationTargets.some((hint) =>
       s.includes(hint),
     );
     const looksWorkflow = workflowHints.some((hint) => s.includes(hint));
 
-    return looksImplementation && !looksWorkflow;
+    return hasImplementationVerb && hasImplementationTarget && !looksWorkflow;
   }
   function isWorkflowContinuationIntent(text = "") {
     const s = String(text || "").toLowerCase().trim();
@@ -2333,6 +2354,44 @@ export default function App() {
     );
   }
 
+  function isExplicitWorkflowPreviewRequest(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const directRequests = [
+      "yes",
+      "yeah",
+      "yep",
+      "ok",
+      "okay",
+      "sure",
+      "go ahead",
+      "please do",
+      "preview",
+      "preview it",
+      "run it",
+      "run the app",
+      "start it",
+      "start the app",
+      "open it",
+      "open the app",
+      "test it",
+      "show it",
+      "what now",
+      "what next",
+      "next",
+      "next step",
+      "next steps",
+    ];
+
+    if (directRequests.includes(s)) return true;
+
+    return /^(please\s+)?(preview|run|start|open|test|show)\b/.test(s);
+  }
+
   function isWorkflowPreviewFollowupIntent(text = "", context = null) {
     const s = String(text || "")
       .toLowerCase()
@@ -2345,17 +2404,7 @@ export default function App() {
     if (isWorkflowShowChangesIntent(s)) return false;
     if (isWorkflowBugfixIntent(s)) return false;
 
-    return (
-      isPreviewIntent(s) ||
-      isWorkflowContinuationIntent(s) ||
-      s === "what now" ||
-      s === "what next" ||
-      s === "next" ||
-      s === "next step" ||
-      s === "next steps" ||
-      s.includes("what now") ||
-      s.includes("what next")
-    );
+    return isExplicitWorkflowPreviewRequest(s);
   }
 
   function isWorkflowSuccessAckIntent(text = "") {
@@ -2693,11 +2742,95 @@ export default function App() {
           return;
         }
 
-        if (promptTask.kind === "preview_followup") {
+        if (
+          promptTask.kind === "preview_followup" &&
+          isExplicitWorkflowPreviewRequest(draft)
+        ) {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
             buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+          );
+          return;
+        }
+
+        if (
+          promptTask.kind !== "manual_steps" &&
+          promptTask.kind !== "provider_setup" &&
+          promptTask.kind !== "dependency_install" &&
+          promptTask.kind !== "expo_phone_preview" &&
+          promptTask.kind !== "expo_terminal_choice"
+        ) {
+          const followupGoal =
+            "Fix the previous project edit.\n\n" +
+            `User report: ${draft}\n\n` +
+            "The user is describing what happened after the last implementation. Inspect the relevant files before editing, then request the smallest safe fix.";
+
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+
+          appendMessage(
+            "assistant",
+            "The last edit is complete, but your next message could mean more than one thing.\n\n" +
+              "Choose the next KForge action:",
+            {
+              actions: [
+                {
+                  label: "Preview",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+                    );
+                  },
+                },
+                {
+                  label: "Show changes",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowShowChangesMessage(workflowContext),
+                    );
+                  },
+                },
+                {
+                  label:
+                    modelWorkflowPolicy.mode === "advisory_only"
+                      ? "Fix last edit in test mode"
+                      : "Fix last edit",
+                  onClick: () => {
+                    setWorkflowContext({
+                      ...workflowContext,
+                      status: "in_progress",
+                      nextStep: "fix",
+                      updatedAt: Date.now(),
+                      source: "completed_workflow_followup_choice",
+                    });
+
+                    appendMessage(
+                      "assistant",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Continuing the fix in test mode. File writes still require approval, and Cancel will stop the tool flow."
+                        : "Continuing the fix. I will inspect the relevant files before editing.",
+                    );
+
+                    sendWithPrompt(followupGoal, {
+                      silentUserAppend: true,
+                      forceAdvisoryTestOverride:
+                        modelWorkflowPolicy.mode === "advisory_only",
+                    });
+                  },
+                },
+                {
+                  label: "Make another edit",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me the next edit you want to make, and I will route it from the current project state.",
+                    );
+                  },
+                },
+              ],
+            },
           );
           return;
         }
