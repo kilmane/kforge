@@ -1798,7 +1798,7 @@ export default function AiPanel({
               if (finalText && !agentMadeProjectChanges) {
                 appendMessage(
                   "assistant",
-                  "I inspected the project, but I did not change any files yet. The settings page has not been added yet.",
+                  "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
                   {
                     actions: [
                       {

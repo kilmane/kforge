@@ -3089,8 +3089,68 @@ export default function App() {
             cleanedLower.includes("kforge can help with this through")
           );
 
+        const hasXmlLikeToolCall =
+          /<tool_call\b|<\/tool_call>|<invoke\s+name=["'][^"']+["']\s*>|<minimax:tool_call\b/i.test(
+            out,
+          );
+
+        const shouldShowAdvisoryNoActionRecovery =
+          isAdvisoryTestOverride &&
+          promptTask.kind === "project_edit" &&
+          toolBlocks.length === 0 &&
+          !hasXmlLikeToolCall;
+
         // Append cleaned assistant output (keeps transcript readable)
-        if (cleaned) {
+        if (shouldShowAdvisoryNoActionRecovery) {
+          appendMessage(
+            "assistant",
+            "The weak/advisory model did not produce an actionable tool request or file edit.\n\n" +
+              "Recommended: switch to a stronger model for project edits.\n\n" +
+              "You can still continue testing this model at your own risk. KForge will keep file-write approval gates active.",
+            {
+              actions: [
+                {
+                  label: "Try once more in test mode",
+                  onClick: () => {
+                    sendWithPrompt(
+                      "Continue the previous project edit.\n\n" +
+                        `Original request: ${draft}\n\n` +
+                        "Your previous reply was not actionable. Request exactly one tool call next. If inspection is needed, request one read_file or list_dir call. If editing is possible, request one write_file call. Do not give only general prose.",
+                      {
+                        silentUserAppend: true,
+                        forceAdvisoryTestOverride: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: "Give manual steps",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Manual path:\n\n" +
+                        "1. Inspect the existing React entry file, usually src/App.jsx.\n" +
+                        "2. Inspect the existing src folder structure.\n" +
+                        "3. Create the new component inside src, using the project’s existing React style.\n" +
+                        "4. Import and render or route that component from the existing app entry point.\n" +
+                        "5. Preview the app and confirm the new page or section is visible.\n\n" +
+                        "For reliable automatic edits, switch to a stronger model. This weak/advisory model did not produce an actionable edit.",
+                    );
+                  },
+                },
+                {
+                  label: "Stop",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Stopped. No files were changed by that response.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
+        } else if (cleaned) {
           appendMessage("assistant", cleaned);
         } else {
           // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
