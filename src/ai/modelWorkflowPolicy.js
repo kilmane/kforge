@@ -230,7 +230,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "This model is safer for chat, planning, and manual guidance. For direct project edits, switch to a stronger coding-capable model.",
+        "Advisory-only route: useful for chat, planning, and manual guidance. Not recommended for project edits; switch to a stronger coding-capable model for implementation.",
     });
   }
 
@@ -250,7 +250,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
           TASK.MULTI_FILE_REFACTOR,
         ],
         userHint:
-          "This model is usable in guarded mode. KForge should prefer patch preview over direct file writes for project edits.",
+          "Guarded-edit route: usable for small/routine tasks. For project edits, KForge should prefer Patch Preview or guidance over direct file writes.",
       });
     }
 
@@ -268,7 +268,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
       ],
       notRecommendedTaskKinds: [],
       userHint:
-        "This model is suitable for direct project edits, with KForge write guards still active.",
+        "Full-agent route: suitable for project edits, with KForge write approval and path safety still active.",
     });
   }
 
@@ -291,7 +291,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "This provider/model should use guarded editing. Prefer patch preview or guidance before allowing direct writes.",
+        "Guarded-edit route: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a stronger trusted model.",
     });
   }
 
