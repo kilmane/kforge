@@ -2886,7 +2886,7 @@ export default function App() {
         appendMessage(
           "assistant",
           "This model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-            "Recommended: switch to a stronger model.\n\n" +
+            "Recommended: switch to a stronger coding-capable model.\n\n" +
             "If you continue, you are testing this model at your own risk. KForge will keep file-write approval and path safety active, and Cancel will stop the tool flow.",
           {
             actions: [
@@ -3105,7 +3105,7 @@ export default function App() {
           appendMessage(
             "assistant",
             "The weak/advisory model did not produce an actionable tool request or file edit.\n\n" +
-              "Recommended: switch to a stronger model for project edits.\n\n" +
+              "Recommended: switch to a stronger coding-capable model for project edits.\n\n" +
               "You can still continue testing this model at your own risk. KForge will keep file-write approval and path safety active.",
             {
               actions: [
@@ -3134,7 +3134,7 @@ export default function App() {
                         "3. Create the new component inside src, using the project’s existing React style.\n" +
                         "4. Import and render or route that component from the existing app entry point.\n" +
                         "5. Preview the app and confirm the new page or section is visible.\n\n" +
-                        "For reliable automatic edits, switch to a stronger model. This weak/advisory model did not produce an actionable edit.",
+                        "For reliable automatic edits, switch to a stronger coding-capable model. This weak/advisory model did not produce an actionable edit.",
                     );
                   },
                 },

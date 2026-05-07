@@ -291,7 +291,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Guarded-edit route: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a stronger trusted model.",
+        "Guarded-edit route: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a stronger coding-capable model.",
     });
   }
 
