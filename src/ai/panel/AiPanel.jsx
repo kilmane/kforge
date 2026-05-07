@@ -23,6 +23,11 @@ import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
+import {
+  WORKFLOW_NEXT_STEP,
+  WORKFLOW_STATUS,
+  WORKFLOW_TASK_KIND,
+} from "../workflowState.js";
 
 /**
  * ✅ Global caches to prevent repeated tool prompts when AiPanel is collapsed/re-opened.
@@ -1660,9 +1665,9 @@ export default function AiPanel({
           } else if (successfulWritePaths.length > 0) {
             if (typeof setWorkflowContext === "function") {
               setWorkflowContext({
-                taskKind: "implementation",
-                status: "completed",
-                nextStep: "preview",
+                taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+                status: WORKFLOW_STATUS.COMPLETED,
+                nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
                 lastEditedPath: latestWrittenPath || "",
                 updatedAt: Date.now(),
                 source: "tool_batch",
@@ -1782,9 +1787,9 @@ export default function AiPanel({
                 agentSuccessfulWritePaths.length > 0
               ) {
                 setWorkflowContext({
-                  taskKind: "implementation",
-                  status: "completed",
-                  nextStep: "preview",
+                  taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+                  status: WORKFLOW_STATUS.COMPLETED,
+                  nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
                   lastEditedPath: latestAgentWrittenPath || "",
                   updatedAt: Date.now(),
                   source: "agent_continuation",

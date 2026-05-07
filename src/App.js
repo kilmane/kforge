@@ -11,6 +11,11 @@ import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTa
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
+import {
+  WORKFLOW_NEXT_STEP,
+  WORKFLOW_STATUS,
+  WORKFLOW_TASK_KIND,
+} from "./ai/workflowState";
 
 import { invoke } from "@tauri-apps/api/core";
 
@@ -414,27 +419,6 @@ function formatTranscriptTime(ts) {
   }
 }
 
-const WORKFLOW_TASK_KIND = Object.freeze({
-  PROJECT_EDIT: "project_edit",
-  IMPLEMENTATION: "implementation",
-});
-
-const WORKFLOW_STATUS = Object.freeze({
-  BLOCKED_BY_MODEL_POLICY: "blocked_by_model_policy",
-  ADVISORY_TEST_OVERRIDE: "advisory_test_override",
-  IN_PROGRESS: "in_progress",
-  TOOL_WAITING: "tool_waiting",
-  COMPLETED: "completed",
-});
-
-const WORKFLOW_NEXT_STEP = Object.freeze({
-  SWITCH_MODEL_OR_PLAN: "switch_model_or_plan",
-  TOOL_APPROVAL_TEST_MODE: "tool_approval_test_mode",
-  FIX: "fix",
-  PREVIEW: "preview",
-  SHOW_CHANGES: "show_changes",
-  ANOTHER_EDIT: "another_edit",
-});
 // Build a compact context prefix (UI-only; no backend changes).
 function buildChatContextPrefix(messages, limit) {
   const relevant = messages
