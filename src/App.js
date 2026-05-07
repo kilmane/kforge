@@ -2826,7 +2826,7 @@ export default function App() {
                   onClick: () => {
                     appendMessage(
                       "assistant",
-                      "Tell me the next edit you want to make, and I will route it from the current project state.",
+                      "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
                     );
                   },
                 },
