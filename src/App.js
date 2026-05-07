@@ -2137,7 +2137,7 @@ export default function App() {
         "This looks like a project edit.\n\n" +
         "The selected provider/model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
         "Recommended: switch to a stronger full-agent model.\n\n" +
-        "If you continue with this model, you are testing it at your own risk. KForge will still protect file writes with approval gates."
+        "If you continue with this model, you are testing it at your own risk. KForge will still keep file-write approval and path safety active."
       );
     }
 
@@ -2693,7 +2693,7 @@ export default function App() {
 
                   appendMessage(
                     "assistant",
-                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File writes still require approval, and Cancel will stop the tool flow.",
+                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
                   );
 
                   sendWithPrompt(goal || draft, {
@@ -2810,7 +2810,7 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the fix in test mode. You are testing this weak/advisory model at your own risk. File writes still require approval, and Cancel will stop the tool flow."
+                        ? "Continuing the fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
                         : "Continuing the fix. I will inspect the relevant files before editing.",
                     );
 
@@ -2887,7 +2887,7 @@ export default function App() {
           "assistant",
           "This model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
             "Recommended: switch to a stronger model.\n\n" +
-            "If you continue, you are testing this model at your own risk. KForge will still require approval before file writes, and Cancel will stop the tool flow.",
+            "If you continue, you are testing this model at your own risk. KForge will keep file-write approval and path safety active, and Cancel will stop the tool flow.",
           {
             actions: [
               {
@@ -2895,7 +2895,7 @@ export default function App() {
                 onClick: () => {
                   appendMessage(
                     "assistant",
-                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File writes still require approval, and Cancel will stop the tool flow.",
+                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
                   );
 
                   sendWithPrompt(draft, {
@@ -3106,7 +3106,7 @@ export default function App() {
             "assistant",
             "The weak/advisory model did not produce an actionable tool request or file edit.\n\n" +
               "Recommended: switch to a stronger model for project edits.\n\n" +
-              "You can still continue testing this model at your own risk. KForge will keep file-write approval gates active.",
+              "You can still continue testing this model at your own risk. KForge will keep file-write approval and path safety active.",
             {
               actions: [
                 {
