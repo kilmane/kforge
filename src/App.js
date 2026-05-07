@@ -764,6 +764,51 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+function getCompletedWorkflowRouteDecision({
+  workflowContext = null,
+  promptTask = null,
+  isExplicitPreviewRequest = false,
+} = {}) {
+  if (
+    workflowContext?.taskKind !== WORKFLOW_TASK_KIND.IMPLEMENTATION ||
+    workflowContext?.status !== WORKFLOW_STATUS.COMPLETED
+  ) {
+    return null;
+  }
+
+  const kind = promptTask?.kind || "unknown";
+
+  if (kind === "success_ack") {
+    return { action: "success_ack" };
+  }
+
+  if (kind === "show_changes") {
+    return { action: "show_changes" };
+  }
+
+  if (kind === "preview_followup" && isExplicitPreviewRequest) {
+    return { action: "preview" };
+  }
+
+  const shouldAskForCompletedWorkflowChoice =
+    kind !== "manual_steps" &&
+    kind !== "provider_setup" &&
+    kind !== "dependency_install" &&
+    kind !== "expo_phone_preview" &&
+    kind !== "expo_terminal_choice";
+
+  if (shouldAskForCompletedWorkflowChoice) {
+    return {
+      action: "choose_next_action",
+      prepareFixContext: kind === "broken_preview_debug",
+    };
+  }
+
+  return {
+    action: "continue_normal",
+    prepareFixContext: kind === "broken_preview_debug",
+  };
+}
 export default function App() {
   const [projectPath, setProjectPath] = useState(null);
   const [tree, setTree] = useState([]);
@@ -2724,14 +2769,20 @@ export default function App() {
         });
       }
 
-      if (isCompletedImplementationWorkflow(workflowContext)) {
-        if (promptTask.kind === "success_ack") {
+      const completedWorkflowRoute = getCompletedWorkflowRouteDecision({
+        workflowContext,
+        promptTask,
+        isExplicitPreviewRequest: isExplicitWorkflowPreviewRequest(draft),
+      });
+
+      if (completedWorkflowRoute) {
+        if (completedWorkflowRoute.action === "success_ack") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage("assistant", "Great — glad it is working now.");
           return;
         }
 
-        if (promptTask.kind === "broken_preview_debug") {
+        if (completedWorkflowRoute.prepareFixContext) {
           setWorkflowContext({
             ...workflowContext,
             status: WORKFLOW_STATUS.IN_PROGRESS,
@@ -2739,7 +2790,9 @@ export default function App() {
             updatedAt: Date.now(),
             source: "bugfix_followup",
           });
-        } else if (promptTask.kind === "show_changes") {
+        }
+
+        if (completedWorkflowRoute.action === "show_changes") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
@@ -2748,10 +2801,7 @@ export default function App() {
           return;
         }
 
-        if (
-          promptTask.kind === "preview_followup" &&
-          isExplicitWorkflowPreviewRequest(draft)
-        ) {
+        if (completedWorkflowRoute.action === "preview") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
@@ -2760,13 +2810,7 @@ export default function App() {
           return;
         }
 
-        if (
-          promptTask.kind !== "manual_steps" &&
-          promptTask.kind !== "provider_setup" &&
-          promptTask.kind !== "dependency_install" &&
-          promptTask.kind !== "expo_phone_preview" &&
-          promptTask.kind !== "expo_terminal_choice"
-        ) {
+        if (completedWorkflowRoute.action === "choose_next_action") {
           const followupGoal =
             "Fix the previous project edit.\n\n" +
             `User report: ${draft}\n\n` +
