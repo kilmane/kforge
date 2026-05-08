@@ -29,6 +29,24 @@ let CURRENT_PROJECT_ROOT = null;
 let CURRENT_PROJECT_MEMORY = defaultMemoryV1();
 let PROJECT_MEMORY_LOADED_FOR_ROOT = null;
 
+const WORKSPACE_TREE_IGNORED_DIR_NAMES = new Set([
+  ".git",
+  ".next",
+  ".turbo",
+  ".vite",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "target",
+]);
+
+function shouldSkipWorkspaceTreeEntry(entry) {
+  const name = String(entry?.name ?? "").trim().toLowerCase();
+  if (!name || !entry?.isDirectory) return false;
+  return WORKSPACE_TREE_IGNORED_DIR_NAMES.has(name);
+}
+
 /**
  * Basic absolute-path detection for Windows + Unix.
  */
@@ -281,6 +299,8 @@ async function walkDir(dirPath) {
 
   const nodes = [];
   for (const e of entries || []) {
+    if (shouldSkipWorkspaceTreeEntry(e)) continue;
+
     const name = e?.name ?? "(unknown)";
     const path = joinPath(safeDir, name);
 
