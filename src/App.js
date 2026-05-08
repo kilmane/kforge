@@ -768,6 +768,37 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+function getProjectEditRouteDecision({
+  promptTask = null,
+  modelWorkflowPolicy = null,
+  isAdvisoryTestOverride = false,
+} = {}) {
+  const isProjectEdit = promptTask?.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT;
+  const mode = modelWorkflowPolicy?.mode || "unknown";
+  const shouldShowGuardedEditNote = isProjectEdit && mode === "guarded_edit";
+
+  if (isProjectEdit && mode === "advisory_only" && !isAdvisoryTestOverride) {
+    return {
+      action: "block_advisory_project_edit",
+      shouldShowGuardedEditNote: false,
+      shouldClearProviderSwitchNote: false,
+    };
+  }
+
+  if (isProjectEdit) {
+    return {
+      action: "project_edit",
+      shouldShowGuardedEditNote,
+      shouldClearProviderSwitchNote: !shouldShowGuardedEditNote,
+    };
+  }
+
+  return {
+    action: "continue_normal",
+    shouldShowGuardedEditNote: false,
+    shouldClearProviderSwitchNote: true,
+  };
+}
 function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
   const kind = promptTask?.kind || "";
 
@@ -2998,11 +3029,13 @@ export default function App() {
           return;
         }
       }
-      if (
-        modelWorkflowPolicy.mode === "advisory_only" &&
-        promptTask.kind === "project_edit" &&
-        !isAdvisoryTestOverride
-      ) {
+      const projectEditRoute = getProjectEditRouteDecision({
+        promptTask,
+        modelWorkflowPolicy,
+        isAdvisoryTestOverride,
+      });
+
+      if (projectEditRoute.action === "block_advisory_project_edit") {
         setWorkflowContext(createBlockedProjectEditWorkflowContext(draft));
 
         if (!opts.silentUserAppend) appendMessage("user", draft);
@@ -3033,20 +3066,15 @@ export default function App() {
         return;
       }
 
-      const isProjectImplementationPrompt = promptTask.kind === "project_edit";
-
-      if (isProjectImplementationPrompt) {
+      if (projectEditRoute.action === "project_edit") {
         setWorkflowContext(createImplementationInProgressWorkflowContext());
       }
 
-      if (
-        isProjectImplementationPrompt &&
-        modelWorkflowPolicy.mode === "guarded_edit"
-      ) {
+      if (projectEditRoute.shouldShowGuardedEditNote) {
         setProviderSwitchNote(
           buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy),
         );
-      } else if (providerSwitchNote) {
+      } else if (projectEditRoute.shouldClearProviderSwitchNote && providerSwitchNote) {
         setProviderSwitchNote("");
       }
 
