@@ -12,6 +12,10 @@ import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTa
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
+  createAdvisoryTestOverrideWorkflowContext,
+  createBlockedProjectEditWorkflowContext,
+  createBugfixWorkflowContext,
+  createImplementationInProgressWorkflowContext,
   WORKFLOW_NEXT_STEP,
   WORKFLOW_STATUS,
   WORKFLOW_TASK_KIND,
@@ -2787,14 +2791,9 @@ export default function App() {
       }
 
       if (isAdvisoryTestOverride) {
-        setWorkflowContext({
-          ...workflowContext,
-          status: WORKFLOW_STATUS.ADVISORY_TEST_OVERRIDE,
-          nextStep: WORKFLOW_NEXT_STEP.TOOL_APPROVAL_TEST_MODE,
-          overrideReason: "user_explicit_test_current_model",
-          updatedAt: Date.now(),
-          source: "model_policy_advisory_override",
-        });
+        setWorkflowContext(
+          createAdvisoryTestOverrideWorkflowContext(workflowContext),
+        );
       }
 
       const completedWorkflowRoute = getCompletedWorkflowRouteDecision({
@@ -2811,13 +2810,9 @@ export default function App() {
         }
 
         if (completedWorkflowRoute.prepareFixContext) {
-          setWorkflowContext({
-            ...workflowContext,
-            status: WORKFLOW_STATUS.IN_PROGRESS,
-            nextStep: WORKFLOW_NEXT_STEP.FIX,
-            updatedAt: Date.now(),
-            source: "bugfix_followup",
-          });
+          setWorkflowContext(
+            createBugfixWorkflowContext(workflowContext, "bugfix_followup"),
+          );
         }
 
         if (completedWorkflowRoute.action === "show_changes") {
@@ -2876,13 +2871,12 @@ export default function App() {
                       ? "Fix last edit in test mode"
                       : "Fix last edit",
                   onClick: () => {
-                    setWorkflowContext({
-                      ...workflowContext,
-                      status: WORKFLOW_STATUS.IN_PROGRESS,
-                      nextStep: WORKFLOW_NEXT_STEP.FIX,
-                      updatedAt: Date.now(),
-                      source: "completed_workflow_followup_choice",
-                    });
+                    setWorkflowContext(
+                      createBugfixWorkflowContext(
+                        workflowContext,
+                        "completed_workflow_followup_choice",
+                      ),
+                    );
 
                     appendMessage(
                       "assistant",
@@ -2949,15 +2943,7 @@ export default function App() {
         promptTask.kind === "project_edit" &&
         !isAdvisoryTestOverride
       ) {
-        setWorkflowContext({
-          taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
-          status: WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY,
-          nextStep: WORKFLOW_NEXT_STEP.SWITCH_MODEL_OR_PLAN,
-          blockedReason: "advisory_only",
-          lastUserGoal: draft,
-          updatedAt: Date.now(),
-          source: "model_policy_advisory_only",
-        });
+        setWorkflowContext(createBlockedProjectEditWorkflowContext(draft));
 
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
@@ -3016,13 +3002,7 @@ export default function App() {
       const isProjectImplementationPrompt = promptTask.kind === "project_edit";
 
       if (isProjectImplementationPrompt) {
-        setWorkflowContext({
-          taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
-          status: WORKFLOW_STATUS.IN_PROGRESS,
-          nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
-          updatedAt: Date.now(),
-          source: "send_with_prompt",
-        });
+        setWorkflowContext(createImplementationInProgressWorkflowContext());
       }
 
       if (
