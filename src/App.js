@@ -768,6 +768,39 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
+  const kind = promptTask?.kind || "";
+
+  if (kind === "expo_terminal_choice") {
+    return { action: "expo_terminal_choice" };
+  }
+
+  if (kind === "no_project_implementation") {
+    return { action: "no_project_implementation" };
+  }
+
+  if (kind === "empty_folder_implementation") {
+    return { action: "empty_folder_implementation" };
+  }
+
+  if (kind === "empty_folder_plan") {
+    return { action: "empty_folder_plan" };
+  }
+
+  if (kind === "provider_setup") {
+    return { action: "provider_setup" };
+  }
+
+  if (kind === "dependency_install") {
+    return { action: "dependency_install" };
+  }
+
+  if (kind === "expo_phone_preview") {
+    return { action: "expo_phone_preview" };
+  }
+
+  return null;
+}
 function getBlockedModelPolicyRouteDecision({
   workflowContext = null,
   modelWorkflowPolicy = null,
@@ -2908,36 +2941,63 @@ export default function App() {
         }
       }
 
-      if (promptTask.kind === "expo_terminal_choice") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          buildExpoTerminalChoiceRoutingMessage(projectOpen),
-        );
-        return;
-      }
+      const directWorkflowHandoffRoute = getDirectWorkflowHandoffRouteDecision({
+        promptTask,
+      });
 
-      if (promptTask.kind === "no_project_implementation") {
+      if (directWorkflowHandoffRoute) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage("assistant", buildNoProjectImplementationMessage());
-        return;
-      }
 
-      if (promptTask.kind === "empty_folder_implementation") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          buildEmptyFolderImplementationRoutingMessage(),
-        );
-        return;
-      }
+        if (directWorkflowHandoffRoute.action === "expo_terminal_choice") {
+          appendMessage(
+            "assistant",
+            buildExpoTerminalChoiceRoutingMessage(projectOpen),
+          );
+          return;
+        }
 
-      if (promptTask.kind === "empty_folder_plan") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage("assistant", buildEmptyFolderPlanMessage());
-        return;
-      }
+        if (directWorkflowHandoffRoute.action === "no_project_implementation") {
+          appendMessage("assistant", buildNoProjectImplementationMessage());
+          return;
+        }
 
+        if (directWorkflowHandoffRoute.action === "empty_folder_implementation") {
+          appendMessage(
+            "assistant",
+            buildEmptyFolderImplementationRoutingMessage(),
+          );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "empty_folder_plan") {
+          appendMessage("assistant", buildEmptyFolderPlanMessage());
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "provider_setup") {
+          appendMessage(
+            "assistant",
+            buildCombinedOpenAiSupabaseRoutingMessage(projectOpen),
+          );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "dependency_install") {
+          appendMessage(
+            "assistant",
+            buildPreviewInstallRoutingMessage(projectOpen),
+          );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "expo_phone_preview") {
+          appendMessage(
+            "assistant",
+            buildExpoPhonePreviewRoutingMessage(projectOpen),
+          );
+          return;
+        }
+      }
       if (
         modelWorkflowPolicy.mode === "advisory_only" &&
         promptTask.kind === "project_edit" &&
@@ -2973,32 +3033,6 @@ export default function App() {
         return;
       }
 
-      if (promptTask.kind === "provider_setup") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          buildCombinedOpenAiSupabaseRoutingMessage(projectOpen),
-        );
-        return;
-      }
-
-      if (promptTask.kind === "dependency_install") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          buildPreviewInstallRoutingMessage(projectOpen),
-        );
-        return;
-      }
-
-      if (promptTask.kind === "expo_phone_preview") {
-        if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          buildExpoPhonePreviewRoutingMessage(projectOpen),
-        );
-        return;
-      }
       const isProjectImplementationPrompt = promptTask.kind === "project_edit";
 
       if (isProjectImplementationPrompt) {
