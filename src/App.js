@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import "./index.css";
 import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTaskTemplateContext";
+import { buildWorkspaceSummaryContextBlock } from "./ai/workspace/workspaceSummary";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -1989,6 +1990,11 @@ export default function App() {
         tree,
       });
 
+      const workspaceSummaryBlock = buildWorkspaceSummaryContextBlock(
+        tree,
+        projectPath,
+      );
+
       const workspaceTreeBlock = buildWorkspaceTreeContextBlock(
         tree,
         projectPath,
@@ -2022,7 +2028,7 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab, workflowContext],
   );
