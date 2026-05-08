@@ -2860,11 +2860,13 @@ export default function App() {
         );
       }
 
-      const completedWorkflowRoute = getCompletedWorkflowRouteDecision({
-        workflowContext,
-        promptTask,
-        isExplicitPreviewRequest: isExplicitWorkflowPreviewRequest(draft),
-      });
+      const completedWorkflowRoute = opts.skipCompletedWorkflowRoute
+        ? null
+        : getCompletedWorkflowRouteDecision({
+            workflowContext,
+            promptTask,
+            isExplicitPreviewRequest: isExplicitWorkflowPreviewRequest(draft),
+          });
 
       if (completedWorkflowRoute) {
         if (completedWorkflowRoute.action === "success_ack") {
@@ -2951,6 +2953,7 @@ export default function App() {
 
                     sendWithPrompt(followupGoal, {
                       silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
                       forceAdvisoryTestOverride:
                         modelWorkflowPolicy.mode === "advisory_only",
                     });
