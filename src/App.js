@@ -764,6 +764,38 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+function getBlockedModelPolicyRouteDecision({
+  workflowContext = null,
+  modelWorkflowPolicy = null,
+  promptTask = null,
+  isAdvisoryTestOverride = false,
+  isExplicitNewWorkflow = false,
+} = {}) {
+  if (
+    workflowContext?.status !== WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY ||
+    workflowContext?.taskKind !== WORKFLOW_TASK_KIND.PROJECT_EDIT
+  ) {
+    return null;
+  }
+
+  if (modelWorkflowPolicy?.mode !== "advisory_only") {
+    return null;
+  }
+
+  if (isAdvisoryTestOverride) {
+    return null;
+  }
+
+  if (promptTask?.kind === "manual_steps") {
+    return null;
+  }
+
+  if (isExplicitNewWorkflow) {
+    return null;
+  }
+
+  return { action: "blocked_model_policy_followup" };
+}
 function getCompletedWorkflowRouteDecision({
   workflowContext = null,
   promptTask = null,
@@ -2205,12 +2237,6 @@ export default function App() {
     );
   }, []);
 
-  const isBlockedByModelPolicyWorkflow = useCallback((context) => {
-    return (
-      context?.status === WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY &&
-      context?.taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT
-    );
-  }, []);
 
   const isExplicitNewWorkflowIntent = useCallback((text = "") => {
     const s = String(text || "")
@@ -2718,13 +2744,15 @@ export default function App() {
         !!opts.forceAdvisoryTestOverride &&
         modelWorkflowPolicy.mode === "advisory_only";
 
-      if (
-        isBlockedByModelPolicyWorkflow(workflowContext) &&
-        modelWorkflowPolicy.mode === "advisory_only" &&
-        !isAdvisoryTestOverride &&
-        promptTask.kind !== "manual_steps" &&
-        !isExplicitNewWorkflowIntent(draft)
-      ) {
+      const blockedModelPolicyRoute = getBlockedModelPolicyRouteDecision({
+        workflowContext,
+        modelWorkflowPolicy,
+        promptTask,
+        isAdvisoryTestOverride,
+        isExplicitNewWorkflow: isExplicitNewWorkflowIntent(draft),
+      });
+
+      if (blockedModelPolicyRoute?.action === "blocked_model_policy_followup") {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
@@ -3247,7 +3275,6 @@ export default function App() {
       workflowContext,
       inferPromptTaskKind,
       buildSmartProviderSwitchMessage,
-      isBlockedByModelPolicyWorkflow,
       isExplicitNewWorkflowIntent,
       buildBlockedModelPolicyFollowupMessage,
       buildInputWithContext,
