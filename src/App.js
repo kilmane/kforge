@@ -2282,7 +2282,7 @@ export default function App() {
     const taskKind = promptTask?.kind || "unknown";
     const mode = modelWorkflowPolicy?.mode || "unknown";
 
-    if (taskKind === "project_edit" && mode === "advisory_only") {
+    if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "advisory_only") {
       return (
         "This looks like a project edit.\n\n" +
         "The selected provider/model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
@@ -2291,7 +2291,7 @@ export default function App() {
       );
     }
 
-    if (taskKind === "project_edit" && mode === "guarded_edit") {
+    if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "guarded_edit") {
       return (
         "This looks like a project edit.\n\n" +
         "The selected provider/model is in guarded-edit mode, so KForge will prefer Patch Preview before applying project changes."
@@ -2333,7 +2333,7 @@ export default function App() {
   const buildBlockedModelPolicyFollowupMessage = useCallback(
     (workflowContext, modelWorkflowPolicy) => {
       const promptTask = {
-        kind: workflowContext?.taskKind || "project_edit",
+        kind: workflowContext?.taskKind || WORKFLOW_TASK_KIND.PROJECT_EDIT,
       };
 
       return (
@@ -2721,7 +2721,7 @@ export default function App() {
         !isDependencyInstallIntent(text)
       ) {
         return {
-          kind: "project_edit",
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
           confidence: "high",
           source: "existing_intent_helpers",
         };
@@ -3215,7 +3215,7 @@ export default function App() {
 
         const shouldShowAdvisoryNoActionRecovery =
           isAdvisoryTestOverride &&
-          promptTask.kind === "project_edit" &&
+          promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
           toolBlocks.length === 0 &&
           !hasXmlLikeToolCall;
 
