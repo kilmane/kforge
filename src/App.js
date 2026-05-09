@@ -9,6 +9,7 @@ import React, {
 import "./index.css";
 import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTaskTemplateContext";
 import { buildWorkspaceSummaryContextBlock } from "./ai/workspace/workspaceSummary";
+import { buildCodeScoutContextBlock } from "./ai/workspace/codeScout";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -1995,6 +1996,12 @@ export default function App() {
         projectPath,
       );
 
+      const codeScoutBlock = buildCodeScoutContextBlock(
+        tree,
+        projectPath,
+        rawPrompt,
+      );
+
       const workspaceTreeBlock = buildWorkspaceTreeContextBlock(
         tree,
         projectPath,
@@ -2028,7 +2035,7 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${codeScoutBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab, workflowContext],
   );
