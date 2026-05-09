@@ -243,15 +243,15 @@ const STACK_DEFINITIONS = [
     ],
   },
   {
-    label: "Node backend / API",
-    minScore: 4,
+    label: "Node / API-style project",
+    minScore: 5,
     tests: [
       {
         weight: 2,
         detect: (index) => findExactFiles(index, ["package.json"]),
       },
       {
-        weight: 4,
+        weight: 5,
         detect: (index) =>
           findExactFiles(index, [
             "server.js",
@@ -261,7 +261,7 @@ const STACK_DEFINITIONS = [
           ]),
       },
       {
-        weight: 4,
+        weight: 5,
         detect: (index) =>
           findFilesByPathRegex(index, /^src\/server\.(js|ts|mjs|cjs)$/),
       },
