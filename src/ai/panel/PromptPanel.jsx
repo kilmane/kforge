@@ -15,12 +15,8 @@ export default function PromptPanel({
   askForPatch,
   setAskForPatch,
 
-  // preview controls (still owned by App)
+  // preview status
   patchPreview,
-  patchPreviewVisible,
-  copyPatchToClipboard,
-  setPatchPreviewVisible,
-  discardPatchPreview,
 
   // prompt box
   aiPrompt,
@@ -137,38 +133,11 @@ export default function PromptPanel({
               <span className="opacity-80">Suggest edits (preview)</span>
             </label>
 
-            {patchPreview ? (
-              <div className="flex items-center gap-2">
-                <button
-                  className={buttonClass("ghost")}
-                  onClick={copyPatchToClipboard}
-                  type="button"
-                  title="Copy the suggested edits"
-                >
-                  Copy
-                </button>
-                <button
-                  className={buttonClass("ghost")}
-                  onClick={() => setPatchPreviewVisible((v) => !v)}
-                  type="button"
-                  title={patchPreviewVisible ? "Hide preview" : "Show preview"}
-                >
-                  {patchPreviewVisible ? "Hide" : "Show"}
-                </button>
-                <button
-                  className={buttonClass("danger")}
-                  onClick={discardPatchPreview}
-                  type="button"
-                  title="Discard the suggested edits"
-                >
-                  Discard
-                </button>
-              </div>
-            ) : (
-              <div className="text-[11px] opacity-60">
-                If the assistant suggests edits, you’ll see a preview here.
-              </div>
-            )}
+            <div className="text-[11px] opacity-60">
+              {patchPreview
+                ? "Preview controls are available above."
+                : "If the assistant suggests edits, you’ll see a preview here."}
+            </div>
           </div>
 
           <div className="text-[11px] opacity-60 leading-snug">

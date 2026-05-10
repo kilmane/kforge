@@ -35,7 +35,7 @@ export default function PatchPreviewPanel({
         <div className="overflow-hidden rounded border border-zinc-800 bg-zinc-950/40">
           <div className="flex flex-col gap-2 border-b border-zinc-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 text-[11px] leading-snug">
-              <span className="mr-2 text-xs uppercase tracking-wide opacity-70">
+              <span className="mr-2 text-xs uppercase tracking-wide text-sky-300/90">
                 Patch Preview (read-only)
               </span>
               <span
@@ -86,7 +86,7 @@ export default function PatchPreviewPanel({
       ) : (
         <div className="flex flex-col gap-2 rounded border border-zinc-800 bg-zinc-900/20 p-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 text-[11px] leading-snug">
-            <span className="mr-2 text-xs uppercase tracking-wide opacity-70">
+            <span className="mr-2 text-xs uppercase tracking-wide text-sky-300/90">
               Patch Preview (read-only)
             </span>
             <span className="opacity-60">Preview hidden.</span>
