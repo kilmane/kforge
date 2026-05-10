@@ -36,6 +36,80 @@ function normalizeWorkflowPathList(paths = []) {
   return normalized;
 }
 
+function normalizeChangedFileSummaries(changedFileSummaries = []) {
+  const sourceSummaries = Array.isArray(changedFileSummaries)
+    ? changedFileSummaries
+    : [];
+
+  return sourceSummaries
+    .map((item) => {
+      if (typeof item === "string") {
+        return {
+          path: "",
+          summary: item.trim(),
+        };
+      }
+
+      return {
+        path: String(item?.path || "").trim(),
+        summary: String(item?.summary || "").trim(),
+      };
+    })
+    .filter((item) => item.summary);
+}
+
+export function buildCompletedWorkflowChangeSummary(context = null, options = {}) {
+  const editedPaths = normalizeWorkflowPathList(context?.editedPaths);
+  const lastEditedPath = String(context?.lastEditedPath || "").trim();
+  const changedFileSummaries = normalizeChangedFileSummaries(
+    context?.changedFileSummaries,
+  );
+  const fallbackLine = String(
+    options?.fallbackLine || "I do not have a detailed summary of each file yet.",
+  ).trim();
+  const maxPaths =
+    Number.isFinite(options?.maxPaths) && options.maxPaths > 0
+      ? Math.floor(options.maxPaths)
+      : 8;
+
+  const paths =
+    editedPaths.length > 0 ? editedPaths : lastEditedPath ? [lastEditedPath] : [];
+
+  if (paths.length === 0) {
+    return (
+      "Changed:\n" +
+      "- Implementation completed, but no changed file path was recorded.\n\n" +
+      fallbackLine
+    );
+  }
+
+  const summaryByPath = new Map();
+  changedFileSummaries.forEach((item) => {
+    if (item.path && item.summary && !summaryByPath.has(item.path)) {
+      summaryByPath.set(item.path, item.summary);
+    }
+  });
+
+  const visiblePaths = paths.slice(0, maxPaths);
+  const lines = visiblePaths.map((path) => {
+    const summary = summaryByPath.get(path);
+    return summary ? `- ${path} — ${summary}` : `- ${path}`;
+  });
+
+  if (paths.length > visiblePaths.length) {
+    lines.push(`- ...and ${paths.length - visiblePaths.length} more`);
+  }
+
+  const hasMissingSummaries =
+    changedFileSummaries.length === 0 ||
+    visiblePaths.some((path) => !summaryByPath.has(path));
+
+  return (
+    `Changed:\n${lines.join("\n")}` +
+    (hasMissingSummaries && fallbackLine ? `\n\n${fallbackLine}` : "")
+  );
+}
+
 export function createAdvisoryTestOverrideWorkflowContext(
   previousContext = null,
 ) {
@@ -87,9 +161,16 @@ export function createImplementationInProgressWorkflowContext() {
 export function createCompletedImplementationWorkflowContext({
   lastEditedPath = "",
   editedPaths = [],
+  changedFileSummaries = [],
+  changeSummary = "",
+  completedSummary = "",
+  partialSummary = "",
+  nextStep = WORKFLOW_NEXT_STEP.PREVIEW,
   source = "tool_batch",
 } = {}) {
   const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
+  const normalizedChangedFileSummaries =
+    normalizeChangedFileSummaries(changedFileSummaries);
   const cleanLastEditedPath = String(lastEditedPath || "").trim();
   const finalLastEditedPath =
     cleanLastEditedPath ||
@@ -100,7 +181,7 @@ export function createCompletedImplementationWorkflowContext({
   return {
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.COMPLETED,
-    nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+    nextStep,
     lastEditedPath: finalLastEditedPath,
     editedPaths:
       normalizedEditedPaths.length > 0
@@ -108,6 +189,10 @@ export function createCompletedImplementationWorkflowContext({
         : finalLastEditedPath
           ? [finalLastEditedPath]
           : [],
+    changedFileSummaries: normalizedChangedFileSummaries,
+    changeSummary: String(changeSummary || "").trim(),
+    completedSummary: String(completedSummary || "").trim(),
+    partialSummary: String(partialSummary || "").trim(),
     updatedAt: Date.now(),
     source,
   };

@@ -23,7 +23,10 @@ import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
-import { createCompletedImplementationWorkflowContext } from "../workflowState.js";
+import {
+  buildCompletedWorkflowChangeSummary,
+  createCompletedImplementationWorkflowContext,
+} from "../workflowState.js";
 
 /**
  * ✅ Global caches to prevent repeated tool prompts when AiPanel is collapsed/re-opened.
@@ -1667,24 +1670,25 @@ export default function AiPanel({
               args: { path: fallbackReadPath },
             });
           } else if (successfulWritePaths.length > 0) {
+            const completedWorkflowContext =
+              createCompletedImplementationWorkflowContext({
+                lastEditedPath: latestWrittenPath || "",
+                editedPaths: successfulWritePaths,
+                source: "tool_batch",
+              });
+
             if (typeof setWorkflowContext === "function") {
-              setWorkflowContext(
-                createCompletedImplementationWorkflowContext({
-                  lastEditedPath: latestWrittenPath || "",
-                  editedPaths: successfulWritePaths,
-                  source: "tool_batch",
-                }),
-              );
+              setWorkflowContext(completedWorkflowContext);
             }
 
+            const fileCountLabel =
+              successfulWritePaths.length === 1
+                ? "1 file"
+                : `${successfulWritePaths.length} files`;
             const writeCompletionMessage =
-              successfulWritePaths.length > 1
-                ? `Done — updated ${successfulWritePaths.length} files:\n\n${successfulWritePaths
-                    .map((path) => `- ${path}`)
-                    .join("\n")}\n\nWould you like to preview the app, see the file changes, or make another edit?`
-                : latestWrittenPath
-                  ? `Done — updated ${latestWrittenPath}.\n\nWould you like to preview the app, see the file changes, or make another edit?`
-                  : "Done — file updated.\n\nWould you like to preview the app, see the file changes, or make another edit?";
+              `Done — updated ${fileCountLabel}.\n\n` +
+              `${buildCompletedWorkflowChangeSummary(completedWorkflowContext)}\n\n` +
+              "Next:\nPreview the app, show changes, or make another edit.";
 
             appendMessage("assistant", writeCompletionMessage);
           } else if (typeof runAi === "function") {
@@ -1789,21 +1793,22 @@ export default function AiPanel({
                   ? agentSuccessfulWritePaths[agentSuccessfulWritePaths.length - 1]
                   : "";
 
-              if (
-                typeof setWorkflowContext === "function" &&
-                agentSuccessfulWritePaths.length > 0
-              ) {
-                setWorkflowContext(
-                  createCompletedImplementationWorkflowContext({
+              const agentMadeProjectChanges =
+                agentSuccessfulWritePaths.length > 0;
+              const completedWorkflowContext = agentMadeProjectChanges
+                ? createCompletedImplementationWorkflowContext({
                     lastEditedPath: latestAgentWrittenPath || "",
                     editedPaths: agentSuccessfulWritePaths,
                     source: "agent_continuation",
-                  }),
-                );
-              }
+                  })
+                : null;
 
-              const agentMadeProjectChanges =
-                agentSuccessfulWritePaths.length > 0;
+              if (
+                typeof setWorkflowContext === "function" &&
+                completedWorkflowContext
+              ) {
+                setWorkflowContext(completedWorkflowContext);
+              }
 
               const finalText = String(agentResult?.text || "").trim();
               if (finalText && !agentMadeProjectChanges) {
@@ -1841,20 +1846,29 @@ export default function AiPanel({
                     ],
                   },
                 );
+              } else if (finalText && agentMadeProjectChanges) {
+                appendMessage(
+                  "assistant",
+                  `${finalText}\n\n${buildCompletedWorkflowChangeSummary(
+                    completedWorkflowContext,
+                  )}\n\nNext:\nPreview the app, show changes, or make another edit.`,
+                );
               } else if (finalText) {
                 appendMessage("assistant", finalText);
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&
                 agentSuccessfulWritePaths.length > 0
               ) {
+                const fileCountLabel =
+                  agentSuccessfulWritePaths.length === 1
+                    ? "1 file"
+                    : `${agentSuccessfulWritePaths.length} files`;
                 const agentWriteCompletionMessage =
-                  agentSuccessfulWritePaths.length > 1
-                    ? `Done — updated ${agentSuccessfulWritePaths.length} files:\n\n${agentSuccessfulWritePaths
-                        .map((path) => `- ${path}`)
-                        .join("\n")}\n\n${buildPreviewHandoffMessage()}`
-                    : latestAgentWrittenPath
-                      ? `Done — updated ${latestAgentWrittenPath}.\n\n${buildPreviewHandoffMessage()}`
-                      : `The requested implementation changes are in place.\n\n${buildPreviewHandoffMessage()}`;
+                  `Done — updated ${fileCountLabel}.\n\n` +
+                  `${buildCompletedWorkflowChangeSummary(
+                    completedWorkflowContext,
+                  )}\n\n` +
+                  "Next:\nPreview the app, show changes, or make another edit.";
 
                 appendMessage("assistant", agentWriteCompletionMessage);
               } else if (agentResult?.stopReason === "tool_cancelled") {

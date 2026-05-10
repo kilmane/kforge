@@ -17,6 +17,7 @@ import { buildWorkspaceSnapshotContextBlock } from "./ai/workspace/workspaceSnap
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
+  buildCompletedWorkflowChangeSummary,
   createAdvisoryTestOverrideWorkflowContext,
   createBlockedProjectEditWorkflowContext,
   createBugfixWorkflowContext,
@@ -2824,48 +2825,19 @@ export default function App() {
     [],
   );
   function buildWorkflowShowChangesMessage(context = null) {
-    const editedPaths = Array.isArray(context?.editedPaths)
-      ? context.editedPaths
-          .map((path) => String(path || "").trim())
-          .filter(Boolean)
-      : [];
-    const lastEditedPath = String(context?.lastEditedPath || "").trim();
-
-    if (editedPaths.length > 1) {
-      return (
-        "The last implementation updated these files:\n\n" +
-        `${editedPaths.map((path) => `- ${path}`).join("\n")}\n\n` +
-        "Open those files in the editor to review the changes, or ask for another edit."
-      );
-    }
-
-    if (lastEditedPath) {
-      return (
-        "The last implementation updated:\n\n" +
-        `${lastEditedPath}\n\n` +
-        "Open that file in the editor to review the change, or ask for another edit."
-      );
-    }
+    const summary = buildCompletedWorkflowChangeSummary(context);
 
     return (
-      "The last implementation completed successfully.\n\n" +
-      "Open the changed files in the editor to review them, or ask for another edit."
+      "The last implementation completed.\n\n" +
+      `${summary}\n\n` +
+      "Next:\nOpen the listed files in the editor to review them, or ask for another edit."
     );
   }
   function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
-    const editedPaths = Array.isArray(context?.editedPaths)
-      ? context.editedPaths
-          .map((path) => String(path || "").trim())
-          .filter(Boolean)
-      : [];
-    const lastEditedPath = String(context?.lastEditedPath || "").trim();
-
-    const prefix =
-      editedPaths.length > 1
-        ? `Last completed edits:\n\n${editedPaths.map((path) => `- ${path}`).join("\n")}\n\n`
-        : lastEditedPath
-          ? `Last completed edit: ${lastEditedPath}.\n\n`
-          : "Last implementation completed.\n\n";
+    const summary = buildCompletedWorkflowChangeSummary(context, {
+      maxPaths: 6,
+    });
+    const prefix = `Last implementation completed.\n\n${summary}\n\n`;
 
     if (!projectOpen) {
       return (
