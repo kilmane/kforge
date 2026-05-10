@@ -18,14 +18,14 @@ export default function PatchPreviewPanel({
   setPatchPreviewVisible,
   copyPatchToClipboard,
   discardPatchPreview,
-  buttonClass
+  buttonClass,
 }) {
   if (!patchPreview) return null;
 
   const showPatchShapeWarning =
     patchPreviewVisible && !looksLikeStandardFilePatch(patchPreview);
 
-  const footerMessage = showPatchShapeWarning
+  const helperMessage = showPatchShapeWarning
     ? "This preview may not be a standard file patch. Review carefully before copying or applying it manually."
     : "Review-only suggested changes. Nothing is applied automatically.";
 
@@ -33,19 +33,17 @@ export default function PatchPreviewPanel({
     <div className="space-y-2">
       {patchPreviewVisible ? (
         <div className="overflow-hidden rounded border border-zinc-800 bg-zinc-950/40">
-          <div className="max-h-[42vh] min-h-[180px] overflow-auto overscroll-contain p-3">
-            <pre className="min-w-max text-[11px] leading-snug whitespace-pre font-mono text-zinc-100">
-              {patchPreview}
-            </pre>
-          </div>
-
-          <div className="flex flex-col gap-2 border-t border-zinc-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 border-b border-zinc-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 text-[11px] leading-snug">
               <span className="mr-2 text-xs uppercase tracking-wide opacity-70">
                 Patch Preview (read-only)
               </span>
-              <span className={showPatchShapeWarning ? "text-yellow-200/90" : "opacity-60"}>
-                {footerMessage}
+              <span
+                className={
+                  showPatchShapeWarning ? "text-yellow-200/90" : "opacity-60"
+                }
+              >
+                {helperMessage}
               </span>
             </div>
 
@@ -77,6 +75,12 @@ export default function PatchPreviewPanel({
                 Discard
               </button>
             </div>
+          </div>
+
+          <div className="max-h-[28vh] min-h-[120px] overflow-auto overscroll-contain p-3">
+            <pre className="min-w-max text-[11px] leading-snug whitespace-pre font-mono text-zinc-100">
+              {patchPreview}
+            </pre>
           </div>
         </div>
       ) : (
