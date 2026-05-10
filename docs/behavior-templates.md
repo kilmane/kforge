@@ -120,7 +120,7 @@ Good for:
 Use this when editing code safely matters.
 
 ```text
-Before suggesting code changes, inspect the relevant file contents first. Prefer small targeted edits. If a file is small enough, provide a full replacement for safer copy/paste.
+Before suggesting code changes, use the visible project structure to choose likely existing files or folders. Inspect the relevant file contents before editing unless the exact target file is already known. Prefer existing paths, small targeted edits, and full-file replacements when a file is small enough for safer copy/paste.
 ```
 
 Good for:

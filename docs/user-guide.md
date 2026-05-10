@@ -28,6 +28,7 @@ This guide is written for early beta testers. It is designed to help you get sta
 8. Opening, creating, and closing projects
 9. The main toolbar
 10. Explorer and file editing
+10a. Workspace Awareness
 11. The AI panel
 12. Chat vs Transcript
 13. Prompt box and advanced AI controls
@@ -487,6 +488,18 @@ Examples:
 
 KForge works best when the relevant project folder is open and the active file is clear.
 
+## Workspace Awareness
+
+KForge can use the already-loaded project tree to understand the shape of the current project.
+
+This helps it prefer existing folders and files, suggest likely inspection targets, and avoid inventing project structure.
+
+Workspace Awareness is based on visible project structure, not automatic reading of every file.
+
+If KForge needs file contents to make a safe edit, it should inspect the relevant file first.
+
+For more detail, see [Workspace Awareness](workspace-awareness.md).
+
 ---
 
 # 11) The AI panel
@@ -603,6 +616,17 @@ Explain things for a beginner. Avoid jargon where possible. Use short steps.
 ```
 
 System instructions can help reduce confusion and improve consistency, but they do not guarantee perfect behaviour. Always check important file changes, commands, provider settings, and generated code yourself.
+### How System optional fits KForge guardrails
+
+The **System (optional)** field is for user-provided behaviour preferences.
+
+It can help you ask KForge to work in a particular style, such as one step at a time, beginner-friendly explanations, cautious coding, or stricter truthfulness.
+
+It is not the same as KForge’s built-in safety and workflow guardrails.
+
+Built-in guardrails still matter. For example, KForge should still avoid false tool claims, avoid pretending to inspect files it has not inspected, respect project-root safety, and keep guided workflows truthful.
+
+Think of **System (optional)** as your extra instruction layer, not a replacement for KForge’s core safety rules.
 
 For ready-made examples, use the **Behavior Templates** link beside the System field, or open:
 
@@ -677,6 +701,21 @@ This is useful when you want to review suggested changes before applying them.
 A good beginner use case is cautious editing.
 
 Turn it on when you want a review-first workflow instead of immediately acting on every suggestion.
+### Patch Preview
+
+When KForge shows a **Patch Preview**, it is showing suggested file changes for review.
+
+Patch Preview is read-only by itself.
+
+It lets you inspect what would change before deciding what to do next.
+
+Depending on the current build, Patch Preview controls may include:
+
+* **Hide** — closes or hides the preview without applying anything
+* **Copy patch** — copies the suggested patch text so you can review, save, or apply it manually elsewhere
+* **Discard** — throws away the current preview suggestion
+
+Patch Preview is useful when you want caution, especially with weaker models, unfamiliar files, or larger edits.
 
 ---
 

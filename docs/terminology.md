@@ -257,6 +257,47 @@ Billing, quotas, and rate limits are controlled by the provider.
 
 ---
 
+## Workspace Awareness
+
+**Workspace Awareness** is KForge’s ability to use the currently open project structure as context.
+
+It is based on the loaded project tree, visible folders, visible filenames, and other already-known project facts.
+
+Workspace Awareness does not mean KForge has automatically read every file.
+
+For more detail, see [Workspace Awareness](workspace-awareness.md).
+
+---
+
+## Project tree
+
+The **project tree** is the visible folder and file structure for the currently open project.
+
+KForge can use the project tree to understand likely app folders, entry files, config files, and project shape.
+
+The project tree is structural information. It is not the same as reading file contents.
+
+---
+
+## Inspection candidate
+
+An **inspection candidate** is a likely file or folder KForge should inspect before editing.
+
+For example, if a project has `src/App.jsx`, that may be a good inspection candidate for a React app change.
+
+Inspection candidates are hints, not proof of what a file contains.
+
+---
+
+## Workspace Snapshot
+
+A **Workspace Snapshot** is a compact internal summary of what KForge already knows from the loaded project tree.
+
+It can include project root, detected template, detected project kind, and visible item counts.
+
+It is read-only context. It does not read file contents, parse `package.json`, run commands, or change files.
+
+---
 ## Important summary
 
 * **Provider** = where the AI request goes

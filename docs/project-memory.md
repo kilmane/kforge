@@ -23,6 +23,17 @@ Advanced feature · Optional · User-controlled
 
 
 Nothing happens unless **you** ask for it.
+## Project Memory vs Workspace Awareness
+
+Project Memory and Workspace Awareness are different.
+
+Project Memory stores user-approved notes, rules, decisions, and working context for the current project.
+
+Workspace Awareness comes from the currently open project structure, such as the visible project tree, folders, filenames, and already-known project facts.
+
+Workspace Awareness helps KForge understand what exists now. Project Memory helps KForge remember durable project preferences over time.
+
+For more detail, see [Workspace Awareness](workspace-awareness.md).
 
 
 ---

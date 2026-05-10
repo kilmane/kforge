@@ -12,6 +12,7 @@ understanding providers and models, and configuring the system.
 ## User Guides
 
 - [User Guide](user-guide.md)
+- [Workspace Awareness](workspace-awareness.md)
 - [Behavior Templates](behavior-templates.md)
 - [Terminology](terminology.md)
 - [Providers and Models](PROVIDERS_AND_MODELS.md)
