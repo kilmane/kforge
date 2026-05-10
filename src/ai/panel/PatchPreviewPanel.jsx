@@ -13,12 +13,17 @@ export default function PatchPreviewPanel({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs uppercase tracking-wide opacity-60">
-          Patch Preview (read-only)
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-wide opacity-60">
+            Patch Preview (read-only)
+          </div>
+          <div className="text-[11px] opacity-50">
+            Review-only suggested changes. Nothing is applied automatically.
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             className={buttonClass("ghost")}
             onClick={() => setPatchPreviewVisible((v) => !v)}
@@ -49,18 +54,18 @@ export default function PatchPreviewPanel({
       </div>
 
       {patchPreviewVisible ? (
-        <div className="border border-zinc-800 rounded bg-zinc-950/30">
-          <div className="max-h-[220px] overflow-auto p-2">
-            <pre className="text-[11px] leading-snug whitespace-pre text-zinc-100">
+        <div className="overflow-hidden rounded border border-zinc-800 bg-zinc-950/40">
+          <div className="max-h-[42vh] min-h-[180px] overflow-auto overscroll-contain p-3">
+            <pre className="min-w-max text-[11px] leading-snug whitespace-pre font-mono text-zinc-100">
               {patchPreview}
             </pre>
           </div>
-          <div className="px-2 pb-2 text-[11px] opacity-60">
-            Preview only — nothing is applied automatically.
+          <div className="border-t border-zinc-800 px-3 py-2 text-[11px] opacity-60">
+            Patch Preview is read-only. Copy the patch if you want to review or apply it manually.
           </div>
         </div>
       ) : (
-        <div className="text-[11px] opacity-60 border border-zinc-800 rounded p-2 bg-zinc-900/20">
+        <div className="rounded border border-zinc-800 bg-zinc-900/20 p-2 text-[11px] opacity-60">
           Preview hidden.
         </div>
       )}

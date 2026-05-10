@@ -701,13 +701,16 @@ This is useful when you want to review suggested changes before applying them.
 A good beginner use case is cautious editing.
 
 Turn it on when you want a review-first workflow instead of immediately acting on every suggestion.
-### Patch Preview
+
+### Patch Preview (read-only)
 
 When KForge shows a **Patch Preview**, it is showing suggested file changes for review.
 
 Patch Preview is read-only by itself.
 
 It lets you inspect what would change before deciding what to do next.
+
+Long patches scroll inside the preview box, so the chat and input area stay usable while you review larger diffs.
 
 Depending on the current build, Patch Preview controls may include:
 
@@ -792,6 +795,7 @@ Useful when:
 * restarting preview
 * changing configuration
 * freeing a running process
+* freeing file locks before deleting or moving the project folder on Windows
 * recovering from a stuck preview
 
 ## Open
@@ -1080,6 +1084,12 @@ Check:
 * whether dependencies were installed
 * whether the project is static, framework, or mobile
 * whether the workflow actually belongs outside KForge for mobile preview
+
+## I cannot delete or rename my project folder
+
+Stop Preview first.
+
+While a preview or development server is running, Windows may keep files in the project folder locked. Use **Preview → Stop**, wait for Preview to return to idle, then delete, rename, or move the folder.
 
 ## Open is disabled
 
