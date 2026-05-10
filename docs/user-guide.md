@@ -712,6 +712,8 @@ It lets you inspect what would change before deciding what to do next.
 
 Long patches scroll inside the preview box, so the chat and input area stay usable while you review larger diffs.
 
+If the preview does not look like a standard file patch, KForge may show a warning so you know to review it carefully before copying or applying it manually.
+
 Depending on the current build, Patch Preview controls may include:
 
 * **Hide** — closes or hides the preview without applying anything
