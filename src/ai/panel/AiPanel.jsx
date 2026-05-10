@@ -613,15 +613,16 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- If the next edit may require a new dependency, inspect package.json first and do NOT assume that dependency is already installed.\n` +
     `- If the workspace is empty and the latest user asks to add a page, feature, or app, do not start inventing files in the tool loop; answer normally and direct the user toward the supported new-project path instead.\n` +
     `- Do NOT create files or directories unless the user explicitly asks for them.\n` +
-    `- When inspecting a workspace, start with the list_dir tool on "." unless the conversation already contains a directory listing.\n` +
+    `- When workspace context already names a likely existing file, prefer read_file on that candidate before broad directory listing.\n` +
+    `- Use list_dir(".") as a fallback when no useful candidate file or folder is already visible from workspace context or prior tool results.\n` +
     `- If a tool already returned the requested information, DO NOT call the same tool again.\n` +
     `- For inspection-only or explanation requests, summarize the tool result for the user once enough information is available.\n` +
     `- For normal in-project implementation work, do NOT stop after the first inspection result just to summarize it.\n` +
-    `- After a top-level directory listing, use that result to choose the next necessary inspection tool or edit step.\n` +
+    `- After a directory listing, use that result to choose the next necessary inspection tool or edit step.\n` +
     `- If the directory listing already shows a likely app target such as src/, app/, pages/, or package.json, continue with the next tool instead of narrating the structure.\n` +
     `- Only call another tool if new information is required for the current implementation step.\n` +
     `- For workspace inspection tasks, use at most 3 tool calls before answering.\n` +
-    `- Prefer this order for implementation-oriented inspection: list_dir("."), then list_dir("src") or read_file("package.json"), then read_file on the most likely existing target.\n` +
+    `- Prefer this order for implementation-oriented inspection: candidate read_file from workspace context when available, otherwise list_dir(".") or a candidate folder, then read_file on the most likely existing target.\n` +
     `- Do NOT inspect subdirectories like node_modules unless the user explicitly asks.\n` +
     `- Do NOT read more files once you have enough information to continue the edit or provide the final answer.\n` +
     `- If you need a tool, output ONLY a tool request in the exact fenced format.\n` +
