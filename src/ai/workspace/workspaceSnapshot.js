@@ -126,11 +126,6 @@ function limitList(items) {
   };
 }
 
-function formatList(listInfo) {
-  const items = listInfo?.items || [];
-  if (items.length === 0) return "none detected";
-  return `${items.join(", ")}${listInfo?.truncated ? ", ..." : ""}`;
-}
 
 export function createWorkspaceSnapshot(tree, projectPath, projectTemplateInfo = null) {
   const root = Array.isArray(tree) ? tree.filter(Boolean) : [];
@@ -216,20 +211,14 @@ export function buildWorkspaceSnapshotContextBlock(
   const detectedKind = snapshot.detectedKind || "none detected";
 
   return [
-    "=== Workspace Snapshot (read-only; already-loaded tree only) ===",
+    "=== Workspace Snapshot (read-only foundation; already-loaded tree only) ===",
     `Project root: ${snapshot.projectRoot}`,
     `Detected template: ${detectedTemplate}`,
     `Detected project kind: ${detectedKind}`,
     `Known visible items: ${snapshot.counts.folders} folder(s), ${snapshot.counts.files} file(s)`,
-    `Top-level folders: ${formatList(snapshot.topLevelFolders)}`,
-    `Top-level files: ${formatList(snapshot.topLevelFiles)}`,
-    `Likely app folders: ${formatList(snapshot.appFolders)}`,
-    `Likely entry files: ${formatList(snapshot.likelyEntryFiles)}`,
-    `Config files: ${formatList(snapshot.configFiles)}`,
-    `Package manager files: ${formatList(snapshot.packageManagerFiles)}`,
-    "This snapshot centralizes facts KForge already knows from the loaded workspace tree.",
+    "This is a compact reusable snapshot of facts KForge already knows from the loaded workspace tree.",
     "It has not read file contents, parsed package.json, or executed tools.",
-    "Keep using the more specific workspace blocks below for detailed routing hints.",
+    "Use the detailed Repo Explore Summary, Project Stack Signals, Code Scout Hints, Inspection Candidate Routing, and compressed tree blocks below for routing details.",
     "=== End Workspace Snapshot ===",
     "",
   ].join("\n");
