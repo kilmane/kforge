@@ -1017,7 +1017,7 @@ export default function App() {
 
   // For retry: remember last “send” details
   const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit, includeActiveFile, fileSnapshot }
-  const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, status, nextStep, lastEditedPath, updatedAt, source }
+  const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, status, nextStep, lastEditedPath, editedPaths, updatedAt, source }
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
@@ -2077,6 +2077,10 @@ export default function App() {
             workflowContext.lastEditedPath
               ? `- lastEditedPath: ${String(workflowContext.lastEditedPath || "")}`
               : "",
+            Array.isArray(workflowContext.editedPaths) &&
+            workflowContext.editedPaths.length > 0
+              ? `- editedPaths: ${workflowContext.editedPaths.join(", ")}`
+              : "",
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
             "If implementation is completed and nextStep is preview, a vague yes/run/test/what now follow-up means guide to Preview, not another file edit.",
@@ -2820,7 +2824,20 @@ export default function App() {
     [],
   );
   function buildWorkflowShowChangesMessage(context = null) {
+    const editedPaths = Array.isArray(context?.editedPaths)
+      ? context.editedPaths
+          .map((path) => String(path || "").trim())
+          .filter(Boolean)
+      : [];
     const lastEditedPath = String(context?.lastEditedPath || "").trim();
+
+    if (editedPaths.length > 1) {
+      return (
+        "The last implementation updated these files:\n\n" +
+        `${editedPaths.map((path) => `- ${path}`).join("\n")}\n\n` +
+        "Open those files in the editor to review the changes, or ask for another edit."
+      );
+    }
 
     if (lastEditedPath) {
       return (
@@ -2835,12 +2852,20 @@ export default function App() {
       "Open the changed files in the editor to review them, or ask for another edit."
     );
   }
-
   function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
+    const editedPaths = Array.isArray(context?.editedPaths)
+      ? context.editedPaths
+          .map((path) => String(path || "").trim())
+          .filter(Boolean)
+      : [];
     const lastEditedPath = String(context?.lastEditedPath || "").trim();
-    const prefix = lastEditedPath
-      ? `Last completed edit: ${lastEditedPath}.\n\n`
-      : "Last implementation completed.\n\n";
+
+    const prefix =
+      editedPaths.length > 1
+        ? `Last completed edits:\n\n${editedPaths.map((path) => `- ${path}`).join("\n")}\n\n`
+        : lastEditedPath
+          ? `Last completed edit: ${lastEditedPath}.\n\n`
+          : "Last implementation completed.\n\n";
 
     if (!projectOpen) {
       return (
@@ -2857,7 +2882,6 @@ export default function App() {
       "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
     );
   }
-
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
       if (aiRunning) return;
@@ -3217,6 +3241,8 @@ export default function App() {
           ? advisoryOverrideInstruction + "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
+            "For multi-file implementation requests, inspect each likely existing target file before writing it unless that exact file was already read in this conversation.\n" +
+            "For multi-file work, proceed one file/tool step at a time; edit only known inspected paths and stop clearly if another required file is genuinely ambiguous.\n" +
             "If a specific file path is mentioned or implied (such as src/App.jsx), modify that file directly instead of creating alternatives.\n" +
             "Do NOT paste full file contents in chat.\n" +
             "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +

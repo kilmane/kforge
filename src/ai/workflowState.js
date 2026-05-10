@@ -20,6 +20,22 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   ANOTHER_EDIT: "another_edit",
 });
 
+function normalizeWorkflowPathList(paths = []) {
+  const sourcePaths = Array.isArray(paths) ? paths : [];
+  const seen = new Set();
+  const normalized = [];
+
+  sourcePaths.forEach((path) => {
+    const cleanPath = String(path || "").trim();
+    if (!cleanPath || seen.has(cleanPath)) return;
+
+    seen.add(cleanPath);
+    normalized.push(cleanPath);
+  });
+
+  return normalized;
+}
+
 export function createAdvisoryTestOverrideWorkflowContext(
   previousContext = null,
 ) {
@@ -70,13 +86,28 @@ export function createImplementationInProgressWorkflowContext() {
 
 export function createCompletedImplementationWorkflowContext({
   lastEditedPath = "",
+  editedPaths = [],
   source = "tool_batch",
 } = {}) {
+  const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
+  const cleanLastEditedPath = String(lastEditedPath || "").trim();
+  const finalLastEditedPath =
+    cleanLastEditedPath ||
+    (normalizedEditedPaths.length > 0
+      ? normalizedEditedPaths[normalizedEditedPaths.length - 1]
+      : "");
+
   return {
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.COMPLETED,
     nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
-    lastEditedPath,
+    lastEditedPath: finalLastEditedPath,
+    editedPaths:
+      normalizedEditedPaths.length > 0
+        ? normalizedEditedPaths
+        : finalLastEditedPath
+          ? [finalLastEditedPath]
+          : [],
     updatedAt: Date.now(),
     source,
   };

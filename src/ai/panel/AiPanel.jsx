@@ -606,6 +606,8 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- Do not repeat the full prior conversation unnecessarily.\n` +
     `- You are inspecting or continuing work inside an existing workspace unless the user explicitly asks to create files or folders.\n` +
     `- If the latest user request is normal in-project implementation work and routine inspection reveals a clear existing target, continue with the next necessary tool or edit step instead of stopping to ask for permission.\n` +
+    `- For multi-file implementation requests, inspect each likely existing target file before writing it unless that exact file was already read in this conversation.\n` +
+    `- For multi-file work, proceed one file/tool step at a time; edit only known inspected paths and stop clearly if another required file is genuinely ambiguous.\n` +
     `- Do not ask follow-up questions like which file or directory to use after routine inspection unless the request is genuinely ambiguous or multiple existing targets are equally plausible.\n` +
     `- For ordinary feature requests inside an existing project, prefer the simplest responsible existing file and continue.\n` +
     `- Do NOT introduce a router, routing library, navigation framework, or URL-based page structure unless inspection confirms the project already uses routing or the user explicitly asks for it.\n` +
@@ -1669,17 +1671,22 @@ export default function AiPanel({
               setWorkflowContext(
                 createCompletedImplementationWorkflowContext({
                   lastEditedPath: latestWrittenPath || "",
+                  editedPaths: successfulWritePaths,
                   source: "tool_batch",
                 }),
               );
             }
 
-            appendMessage(
-              "assistant",
-              latestWrittenPath
-                ? `Done — updated ${latestWrittenPath}.\n\nWould you like to preview the app, see the file changes, or make another edit?`
-                : "Done — file updated.\n\nWould you like to preview the app, see the file changes, or make another edit?",
-            );
+            const writeCompletionMessage =
+              successfulWritePaths.length > 1
+                ? `Done — updated ${successfulWritePaths.length} files:\n\n${successfulWritePaths
+                    .map((path) => `- ${path}`)
+                    .join("\n")}\n\nWould you like to preview the app, see the file changes, or make another edit?`
+                : latestWrittenPath
+                  ? `Done — updated ${latestWrittenPath}.\n\nWould you like to preview the app, see the file changes, or make another edit?`
+                  : "Done — file updated.\n\nWould you like to preview the app, see the file changes, or make another edit?";
+
+            appendMessage("assistant", writeCompletionMessage);
           } else if (typeof runAi === "function") {
             try {
               const continuationTools = [
@@ -1789,6 +1796,7 @@ export default function AiPanel({
                 setWorkflowContext(
                   createCompletedImplementationWorkflowContext({
                     lastEditedPath: latestAgentWrittenPath || "",
+                    editedPaths: agentSuccessfulWritePaths,
                     source: "agent_continuation",
                   }),
                 );
@@ -1839,12 +1847,16 @@ export default function AiPanel({
                 agentResult?.stopReason === "max_steps_reached" &&
                 agentSuccessfulWritePaths.length > 0
               ) {
-                appendMessage(
-                  "assistant",
-                  latestAgentWrittenPath
-                    ? `Done — updated ${latestAgentWrittenPath}.\n\n${buildPreviewHandoffMessage()}`
-                    : `The requested implementation changes are in place.\n\n${buildPreviewHandoffMessage()}`,
-                );
+                const agentWriteCompletionMessage =
+                  agentSuccessfulWritePaths.length > 1
+                    ? `Done — updated ${agentSuccessfulWritePaths.length} files:\n\n${agentSuccessfulWritePaths
+                        .map((path) => `- ${path}`)
+                        .join("\n")}\n\n${buildPreviewHandoffMessage()}`
+                    : latestAgentWrittenPath
+                      ? `Done — updated ${latestAgentWrittenPath}.\n\n${buildPreviewHandoffMessage()}`
+                      : `The requested implementation changes are in place.\n\n${buildPreviewHandoffMessage()}`;
+
+                appendMessage("assistant", agentWriteCompletionMessage);
               } else if (agentResult?.stopReason === "tool_cancelled") {
                 const cancelledToolName = String(
                   agentResult?.cancelledToolName || "tool",
