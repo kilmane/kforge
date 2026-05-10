@@ -853,13 +853,13 @@ function ProviderMenuButton({
         title={label}
         onClick={() => setOpen((v) => !v)}
         className={[
-          "flex items-center gap-2 px-3 py-1.5 rounded-md border",
+          "flex items-center gap-2 px-2.5 py-1 rounded-md border",
           "text-sm font-semibold text-white",
-          "max-w-[520px]",
+          "max-w-[360px]",
           buttonTone,
         ].join(" ")}
       >
-        <span className="truncate max-w-[460px]">{label}</span>
+        <span className="truncate max-w-[300px]">{label}</span>
         <span className="text-yellow-300 font-extrabold text-xs leading-none">
           ▼
         </span>
@@ -988,7 +988,7 @@ function HelpMenuPlaceholder({ invoke }) {
         title="Help"
         onClick={() => setOpen((v) => !v)}
         className={[
-          "flex items-center gap-2 px-3 py-1.5 rounded-md border",
+          "flex items-center gap-2 px-2.5 py-1 rounded-md border",
           "text-sm font-semibold text-white",
           "bg-emerald-600/90 hover:bg-emerald-600 border-emerald-500/60",
         ].join(" ")}
@@ -1979,9 +1979,9 @@ export default function AiPanel({
       className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 h-full flex flex-col`}
     >
       {/* AI header: GPT-clean control */}
-      <div className="p-3 border-b border-zinc-800 sticky top-0 z-30 bg-zinc-950">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+      <div className="p-2 border-b border-zinc-800 sticky top-0 z-30 bg-zinc-950">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <ProviderMenuButton
               provider={aiProvider}
               model={aiModelStr || "(none)"}
@@ -1995,6 +1995,82 @@ export default function AiPanel({
             />
 
             <HelpMenuPlaceholder invoke={invoke} />
+
+            {isDevBuild ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    setPreviewOpen((open) => !open);
+                    setTerminalOpen(false);
+                    setServicesOpen(false);
+                  }}
+                  title={previewOpen ? "Hide preview" : "Show preview"}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                    previewOpen
+                      ? "border-zinc-700 bg-zinc-900 text-zinc-100"
+                      : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900/50 hover:text-zinc-100"
+                  }`}
+                >
+                  <span>{previewOpen ? "▼" : "▶"}</span>
+                  <span className="font-medium">Preview</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    setTerminalOpen((open) => !open);
+                    setPreviewOpen(false);
+                    setServicesOpen(false);
+                  }}
+                  title={terminalOpen ? "Hide terminal" : "Show terminal"}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                    terminalOpen
+                      ? "border-zinc-700 bg-zinc-900 text-zinc-100"
+                      : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900/50 hover:text-zinc-100"
+                  }`}
+                >
+                  <span>{terminalOpen ? "▼" : "▶"}</span>
+                  <span className="font-medium">Terminal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof setFocusMode === "function") {
+                      setFocusMode(true);
+                    }
+                    const nextServicesOpen = !servicesOpen;
+                    setServicesOpen(nextServicesOpen);
+                    setPreviewOpen(false);
+                    setTerminalOpen(false);
+                    if (nextServicesOpen) {
+                      requestAnimationFrame(() => {
+                        servicesSectionRef.current?.scrollIntoView({
+                          block: "start",
+                          behavior: "auto",
+                        });
+                      });
+                    }
+                  }}
+                  title={servicesOpen ? "Hide services" : "Show services"}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                    servicesOpen
+                      ? "border-zinc-700 bg-zinc-900 text-zinc-100"
+                      : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900/50 hover:text-zinc-100"
+                  }`}
+                >
+                  <span>{servicesOpen ? "▼" : "▶"}</span>
+                  <span className="font-medium">Services</span>
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -2010,156 +2086,36 @@ export default function AiPanel({
             </button>
           </div>
         </div>
-        {isDevBuild && (
+
+        {isDevBuild ? (
           <>
             {previewOpen ? (
-              <div className="border-b border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof setFocusMode === "function") {
-                      setFocusMode(true);
-                    }
-                    setPreviewOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-                >
-                  <span className="font-medium">▼ Preview</span>
-                  <span className="text-xs text-zinc-500">Hide preview</span>
-                </button>
-
-                <div className="p-3 border-t border-zinc-800">
-                  <PreviewPanel projectPath={projectPath} />
-                </div>
+              <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+                <PreviewPanel projectPath={projectPath} />
               </div>
-            ) : terminalOpen ? (
-              <div className="border-b border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof setFocusMode === "function") {
-                      setFocusMode(true);
-                    }
-                    setTerminalOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-                >
-                  <span className="font-medium flex items-center gap-2">
-                    <span>▼</span>
-                    <span>Terminal</span>
-                  </span>
-                  <span className="text-xs text-zinc-500">Hide terminal</span>
-                </button>
+            ) : null}
 
-                <div className="p-3 border-t border-zinc-800">
-                  <CommandRunnerPanel projectPath={projectPath} />
-                </div>
+            {terminalOpen ? (
+              <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+                <CommandRunnerPanel projectPath={projectPath} />
               </div>
-            ) : servicesOpen ? (
+            ) : null}
+
+            {servicesOpen ? (
               <div
                 ref={servicesSectionRef}
-                className="border-b border-zinc-800"
+                className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30"
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof setFocusMode === "function") {
-                      setFocusMode(true);
-                    }
-                    setServicesOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
+                <div
+                  ref={servicesPanelScrollRef}
+                  className="max-h-[70vh] overflow-auto"
                 >
-                  <span className="font-medium flex items-center gap-2">
-                    <span>▼</span>
-                    <span>Services</span>
-                  </span>
-                  <span className="text-xs text-zinc-500">Hide services</span>
-                </button>
-
-                <div className="border-t border-zinc-800 px-3 pb-3 pt-2">
-                  <div
-                    ref={servicesPanelScrollRef}
-                    className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/30"
-                  >
-                    <ServicePanel projectPath={projectPath} />
-                  </div>
+                  <ServicePanel projectPath={projectPath} />
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="border-b border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setFocusMode === "function") {
-                        setFocusMode(true);
-                      }
-                      setPreviewOpen(true);
-                      setTerminalOpen(false);
-                      setServicesOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-                  >
-                    <span className="font-medium">▶ Preview</span>
-                    <span className="text-xs text-zinc-500">Show preview</span>
-                  </button>
-                </div>
-
-                <div className="border-b border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setFocusMode === "function") {
-                        setFocusMode(true);
-                      }
-                      setTerminalOpen(true);
-                      setPreviewOpen(false);
-                      setServicesOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-                  >
-                    <span className="font-medium flex items-center gap-2">
-                      <span>▶</span>
-                      <span>Terminal</span>
-                    </span>
-                    <span className="text-xs text-zinc-500">Show terminal</span>
-                  </button>
-                </div>
-
-                <div
-                  ref={servicesSectionRef}
-                  className="border-b border-zinc-800"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setFocusMode === "function") {
-                        setFocusMode(true);
-                      }
-                      setServicesOpen(true);
-                      setPreviewOpen(false);
-                      setTerminalOpen(false);
-                      requestAnimationFrame(() => {
-                        servicesSectionRef.current?.scrollIntoView({
-                          block: "start",
-                          behavior: "auto",
-                        });
-                      });
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900/40"
-                  >
-                    <span className="font-medium flex items-center gap-2">
-                      <span>▶</span>
-                      <span>Services</span>
-                    </span>
-                    <span className="text-xs text-zinc-500">Show services</span>
-                  </button>
-                </div>
-              </>
-            )}
+            ) : null}
           </>
-        )}
+        ) : null}
         {providerSwitchNote ? (
           <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
