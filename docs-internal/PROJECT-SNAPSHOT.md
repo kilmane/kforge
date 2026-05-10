@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **April 13th, 2026**
+Last Updated: **May 10th, 2026**
 
-Phase: **6.4 — Agent workflows + UI hardening follow-up**
-Status: **active hardening / polish checkpoint — workflow architecture stable, transcript layout fixed, Help menu relocated into the AI header, documentation catch-up in progress**
+Phase: **7 — Workspace Awareness complete / docs catch-up**
+Status: **Phase 7 workspace-awareness stack is stable; user-facing and internal docs are being refreshed**
 
 Stable restore tags now available:
 
@@ -21,6 +21,10 @@ Stable restore tags now available:
 * `phase-5.4-expo-preview-flow-checkpoint`
 * `phase-6.3-task-templates-stable`
 * `phase-6.4-transcript-clear-restored`
+* `phase-6.5-smart-provider-switching-part4-stable`
+* `phase-6.6-workflow-state-router-stable`
+* `phase-7.5-context-compression-stable`
+* `phase-7.6-workspace-snapshot-stable`
 
 ---
 
@@ -1762,6 +1766,9 @@ What this now proves:
 • template expansion now affects preview truth, deploy guidance, terminal guidance, and AI-awareness rules together
 • shell debugging becomes much easier once native chrome, native menu bar, React toolbar, and AI header are treated as distinct surfaces
 • a rendered control can still appear missing when scroll/flex ownership is wrong
+• workspace awareness should remain read-only until a specific user-approved tool action needs file contents
+• visible file/folder names are useful routing hints, but not proof of implementation details
+• compact workspace context prevents prompt bloat while still helping models prefer existing project structure
 
 Current stable journey:
 
@@ -1780,6 +1787,9 @@ Local Project
 → Global AI capability awareness across Services / Preview / Terminal / registry-discovered features
 → routing-bucket hardening for calmer, more truthful AI behavior
 → shell / transcript UI hardening for calmer, more reliable surfaces
+→ smart provider/model policy hardening for advisory, guarded, and full-agent routes
+→ workflow-state routing for blocked, in-progress, tool-waiting, completed, preview, and fix follow-ups
+→ Phase 7 Workspace Awareness: Repo Explore, Code Scout, Project Stack Signals, Inspection Candidate Routing, Context Compression, and Workspace Snapshot
 
 Important warning for future work:
 

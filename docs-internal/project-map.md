@@ -896,6 +896,40 @@ templateRegistry.js
 
 ---
 
+# 6a Workspace Awareness System
+
+Primary files:
+
+src/ai/workspace/workspaceSummary.js
+src/ai/workspace/codeScout.js
+src/ai/workspace/projectStack.js
+src/ai/workspace/inspectionCandidates.js
+src/ai/workspace/workspaceSnapshot.js
+
+Assembly point:
+
+src/App.js
+
+Purpose:
+
+Give the AI compact, read-only awareness of the currently open project structure.
+
+This system uses the already-loaded workspace tree and known project/template facts. It does not automatically read file contents, parse package.json, run commands, install dependencies, or edit files.
+
+Current Phase 7 layers:
+
+* Repo Explore Summary — top-level folders/files, app folders, entry/config/package-manager hints
+* Code Scout — prompt-matched and structural candidate files/folders
+* Project Stack Signals — likely stack hints from filenames and config names
+* Inspection Candidate Routing — guidance to inspect likely existing files before editing
+* Context Compression — compressed secondary workspace tree reference
+* Workspace Snapshot — compact reusable snapshot object/context for already-known workspace facts
+
+Important rule:
+
+Workspace Awareness is path/name/context guidance only. For implementation work, KForge should inspect relevant file contents before editing unless the exact target file is already known from the current conversation or tool results.
+
+---
 # 7 Layout / Dock Architecture
 
 Dock controller:

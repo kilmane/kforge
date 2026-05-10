@@ -390,6 +390,36 @@ Must NOT:
 
 ---
 
+# 2.11a Workspace Awareness Inspect-Before-Edit
+
+Prompt:
+
+```text
+Add a settings page to this app
+```
+
+Workspace state:
+
+* project folder open
+* visible project tree contains likely app files such as src/App.jsx, src/main.jsx, package.json, or similar
+* exact target file has not already been inspected in this conversation
+
+Expected behavior:
+
+* use Workspace Awareness as path/name guidance only
+* prefer likely existing files or folders from the loaded project tree
+* inspect one likely existing file or folder before editing
+* avoid creating new parallel app files when an existing app structure is visible
+* treat file/folder names as hints, not proof of implementation details
+
+Must NOT:
+
+* claim file contents are known from filenames alone
+* write files before inspecting likely existing files unless the exact target file is already known
+* invent paths that conflict with visible project structure
+* parse package.json, run commands, or install dependencies unless the user explicitly asks or approves the needed tool action
+
+---
 # 2.12 Empty-Folder Implementation Request
 
 Prompt:
