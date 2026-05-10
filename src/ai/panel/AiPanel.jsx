@@ -2182,7 +2182,7 @@ export default function AiPanel({
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {/* Patch preview stays above chat when present */}
             {patchPreviewVisible || patchPreview ? (
-              <div className="shrink-0">
+              <div className="shrink-0 px-3 pt-3 pb-2">
                 <PatchPreviewPanel
                   patchPreview={patchPreview}
                   patchPreviewVisible={patchPreviewVisible}
@@ -2533,15 +2533,3 @@ export default function AiPanel({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
