@@ -12,6 +12,7 @@ import { buildWorkspaceSummaryContextBlock } from "./ai/workspace/workspaceSumma
 import { buildProjectStackContextBlock } from "./ai/workspace/projectStack";
 import { buildCodeScoutContextBlock } from "./ai/workspace/codeScout";
 import { buildInspectionCandidateRoutingContextBlock } from "./ai/workspace/inspectionCandidates";
+import { buildWorkspaceSnapshotContextBlock } from "./ai/workspace/workspaceSnapshot";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -2037,6 +2038,12 @@ export default function App() {
         tree,
       });
 
+      const workspaceSnapshotBlock = buildWorkspaceSnapshotContextBlock(
+        tree,
+        projectPath,
+        projectTemplateInfo,
+      );
+
       const workspaceSummaryBlock = buildWorkspaceSummaryContextBlock(
         tree,
         projectPath,
@@ -2089,7 +2096,7 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${projectStackBlock}${codeScoutBlock}${inspectionCandidateRoutingBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSnapshotBlock}${workspaceSummaryBlock}${projectStackBlock}${codeScoutBlock}${inspectionCandidateRoutingBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab, workflowContext],
   );
