@@ -911,6 +911,11 @@ const AI_HELP_LINKS = [
     url: "https://kilmane.github.io/kforge/user-guide.html",
   },
   {
+    id: "workspace_awareness",
+    label: "Workspace Awareness",
+    url: "https://kilmane.github.io/kforge/workspace-awareness.html",
+  },
+  {
     id: "providers_and_models",
     label: "Providers and Models",
     url: "https://kilmane.github.io/kforge/PROVIDERS_AND_MODELS.html",
