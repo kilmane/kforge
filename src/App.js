@@ -464,7 +464,8 @@ function buildWorkspaceTreeContextBlock(tree, projectPath) {
 
   const MAX_LINES = 60;
   const MAX_DEPTH = 2;
-  const MAX_CHILDREN_PER_FOLDER = 8;
+  const MAX_DIRS_PER_FOLDER = 6;
+  const MAX_FILES_PER_FOLDER = 6;
   const lines = [];
   let truncated = false;
 
@@ -491,8 +492,13 @@ function buildWorkspaceTreeContextBlock(tree, projectPath) {
     if (!Array.isArray(nodes) || truncated || depth > MAX_DEPTH) return;
 
     const sorted = sortNodes(nodes);
-    const visible = sorted.slice(0, MAX_CHILDREN_PER_FOLDER);
-    const omittedCount = Math.max(0, sorted.length - visible.length);
+    const directories = sorted.filter((node) => Array.isArray(node?.children));
+    const files = sorted.filter((node) => !Array.isArray(node?.children));
+    const visibleDirs = directories.slice(0, MAX_DIRS_PER_FOLDER);
+    const visibleFiles = files.slice(0, MAX_FILES_PER_FOLDER);
+    const visible = [...visibleDirs, ...visibleFiles];
+    const omittedDirCount = Math.max(0, directories.length - visibleDirs.length);
+    const omittedFileCount = Math.max(0, files.length - visibleFiles.length);
 
     for (const node of visible) {
       if (truncated) return;
@@ -519,9 +525,14 @@ function buildWorkspaceTreeContextBlock(tree, projectPath) {
       }
     }
 
-    if (omittedCount > 0 && !truncated) {
+    if ((omittedDirCount > 0 || omittedFileCount > 0) && !truncated) {
       const indent = "  ".repeat(depth);
-      pushLine(`${indent}... (${omittedCount} more item(s) omitted in this folder)`);
+      if (omittedDirCount > 0) {
+        pushLine(`${indent}... (${omittedDirCount} more folder(s) omitted in this folder)`);
+      }
+      if (omittedFileCount > 0) {
+        pushLine(`${indent}... (${omittedFileCount} more file(s) omitted in this folder)`);
+      }
     }
   }
 
