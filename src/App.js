@@ -459,36 +459,69 @@ function buildActiveFileContextBlock(filePath, fileContent) {
   );
 }
 function buildWorkspaceTreeContextBlock(tree, projectPath) {
-  const root = Array.isArray(tree) ? tree : [];
+  const root = Array.isArray(tree) ? tree.filter(Boolean) : [];
   if (!projectPath || root.length === 0) return "";
 
+  const MAX_LINES = 60;
+  const MAX_DEPTH = 2;
+  const MAX_CHILDREN_PER_FOLDER = 8;
   const lines = [];
   let truncated = false;
-  const MAX_LINES = 120;
 
-  function walk(nodes, depth = 0) {
-    if (!Array.isArray(nodes) || truncated) return;
-
-    const sorted = [...nodes].sort((a, b) => {
+  function sortNodes(nodes) {
+    return [...nodes].filter(Boolean).sort((a, b) => {
       const aDir = Array.isArray(a?.children);
       const bDir = Array.isArray(b?.children);
       if (aDir !== bDir) return aDir ? -1 : 1;
       return String(a?.name || "").localeCompare(String(b?.name || ""));
     });
+  }
 
-    for (const node of sorted) {
-      if (lines.length >= MAX_LINES) {
-        truncated = true;
-        return;
-      }
+  function pushLine(line) {
+    if (lines.length >= MAX_LINES) {
+      truncated = true;
+      return false;
+    }
+
+    lines.push(line);
+    return true;
+  }
+
+  function walk(nodes, depth = 0) {
+    if (!Array.isArray(nodes) || truncated || depth > MAX_DEPTH) return;
+
+    const sorted = sortNodes(nodes);
+    const visible = sorted.slice(0, MAX_CHILDREN_PER_FOLDER);
+    const omittedCount = Math.max(0, sorted.length - visible.length);
+
+    for (const node of visible) {
+      if (truncated) return;
 
       const isDir = Array.isArray(node?.children);
       const indent = "  ".repeat(depth);
-      const name = String(node?.name || "");
-      lines.push(`${indent}${isDir ? "[dir] " : "[file] "}${name}`);
+      const name = String(node?.name || "").trim();
+      if (!name) continue;
 
-      if (isDir) walk(node.children, depth + 1);
-      if (truncated) return;
+      if (!pushLine(`${indent}${isDir ? "[dir] " : "[file] "}${name}`)) {
+        return;
+      }
+
+      if (isDir && depth < MAX_DEPTH) {
+        walk(node.children, depth + 1);
+      } else if (
+        isDir &&
+        Array.isArray(node.children) &&
+        node.children.length > 0
+      ) {
+        pushLine(
+          `${indent}  ... (${node.children.length} child item(s) omitted below compressed depth)`,
+        );
+      }
+    }
+
+    if (omittedCount > 0 && !truncated) {
+      const indent = "  ".repeat(depth);
+      pushLine(`${indent}... (${omittedCount} more item(s) omitted in this folder)`);
     }
   }
 
@@ -498,15 +531,15 @@ function buildWorkspaceTreeContextBlock(tree, projectPath) {
 
   let out = "";
   out +=
-    "=== Workspace Tree Snapshot (reference only; follow existing structure) ===\n";
+    "=== Workspace Tree Snapshot (compressed secondary reference; path/name hints only) ===\n";
   out += `Project root: ${projectPath}\n`;
   out += lines.join("\n");
-  if (truncated) out += "\n... (tree truncated)";
+  if (truncated) out += "\n... (workspace tree snapshot truncated)";
   out += "\n";
   out +=
-    "Use this tree to prefer existing files and folders before proposing new ones.\n";
+    "This compressed tree is secondary to Repo Explore Summary, Project Stack Signals, Code Scout Hints, and Inspection Candidate Routing above.\n";
   out +=
-    "Do not invent framework entry files or tutorial files when equivalent project files already exist in this workspace.\n";
+    "Use it only to preserve visible existing structure and avoid inventing files or folders. It has not read file contents.\n";
   out += "=== End Workspace Tree Snapshot ===\n\n";
 
   return out;
