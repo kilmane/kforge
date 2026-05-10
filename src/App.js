@@ -11,6 +11,7 @@ import { buildKforgeTaskTemplateContext } from "./ai/taskTemplates/buildKforgeTa
 import { buildWorkspaceSummaryContextBlock } from "./ai/workspace/workspaceSummary";
 import { buildProjectStackContextBlock } from "./ai/workspace/projectStack";
 import { buildCodeScoutContextBlock } from "./ai/workspace/codeScout";
+import { buildInspectionCandidateRoutingContextBlock } from "./ai/workspace/inspectionCandidates";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -2008,6 +2009,9 @@ export default function App() {
         rawPrompt,
       );
 
+      const inspectionCandidateRoutingBlock =
+        buildInspectionCandidateRoutingContextBlock(tree, projectPath);
+
       const workspaceTreeBlock = buildWorkspaceTreeContextBlock(
         tree,
         projectPath,
@@ -2041,7 +2045,7 @@ export default function App() {
         fileSnapshot?.path || activeTab?.path || null,
       );
 
-      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${projectStackBlock}${codeScoutBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
+      return `${capabilityBlock}${existingProjectBehaviorBlock}${noProjectBehaviorBlock}${emptyFolderBehaviorBlock}${projectContextBlock}${workspaceSummaryBlock}${projectStackBlock}${codeScoutBlock}${inspectionCandidateRoutingBlock}${workspaceTreeBlock}${primaryEditTargetBlock}${workflowStateBlock}${memoryBlock}${prefix}${fileBlock}${String(rawPrompt || "")}`;
     },
     [messages, projectPath, projectTemplateInfo, tree, activeTab, workflowContext],
   );
