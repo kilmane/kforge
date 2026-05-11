@@ -2184,40 +2184,6 @@ export default function App() {
       .trim();
     if (!s) return false;
 
-    const implementationVerbs = [
-      "add",
-      "create",
-      "make",
-      "implement",
-      "build",
-      "generate",
-      "wire up",
-    ];
-
-    const implementationTargets = [
-      "settings page",
-      "settings screen",
-      "settings view",
-      "page",
-      "route",
-      "screen",
-      "view",
-      "component",
-      "feature",
-      "form",
-      "button",
-      "link",
-      "nav",
-      "navbar",
-      "navigation",
-      "menu",
-      "layout",
-      "dashboard",
-      "sidebar",
-      "modal",
-      "dialog",
-    ];
-
     const workflowHints = [
       "preview",
       "run",
@@ -2232,15 +2198,39 @@ export default function App() {
       "bypass kforge",
     ];
 
-    const hasImplementationVerb = implementationVerbs.some((hint) =>
-      s.includes(hint),
-    );
-    const hasImplementationTarget = implementationTargets.some((hint) =>
-      s.includes(hint),
-    );
-    const looksWorkflow = workflowHints.some((hint) => s.includes(hint));
+    if (workflowHints.some((hint) => s.includes(hint))) return false;
+    if (/^(how|what|why|when|where|should|can|could|would)\b/.test(s)) {
+      return false;
+    }
 
-    return hasImplementationVerb && hasImplementationTarget && !looksWorkflow;
+    const hasImplementationVerb =
+      /\b(add|create|make|implement|build|generate|wire\s+up|update|change|modify|remove|delete|replace|insert|rename)\b/.test(
+        s,
+      );
+
+    if (!hasImplementationVerb) return false;
+
+    const hasProjectAnchor =
+      /\b(app|project|website|site|page|screen|view|ui|interface|frontend|codebase|file|folder|component|route|layout)\b/.test(
+        s,
+      ) ||
+      /\b(src|public|components|pages|app)\//.test(s) ||
+      /\b[\w./-]+\.(js|jsx|ts|tsx|css|html|json|md|rs|py)\b/.test(s);
+
+    const hasConcreteContent =
+      /["'“”‘’`][^"'“”‘’`]{2,}["'“”‘’`]/.test(s) ||
+      /\b(that says|saying|with text|text that says|called|named)\b/.test(s);
+
+    const hasDirectionalProjectPhrase =
+      /\b(to|in|inside|within|on|for)\s+(the\s+)?(app|project|page|screen|site|website|ui|interface|code|file|component)\b/.test(
+        s,
+      );
+
+    return (
+      hasProjectAnchor ||
+      hasDirectionalProjectPhrase ||
+      (hasConcreteContent && /\b(app|project|page|screen|site|website|ui|interface)\b/.test(s))
+    );
   }
   function isWorkflowContinuationIntent(text = "") {
     const s = String(text || "").toLowerCase().trim();
