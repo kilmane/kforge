@@ -528,6 +528,18 @@ Examples:
 * “Create a starter app” → KForge may guide you to **Preview → Generate**
 * “Run git status” → KForge may guide you to **Terminal**
 
+## After KForge edits files
+
+After KForge completes an implementation edit, it may suggest a few natural next steps:
+
+* **Preview** — use **Preview Panel → Preview** to run or view the project
+* **Show changes** — ask KForge to review the changed files it recorded
+* **Another edit** — describe the next change you want
+
+If dependencies are missing, use **Preview Panel → Install** first.
+
+KForge should not pretend that chat itself has started the preview. The chat can guide you to the correct Preview workflow, but the Preview panel is where the project is actually run, opened, or guided.
+
 ## Test connection
 
 The **Test connection** button is helpful during setup.
@@ -1162,6 +1174,7 @@ If something cannot happen entirely inside chat, KForge should guide you to the 
 * get explanations
 * debug with AI help
 * plan work
+* ask what changed after an implementation
 
 ## Use Transcript when you want to
 
