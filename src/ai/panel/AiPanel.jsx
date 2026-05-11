@@ -542,6 +542,13 @@ function buildPreviewHandoffMessage() {
     "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
   );
 }
+
+function buildPostEditNextStepMessage() {
+  return (
+    "Next:\nUse Preview Panel → Preview to run or view it, show changes, or make another edit.\n\n" +
+    "If dependencies are missing, use Preview Panel → Install first."
+  );
+}
 function buildAgentConversationInput(messages, tools, maxTurns = 20) {
   const relevant = (Array.isArray(messages) ? messages : [])
     .filter((m) => {
@@ -1688,7 +1695,7 @@ export default function AiPanel({
             const writeCompletionMessage =
               `Done — updated ${fileCountLabel}.\n\n` +
               `${buildCompletedWorkflowChangeSummary(completedWorkflowContext)}\n\n` +
-              "Next:\nPreview the app, show changes, or make another edit.";
+              buildPostEditNextStepMessage();
 
             appendMessage("assistant", writeCompletionMessage);
           } else if (typeof runAi === "function") {
@@ -1851,7 +1858,7 @@ export default function AiPanel({
                   "assistant",
                   `${finalText}\n\n${buildCompletedWorkflowChangeSummary(
                     completedWorkflowContext,
-                  )}\n\nNext:\nPreview the app, show changes, or make another edit.`,
+                  )}\n\n${buildPostEditNextStepMessage()}`,
                 );
               } else if (finalText) {
                 appendMessage("assistant", finalText);
@@ -1868,7 +1875,7 @@ export default function AiPanel({
                   `${buildCompletedWorkflowChangeSummary(
                     completedWorkflowContext,
                   )}\n\n` +
-                  "Next:\nPreview the app, show changes, or make another edit.";
+                  buildPostEditNextStepMessage();
 
                 appendMessage("assistant", agentWriteCompletionMessage);
               } else if (agentResult?.stopReason === "tool_cancelled") {

@@ -2866,27 +2866,82 @@ export default function App() {
     },
     [getWorkflowEditedPaths],
   );
-  function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
+  const buildWorkflowPreviewRoutingMessage = useCallback((projectOpen, context = null) => {
     const summary = buildCompletedWorkflowChangeSummary(context, {
       maxPaths: 6,
     });
+    const detectedTemplateName =
+      projectTemplateInfo?.detectedTemplate?.name || "";
+    const detectedTemplateId = projectTemplateInfo?.detectedTemplate?.id || "";
+    const detectedKind = projectTemplateInfo?.kind || "";
+    const templateLabel =
+      detectedTemplateName || detectedKind || "current project";
+    const templateId = String(detectedTemplateId || "").toLowerCase();
+    const kind = String(detectedKind || "").toLowerCase();
+    const isExpoProject =
+      templateId.includes("expo") ||
+      kind.includes("expo") ||
+      String(detectedTemplateName || "").toLowerCase().includes("expo");
+    const isStaticProject =
+      templateId.includes("static") || kind === "static";
+    const isPackageProject =
+      kind === "package" ||
+      templateId.includes("vite") ||
+      templateId.includes("next");
+
     const prefix = `Last implementation completed.\n\n${summary}\n\n`;
 
     if (!projectOpen) {
       return (
         prefix +
-        "Open the project folder first in Explorer.\n\n" +
-        "Then you can leave the chat and open: Preview Panel → Preview."
+        "To preview it, open the project folder first.\n\n" +
+        "Then leave the chat and use: Preview Panel → Preview.\n\n" +
+        "I will not claim the preview has started from chat."
+      );
+    }
+
+    if (isExpoProject) {
+      return (
+        prefix +
+        `Detected preview target: ${templateLabel}.\n\n` +
+        "For Expo/mobile projects, KForge's Preview panel gives the right guidance, but the real phone preview happens outside the chat through Expo/Expo Go.\n\n" +
+        "Next:\nLeave the chat and open: Preview Panel.\n\n" +
+        "Use Install first if dependencies are not installed yet, then follow the Expo phone preview guidance there."
+      );
+    }
+
+    if (isStaticProject) {
+      return (
+        prefix +
+        `Detected preview target: ${templateLabel}.\n\n` +
+        "This looks like a static/simple project.\n\n" +
+        "Next:\nLeave the chat and open: Preview Panel → Preview.\n\n" +
+        "KForge should use the static preview flow when the project is detected correctly."
+      );
+    }
+
+    if (isPackageProject) {
+      return (
+        prefix +
+        `Detected preview target: ${templateLabel}.\n\n` +
+        "This looks like a package-based web app.\n\n" +
+        "Next:\nLeave the chat and open: Preview Panel.\n\n" +
+        "Use Install first if dependencies are not installed yet, then use Preview to run the app."
       );
     }
 
     return (
       prefix +
+      `Detected preview target: ${templateLabel}.\n\n` +
       "KForge can help with this through the Preview panel.\n\n" +
-      "You can now leave the chat and open: Preview Panel → Preview.\n\n" +
+      "Next:\nLeave the chat and open: Preview Panel → Preview.\n\n" +
       "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
     );
-  }
+  }, [
+    projectTemplateInfo?.detectedTemplate?.id,
+    projectTemplateInfo?.detectedTemplate?.name,
+    projectTemplateInfo?.kind,
+  ]);
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
       if (aiRunning) return;
@@ -3459,6 +3514,7 @@ export default function App() {
       buildSmartProviderSwitchMessage,
       isExplicitNewWorkflowIntent,
       buildBlockedModelPolicyFollowupMessage,
+      buildWorkflowPreviewRoutingMessage,
       buildWorkflowShowChangesMessage,
       getWorkflowEditedPaths,
       buildInputWithContext,
