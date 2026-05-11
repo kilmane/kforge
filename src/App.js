@@ -2824,15 +2824,48 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  function buildWorkflowShowChangesMessage(context = null) {
-    const summary = buildCompletedWorkflowChangeSummary(context);
+  const getWorkflowEditedPaths = useCallback((context = null) => {
+    const paths = Array.isArray(context?.editedPaths)
+      ? context.editedPaths
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+    const lastEditedPath = String(context?.lastEditedPath || "").trim();
 
-    return (
-      "The last implementation completed.\n\n" +
-      `${summary}\n\n` +
-      "Next:\nOpen the listed files in the editor to review them, or ask for another edit."
-    );
-  }
+    if (lastEditedPath && !paths.includes(lastEditedPath)) {
+      paths.push(lastEditedPath);
+    }
+
+    return paths;
+  }, []);
+
+  const buildWorkflowShowChangesMessage = useCallback(
+    (context = null) => {
+      const editedPaths = getWorkflowEditedPaths(context);
+
+      if (editedPaths.length === 0) {
+        return (
+          "The last implementation completed, but I do not have changed file paths recorded for it yet.\n\n" +
+          "I cannot show the last changes from workflow state yet. Open the likely edited file in the editor, or ask me to inspect a specific file."
+        );
+      }
+
+      const fileCountLabel =
+        editedPaths.length === 1 ? "1 file" : `${editedPaths.length} files`;
+      const summary = buildCompletedWorkflowChangeSummary(context, {
+        fallbackLine:
+          "I can review the changed files by reading them, but this is not an exact line-by-line diff.",
+      });
+
+      return (
+        `The last implementation changed ${fileCountLabel}.\n\n` +
+        `${summary}\n\n` +
+        "This is a changed-file review, not a Git-style diff. I will not claim exact line-level differences unless a real diff is available.\n\n" +
+        "Next:\nOpen the listed files in the editor, ask me to inspect a specific file, or review the last changed file."
+      );
+    },
+    [getWorkflowEditedPaths],
+  );
   function buildWorkflowPreviewRoutingMessage(projectOpen, context = null) {
     const summary = buildCompletedWorkflowChangeSummary(context, {
       maxPaths: 6,
@@ -2952,10 +2985,40 @@ export default function App() {
         }
 
         if (completedWorkflowRoute.action === "show_changes") {
+          const editedPaths = getWorkflowEditedPaths(workflowContext);
+          const lastChangedPath =
+            editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
+
           if (!opts.silentUserAppend) appendMessage("user", draft);
+
           appendMessage(
             "assistant",
             buildWorkflowShowChangesMessage(workflowContext),
+            {
+              actions: lastChangedPath
+                ? [
+                    {
+                      label: "Review last changed file",
+                      onClick: () => {
+                        appendMessage(
+                          "assistant",
+                          `Reviewing ${lastChangedPath}. I will read the file and summarize what is currently there. This is not an exact diff.`,
+                        );
+
+                        sendWithPrompt(
+                          "Review the last changed file from the completed implementation.\n\n" +
+                            `Read this file and summarize the relevant current content without editing it:\n${lastChangedPath}\n\n` +
+                            "Do not write files. Do not claim to show an exact diff unless a real diff is available. Request exactly one read_file tool call for that path.",
+                          {
+                            silentUserAppend: true,
+                            skipCompletedWorkflowRoute: true,
+                          },
+                        );
+                      },
+                    },
+                  ]
+                : [],
+            },
           );
           return;
         }
@@ -3222,6 +3285,8 @@ export default function App() {
             "Do NOT call write_file with placeholder, abbreviated, or comment-only content. write_file content must be the full intended file text.\n" +
             "\n" +
             "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
+            "For read-only file review requests, show-changes review requests, or requests to inspect a named changed file, request exactly one read_file tool call for the named path.\n" +
+            "Do NOT call write_file for show-changes or read-only review requests unless the user explicitly asks for another edit.\n" +
             "Do NOT invent or emit any other tool names.\n" +
             "Do NOT emit tools like preview, install, terminal, services, supabase, stripe, or deploy.\n" +
             "If the user wants a KForge UI workflow such as Preview, Services, or Terminal, answer in normal assistant text and guide them there instead of emitting a tool call.\n" +
@@ -3394,6 +3459,8 @@ export default function App() {
       buildSmartProviderSwitchMessage,
       isExplicitNewWorkflowIntent,
       buildBlockedModelPolicyFollowupMessage,
+      buildWorkflowShowChangesMessage,
+      getWorkflowEditedPaths,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
