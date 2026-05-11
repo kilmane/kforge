@@ -461,72 +461,8 @@ function isPreviewIntent(text) {
     s.includes("on my phone")
   );
 }
-function isClosingIntent(text) {
-  const s = String(text || "")
-    .toLowerCase()
-    .trim();
-  return (
-    s === "thanks" ||
-    s === "thank you" ||
-    s === "thanks for the help" ||
-    s === "cheers" ||
-    s === "all good" ||
-    s === "that worked" ||
-    s === "perfect"
-  );
-}
 
-function isBrokenPreviewOrBugfixIntent(text) {
-  const s = String(text || "")
-    .toLowerCase()
-    .trim();
 
-  if (!s) return false;
-
-  return (
-    s.includes("blank page") ||
-    s.includes("page is blank") ||
-    s.includes("nothing to preview") ||
-    s.includes("dead link") ||
-    s.includes("not clickable") ||
-    s.includes("is not clickable") ||
-    s.includes("not working") ||
-    s.includes("doesn't work") ||
-    s.includes("does not work") ||
-    s.includes("broken") ||
-    s.includes("bug") ||
-    s.includes("error upon preview") ||
-    s.includes("blank upon preview")
-  );
-}
-
-function isAdvisoryOnlyIntent(text) {
-  const s = String(text || "")
-    .toLowerCase()
-    .trim();
-  if (!s) return false;
-
-  if (isClosingIntent(s)) return true;
-  if (isBrokenPreviewOrBugfixIntent(s)) return false;
-  if (isPreviewIntent(s)) return true;
-  if (isShowChangesIntent(s)) return true;
-
-  return (
-    s.startsWith("how do i ") ||
-    s.startsWith("how can i ") ||
-    s.startsWith("can i ") ||
-    s.startsWith("should i ") ||
-    s.startsWith("what command should i run") ||
-    s.startsWith("what should i run") ||
-    s.startsWith("what do i run") ||
-    s.startsWith("why ") ||
-    s.startsWith("explain ") ||
-    s.startsWith("show me the commands") ||
-    s.includes("on my phone") ||
-    s.includes("in kforge") ||
-    s.includes("in the browser")
-  );
-}
 function buildInstallHandoffMessage() {
   return (
     "KForge can help with this through the Preview panel.\n\n" +
@@ -1216,11 +1152,14 @@ export default function AiPanel({
   // Local cache still used, but global is the real guard.
   const processedKeysRef = useRef(new Set());
   const toolBatchRunningRef = useRef(false);
+  const toolBatchRescanNeededRef = useRef(false);
+  const [toolScanTick, setToolScanTick] = useState(0);
 
   // ✅ Reset caches when conversation clears
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) {
       processedKeysRef.current = new Set();
+      toolBatchRescanNeededRef.current = false;
       GLOBAL_SEEN_TOOL_KEYS.clear();
     }
   }, [messages]);
@@ -1433,12 +1372,32 @@ export default function AiPanel({
   // Model-initiated tool detection: scan assistant messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
-    if (toolBatchRunningRef.current) return;
+    if (toolBatchRunningRef.current) {
+      toolBatchRescanNeededRef.current = true;
+      return;
+    }
 
     const processAssistantToolCalls = async () => {
       toolBatchRunningRef.current = true;
       const batchCalls = [];
       let triggerMessageIndex = -1;
+
+      const queueCall = ({ key, toolName, args, sourceIndex }) => {
+        if (
+          GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+          processedKeysRef.current.has(key)
+        ) {
+          return;
+        }
+
+        if (triggerMessageIndex < 0 && typeof sourceIndex === "number") {
+          triggerMessageIndex = sourceIndex;
+        }
+
+        GLOBAL_SEEN_TOOL_KEYS.add(key);
+        processedKeysRef.current.add(key);
+        batchCalls.push({ toolName, args });
+      };
 
       try {
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -1450,29 +1409,9 @@ export default function AiPanel({
 
           const msgKey = String(msg?.id ?? msg?.ts ?? i);
           const pendingCalls = [];
-          const nearestUserText = getNearestUserMessageTextBeforeIndex(
-            messages,
-            i,
-          );
-          if (isAdvisoryOnlyIntent(nearestUserText)) {
+          if (msg?.meta?.allowModelToolExecution !== true) {
             continue;
           }
-          const queueCall = ({ key, toolName, args, sourceIndex }) => {
-            if (
-              GLOBAL_SEEN_TOOL_KEYS.has(key) ||
-              processedKeysRef.current.has(key)
-            ) {
-              return;
-            }
-
-            if (triggerMessageIndex < 0 && typeof sourceIndex === "number") {
-              triggerMessageIndex = sourceIndex;
-            }
-
-            GLOBAL_SEEN_TOOL_KEYS.add(key);
-            processedKeysRef.current.add(key);
-            batchCalls.push({ toolName, args });
-          };
 
           // A) XML tool calls
           const xmlCalls = extractXmlToolCalls(content);
@@ -1644,6 +1583,11 @@ export default function AiPanel({
               : "";
 
           const fallbackReadPath = latestWrittenPath || activeTab?.path || "";
+          const triggerToolMessage =
+            triggerMessageIndex >= 0 ? messages[triggerMessageIndex] : null;
+          const triggerToolTaskKind = String(
+            triggerToolMessage?.meta?.modelToolExecutionKind || "",
+          ).trim();
 
           const allWritesFailed =
             (failedWritePaths.length > 0 || failedDirPaths.length > 0) &&
@@ -1663,6 +1607,7 @@ export default function AiPanel({
             appendMessage("assistant", buildInstallHandoffMessage());
           } else if (
             isPreviewIntent(latestUserText) &&
+            triggerToolTaskKind !== "project_edit" &&
             successfulWritePaths.length === 0 &&
             successfulDirPaths.length === 0
           ) {
@@ -1944,12 +1889,18 @@ export default function AiPanel({
         }
       } finally {
         toolBatchRunningRef.current = false;
+
+        if (toolBatchRescanNeededRef.current) {
+          toolBatchRescanNeededRef.current = false;
+          setToolScanTick((tick) => tick + 1);
+        }
       }
     };
 
     processAssistantToolCalls();
   }, [
     messages,
+    toolScanTick,
     activeTab,
     appendMessage,
     runTool,

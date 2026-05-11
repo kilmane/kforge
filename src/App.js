@@ -1644,6 +1644,7 @@ export default function App() {
       actionLabel: opts.actionLabel || null,
       action: typeof opts.action === "function" ? opts.action : null,
       actions: Array.isArray(opts.actions) ? opts.actions : null,
+      meta: opts.meta && typeof opts.meta === "object" ? opts.meta : null,
     };
     setMessages((prev) => [...prev, msg]);
     return msg;
@@ -2613,7 +2614,9 @@ export default function App() {
 
     if (directRequests.includes(s)) return true;
 
-    return /^(please\s+)?(preview|run|start|open|test|show)\b/.test(s);
+    return /^(please\s+)?(preview|run|start|open|test|show)\s+(it|the app|app|preview|now)$/i.test(
+      s,
+    );
   }
 
   function isWorkflowPreviewFollowupIntent(text = "", context = null) {
@@ -2796,7 +2799,7 @@ export default function App() {
       if (
         projectOpen &&
         isNoProjectImplementationIntent(text) &&
-        !isPreviewIntent(text) &&
+        !isExplicitWorkflowPreviewRequest(text) &&
         !isDependencyInstallIntent(text)
       ) {
         return {
@@ -2806,7 +2809,7 @@ export default function App() {
         };
       }
 
-      if (isPreviewIntent(text)) {
+      if (isPreviewIntent(text) && !isNoProjectImplementationIntent(text)) {
         return {
           kind: "preview_followup",
           confidence: "medium",
@@ -3414,6 +3417,24 @@ export default function App() {
           toolBlocks.length === 0 &&
           !hasXmlLikeToolCall;
 
+        const shouldAllowModelToolExecution =
+          !shouldSuppressReturnedToolBlocks &&
+          toolBlocks.length > 0 &&
+          (
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
+            promptTask.kind === "broken_preview_debug" ||
+            !!opts.skipCompletedWorkflowRoute ||
+            !!isAdvisoryTestOverride
+          );
+
+        const shouldShowProjectEditNoToolRecovery =
+          !shouldShowAdvisoryNoActionRecovery &&
+          promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+          toolBlocks.length === 0 &&
+          !hasXmlLikeToolCall &&
+          !askForPatch &&
+          !!cleaned;
+
         // Append cleaned assistant output (keeps transcript readable)
         if (shouldShowAdvisoryNoActionRecovery) {
           appendMessage(
@@ -3464,12 +3485,53 @@ export default function App() {
               ],
             },
           );
+        } else if (shouldShowProjectEditNoToolRecovery) {
+          appendMessage(
+            "assistant",
+            "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
+              "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
+            {
+              actions: [
+                {
+                  label: "Continue editing",
+                  onClick: () => {
+                    sendWithPrompt(
+                      "Continue the previous project edit.\n\n" +
+                        `Original request: ${draft}\n\n` +
+                        "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n" +
+                        "If inspection is needed, request one read_file or list_dir tool first. For a static project, index.html is often the first file to inspect.\n" +
+                        "If editing is possible, request one write_file tool. Do not give only prose.",
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                        forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: "Stop",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Stopped. No files were changed by that response.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
         } else if (cleaned) {
           appendMessage("assistant", cleaned);
         } else {
           // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
-          if (toolBlocks.length > 0 && !shouldSuppressReturnedToolBlocks) {
+          if (toolBlocks.length > 0 && shouldAllowModelToolExecution) {
             appendMessage("assistant", "(Model requested one or more tools.)");
+          } else if (toolBlocks.length > 0 && !shouldSuppressReturnedToolBlocks) {
+            appendMessage(
+              "system",
+              "[tool] Tool request blocked: this KForge route did not allow model-initiated tools.",
+            );
           } else {
             appendMessage("assistant", "");
           }
@@ -3479,9 +3541,14 @@ export default function App() {
         maybeCapturePatchPreview(out);
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
-        if (!shouldSuppressReturnedToolBlocks) {
+        if (shouldAllowModelToolExecution) {
           for (const tb of toolBlocks) {
-            appendMessage("assistant", tb);
+            appendMessage("assistant", tb, {
+              meta: {
+                allowModelToolExecution: true,
+                modelToolExecutionKind: String(promptTask.kind || "unknown"),
+              },
+            });
           }
         }
       } else {
