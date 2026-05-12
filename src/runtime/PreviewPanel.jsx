@@ -57,6 +57,75 @@ function findPreviewUrl(entries) {
   return "";
 }
 
+function previewLogBasename(value) {
+  const parts = String(value || "")
+    .split(/[\\/]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts[parts.length - 1] : String(value || "");
+}
+
+function formatPreviewLogForDisplay(entry) {
+  const kind = String(entry?.kind || "");
+  const line = String(entry?.line || "").trim();
+
+  if (!line) return null;
+
+  if (/press\s+h.*show\s+help/i.test(line)) {
+    return null;
+  }
+
+  if (/^>\s*[^@\s]+@[^ ]+\s+dev\b/i.test(line)) {
+    return null;
+  }
+
+  if (/^>\s*(vite|next dev|react-scripts start)\s*$/i.test(line)) {
+    return null;
+  }
+
+  if (/^VITE v[\w.-]+\s+ready in\b/i.test(line)) {
+    return null;
+  }
+
+  const runningMatch = line.match(
+    /^Running:\s+(.+?)\s+\(cwd:\s+(.+?)\)\s+\[pid=\d+\]$/i,
+  );
+  if (runningMatch) {
+    return {
+      ...entry,
+      kind: "status",
+      line: `Starting preview: ${runningMatch[1]} in ${previewLogBasename(
+        runningMatch[2],
+      )}...`,
+    };
+  }
+
+  const servingMatch = line.match(/^Serving static site from\s+(.+)$/i);
+  if (servingMatch) {
+    return {
+      ...entry,
+      kind: "status",
+      line: `Starting static preview for ${previewLogBasename(
+        servingMatch[1],
+      )}...`,
+    };
+  }
+
+  const localMatch = line.match(
+    /(?:➜\s*)?Local:\s*(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i,
+  );
+  if (localMatch?.[1]) {
+    return {
+      ...entry,
+      kind: "status",
+      line: `Preview ready: ${localMatch[1]}`,
+    };
+  }
+
+  return { ...entry, kind, line };
+}
+
 export default function PreviewPanel({ projectPath }) {
   const [status, setStatus] = useState(getPreviewStatusValue());
   const [logs, setLogs] = useState(() => getPreviewLogBuffer());
@@ -291,6 +360,10 @@ export default function PreviewPanel({ projectPath }) {
     if (status !== "idle") return true;
     return false;
   }, [isExpoProject, logs.length, status]);
+
+  const displayLogs = useMemo(() => {
+    return logs.map(formatPreviewLogForDisplay).filter(Boolean);
+  }, [logs]);
 
   async function handleOpen() {
     if (!previewUrl || isExpoProject) return;
@@ -604,10 +677,10 @@ export default function PreviewPanel({ projectPath }) {
 
       {showLogPanel ? (
         <div className="mt-3 h-44 overflow-auto rounded-lg bg-black/30 p-2 text-xs">
-          {logs.length === 0 ? (
+          {displayLogs.length === 0 ? (
             <div className="text-zinc-500">No logs yet.</div>
           ) : (
-            logs.map((l) => (
+            displayLogs.map((l) => (
               <div
                 key={l.ts + l.line}
                 className={
