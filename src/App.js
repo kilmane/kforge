@@ -76,6 +76,7 @@ KForge capability guidance:
 Behavior rules:
 - Be truthful about what KForge can and cannot do.
 - Do not claim the UI has already navigated, opened, run, installed, previewed, or configured anything unless that actually happened.
+- In manual guidance, do not say something has been successfully installed, created, configured, fixed, or completed unless a real KForge action/tool result reported success. Phrase manual outcomes conditionally, such as "After that command succeeds..." or "Once you run this...".
 - Do not tell the UI to navigate, auto-open panels, or force workflow state.
 - Keep guidance calm and optional.
 - Do not ask for secrets, credentials, or configuration values too early.
@@ -880,6 +881,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
 
   if (kind === "provider_setup") {
     return { action: "provider_setup" };
+  }
+
+  if (kind === "supabase_service") {
+    return { action: "supabase_service" };
   }
 
   if (kind === "dependency_install") {
@@ -2480,6 +2485,50 @@ export default function App() {
       "Use the OpenAI service to add OpenAI to the project, and the Supabase service to connect the project to Supabase."
     );
   }
+  function isSupabaseServiceWorkflowIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s || !s.includes("supabase")) return false;
+
+    if (/\b(service[-\s]?role|service role|secret key|private key)\b/.test(s)) {
+      return true;
+    }
+
+    return (
+      /\b(connect|set up|setup|configure|add|install|create|generate|wire up|use|query|read|insert|debug|fix|troubleshoot|not working|broken)\b/.test(s) ||
+      s.includes("supabase client") ||
+      s.includes("supabase example") ||
+      s.includes("query helper") ||
+      s.includes("connection values") ||
+      s.includes("where do i put") ||
+      s.includes("env") ||
+      s.includes("anon key") ||
+      s.includes("public key")
+    );
+  }
+
+  function buildSupabaseRoutingMessage(projectOpen) {
+    const route = "Services → Backend → Supabase";
+
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        `Then you can leave the chat and open: ${route}.\n\n` +
+        'Start with "Quick Connect Supabase" for the beginner-friendly flow, or "Check Supabase setup" for step-by-step control.\n\n' +
+        "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
+      );
+    }
+
+    return (
+      "KForge can help with this through the Supabase service flow.\n\n" +
+      `You can now leave the chat and open: ${route}.\n\n` +
+      'Start with "Quick Connect Supabase" for the beginner-friendly flow, or "Check Supabase setup" for step-by-step control.\n\n' +
+      "The service can help prepare env files, install @supabase/supabase-js, create src/lib/supabase.js, and generate starter read/query examples.\n\n" +
+      "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
+    );
+  }
   function isExpoPhonePreviewWorkflowIntent(
     text = "",
     detectedTemplateName = "",
@@ -2756,9 +2805,9 @@ export default function App() {
         };
       }
 
-      if (isDependencyInstallWorkflowIntent(text)) {
+      if (hasManualOrAdvisoryIntent(text)) {
         return {
-          kind: "dependency_install",
+          kind: "manual_steps",
           confidence: "high",
           source: "existing_intent_helpers",
         };
@@ -2772,13 +2821,22 @@ export default function App() {
         };
       }
 
-      if (hasManualOrAdvisoryIntent(text)) {
+      if (isSupabaseServiceWorkflowIntent(text)) {
         return {
-          kind: "manual_steps",
+          kind: "supabase_service",
           confidence: "high",
           source: "existing_intent_helpers",
         };
       }
+
+      if (isDependencyInstallWorkflowIntent(text)) {
+        return {
+          kind: "dependency_install",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
 
       if (!projectOpen && isNoProjectImplementationIntent(text)) {
         return {
@@ -3212,6 +3270,11 @@ export default function App() {
             "assistant",
             buildCombinedOpenAiSupabaseRoutingMessage(projectOpen),
           );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "supabase_service") {
+          appendMessage("assistant", buildSupabaseRoutingMessage(projectOpen));
           return;
         }
 

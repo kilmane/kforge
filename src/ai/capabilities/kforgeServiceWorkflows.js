@@ -66,6 +66,9 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       "KForge can also generate starter development files such as read examples, insert examples, and a reusable query helper.",
       "These developer-assist files help you start integrating Supabase into real application code.",
       "If Supabase is local, KForge also checks for local Supabase configuration.",
+      "For frontend projects, prefer the Supabase anon/public key, not a service-role key.",
+      "Do not ask the user to paste Supabase secrets into chat.",
+      "Do not store or request Supabase service-role, private, or admin keys.",
     ],
     env_vars: [
       "SUPABASE_URL",
@@ -81,6 +84,9 @@ export const KFORGE_SERVICE_WORKFLOWS = {
       'Offer "Check Supabase setup" for step-by-step control.',
       "After recommending the KForge workflow, tell the user they can leave the chat and continue in KForge Services.",
       "Do not continue the KForge Services workflow inside chat.",
+      "Do not claim the chat clicked Services, opened Supabase, installed packages, created env files, or generated files.",
+      "For frontend projects, guide toward anon/public Supabase keys and Vite-prefixed env vars when appropriate.",
+      "Never ask for service-role, private, or admin keys in chat.",
       "Only move into manual guidance if the user explicitly says they want to bypass KForge Services.",
     ],
     first_response_template: [
