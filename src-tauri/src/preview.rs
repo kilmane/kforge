@@ -495,12 +495,23 @@ fn start_static_preview(
 
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    if let Err(err) = handle_static_connection(stream, &root) {
+                    if let Err(err) = stream.set_nonblocking(false) {
                         emit_log(
                             &app_server,
                             "stderr",
-                            &format!("Static preview request failed: {}", err),
+                            &format!("Static preview request setup failed: {}", err),
                         );
+                        continue;
+                    }
+
+                    if let Err(err) = handle_static_connection(stream, &root) {
+                        if err.kind() != std::io::ErrorKind::WouldBlock {
+                            emit_log(
+                                &app_server,
+                                "stderr",
+                                &format!("Static preview request failed: {}", err),
+                            );
+                        }
                     }
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
