@@ -306,6 +306,106 @@ function collectToolBatchPaths(calls, toolName) {
     .filter(Boolean);
 }
 
+const INSPECT_BEFORE_WRITE_TOOL_KINDS = new Set([
+  "project_edit",
+  "broken_preview_debug",
+]);
+
+const INSPECTION_TOOL_NAMES = new Set([
+  "read_file",
+  "list_dir",
+  "search_in_file",
+]);
+
+const BLIND_WRITE_INSPECTION_EVIDENCE_KEYS = new Set();
+
+function getNearestUserMessageIndexBeforeIndex(messages, index) {
+  const items = Array.isArray(messages) ? messages : [];
+  const numericIndex = Number(index);
+  const start =
+    Number.isFinite(numericIndex) && numericIndex >= 0
+      ? Math.min(numericIndex - 1, items.length - 1)
+      : items.length - 1;
+
+  for (let i = start; i >= 0; i--) {
+    if (items[i]?.role === "user") return i;
+  }
+
+  return -1;
+}
+
+function buildBlindWriteInspectionEvidenceKey({
+  taskKind,
+  userMessageIndex,
+  userText,
+}) {
+  const kind = String(taskKind || "").trim() || "unknown";
+  const userIndex =
+    Number.isInteger(userMessageIndex) && userMessageIndex >= 0
+      ? String(userMessageIndex)
+      : "unknown";
+  const goal = String(userText || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 400);
+
+  return `${kind}::${userIndex}::${goal}`;
+}
+
+function isInspectBeforeWriteGuardedTaskKind(taskKind) {
+  return INSPECT_BEFORE_WRITE_TOOL_KINDS.has(String(taskKind || "").trim());
+}
+
+function hasWriteFileToolCall(calls) {
+  return (Array.isArray(calls) ? calls : []).some(
+    (call) => String(call?.toolName || "").trim() === "write_file",
+  );
+}
+
+function hasSuccessfulInspectionToolResult(results) {
+  return (Array.isArray(results) ? results : []).some(
+    (item) =>
+      item?.ok &&
+      INSPECTION_TOOL_NAMES.has(String(item?.toolName || "").trim()),
+  );
+}
+
+function shouldBlockBlindWrite({
+  calls,
+  taskKind,
+  userMessageIndex,
+  userText,
+}) {
+  if (!isInspectBeforeWriteGuardedTaskKind(taskKind)) return false;
+  if (!hasWriteFileToolCall(calls)) return false;
+
+  const evidenceKey = buildBlindWriteInspectionEvidenceKey({
+    taskKind,
+    userMessageIndex,
+    userText,
+  });
+
+  return !BLIND_WRITE_INSPECTION_EVIDENCE_KEYS.has(evidenceKey);
+}
+
+function rememberSuccessfulInspectionForTask({
+  taskKind,
+  userMessageIndex,
+  userText,
+  results,
+}) {
+  if (!isInspectBeforeWriteGuardedTaskKind(taskKind)) return;
+  if (!hasSuccessfulInspectionToolResult(results)) return;
+
+  BLIND_WRITE_INSPECTION_EVIDENCE_KEYS.add(
+    buildBlindWriteInspectionEvidenceKey({
+      taskKind,
+      userMessageIndex,
+      userText,
+    }),
+  );
+}
+
 function buildToolBatchWorkingMessage(calls) {
   const items = Array.isArray(calls) ? calls : [];
   const writePaths = collectToolBatchPaths(items, "write_file");
@@ -1515,6 +1615,88 @@ export default function AiPanel({
           }
         }
         if (batchCalls.length > 0) {
+          const latestUserText = getNearestUserMessageTextBeforeIndex(
+            messages,
+            triggerMessageIndex,
+          );
+          const latestUserMessageIndex = getNearestUserMessageIndexBeforeIndex(
+            messages,
+            triggerMessageIndex,
+          );
+          const triggerToolMessage =
+            triggerMessageIndex >= 0 ? messages[triggerMessageIndex] : null;
+          const triggerToolTaskKind = String(
+            triggerToolMessage?.meta?.modelToolExecutionKind || "",
+          ).trim();
+          const isFixToolExecution =
+            triggerToolTaskKind === "broken_preview_debug";
+
+          if (
+            shouldBlockBlindWrite({
+              calls: batchCalls,
+              taskKind: triggerToolTaskKind,
+              userMessageIndex: latestUserMessageIndex,
+              userText: latestUserText,
+            })
+          ) {
+            appendMessage(
+              "assistant",
+              isFixToolExecution
+                ? "KForge blocked a file write because the model tried to fix files before completing inspection.\n\nNo files were changed."
+                : "KForge blocked a file write because the model tried to edit files before inspecting the project.\n\nNo files were changed.",
+              {
+                actions: [
+                  {
+                    label: "Inspect first",
+                    onClick: () => {
+                      const originalGoal = String(
+                        latestUserText ||
+                          (isFixToolExecution
+                            ? "Continue the previous fix/debug task."
+                            : "Continue the previous project edit."),
+                      ).trim();
+
+                      appendMessage(
+                        "assistant",
+                        isFixToolExecution
+                          ? "Inspecting first before attempting the fix."
+                          : "Inspecting first before attempting the edit.",
+                      );
+
+                      if (typeof sendWithPrompt === "function") {
+                        sendWithPrompt(
+                          (isFixToolExecution
+                            ? "Inspect before fixing.\n\n"
+                            : "Inspect before editing.\n\n") +
+                            `Original request: ${originalGoal}\n\n` +
+                            "The previous model response tried to request write_file before inspection evidence was available.\n" +
+                            "Do not request write_file yet. Request exactly one inspection tool call next: read_file, list_dir, or search_in_file.\n" +
+                            (isFixToolExecution
+                              ? "After the inspection result is available, continue with the smallest safe fix only if needed."
+                              : "After the inspection result is available, continue with the smallest safe edit only if needed."),
+                          {
+                            silentUserAppend: true,
+                            forceAdvisoryTestOverride: true,
+                          },
+                        );
+                      }
+                    },
+                  },
+                  {
+                    label: "Stop",
+                    onClick: () => {
+                      appendMessage(
+                        "assistant",
+                        "Stopped. No files were changed by the blocked write.",
+                      );
+                    },
+                  },
+                ],
+              },
+            );
+            return;
+          }
+
           appendMessage("assistant", buildToolBatchWorkingMessage(batchCalls));
 
           const executedBatchResults = [];
@@ -1538,6 +1720,13 @@ export default function AiPanel({
             });
           }
 
+          rememberSuccessfulInspectionForTask({
+            taskKind: triggerToolTaskKind,
+            userMessageIndex: latestUserMessageIndex,
+            userText: latestUserText,
+            results: executedBatchResults,
+          });
+
           const cancelledToolNames = executedBatchResults
             .filter((item) => item?.cancelled)
             .map((item) => item.toolName || "tool");
@@ -1556,10 +1745,6 @@ export default function AiPanel({
             appendMessage("assistant", doneMessage);
           }
 
-          const latestUserText = getNearestUserMessageTextBeforeIndex(
-            messages,
-            triggerMessageIndex,
-          );
           const successfulWritePaths = collectSuccessfulToolBatchPaths(
             executedBatchResults,
             "write_file",
@@ -1583,11 +1768,6 @@ export default function AiPanel({
               : "";
 
           const fallbackReadPath = latestWrittenPath || activeTab?.path || "";
-          const triggerToolMessage =
-            triggerMessageIndex >= 0 ? messages[triggerMessageIndex] : null;
-          const triggerToolTaskKind = String(
-            triggerToolMessage?.meta?.modelToolExecutionKind || "",
-          ).trim();
 
           const allWritesFailed =
             (failedWritePaths.length > 0 || failedDirPaths.length > 0) &&
@@ -1766,27 +1946,40 @@ export default function AiPanel({
               if (finalText && !agentMadeProjectChanges) {
                 appendMessage(
                   "assistant",
-                  "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
+                  isFixToolExecution
+                    ? "I inspected the relevant files for the fix, but I did not change any files yet."
+                    : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
                   {
                     actions: [
                       {
-                        label: "Continue editing",
+                        label: isFixToolExecution
+                          ? "Continue fixing"
+                          : "Continue editing",
                         onClick: () => {
                           const originalGoal = String(
-                            latestUserText || "Continue the previous project edit.",
+                            latestUserText ||
+                              (isFixToolExecution
+                                ? "Continue the previous fix/debug task."
+                                : "Continue the previous project edit."),
                           ).trim();
 
                           appendMessage(
                             "assistant",
-                            "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
+                            isFixToolExecution
+                              ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
+                              : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
-                              "Continue the previous project edit.\n\n" +
+                              (isFixToolExecution
+                                ? "Continue the previous fix/debug task.\n\n"
+                                : "Continue the previous project edit.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
                                 "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.",
+                                (isFixToolExecution
+                                  ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
+                                  : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,
@@ -1835,27 +2028,40 @@ export default function AiPanel({
               } else if (agentResult?.stopReason === "empty_response") {
                 appendMessage(
                   "assistant",
-                  "The model stopped after inspection and did not request the next edit. No further files were changed.",
+                  isFixToolExecution
+                    ? "The model stopped after fix inspection and did not request the next action. No further files were changed."
+                    : "The model stopped after inspection and did not request the next edit. No further files were changed.",
                   {
                     actions: [
                       {
-                        label: "Continue editing",
+                        label: isFixToolExecution
+                          ? "Continue fixing"
+                          : "Continue editing",
                         onClick: () => {
                           const originalGoal = String(
-                            latestUserText || "Continue the previous project edit.",
+                            latestUserText ||
+                              (isFixToolExecution
+                                ? "Continue the previous fix/debug task."
+                                : "Continue the previous project edit."),
                           ).trim();
 
                           appendMessage(
                             "assistant",
-                            "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
+                            isFixToolExecution
+                              ? "Continuing the fix attempt. I will ask the model to request one concrete tool call next."
+                              : "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
-                              "Continue the previous project edit.\n\n" +
+                              (isFixToolExecution
+                                ? "Continue the previous fix/debug task.\n\n"
+                                : "Continue the previous project edit.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
                                 "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only.",
+                                (isFixToolExecution
+                                  ? "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
+                                  : "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only."),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,

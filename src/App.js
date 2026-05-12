@@ -824,14 +824,24 @@ function getProjectEditRouteDecision({
   isAdvisoryTestOverride = false,
 } = {}) {
   const isProjectEdit = promptTask?.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT;
+  const isProjectFix = promptTask?.kind === "broken_preview_debug";
+  const isProjectEditLike = isProjectEdit || isProjectFix;
   const mode = modelWorkflowPolicy?.mode || "unknown";
-  const shouldShowGuardedEditNote = isProjectEdit && mode === "guarded_edit";
+  const shouldShowGuardedEditNote = isProjectEditLike && mode === "guarded_edit";
 
-  if (isProjectEdit && mode === "advisory_only" && !isAdvisoryTestOverride) {
+  if (isProjectEditLike && mode === "advisory_only" && !isAdvisoryTestOverride) {
     return {
       action: "block_advisory_project_edit",
       shouldShowGuardedEditNote: false,
       shouldClearProviderSwitchNote: false,
+    };
+  }
+
+  if (isProjectFix) {
+    return {
+      action: "project_fix",
+      shouldShowGuardedEditNote,
+      shouldClearProviderSwitchNote: !shouldShowGuardedEditNote,
     };
   }
 
@@ -2208,8 +2218,6 @@ export default function App() {
         s,
       );
 
-    if (!hasImplementationVerb) return false;
-
     const hasProjectAnchor =
       /\b(app|project|website|site|page|screen|view|ui|interface|frontend|codebase|file|folder|component|route|layout)\b/.test(
         s,
@@ -2226,10 +2234,20 @@ export default function App() {
         s,
       );
 
+    const hasConcreteProjectEdit =
+      hasConcreteContent &&
+      (
+        hasProjectAnchor ||
+        hasDirectionalProjectPhrase ||
+        /\b(app|project|page|screen|site|website|ui|interface)\b/.test(s)
+      );
+
+    if (!hasImplementationVerb && !hasConcreteProjectEdit) return false;
+
     return (
       hasProjectAnchor ||
       hasDirectionalProjectPhrase ||
-      (hasConcreteContent && /\b(app|project|page|screen|site|website|ui|interface)\b/.test(s))
+      hasConcreteProjectEdit
     );
   }
   function isWorkflowContinuationIntent(text = "") {
@@ -3252,6 +3270,8 @@ export default function App() {
 
       if (projectEditRoute.action === "project_edit") {
         setWorkflowContext(createImplementationInProgressWorkflowContext());
+      } else if (projectEditRoute.action === "project_fix") {
+        setWorkflowContext(createBugfixWorkflowContext(workflowContext, "project_fix_route"));
       }
 
       if (projectEditRoute.shouldShowGuardedEditNote) {
@@ -3403,7 +3423,10 @@ export default function App() {
 
         const shouldShowAdvisoryNoActionRecovery =
           isAdvisoryTestOverride &&
-          promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+          (
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
+            promptTask.kind === "broken_preview_debug"
+          ) &&
           toolBlocks.length === 0 &&
           !hasXmlLikeToolCall;
 
@@ -3419,11 +3442,17 @@ export default function App() {
 
         const shouldShowProjectEditNoToolRecovery =
           !shouldShowAdvisoryNoActionRecovery &&
-          promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+          (
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
+            promptTask.kind === "broken_preview_debug"
+          ) &&
           toolBlocks.length === 0 &&
           !hasXmlLikeToolCall &&
           !askForPatch &&
           !!cleaned;
+
+        const isFixNoToolRecovery =
+          promptTask.kind === "broken_preview_debug";
 
         // Append cleaned assistant output (keeps transcript readable)
         if (shouldShowAdvisoryNoActionRecovery) {
@@ -3478,19 +3507,30 @@ export default function App() {
         } else if (shouldShowProjectEditNoToolRecovery) {
           appendMessage(
             "assistant",
-            "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
-              "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
+            isFixNoToolRecovery
+              ? "The model replied without requesting a KForge tool, so no fix was made.\n\n" +
+                "This was a fix/debug request. I can ask it to continue with one concrete fix tool request, or stop here."
+              : "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
+                "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
             {
               actions: [
                 {
-                  label: "Continue editing",
+                  label: isFixNoToolRecovery
+                    ? "Continue fixing"
+                    : "Continue editing",
                   onClick: () => {
                     sendWithPrompt(
-                      "Continue the previous project edit.\n\n" +
+                      (isFixNoToolRecovery
+                          ? "Continue the previous fix/debug task.\n\n"
+                          : "Continue the previous project edit.\n\n") +
                         `Original request: ${draft}\n\n` +
-                        "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n" +
+                        (isFixNoToolRecovery
+                          ? "Your previous reply promised a fix/debug action but did not request a tool. Request exactly one fenced tool block now.\n"
+                          : "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n") +
                         "If inspection is needed, request one read_file or list_dir tool first. For a static project, index.html is often the first file to inspect.\n" +
-                        "If editing is possible, request one write_file tool. Do not give only prose.",
+                        (isFixNoToolRecovery
+                          ? "If a file fix is possible, request one write_file tool for the smallest safe fix. Do not give only prose."
+                          : "If editing is possible, request one write_file tool. Do not give only prose."),
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
