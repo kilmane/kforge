@@ -639,7 +639,22 @@ function buildPreviewHandoffMessage() {
   );
 }
 
-function buildPostEditNextStepMessage() {
+function buildPostEditNextStepMessage(context = null) {
+  const suggestedActions = Array.isArray(
+    context?.assistantResult?.suggestedActions,
+  )
+    ? context.assistantResult.suggestedActions
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    : [];
+
+  if (suggestedActions.length > 0) {
+    return (
+      `Next suggested actions:\n${suggestedActions.join(" / ")}.\n\n` +
+      "Use Preview Panel → Preview to run or view it. If dependencies are missing, use Preview Panel → Install first."
+    );
+  }
+
   return (
     "Next:\nUse Preview Panel → Preview to run or view it, show changes, or make another edit.\n\n" +
     "If dependencies are missing, use Preview Panel → Install first."
@@ -1880,7 +1895,7 @@ export default function AiPanel({
             const writeCompletionMessage =
               `Done — updated ${fileCountLabel}.\n\n` +
               `${buildCompletedWorkflowChangeSummary(completedWorkflowContext)}\n\n` +
-              buildPostEditNextStepMessage();
+              buildPostEditNextStepMessage(completedWorkflowContext);
 
             appendMessage("assistant", writeCompletionMessage);
           } else if (typeof runAi === "function") {
@@ -2142,7 +2157,7 @@ export default function AiPanel({
                   "assistant",
                   `Done — updated ${fileCountLabel}.\n\n${buildCompletedWorkflowChangeSummary(
                     completedWorkflowContext,
-                  )}\n\n${buildPostEditNextStepMessage()}`,
+                  )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`,
                 );
               } else if (finalText) {
                 appendMessage("assistant", finalText);
@@ -2159,7 +2174,7 @@ export default function AiPanel({
                   `${buildCompletedWorkflowChangeSummary(
                     completedWorkflowContext,
                   )}\n\n` +
-                  buildPostEditNextStepMessage();
+                  buildPostEditNextStepMessage(completedWorkflowContext);
 
                 appendMessage("assistant", agentWriteCompletionMessage);
               } else if (agentResult?.stopReason === "max_steps_reached") {

@@ -20,6 +20,47 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   ANOTHER_EDIT: "another_edit",
 });
 
+export const ASSISTANT_ACTION_RESULT = Object.freeze({
+  SUCCESS: "success",
+  FAIL: "fail",
+  BLOCKED: "blocked",
+  PARTIAL: "partial",
+  AMBIGUOUS: "ambiguous",
+  NEEDS_USER: "needs_user",
+  NEEDS_TOOL: "needs_tool",
+  NO_CHANGE_NEEDED: "no_change_needed",
+});
+
+export const ASSISTANT_ACTION_TYPE = Object.freeze({
+  PROJECT_EDIT: "project_edit",
+  FIX: "fix",
+  PERFORMANCE: "performance",
+  PREVIEW: "preview",
+  DEPLOY: "deploy",
+  SERVICES: "services",
+  MANUAL: "manual",
+  UNKNOWN: "unknown",
+});
+
+export const SUGGESTED_ACTION_LABEL = Object.freeze({
+  PREVIEW_APP: "Preview the app",
+  SHOW_CHANGES: "Show changes",
+  CONTINUE_EDITING: "Continue editing",
+  CONTINUE_FIXING: "Continue fixing",
+  CONTINUE_DIAGNOSING: "Continue diagnosing",
+  FIX_ERROR: "Fix the error",
+  SHOW_LOGS: "Show logs",
+  TRY_AGAIN: "Try again",
+  DEPLOY_VERCEL: "Deploy to Vercel",
+  DEPLOY_NETLIFY: "Deploy to Netlify",
+  OPEN_SERVICES: "Open Services",
+  GIVE_MANUAL_STEPS: "Give manual steps",
+  CONNECT_GITHUB_FIRST: "Connect GitHub first",
+  CHOOSE_VERCEL: "Choose Vercel",
+  CHOOSE_NETLIFY: "Choose Netlify",
+  STOP: "Stop",
+});
+
 function normalizeWorkflowPathList(paths = []) {
   const sourcePaths = Array.isArray(paths) ? paths : [];
   const seen = new Set();
@@ -56,6 +97,146 @@ function normalizeChangedFileSummaries(changedFileSummaries = []) {
       };
     })
     .filter((item) => item.summary);
+}
+
+function normalizeAssistantActionResult(result = "") {
+  const cleanResult = String(result || "").trim();
+
+  return Object.values(ASSISTANT_ACTION_RESULT).includes(cleanResult)
+    ? cleanResult
+    : ASSISTANT_ACTION_RESULT.AMBIGUOUS;
+}
+
+function normalizeAssistantActionType(actionType = "") {
+  const cleanActionType = String(actionType || "").trim();
+
+  return Object.values(ASSISTANT_ACTION_TYPE).includes(cleanActionType)
+    ? cleanActionType
+    : ASSISTANT_ACTION_TYPE.UNKNOWN;
+}
+
+export function buildSuggestedActionsForAssistantResult({
+  actionResult = ASSISTANT_ACTION_RESULT.AMBIGUOUS,
+  actionType = ASSISTANT_ACTION_TYPE.UNKNOWN,
+} = {}) {
+  const result = normalizeAssistantActionResult(actionResult);
+  const type = normalizeAssistantActionType(actionType);
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.SUCCESS &&
+    type === ASSISTANT_ACTION_TYPE.PROJECT_EDIT
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+      SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+      SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.SUCCESS &&
+    type === ASSISTANT_ACTION_TYPE.PREVIEW
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.DEPLOY_VERCEL,
+      SUGGESTED_ACTION_LABEL.DEPLOY_NETLIFY,
+      SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.FAIL &&
+    type === ASSISTANT_ACTION_TYPE.PREVIEW
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.FIX_ERROR,
+      SUGGESTED_ACTION_LABEL.SHOW_LOGS,
+      SUGGESTED_ACTION_LABEL.TRY_AGAIN,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.NEEDS_USER &&
+    type === ASSISTANT_ACTION_TYPE.DEPLOY
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.CHOOSE_VERCEL,
+      SUGGESTED_ACTION_LABEL.CHOOSE_NETLIFY,
+      SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.PARTIAL &&
+    type === ASSISTANT_ACTION_TYPE.PERFORMANCE
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING,
+      SUGGESTED_ACTION_LABEL.STOP,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.PARTIAL &&
+    type === ASSISTANT_ACTION_TYPE.FIX
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.CONTINUE_FIXING,
+      SUGGESTED_ACTION_LABEL.STOP,
+    ];
+  }
+
+  if (result === ASSISTANT_ACTION_RESULT.PARTIAL) {
+    return [
+      SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+      SUGGESTED_ACTION_LABEL.STOP,
+    ];
+  }
+
+  if (result === ASSISTANT_ACTION_RESULT.NO_CHANGE_NEEDED) {
+    return [
+      SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+      SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+      SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+    ];
+  }
+
+  return [
+    SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+    SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+    SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+  ];
+}
+
+export function buildAssistantResultProtocol({
+  actionResult = ASSISTANT_ACTION_RESULT.AMBIGUOUS,
+  actionType = ASSISTANT_ACTION_TYPE.UNKNOWN,
+  summary = "",
+  changedPaths = [],
+  nextStep = "",
+  suggestedActions = null,
+  source = "",
+} = {}) {
+  const normalizedActionResult = normalizeAssistantActionResult(actionResult);
+  const normalizedActionType = normalizeAssistantActionType(actionType);
+  const normalizedChangedPaths = normalizeWorkflowPathList(changedPaths);
+  const normalizedSuggestedActions = Array.isArray(suggestedActions)
+    ? suggestedActions.map((item) => String(item || "").trim()).filter(Boolean)
+    : buildSuggestedActionsForAssistantResult({
+        actionResult: normalizedActionResult,
+        actionType: normalizedActionType,
+      });
+
+  return {
+    actionResult: normalizedActionResult,
+    actionType: normalizedActionType,
+    summary: String(summary || "").trim(),
+    changedPaths: normalizedChangedPaths,
+    nextStep: String(nextStep || "").trim(),
+    suggestedActions: normalizedSuggestedActions,
+    updatedAt: Date.now(),
+    source: String(source || "").trim(),
+  };
 }
 
 export function buildCompletedWorkflowChangeSummary(context = null, options = {}) {
@@ -165,6 +346,7 @@ export function createCompletedImplementationWorkflowContext({
   changeSummary = "",
   completedSummary = "",
   partialSummary = "",
+  assistantResult = null,
   nextStep = WORKFLOW_NEXT_STEP.PREVIEW,
   source = "tool_batch",
 } = {}) {
@@ -178,21 +360,34 @@ export function createCompletedImplementationWorkflowContext({
       ? normalizedEditedPaths[normalizedEditedPaths.length - 1]
       : "");
 
+  const finalEditedPaths =
+    normalizedEditedPaths.length > 0
+      ? normalizedEditedPaths
+      : finalLastEditedPath
+        ? [finalLastEditedPath]
+        : [];
+
+  const finalAssistantResult =
+    assistantResult ||
+    buildAssistantResultProtocol({
+      actionResult: ASSISTANT_ACTION_RESULT.SUCCESS,
+      actionType: ASSISTANT_ACTION_TYPE.PROJECT_EDIT,
+      changedPaths: finalEditedPaths,
+      nextStep,
+      source,
+    });
+
   return {
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.COMPLETED,
     nextStep,
     lastEditedPath: finalLastEditedPath,
-    editedPaths:
-      normalizedEditedPaths.length > 0
-        ? normalizedEditedPaths
-        : finalLastEditedPath
-          ? [finalLastEditedPath]
-          : [],
+    editedPaths: finalEditedPaths,
     changedFileSummaries: normalizedChangedFileSummaries,
     changeSummary: String(changeSummary || "").trim(),
     completedSummary: String(completedSummary || "").trim(),
     partialSummary: String(partialSummary || "").trim(),
+    assistantResult: finalAssistantResult,
     updatedAt: Date.now(),
     source,
   };
