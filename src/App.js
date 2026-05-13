@@ -81,7 +81,11 @@ Behavior rules:
 - Keep guidance calm and optional.
 - Do not ask for secrets, credentials, or configuration values too early.
 - Only move into file creation or code changes when the user asks for implementation work or the task truly requires project files.
-- For performance requests such as slow, laggy, large bundle, slow loading, memory, CPU, or excessive re-rendering, treat the task as diagnosis-first project work: inspect relevant project files and evidence before changing code, avoid blind optimization, avoid repeatedly inspecting the same file, and prefer the smallest evidence-based fix. Manual performance guidance should recommend measuring/inspecting first and should not present React.memo, useMemo, or useCallback as blanket default fixes.
+- For performance requests such as slow, laggy, large bundle, slow loading, memory, CPU, or excessive re-rendering, treat the task as diagnosis-first project work: inspect relevant project files and evidence before changing code, avoid blind optimization, avoid repeatedly inspecting the same file, and prefer the smallest evidence-based fix.
+- Manual performance guidance must start with measuring/inspecting first, for example Lighthouse, React Profiler, bundle analysis, build output, network waterfall, image sizes, or preview logs.
+- In manual performance guidance, React.memo, useMemo, and useCallback must be framed as conditional tools only: use them after profiling shows unnecessary re-renders, expensive calculations, or unstable props. Do not list them as default/general fixes.
+- In manual performance guidance, do not promise results. Avoid endings such as "you should see an improvement", "this will improve performance", "significantly improve performance", or similar guaranteed outcome wording. End with conditional wording such as "Measure again after each change to confirm whether it helped."
+- In manual Vite/React performance guidance, do not recommend changing Vite minification settings, adding terser, adding PurgeCSS, or adding new optimization packages as default steps unless there is evidence they are needed. Prefer measurement, bundle review, image review, dependency review, and small evidence-based changes first.
 
 Model usage hints:
 - Treat explicit manual-intent language as a strong override. Examples include: "manually", "manual steps", "manual setup", "just give me the commands", "don't use KForge", "bypass KForge", and similar phrasing.
@@ -882,6 +886,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
 
   if (kind === "empty_folder_performance") {
     return { action: "empty_folder_performance" };
+  }
+
+  if (kind === "manual_performance") {
+    return { action: "manual_performance" };
   }
 
   if (kind === "empty_folder_plan") {
@@ -2389,6 +2397,27 @@ export default function App() {
     );
   }
 
+  function buildManualPerformanceGuidanceMessage() {
+    return (
+      "Manual performance path:\n\n" +
+      "1. Measure first.\n" +
+      "   Use Lighthouse, React Profiler, build output, browser Network/Performance tabs, preview logs, or bundle size information to find the actual bottleneck.\n\n" +
+      "2. Check the biggest likely costs first.\n" +
+      "   Look for large images, large dependencies, repeated network requests, slow API calls, expensive rendering, or unnecessary work during startup.\n\n" +
+      "3. Review the build output.\n" +
+      "   Run `pnpm build` and check whether the bundle or assets are larger than expected. Only add a bundle analyzer if the normal build output is not enough.\n\n" +
+      "4. Review images and static assets.\n" +
+      "   Compress oversized images, use appropriate dimensions, and lazy-load non-critical images when measurement shows they affect load time.\n\n" +
+      "5. Review React rendering only after profiling.\n" +
+      "   Use React.memo, useMemo, or useCallback only when profiling shows unnecessary re-renders, expensive calculations, or unstable props. Do not add them as blanket fixes.\n\n" +
+      "6. Make one small change at a time.\n" +
+      "   Apply the smallest evidence-based fix, then measure again before making another change.\n\n" +
+      "7. Verify after each change.\n" +
+      "   Run the app, compare the same metric again, and keep the change only if it helped.\n\n" +
+      "Measure again after each change to confirm whether it helped."
+    );
+  }
+
   function buildNoProjectImplementationMessage() {
     return (
       "Open or create a project first in Explorer.\n\n" +
@@ -3054,6 +3083,17 @@ export default function App() {
         };
       }
 
+      if (
+        hasManualOrAdvisoryIntent(text) &&
+        isPerformanceProjectWorkIntent(text)
+      ) {
+        return {
+          kind: "manual_performance",
+          confidence: "high",
+          source: "performance_manual_intent",
+        };
+      }
+
       if (hasManualOrAdvisoryIntent(text)) {
         return {
           kind: "manual_steps",
@@ -3509,6 +3549,11 @@ export default function App() {
 
         if (directWorkflowHandoffRoute.action === "empty_folder_performance") {
           appendMessage("assistant", buildEmptyFolderPerformanceMessage());
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "manual_performance") {
+          appendMessage("assistant", buildManualPerformanceGuidanceMessage());
           return;
         }
 

@@ -2078,63 +2078,60 @@ export default function AiPanel({
                 !isFixToolExecution && isPerformanceProjectRequest(latestUserText);
 
               if (finalText && !agentMadeProjectChanges) {
-                appendMessage(
-                  "assistant",
-                  isFixToolExecution
-                    ? "I inspected the relevant files for the fix, but I did not change any files yet."
-                    : isPerformanceToolExecution
-                      ? "I inspected part of the project for performance, but I did not change any files yet. Performance work should inspect enough evidence before editing."
+                if (isPerformanceToolExecution) {
+                  appendMessage(
+                    "assistant",
+                    `${finalText}\n\nNo files were changed by this performance diagnosis.`,
+                  );
+                } else {
+                  appendMessage(
+                    "assistant",
+                    isFixToolExecution
+                      ? "I inspected the relevant files for the fix, but I did not change any files yet."
                       : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
-                  {
-                    actions: [
-                      {
-                        label: isFixToolExecution
-                          ? "Continue fixing"
-                          : isPerformanceToolExecution
-                            ? "Continue diagnosing"
+                    {
+                      actions: [
+                        {
+                          label: isFixToolExecution
+                            ? "Continue fixing"
                             : "Continue editing",
-                        onClick: () => {
-                          const originalGoal = String(
-                            latestUserText ||
-                              (isFixToolExecution
-                                ? "Continue the previous fix/debug task."
-                                : "Continue the previous project edit."),
-                          ).trim();
+                          onClick: () => {
+                            const originalGoal = String(
+                              latestUserText ||
+                                (isFixToolExecution
+                                  ? "Continue the previous fix/debug task."
+                                  : "Continue the previous project edit."),
+                            ).trim();
 
-                          appendMessage(
-                            "assistant",
-                            isFixToolExecution
-                              ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
-                              : isPerformanceToolExecution
-                                ? "Continuing the performance diagnosis. I will ask the model to inspect enough evidence before making a file change."
+                            appendMessage(
+                              "assistant",
+                              isFixToolExecution
+                                ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
                                 : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
-                          );
-
-                          if (typeof sendWithPrompt === "function") {
-                            sendWithPrompt(
-                              (isFixToolExecution
-                                ? "Continue the previous fix/debug task.\n\n"
-                                : isPerformanceToolExecution
-                                  ? "Continue the previous performance diagnosis.\n\n"
-                                  : "Continue the previous project edit.\n\n") +
-                                `Original request: ${originalGoal}\n\n` +
-                                (isPerformanceToolExecution
-                                  ? "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next step: either inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component, or if enough evidence is already available, request one smallest safe write_file change. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
-                                  : "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                    (isFixToolExecution
-                                      ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                      : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.")),
-                              {
-                                silentUserAppend: true,
-                                forceAdvisoryTestOverride: true,
-                              },
                             );
-                          }
+
+                            if (typeof sendWithPrompt === "function") {
+                              sendWithPrompt(
+                                (isFixToolExecution
+                                  ? "Continue the previous fix/debug task.\n\n"
+                                  : "Continue the previous project edit.\n\n") +
+                                  `Original request: ${originalGoal}\n\n` +
+                                  "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                  (isFixToolExecution
+                                    ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
+                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
+                                {
+                                  silentUserAppend: true,
+                                  forceAdvisoryTestOverride: true,
+                                },
+                              );
+                            }
+                          },
                         },
-                      },
-                    ],
-                  },
-                );
+                      ],
+                    },
+                  );
+                }
               } else if (finalText && agentMadeProjectChanges) {
                 const fileCountLabel =
                   agentSuccessfulWritePaths.length === 1
