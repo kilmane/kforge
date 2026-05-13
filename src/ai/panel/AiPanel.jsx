@@ -24,6 +24,9 @@ import { runToolHandler } from "../tools/handlers/index.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
+  ASSISTANT_ACTION_RESULT,
+  ASSISTANT_ACTION_TYPE,
+  buildAssistantResultProtocol,
   buildCompletedWorkflowChangeSummary,
   createCompletedImplementationWorkflowContext,
   SUGGESTED_ACTION_LABEL,
@@ -660,6 +663,32 @@ function buildPostEditNextStepMessage(context = null) {
     "Next:\nUse Preview Panel → Preview to run or view it, show changes, or make another edit.\n\n" +
     "If dependencies are missing, use Preview Panel → Install first."
   );
+}
+function getAssistantResultActionTypeForContinuation({
+  isPerformanceToolExecution = false,
+  isFixToolExecution = false,
+} = {}) {
+  if (isPerformanceToolExecution) return ASSISTANT_ACTION_TYPE.PERFORMANCE;
+  if (isFixToolExecution) return ASSISTANT_ACTION_TYPE.FIX;
+
+  return ASSISTANT_ACTION_TYPE.PROJECT_EDIT;
+}
+
+function buildPartialAssistantResultForContinuation({
+  isPerformanceToolExecution = false,
+  isFixToolExecution = false,
+  summary = "",
+  source = "",
+} = {}) {
+  return buildAssistantResultProtocol({
+    actionResult: ASSISTANT_ACTION_RESULT.PARTIAL,
+    actionType: getAssistantResultActionTypeForContinuation({
+      isPerformanceToolExecution,
+      isFixToolExecution,
+    }),
+    summary,
+    source,
+  });
 }
 function buildAgentConversationInput(messages, tools, maxTurns = 20) {
   const relevant = (Array.isArray(messages) ? messages : [])
@@ -2187,6 +2216,23 @@ export default function AiPanel({
                         ? "Continue the previous fix/debug task."
                         : "Continue the previous project edit."),
                 ).trim();
+                const assistantResult = buildPartialAssistantResultForContinuation({
+                  isPerformanceToolExecution,
+                  isFixToolExecution,
+                  summary: "The agent reached the safe tool-step limit before changing files.",
+                  source: "agent_max_steps_reached",
+                });
+                const continueActionLabel =
+                  assistantResult.suggestedActions[0] ||
+                  (isPerformanceToolExecution
+                    ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
+                    : isFixToolExecution
+                      ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING);
+                const stopActionLabel =
+                  assistantResult.suggestedActions.find(
+                    (item) => item === SUGGESTED_ACTION_LABEL.STOP,
+                  ) || SUGGESTED_ACTION_LABEL.STOP;
 
                 appendMessage(
                   "assistant",
@@ -2196,11 +2242,7 @@ export default function AiPanel({
                   {
                     actions: [
                       {
-                        label: isPerformanceToolExecution
-                          ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
-                          : isFixToolExecution
-                            ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                        label: continueActionLabel,
                         onClick: () => {
                           appendMessage(
                             "assistant",
@@ -2229,7 +2271,7 @@ export default function AiPanel({
                         },
                       },
                       {
-                        label: SUGGESTED_ACTION_LABEL.STOP,
+                        label: stopActionLabel,
                         onClick: () => {
                           appendMessage(
                             "assistant",
