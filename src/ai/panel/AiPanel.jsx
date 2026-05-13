@@ -1744,6 +1744,24 @@ export default function AiPanel({
               userText: latestUserText,
             })
           ) {
+            const assistantResult = buildAssistantResultProtocol({
+              actionResult: ASSISTANT_ACTION_RESULT.BLOCKED,
+              actionType: getAssistantResultActionTypeForContinuation({
+                isFixToolExecution,
+              }),
+              summary: isFixToolExecution
+                ? "KForge blocked a fix write before inspection completed."
+                : "KForge blocked an edit write before project inspection completed.",
+              source: "blind_write_guard",
+            });
+            const inspectFirstActionLabel =
+              assistantResult.suggestedActions[0] ||
+              SUGGESTED_ACTION_LABEL.INSPECT_FIRST;
+            const stopActionLabel =
+              assistantResult.suggestedActions.find(
+                (item) => item === SUGGESTED_ACTION_LABEL.STOP,
+              ) || SUGGESTED_ACTION_LABEL.STOP;
+
             appendMessage(
               "assistant",
               isFixToolExecution
@@ -1752,7 +1770,7 @@ export default function AiPanel({
               {
                 actions: [
                   {
-                    label: "Inspect first",
+                    label: inspectFirstActionLabel,
                     onClick: () => {
                       const originalGoal = String(
                         latestUserText ||
@@ -1788,7 +1806,7 @@ export default function AiPanel({
                     },
                   },
                   {
-                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    label: stopActionLabel,
                     onClick: () => {
                       appendMessage(
                         "assistant",

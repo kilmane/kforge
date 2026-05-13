@@ -58,6 +58,7 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   CONNECT_GITHUB_FIRST: "Connect GitHub first",
   CHOOSE_VERCEL: "Choose Vercel",
   CHOOSE_NETLIFY: "Choose Netlify",
+  INSPECT_FIRST: "Inspect first",
   STOP: "Stop",
 });
 
@@ -163,6 +164,17 @@ export function buildSuggestedActionsForAssistantResult({
       SUGGESTED_ACTION_LABEL.CHOOSE_VERCEL,
       SUGGESTED_ACTION_LABEL.CHOOSE_NETLIFY,
       SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.BLOCKED &&
+    (type === ASSISTANT_ACTION_TYPE.PROJECT_EDIT ||
+      type === ASSISTANT_ACTION_TYPE.FIX)
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
+      SUGGESTED_ACTION_LABEL.STOP,
     ];
   }
 
