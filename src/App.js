@@ -2509,14 +2509,69 @@ export default function App() {
     );
   }
 
-  function buildSupabaseRoutingMessage(projectOpen) {
+  function buildSupabaseRoutingMessage(projectOpen, text = "") {
     const route = "Services → Backend → Supabase";
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    const mentionsFailure =
+      /\b(fail|failed|error|broken|not working|doesn't work|does not work|cannot connect|can't connect|connection issue|connection problem|missing)\b/.test(
+        s,
+      );
+
+    const asksEnvPlacement =
+      s.includes("where do i put") ||
+      s.includes("where should i put") ||
+      s.includes(".env") ||
+      s.includes("env file") ||
+      s.includes("environment") ||
+      s.includes("key") ||
+      s.includes("keys") ||
+      s.includes("anon key") ||
+      s.includes("public key");
+
+    const asksQueryHelp =
+      /\b(query|queries|read|select|insert|table|rows|data)\b/.test(s) ||
+      s.includes("query helper") ||
+      s.includes("read example") ||
+      s.includes("insert example");
 
     if (!projectOpen) {
       return (
         "Open a project folder first in Explorer.\n\n" +
         `Then you can leave the chat and open: ${route}.\n\n` +
         'Start with "Quick Connect Supabase" for the beginner-friendly flow, or "Check Supabase setup" for step-by-step control.\n\n' +
+        "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
+      );
+    }
+
+    if (mentionsFailure) {
+      return (
+        "KForge can help troubleshoot Supabase through the Supabase service flow.\n\n" +
+        `You can now leave the chat and open: ${route}.\n\n` +
+        'Start with "Check Supabase setup". It checks env values, the Supabase client dependency, the client file, starter examples, query helpers, and local Supabase config when present.\n\n' +
+        "Read the Services log/result for the exact failed or missing step. If you paste that log back into chat, I can help interpret it without pretending I can see it automatically.\n\n" +
+        "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
+      );
+    }
+
+    if (asksEnvPlacement) {
+      return (
+        "KForge can help prepare Supabase env files through the Supabase service flow.\n\n" +
+        `You can now leave the chat and open: ${route}.\n\n` +
+        'Use "Check Supabase setup" first, then "Create .env file" if the project needs one.\n\n' +
+        "For most frontend/Vite projects, use VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. KForge also tracks SUPABASE_URL and SUPABASE_ANON_KEY for non-Vite or shared setup checks.\n\n" +
+        "Use the anon/public Supabase key. Do not paste service-role, private, or admin keys into chat or frontend env files."
+      );
+    }
+
+    if (asksQueryHelp) {
+      return (
+        "KForge can help you start querying Supabase through the Supabase service flow.\n\n" +
+        `You can now leave the chat and open: ${route}.\n\n` +
+        'After setup is checked, use "Create Supabase read example" or "Create Supabase query helper".\n\n' +
+        "Those generate starter files such as src/examples/supabaseExample.js and src/lib/supabaseQueries.js, which you can adapt to your real table names and app flow.\n\n" +
         "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
       );
     }
@@ -2767,6 +2822,17 @@ export default function App() {
         };
       }
 
+      if (
+        isSupabaseServiceWorkflowIntent(text) &&
+        !hasManualOrAdvisoryIntent(text)
+      ) {
+        return {
+          kind: "supabase_service",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
       if (isWorkflowBugfixIntent(text)) {
         return {
           kind: "broken_preview_debug",
@@ -2821,13 +2887,6 @@ export default function App() {
         };
       }
 
-      if (isSupabaseServiceWorkflowIntent(text)) {
-        return {
-          kind: "supabase_service",
-          confidence: "high",
-          source: "existing_intent_helpers",
-        };
-      }
 
       if (isDependencyInstallWorkflowIntent(text)) {
         return {
@@ -3274,7 +3333,7 @@ export default function App() {
         }
 
         if (directWorkflowHandoffRoute.action === "supabase_service") {
-          appendMessage("assistant", buildSupabaseRoutingMessage(projectOpen));
+          appendMessage("assistant", buildSupabaseRoutingMessage(projectOpen, draft));
           return;
         }
 
