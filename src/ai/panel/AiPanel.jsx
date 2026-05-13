@@ -2292,6 +2292,20 @@ export default function AiPanel({
                   `Cancelled — stopped ${cancelledToolName}. I did not continue after the denied tool request.`,
                 );
               } else if (agentResult?.stopReason === "empty_response") {
+                const assistantResult = buildPartialAssistantResultForContinuation({
+                  isPerformanceToolExecution,
+                  isFixToolExecution,
+                  summary: "The model stopped after inspection without requesting the next action.",
+                  source: "agent_empty_response",
+                });
+                const continueActionLabel =
+                  assistantResult.suggestedActions[0] ||
+                  (isFixToolExecution
+                    ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                    : isPerformanceToolExecution
+                      ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
+                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING);
+
                 appendMessage(
                   "assistant",
                   isFixToolExecution
@@ -2302,11 +2316,7 @@ export default function AiPanel({
                   {
                     actions: [
                       {
-                        label: isFixToolExecution
-                          ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                          : isPerformanceToolExecution
-                            ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
-                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                        label: continueActionLabel,
                         onClick: () => {
                           const originalGoal = String(
                             latestUserText ||
