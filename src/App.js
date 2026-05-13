@@ -81,6 +81,7 @@ Behavior rules:
 - Keep guidance calm and optional.
 - Do not ask for secrets, credentials, or configuration values too early.
 - Only move into file creation or code changes when the user asks for implementation work or the task truly requires project files.
+- For performance requests such as slow, laggy, large bundle, slow loading, memory, CPU, or excessive re-rendering, treat the task as diagnosis-first project work: inspect relevant project files and evidence before changing code, avoid blind optimization, avoid repeatedly inspecting the same file, and prefer the smallest evidence-based fix. Manual performance guidance should recommend measuring/inspecting first and should not present React.memo, useMemo, or useCallback as blanket default fixes.
 
 Model usage hints:
 - Treat explicit manual-intent language as a strong override. Examples include: "manually", "manual steps", "manual setup", "just give me the commands", "don't use KForge", "bypass KForge", and similar phrasing.
@@ -871,8 +872,16 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
     return { action: "no_project_implementation" };
   }
 
+  if (kind === "no_project_performance") {
+    return { action: "no_project_performance" };
+  }
+
   if (kind === "empty_folder_implementation") {
     return { action: "empty_folder_implementation" };
+  }
+
+  if (kind === "empty_folder_performance") {
+    return { action: "empty_folder_performance" };
   }
 
   if (kind === "empty_folder_plan") {
@@ -2259,6 +2268,43 @@ export default function App() {
       hasConcreteProjectEdit
     );
   }
+  function isPerformanceProjectWorkIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const hasPerformanceSignal =
+      /\b(performance|slow|sluggish|laggy|lag|lags|freezes?|freezing|stutters?|optimi[sz]e|speed up|faster|loading time|load time|takes too long|bundle|build size|gzip|web vitals|lighthouse|rerender|re-render|memory leak|high memory|cpu)\b/.test(
+        s,
+      ) ||
+      s.includes("too many renders") ||
+      s.includes("reduce bundle") ||
+      s.includes("loads slowly") ||
+      s.includes("slow to load") ||
+      s.includes("make it faster") ||
+      s.includes("make this faster");
+
+    if (!hasPerformanceSignal) return false;
+
+    const hasProjectAnchor =
+      /\b(app|project|website|site|page|screen|view|ui|interface|frontend|bundle|build|preview|component|route|layout)\b/.test(
+        s,
+      ) ||
+      /\b(this|it)\b/.test(s) ||
+      /\b(src|public|components|pages|app)\//.test(s) ||
+      /\b[\w./-]+\.(js|jsx|ts|tsx|css|html|json|md|rs|py)\b/.test(s);
+
+    const hasPerformanceAction =
+      /\b(make|improve|optimi[sz]e|speed|reduce|fix|debug|diagnose|check|find|profile|investigate)\b/.test(
+        s,
+      ) ||
+      /^(why|what)\b/.test(s);
+
+    return hasProjectAnchor || hasPerformanceAction;
+  }
+
   function isWorkflowContinuationIntent(text = "") {
     const s = String(text || "").toLowerCase().trim();
     if (!s) return false;
@@ -2325,6 +2371,21 @@ export default function App() {
       s.includes("npm install") ||
       s.includes("pnpm install") ||
       s.includes("yarn install")
+    );
+  }
+
+  function buildNoProjectPerformanceMessage() {
+    return (
+      "Open a project folder first in Explorer.\n\n" +
+      "Performance diagnosis depends on the current project files, package/config files, build output, preview logs, and the specific slow or laggy behaviour.\n\n" +
+      "Once a project folder is open, KForge can inspect the relevant files before suggesting the smallest safe performance fix."
+    );
+  }
+
+  function buildEmptyFolderPerformanceMessage() {
+    return (
+      "The current project folder is empty, so there is no app to diagnose for performance yet.\n\n" +
+      "Create or open an app project first. If you want a starter project here, use Preview → Generate before asking KForge to diagnose performance."
     );
   }
 
@@ -2928,6 +2989,33 @@ export default function App() {
         };
       }
 
+      if (
+        isPerformanceProjectWorkIntent(text) &&
+        !hasManualOrAdvisoryIntent(text)
+      ) {
+        if (!projectOpen) {
+          return {
+            kind: "no_project_performance",
+            confidence: "high",
+            source: "existing_intent_helpers",
+          };
+        }
+
+        if (emptyProjectFolder) {
+          return {
+            kind: "empty_folder_performance",
+            confidence: "high",
+            source: "existing_intent_helpers",
+          };
+        }
+
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "performance_intent",
+        };
+      }
+
       if (isWorkflowBugfixIntent(text)) {
         return {
           kind: "broken_preview_debug",
@@ -3406,11 +3494,21 @@ export default function App() {
           return;
         }
 
+        if (directWorkflowHandoffRoute.action === "no_project_performance") {
+          appendMessage("assistant", buildNoProjectPerformanceMessage());
+          return;
+        }
+
         if (directWorkflowHandoffRoute.action === "empty_folder_implementation") {
           appendMessage(
             "assistant",
             buildEmptyFolderImplementationRoutingMessage(),
           );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "empty_folder_performance") {
+          appendMessage("assistant", buildEmptyFolderPerformanceMessage());
           return;
         }
 
@@ -3561,9 +3659,22 @@ export default function App() {
           "Inspect before writing and keep changes small.\n"
         : "";
 
+      const isPerformanceProjectTask = promptTask.source === "performance_intent";
+
+      const performanceToolInstruction = isPerformanceProjectTask
+        ? "\n\nPerformance task guidance:\n" +
+          "- Treat this as diagnosis-first performance work.\n" +
+          "- Before write_file, inspect enough relevant text evidence to justify the change. For React/Vite-style apps, likely evidence includes src/App.*, src/App.css or index.css, package.json, and directly relevant component files.\n" +
+          "- Do not repeatedly inspect the same file. If src/App.* was already read, choose a different missing text evidence target such as CSS, package.json, main entry, or a relevant component.\n" +
+          "- Do not read binary assets such as .png, .jpg, .jpeg, .gif, .webp, .ico, .woff, or .ttf as text. You may list asset directories and reason from filenames/sizes only when available.\n" +
+          "- If enough evidence is already available, either request one smallest safe write_file change or explain clearly that no safe code edit is justified.\n" +
+          "- Do not blindly add React.memo, useMemo, or useCallback everywhere. Use them only when inspected code shows repeated unnecessary renders, expensive calculations, unstable props, or a specific measurable bottleneck.\n" +
+          "- Prefer the smallest evidence-based performance fix, such as removing unused work/assets, simplifying render paths, reducing oversized media, or tightening an obviously inefficient loop.\n"
+        : "";
+
       const toolInstruction =
         !effectiveAskForPatch && !shouldSuppressToolsForPrompt
-          ? advisoryOverrideInstruction + "\n\nIMPORTANT:\n" +
+          ? advisoryOverrideInstruction + performanceToolInstruction + "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
             "For multi-file implementation requests, inspect each likely existing target file before writing it unless that exact file was already read in this conversation.\n" +

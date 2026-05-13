@@ -550,6 +550,66 @@ function isDependencyInstallIntent(text) {
   );
 }
 
+function isPerformanceProjectRequest(text = "") {
+  const s = String(text || "").toLowerCase().trim();
+  if (!s) return false;
+
+  return (
+    /\b(performance|slow|sluggish|laggy|lag|lags|freezes?|freezing|stutters?|optimi[sz]e|speed up|faster|loading time|load time|takes too long|bundle|build size|gzip|web vitals|lighthouse|rerender|re-render|memory leak|high memory|cpu)\b/.test(
+      s,
+    ) ||
+    s.includes("too many renders") ||
+    s.includes("reduce bundle") ||
+    s.includes("loads slowly") ||
+    s.includes("slow to load") ||
+    s.includes("make it faster") ||
+    s.includes("make this faster")
+  );
+}
+
+function normalizeDiagnosticPathKey(path = "") {
+  return String(path || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\/+/g, "/")
+    .trim()
+    .toLowerCase();
+}
+
+function isBinaryAssetPath(path = "") {
+  return /\.(png|jpe?g|gif|webp|ico|bmp|svgz?|woff2?|ttf|otf|eot|mp4|webm|mov|mp3|wav|zip|pdf)$/i.test(
+    String(path || "").trim(),
+  );
+}
+
+function collectToolResultPathsFromText(text = "") {
+  const source = String(text || "");
+  const paths = [];
+
+  for (const match of source.matchAll(/\(Path:\s*([^)]+)\)/g)) {
+    if (match?.[1]) paths.push(match[1]);
+  }
+
+  for (const match of source.matchAll(/\bPath:\s*([^\r\n)]+)/g)) {
+    if (match?.[1]) paths.push(match[1]);
+  }
+
+  return paths;
+}
+
+function pathKeyMatches(existingKey, nextKey) {
+  if (!existingKey || !nextKey) return false;
+  return (
+    existingKey === nextKey ||
+    existingKey.endsWith(`/${nextKey}`) ||
+    nextKey.endsWith(`/${existingKey}`)
+  );
+}
+
+function isDiagnosticReadTool(toolName = "") {
+  return toolName === "read_file" || toolName === "list_dir";
+}
+
 function isPreviewIntent(text) {
   const s = String(text || "").toLowerCase();
   return (
@@ -1850,6 +1910,39 @@ export default function AiPanel({
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
+              const isPerformanceContinuation =
+                isPerformanceProjectRequest(latestUserText);
+              const performanceDiagnosticReadKeys = new Set();
+
+              const rememberPerformanceDiagnosticPath = (path) => {
+                const key = normalizeDiagnosticPathKey(path);
+                if (key) performanceDiagnosticReadKeys.add(key);
+              };
+
+              const hasPerformanceDiagnosticPath = (path) => {
+                const key = normalizeDiagnosticPathKey(path);
+                if (!key) return false;
+                return Array.from(performanceDiagnosticReadKeys).some((existing) =>
+                  pathKeyMatches(existing, key),
+                );
+              };
+
+              if (isPerformanceContinuation) {
+                for (const call of Array.isArray(batchCalls) ? batchCalls : []) {
+                  const toolName = String(call?.toolName || "").trim();
+                  if (isDiagnosticReadTool(toolName)) {
+                    rememberPerformanceDiagnosticPath(call?.args?.path);
+                  }
+                }
+
+                for (const item of Array.isArray(executedBatchResults)
+                  ? executedBatchResults
+                  : []) {
+                  for (const path of collectToolResultPathsFromText(item?.result)) {
+                    rememberPerformanceDiagnosticPath(path);
+                  }
+                }
+              }
 
               const agentResult = await runAgent({
                 prompt: "",
@@ -1901,7 +1994,45 @@ export default function AiPanel({
                 executeTool: async (toolCall) => {
                   const toolName = String(toolCall?.name || "").trim();
                   const args = toolCall?.args || {};
+                  const requestedPath = String(args?.path || "").trim();
+
+                  if (
+                    isPerformanceContinuation &&
+                    toolName === "read_file" &&
+                    isBinaryAssetPath(requestedPath)
+                  ) {
+                    return {
+                      ok: false,
+                      error:
+                        "Performance diagnosis blocked a binary asset read. Do not read image/font/media files as text; list the asset directory or inspect text files instead.",
+                    };
+                  }
+
+                  if (
+                    isPerformanceContinuation &&
+                    isDiagnosticReadTool(toolName) &&
+                    hasPerformanceDiagnosticPath(requestedPath)
+                  ) {
+                    return {
+                      ok: false,
+                      error:
+                        "Performance diagnosis blocked a repeated diagnostic read for this path. Do not reread the same file or directory; use already inspected evidence, inspect one different text evidence target, request one smallest safe edit, or explain that no safe code edit is justified.",
+                    };
+                  }
+
                   const result = await runTool({ toolName, args });
+
+                  if (
+                    result?.ok &&
+                    isPerformanceContinuation &&
+                    isDiagnosticReadTool(toolName)
+                  ) {
+                    rememberPerformanceDiagnosticPath(requestedPath);
+
+                    for (const path of collectToolResultPathsFromText(result?.result)) {
+                      rememberPerformanceDiagnosticPath(path);
+                    }
+                  }
 
                   if (result?.ok && toolName === "write_file") {
                     const path = String(args?.path || "").trim();
@@ -1943,18 +2074,25 @@ export default function AiPanel({
               }
 
               const finalText = String(agentResult?.text || "").trim();
+              const isPerformanceToolExecution =
+                !isFixToolExecution && isPerformanceProjectRequest(latestUserText);
+
               if (finalText && !agentMadeProjectChanges) {
                 appendMessage(
                   "assistant",
                   isFixToolExecution
                     ? "I inspected the relevant files for the fix, but I did not change any files yet."
-                    : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
+                    : isPerformanceToolExecution
+                      ? "I inspected part of the project for performance, but I did not change any files yet. Performance work should inspect enough evidence before editing."
+                      : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
                   {
                     actions: [
                       {
                         label: isFixToolExecution
                           ? "Continue fixing"
-                          : "Continue editing",
+                          : isPerformanceToolExecution
+                            ? "Continue diagnosing"
+                            : "Continue editing",
                         onClick: () => {
                           const originalGoal = String(
                             latestUserText ||
@@ -1967,19 +2105,25 @@ export default function AiPanel({
                             "assistant",
                             isFixToolExecution
                               ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
-                              : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
+                              : isPerformanceToolExecution
+                                ? "Continuing the performance diagnosis. I will ask the model to inspect enough evidence before making a file change."
+                                : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
                               (isFixToolExecution
                                 ? "Continue the previous fix/debug task.\n\n"
-                                : "Continue the previous project edit.\n\n") +
+                                : isPerformanceToolExecution
+                                  ? "Continue the previous performance diagnosis.\n\n"
+                                  : "Continue the previous project edit.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
-                                "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                (isFixToolExecution
-                                  ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                  : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
+                                (isPerformanceToolExecution
+                                  ? "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next step: either inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component, or if enough evidence is already available, request one smallest safe write_file change. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
+                                  : "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                    (isFixToolExecution
+                                      ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
+                                      : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.")),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,
@@ -1992,9 +2136,14 @@ export default function AiPanel({
                   },
                 );
               } else if (finalText && agentMadeProjectChanges) {
+                const fileCountLabel =
+                  agentSuccessfulWritePaths.length === 1
+                    ? "1 file"
+                    : `${agentSuccessfulWritePaths.length} files`;
+
                 appendMessage(
                   "assistant",
-                  `${finalText}\n\n${buildCompletedWorkflowChangeSummary(
+                  `Done — updated ${fileCountLabel}.\n\n${buildCompletedWorkflowChangeSummary(
                     completedWorkflowContext,
                   )}\n\n${buildPostEditNextStepMessage()}`,
                 );
@@ -2016,6 +2165,68 @@ export default function AiPanel({
                   buildPostEditNextStepMessage();
 
                 appendMessage("assistant", agentWriteCompletionMessage);
+              } else if (agentResult?.stopReason === "max_steps_reached") {
+                const originalGoal = String(
+                  latestUserText ||
+                    (isPerformanceToolExecution
+                      ? "Continue the previous performance diagnosis."
+                      : isFixToolExecution
+                        ? "Continue the previous fix/debug task."
+                        : "Continue the previous project edit."),
+                ).trim();
+
+                appendMessage(
+                  "assistant",
+                  isPerformanceToolExecution
+                    ? "Performance diagnosis reached the safe tool-step limit before changing files.\n\nNo files were changed. KForge stopped here to avoid a runaway inspection loop.\n\nYou can continue with one more focused diagnostic step, or stop here."
+                    : "The agent reached the safe tool-step limit before changing files.\n\nNo files were changed. KForge stopped here to avoid a runaway tool loop.\n\nYou can continue with one more focused step, or stop here.",
+                  {
+                    actions: [
+                      {
+                        label: isPerformanceToolExecution
+                          ? "Continue diagnosing"
+                          : isFixToolExecution
+                            ? "Continue fixing"
+                            : "Continue editing",
+                        onClick: () => {
+                          appendMessage(
+                            "assistant",
+                            isPerformanceToolExecution
+                              ? "Continuing with one focused performance diagnostic step."
+                              : "Continuing with one focused tool step.",
+                          );
+
+                          if (typeof sendWithPrompt === "function") {
+                            sendWithPrompt(
+                              (isPerformanceToolExecution
+                                ? "Continue the previous performance diagnosis.\n\n"
+                                : isFixToolExecution
+                                  ? "Continue the previous fix/debug task.\n\n"
+                                  : "Continue the previous project edit.\n\n") +
+                                `Original request: ${originalGoal}\n\n` +
+                                (isPerformanceToolExecution
+                                  ? "The previous run reached the safe tool-step limit without changing files. Do not reread the same files. Do not read binary assets as text. Request exactly one focused next step: one missing text evidence file, one smallest safe write_file change if evidence is enough, or a clear explanation that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback."
+                                  : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused next tool call. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
+                              {
+                                silentUserAppend: true,
+                                forceAdvisoryTestOverride: true,
+                              },
+                            );
+                          }
+                        },
+                      },
+                      {
+                        label: "Stop",
+                        onClick: () => {
+                          appendMessage(
+                            "assistant",
+                            "Stopped. No files were changed by that run.",
+                          );
+                        },
+                      },
+                    ],
+                  },
+                );
               } else if (agentResult?.stopReason === "tool_cancelled") {
                 const cancelledToolName = String(
                   agentResult?.cancelledToolName || "tool",
@@ -2030,13 +2241,17 @@ export default function AiPanel({
                   "assistant",
                   isFixToolExecution
                     ? "The model stopped after fix inspection and did not request the next action. No further files were changed."
-                    : "The model stopped after inspection and did not request the next edit. No further files were changed.",
+                    : isPerformanceToolExecution
+                      ? "The model stopped after partial performance inspection and did not request the next diagnostic step. No files were changed."
+                      : "The model stopped after inspection and did not request the next edit. No further files were changed.",
                   {
                     actions: [
                       {
                         label: isFixToolExecution
                           ? "Continue fixing"
-                          : "Continue editing",
+                          : isPerformanceToolExecution
+                            ? "Continue diagnosing"
+                            : "Continue editing",
                         onClick: () => {
                           const originalGoal = String(
                             latestUserText ||
@@ -2049,19 +2264,25 @@ export default function AiPanel({
                             "assistant",
                             isFixToolExecution
                               ? "Continuing the fix attempt. I will ask the model to request one concrete tool call next."
-                              : "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
+                              : isPerformanceToolExecution
+                                ? "Continuing the performance diagnosis. I will ask the model to request one concrete diagnostic step next."
+                                : "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
                               (isFixToolExecution
                                 ? "Continue the previous fix/debug task.\n\n"
-                                : "Continue the previous project edit.\n\n") +
+                                : isPerformanceToolExecution
+                                  ? "Continue the previous performance diagnosis.\n\n"
+                                  : "Continue the previous project edit.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
-                                "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                (isFixToolExecution
-                                  ? "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
-                                  : "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only."),
+                                (isPerformanceToolExecution
+                                  ? "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next diagnostic step: inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component; request one smallest safe write_file change if evidence is enough; or explain that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
+                                  : "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                    (isFixToolExecution
+                                      ? "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
+                                      : "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only.")),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,
