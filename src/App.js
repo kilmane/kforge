@@ -76,7 +76,7 @@ KForge capability guidance:
 Behavior rules:
 - Be truthful about what KForge can and cannot do.
 - Do not claim the UI has already navigated, opened, run, installed, previewed, or configured anything unless that actually happened.
-- In manual guidance, do not say something has been successfully installed, created, configured, fixed, or completed unless a real KForge action/tool result reported success. Phrase manual outcomes conditionally, such as "After that command succeeds..." or "Once you run this...".
+- In manual guidance, do not say something has been successfully installed, created, configured, fixed, deployed, published, made live, or completed unless a real KForge action/tool result reported success. Phrase manual outcomes conditionally, such as "After that command succeeds...", "Once you run this...", or "After the deploy command completes successfully...". For manual deployment answers, do not end with claims like "your app should now be deployed" or "successfully deployed"; instead say that the provider should show a live URL after the deploy command completes successfully.
 - Do not tell the UI to navigate, auto-open panels, or force workflow state.
 - Keep guidance calm and optional.
 - Do not ask for secrets, credentials, or configuration values too early.
@@ -885,6 +885,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
 
   if (kind === "supabase_service") {
     return { action: "supabase_service" };
+  }
+
+  if (kind === "deploy_service") {
+    return { action: "deploy_service" };
   }
 
   if (kind === "dependency_install") {
@@ -2584,6 +2588,86 @@ export default function App() {
       "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
     );
   }
+  function isDeployServiceWorkflowIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const mentionsVercel = /\bvercel\b/.test(s);
+    const mentionsNetlify = /\bnetlify\b/.test(s);
+    const mentionsDeployProvider = mentionsVercel || mentionsNetlify;
+    const mentionsWebTarget =
+      /\b(app|project|website|site|page|frontend|web app)\b/.test(s) ||
+      mentionsDeployProvider;
+
+    const asksDeployAction =
+      /\b(deploy|deployment|host|hosting)\b/.test(s) ||
+      s.includes("put this app online") ||
+      s.includes("put this website online") ||
+      s.includes("put this site online") ||
+      s.includes("put it online") ||
+      s.includes("make this live") ||
+      s.includes("make it live") ||
+      s.includes("go live") ||
+      s.includes("where do i deploy") ||
+      s.includes("where should i deploy") ||
+      (/\bpublish\b/.test(s) && mentionsWebTarget && !s.includes("github"));
+
+    const asksProviderHelp =
+      mentionsDeployProvider &&
+      /\b(connect|set up|setup|configure|add|use|open|import|deploy|publish|host|hosting|help|fix|debug|troubleshoot|fail|failed|failing|error|broken|not working|issue|problem)\b/.test(
+        s,
+      );
+
+    return asksDeployAction || asksProviderHelp;
+  }
+
+  function buildDeployRoutingMessage(projectOpen, text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    const mentionsVercel = /\bvercel\b/.test(s);
+    const mentionsNetlify = /\bnetlify\b/.test(s);
+    const route =
+      mentionsVercel && !mentionsNetlify
+        ? "Services → Deploy → Vercel"
+        : mentionsNetlify && !mentionsVercel
+          ? "Services → Deploy → Netlify"
+          : "Services → Deploy, then choose Vercel or Netlify";
+
+    const mentionsFailure =
+      /\b(fail|failed|failing|error|broken|not working|doesn't work|does not work|cannot deploy|can't deploy|deployment issue|deployment problem|missing)\b/.test(
+        s,
+      );
+
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        `Then you can leave the chat and open: ${route}.\n\n` +
+        "KForge deploy actions expect a GitHub-connected project. Use Services → Code → GitHub first if you still need to publish or connect the repo."
+      );
+    }
+
+    if (mentionsFailure) {
+      return (
+        "KForge can help troubleshoot deployment through the deploy service flow.\n\n" +
+        `You can now leave the chat and open: ${route}.\n\n` +
+        "Make sure the project is connected to GitHub and your latest changes are pushed before retrying deployment.\n\n" +
+        "Read the Services log/result and the provider's deployment log for the exact failed step. If you paste that log back into chat, I can help interpret it without pretending I can see it automatically."
+      );
+    }
+
+    return (
+      "KForge can help with this through the deploy service flow.\n\n" +
+      `You can now leave the chat and open: ${route}.\n\n` +
+      "KForge deploy actions expect a GitHub-connected project. Use Services → Code → GitHub first if you still need to publish or connect the repo.\n\n" +
+      "The chat has not deployed anything; the deploy flow opens the provider's guided import/deploy path."
+    );
+  }
+
   function isExpoPhonePreviewWorkflowIntent(
     text = "",
     detectedTemplateName = "",
@@ -2828,6 +2912,17 @@ export default function App() {
       ) {
         return {
           kind: "supabase_service",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
+      if (
+        isDeployServiceWorkflowIntent(text) &&
+        !hasManualOrAdvisoryIntent(text)
+      ) {
+        return {
+          kind: "deploy_service",
           confidence: "high",
           source: "existing_intent_helpers",
         };
@@ -3334,6 +3429,11 @@ export default function App() {
 
         if (directWorkflowHandoffRoute.action === "supabase_service") {
           appendMessage("assistant", buildSupabaseRoutingMessage(projectOpen, draft));
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "deploy_service") {
+          appendMessage("assistant", buildDeployRoutingMessage(projectOpen, draft));
           return;
         }
 
