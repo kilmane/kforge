@@ -22,6 +22,7 @@ import {
   createBlockedProjectEditWorkflowContext,
   createBugfixWorkflowContext,
   createImplementationInProgressWorkflowContext,
+  SUGGESTED_ACTION_LABEL,
   WORKFLOW_NEXT_STEP,
   WORKFLOW_STATUS,
   WORKFLOW_TASK_KIND,
@@ -3462,7 +3463,7 @@ export default function App() {
                   },
                 },
                 {
-                  label: "Show changes",
+                  label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
                     appendMessage(
                       "assistant",
@@ -3856,7 +3857,7 @@ export default function App() {
                   },
                 },
                 {
-                  label: "Give manual steps",
+                  label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
                   onClick: () => {
                     appendMessage(
                       "assistant",
@@ -3871,7 +3872,7 @@ export default function App() {
                   },
                 },
                 {
-                  label: "Stop",
+                  label: SUGGESTED_ACTION_LABEL.STOP,
                   onClick: () => {
                     appendMessage(
                       "assistant",
@@ -3894,8 +3895,8 @@ export default function App() {
               actions: [
                 {
                   label: isFixNoToolRecovery
-                    ? "Continue fixing"
-                    : "Continue editing",
+                    ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                    : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                   onClick: () => {
                     sendWithPrompt(
                       (isFixNoToolRecovery
@@ -3918,7 +3919,7 @@ export default function App() {
                   },
                 },
                 {
-                  label: "Stop",
+                  label: SUGGESTED_ACTION_LABEL.STOP,
                   onClick: () => {
                     appendMessage(
                       "assistant",
