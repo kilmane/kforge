@@ -26,6 +26,7 @@ import { getToolSchemas } from "../tools/toolSchema.js";
 import {
   buildCompletedWorkflowChangeSummary,
   createCompletedImplementationWorkflowContext,
+  SUGGESTED_ACTION_LABEL,
 } from "../workflowState.js";
 
 /**
@@ -1758,7 +1759,7 @@ export default function AiPanel({
                     },
                   },
                   {
-                    label: "Stop",
+                    label: SUGGESTED_ACTION_LABEL.STOP,
                     onClick: () => {
                       appendMessage(
                         "assistant",
@@ -2108,8 +2109,8 @@ export default function AiPanel({
                       actions: [
                         {
                           label: isFixToolExecution
-                            ? "Continue fixing"
-                            : "Continue editing",
+                            ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                           onClick: () => {
                             const originalGoal = String(
                               latestUserText ||
@@ -2196,10 +2197,10 @@ export default function AiPanel({
                     actions: [
                       {
                         label: isPerformanceToolExecution
-                          ? "Continue diagnosing"
+                          ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
                           : isFixToolExecution
-                            ? "Continue fixing"
-                            : "Continue editing",
+                            ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                         onClick: () => {
                           appendMessage(
                             "assistant",
@@ -2228,7 +2229,7 @@ export default function AiPanel({
                         },
                       },
                       {
-                        label: "Stop",
+                        label: SUGGESTED_ACTION_LABEL.STOP,
                         onClick: () => {
                           appendMessage(
                             "assistant",
@@ -2260,10 +2261,10 @@ export default function AiPanel({
                     actions: [
                       {
                         label: isFixToolExecution
-                          ? "Continue fixing"
+                          ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
                           : isPerformanceToolExecution
-                            ? "Continue diagnosing"
-                            : "Continue editing",
+                            ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
+                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                         onClick: () => {
                           const originalGoal = String(
                             latestUserText ||
