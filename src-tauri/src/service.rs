@@ -635,6 +635,10 @@ fn create_supabase_client_file(project_dir: &PathBuf) -> Result<PathBuf, String>
 
     let content = r#"import { createClient } from "@supabase/supabase-js";
 
+// Frontend apps should use the Supabase anon/public key.
+// Do not put service-role, private, or admin keys in frontend env files.
+// For Vite projects, prefer VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
 
@@ -758,6 +762,8 @@ fn create_supabase_example_file(project_dir: &PathBuf) -> Result<PathBuf, String
 
     let content = r#"import { supabase } from "../lib/supabase";
 
+// Starter example only: replace "your_table" with your real table name.
+
 export async function loadExampleData() {
   const { data, error } = await supabase
     .from("your_table")
@@ -791,6 +797,8 @@ fn create_supabase_insert_example_file(project_dir: &PathBuf) -> Result<PathBuf,
     }
 
     let content = r#"import { supabase } from "../lib/supabase";
+
+// Starter example only: replace "your_table" and example values with your real schema.
 
 export async function insertExampleRow() {
   const { data, error } = await supabase
@@ -830,6 +838,9 @@ fn create_supabase_queries_file(project_dir: &PathBuf) -> Result<PathBuf, String
     }
 
     let content = r#"import { supabase } from "./supabase";
+
+// Starter helpers only: pass table names you control in your app code.
+// Do not use frontend helper code with service-role, private, or admin keys.
 
 export async function fetchRows(table) {
   const { data, error } = await supabase
