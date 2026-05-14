@@ -2948,7 +2948,7 @@ export default function App() {
     if (words.length > 5) return false;
 
     const actionOrUnclearPattern =
-      /\b(what|now|next|preview|show|changes?|review|fix|debug|broken|error|bug|deploy|publish|manual|steps?|install|continue|edit|make|add|remove|change|open|run|test|why|how|can|could|please|again|more|logs?|supabase|vercel|netlify|slow|faster|performance|maybe|hmm|unsure|not sure|don't know|dont know|wait|bad|wrong|failed?|fail|problem|issue)\b/;
+      /\b(what|now|next|preview|show|suggestions?|options?|changes?|review|fix|debug|broken|error|bug|deploy|publish|manual|steps?|install|continue|edit|make|add|remove|change|open|run|test|why|how|can|could|please|again|earlier|meant|mean|more|logs?|supabase|vercel|netlify|slow|faster|performance|maybe|hmm|unsure|not sure|don't know|dont know|wait|lost|confused|understand|misunderstood|unclear|explain|bad|wrong|dumb|stupid|annoying|frustrating|failed?|fail|problem|issue)\b/;
 
     if (actionOrUnclearPattern.test(s)) return false;
 
@@ -2972,6 +2972,10 @@ export default function App() {
       s === "perfect" ||
       s === "perfecto" ||
       s === "awesome" ||
+      s === "lovely" ||
+      s === "excellent" ||
+      s === "brilliant" ||
+      s === "amazing" ||
       s === "wow" ||
       s === "bravo" ||
       s === "super" ||
@@ -3378,6 +3382,47 @@ export default function App() {
     projectTemplateInfo?.detectedTemplate?.name,
     projectTemplateInfo?.kind,
   ]);
+  function buildCompletedWorkflowChoiceMessage(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (
+      s.includes("dumb") ||
+      s.includes("stupid") ||
+      s.includes("annoying") ||
+      s.includes("frustrating")
+    ) {
+      return "Sorry — that response was not helpful. Choose what you want to do next:";
+    }
+
+    if (
+      s.includes("lost") ||
+      s.includes("confused") ||
+      s.includes("understand") ||
+      s.includes("unclear") ||
+      s.includes("explain") ||
+      /^[?!.\s]+$/.test(s)
+    ) {
+      return "Sorry — I didn’t explain that clearly. Choose one of these actions:";
+    }
+
+    if (
+      s.includes("suggestion") ||
+      s.includes("option") ||
+      s.includes("again") ||
+      s.includes("earlier") ||
+      s.includes("meant")
+    ) {
+      return "Sure — here are the suggested actions again:";
+    }
+
+    if (s.includes("what now") || s === "what now" || s === "next") {
+      return "Now, choose what you'd like to do next:";
+    }
+
+    return "Choose what you'd like to do next:";
+  }
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
       if (aiRunning) return;
@@ -3533,7 +3578,7 @@ export default function App() {
 
           appendMessage(
             "assistant",
-            "Done — choose what you'd like to do next:",
+            buildCompletedWorkflowChoiceMessage(draft),
             {
               actions: [
                 {

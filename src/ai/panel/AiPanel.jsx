@@ -643,6 +643,12 @@ function buildPreviewHandoffMessage() {
   );
 }
 
+function buildPostEditChangeSummary(context = null) {
+  return buildCompletedWorkflowChangeSummary(context, {
+    fallbackLine: "",
+  });
+}
+
 function buildPostEditNextStepMessage(context = null) {
   const suggestedActions = Array.isArray(
     context?.assistantResult?.suggestedActions,
@@ -1942,7 +1948,7 @@ export default function AiPanel({
                 : `${successfulWritePaths.length} files`;
             const writeCompletionMessage =
               `Done — updated ${fileCountLabel}.\n\n` +
-              `${buildCompletedWorkflowChangeSummary(completedWorkflowContext)}\n\n` +
+              `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
               buildPostEditNextStepMessage(completedWorkflowContext);
 
             appendMessage("assistant", writeCompletionMessage);
@@ -2203,7 +2209,7 @@ export default function AiPanel({
 
                 appendMessage(
                   "assistant",
-                  `Done — updated ${fileCountLabel}.\n\n${buildCompletedWorkflowChangeSummary(
+                  `Done — updated ${fileCountLabel}.\n\n${buildPostEditChangeSummary(
                     completedWorkflowContext,
                   )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`,
                 );
@@ -2219,7 +2225,7 @@ export default function AiPanel({
                     : `${agentSuccessfulWritePaths.length} files`;
                 const agentWriteCompletionMessage =
                   `Done — updated ${fileCountLabel}.\n\n` +
-                  `${buildCompletedWorkflowChangeSummary(
+                  `${buildPostEditChangeSummary(
                     completedWorkflowContext,
                   )}\n\n` +
                   buildPostEditNextStepMessage(completedWorkflowContext);
