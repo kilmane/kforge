@@ -18,6 +18,7 @@ import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
   buildCompletedWorkflowChangeSummary,
+  createCompletedFeatureBlueprintWorkflowContext,
   createAdvisoryTestOverrideWorkflowContext,
   createBlockedProjectEditWorkflowContext,
   createBugfixWorkflowContext,
@@ -2299,6 +2300,37 @@ export default function App() {
       hasConcreteProjectEdit
     );
   }
+  function isFeatureBlueprintIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const hasBlueprintSignal =
+      /\b(feature\s+blueprint|implementation\s+blueprint|build\s+blueprint|planning\s+blueprint)\b/.test(
+        s,
+      ) ||
+      /\bblueprint\b/.test(s) ||
+      /\b(plan|planning)\s+(this\s+)?(feature|implementation|build|change)\b/.test(
+        s,
+      ) ||
+      /\b(before\s+(you\s+)?(implement|build|edit|change)|before\s+writing\s+code)\b/.test(
+        s,
+      );
+
+    if (!hasBlueprintSignal) return false;
+
+    const hasProjectAnchor =
+      /\b(app|project|website|site|page|screen|view|ui|interface|frontend|codebase|feature|component|route|layout|form|modal|dialog|dashboard|settings|auth|login|signup|checkout|database|supabase|deploy)\b/.test(
+        s,
+      ) ||
+      /\b(src|public|components|pages|app)\//.test(s) ||
+      /\b[\w./-]+\.(js|jsx|ts|tsx|css|html|json|md|rs|py)\b/.test(s);
+
+    return hasProjectAnchor;
+  }
+
   function isPerformanceProjectWorkIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3211,6 +3243,14 @@ export default function App() {
       }
 
 
+      if (projectOpen && isFeatureBlueprintIntent(text)) {
+        return {
+          kind: WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT,
+          confidence: "high",
+          source: "feature_blueprint_intent",
+        };
+      }
+
       if (!projectOpen && isNoProjectImplementationIntent(text)) {
         return {
           kind: "no_project_implementation",
@@ -3918,7 +3958,11 @@ export default function App() {
         ? "\n\nINSTRUCTION:\nReturn proposed changes as a unified diff inside a single ```diff``` fenced block.\n" +
           "Read-only preview only: do not apply changes, do not write files.\n"
         : "";
+      const isFeatureBlueprintTask =
+        promptTask.kind === WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT;
+
       const shouldSuppressToolsForPrompt =
+        isFeatureBlueprintTask ||
         hasManualOrAdvisoryIntent(draft) ||
         (!modelWorkflowPolicy.allowToolCalls && !isAdvisoryTestOverride);
 
@@ -3941,6 +3985,14 @@ export default function App() {
           "- If enough evidence is already available, either request one smallest safe write_file change or explain clearly that no safe code edit is justified.\n" +
           "- Do not blindly add React.memo, useMemo, or useCallback everywhere. Use them only when inspected code shows repeated unnecessary renders, expensive calculations, unstable props, or a specific measurable bottleneck.\n" +
           "- Prefer the smallest evidence-based performance fix, such as removing unused work/assets, simplifying render paths, reducing oversized media, or tightening an obviously inefficient loop.\n"
+        : "";
+
+      const featureBlueprintInstruction = isFeatureBlueprintTask
+        ? "\n\nFeature Blueprint mode:\n" +
+          "- Do not request tools and do not modify files yet.\n" +
+          "- Produce a compact implementation blueprint for the requested feature.\n" +
+          "- Include: likely files to inspect/change, implementation steps, risks/unknowns, and a preview/check plan.\n" +
+          "- Keep it practical and concise. Do not claim files were changed.\n"
         : "";
 
       const toolInstruction =
@@ -3984,7 +4036,7 @@ export default function App() {
           : "";
 
       const inputWithContext = buildInputWithContext(
-        `${draft}${patchInstruction}${toolInstruction}`,
+        `${draft}${patchInstruction}${featureBlueprintInstruction}${toolInstruction}`,
         fileSnapshot,
       );
 
@@ -4156,7 +4208,73 @@ export default function App() {
             },
           );
         } else if (cleaned) {
-          appendMessage("assistant", cleaned);
+          if (isFeatureBlueprintTask) {
+            const blueprintContext = createCompletedFeatureBlueprintWorkflowContext({
+              lastUserGoal: draft,
+              blueprintSummary: cleaned,
+              source: "feature_blueprint_intent",
+            });
+
+            setWorkflowContext(blueprintContext);
+
+            appendMessage("assistant", cleaned, {
+              actions: [
+                {
+                  label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
+                  onClick: () => {
+                    sendWithPrompt(
+                      "Start implementation from the approved feature blueprint.\n\n" +
+                        `Original feature request: ${draft}\n\n` +
+                        "Modify the project files for this app using the blueprint above. Inspect the relevant existing files before writing and keep the first edit small and safe.",
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
+                  onClick: () => {
+                    sendWithPrompt(
+                      "Refine the previous feature blueprint.\n\n" +
+                        `Original feature request: ${draft}\n\n` +
+                        "Do not edit files yet. Make the blueprint clearer, smaller, and safer.",
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
+                  onClick: () => {
+                    sendWithPrompt(
+                      "Inspect first for this feature before implementation.\n\n" +
+                        `Original feature request: ${draft}\n\n` +
+                        "Read the most relevant existing project file first. Do not write yet.",
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "No action taken. The blueprint is available above when you want to continue.",
+                    );
+                  },
+                },
+              ],
+            });
+          } else {
+            appendMessage("assistant", cleaned);
+          }
         } else {
           // Avoid empty assistant bubbles; still keep a small trace if tools were requested.
           if (toolBlocks.length > 0 && shouldAllowModelToolExecution) {

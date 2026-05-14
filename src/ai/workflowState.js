@@ -1,6 +1,7 @@
 export const WORKFLOW_TASK_KIND = Object.freeze({
   PROJECT_EDIT: "project_edit",
   IMPLEMENTATION: "implementation",
+  FEATURE_BLUEPRINT: "feature_blueprint",
 });
 
 export const WORKFLOW_STATUS = Object.freeze({
@@ -18,6 +19,8 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   PREVIEW: "preview",
   SHOW_CHANGES: "show_changes",
   ANOTHER_EDIT: "another_edit",
+  START_IMPLEMENTATION: "start_implementation",
+  REFINE_BLUEPRINT: "refine_blueprint",
 });
 
 export const ASSISTANT_ACTION_RESULT = Object.freeze({
@@ -33,6 +36,7 @@ export const ASSISTANT_ACTION_RESULT = Object.freeze({
 
 export const ASSISTANT_ACTION_TYPE = Object.freeze({
   PROJECT_EDIT: "project_edit",
+  FEATURE_BLUEPRINT: "feature_blueprint",
   FIX: "fix",
   PERFORMANCE: "performance",
   PREVIEW: "preview",
@@ -48,6 +52,8 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   CONTINUE_EDITING: "Continue editing",
   CONTINUE_FIXING: "Continue fixing",
   CONTINUE_DIAGNOSING: "Continue diagnosing",
+  START_IMPLEMENTATION: "Start implementation",
+  REFINE_BLUEPRINT: "Refine blueprint",
   FIX_ERROR: "Fix the error",
   SHOW_LOGS: "Show logs",
   TRY_AGAIN: "Try again",
@@ -132,6 +138,18 @@ export function buildSuggestedActionsForAssistantResult({
       SUGGESTED_ACTION_LABEL.PREVIEW_APP,
       SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
       SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+      SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.SUCCESS &&
+    type === ASSISTANT_ACTION_TYPE.FEATURE_BLUEPRINT
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
+      SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
+      SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
       SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
     ];
   }
@@ -342,6 +360,32 @@ export function createBlockedProjectEditWorkflowContext(lastUserGoal = "") {
     lastUserGoal,
     updatedAt: Date.now(),
     source: "model_policy_advisory_only",
+  };
+}
+
+export function createCompletedFeatureBlueprintWorkflowContext({
+  lastUserGoal = "",
+  blueprintSummary = "",
+  source = "feature_blueprint",
+} = {}) {
+  const cleanBlueprintSummary = String(blueprintSummary || "").trim();
+  const assistantResult = buildAssistantResultProtocol({
+    actionResult: ASSISTANT_ACTION_RESULT.SUCCESS,
+    actionType: ASSISTANT_ACTION_TYPE.FEATURE_BLUEPRINT,
+    summary: cleanBlueprintSummary || "Feature blueprint prepared.",
+    nextStep: WORKFLOW_NEXT_STEP.START_IMPLEMENTATION,
+    source,
+  });
+
+  return {
+    taskKind: WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT,
+    status: WORKFLOW_STATUS.COMPLETED,
+    nextStep: WORKFLOW_NEXT_STEP.START_IMPLEMENTATION,
+    lastUserGoal: String(lastUserGoal || "").trim(),
+    blueprintSummary: cleanBlueprintSummary,
+    assistantResult,
+    updatedAt: Date.now(),
+    source,
   };
 }
 
