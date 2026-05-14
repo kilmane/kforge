@@ -29,7 +29,9 @@ import {
   buildAssistantResultProtocol,
   buildCompletedWorkflowChangeSummary,
   createCompletedImplementationWorkflowContext,
+  createPartialImplementationWorkflowContext,
   SUGGESTED_ACTION_LABEL,
+  WORKFLOW_NEXT_STEP,
 } from "../workflowState.js";
 
 /**
@@ -702,7 +704,7 @@ function getAssistantResultActionTypeForContinuation({
   if (isPerformanceToolExecution) return ASSISTANT_ACTION_TYPE.PERFORMANCE;
   if (isFixToolExecution) return ASSISTANT_ACTION_TYPE.FIX;
 
-  return ASSISTANT_ACTION_TYPE.PROJECT_EDIT;
+  return ASSISTANT_ACTION_TYPE.IMPLEMENTATION;
 }
 
 function buildPartialAssistantResultForContinuation({
@@ -711,12 +713,18 @@ function buildPartialAssistantResultForContinuation({
   summary = "",
   source = "",
 } = {}) {
+  const actionType = getAssistantResultActionTypeForContinuation({
+    isPerformanceToolExecution,
+    isFixToolExecution,
+  });
+
   return buildAssistantResultProtocol({
     actionResult: ASSISTANT_ACTION_RESULT.PARTIAL,
-    actionType: getAssistantResultActionTypeForContinuation({
-      isPerformanceToolExecution,
-      isFixToolExecution,
-    }),
+    actionType,
+    nextStep:
+      actionType === ASSISTANT_ACTION_TYPE.IMPLEMENTATION
+        ? WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION
+        : "",
     summary,
     source,
   });
@@ -1807,7 +1815,7 @@ export default function AiPanel({
                         latestUserText ||
                           (isFixToolExecution
                             ? "Continue the previous fix/debug task."
-                            : "Continue the previous project edit."),
+                            : "Continue the previous implementation."),
                       ).trim();
 
                       appendMessage(
@@ -2195,7 +2203,7 @@ export default function AiPanel({
                             ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
                             : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                           onClick: () => {
-                            const originalGoal = String(
+                          const originalGoal = String(
                               latestUserText ||
                                 (isFixToolExecution
                                   ? "Continue the previous fix/debug task."
@@ -2279,21 +2287,39 @@ export default function AiPanel({
                       ? "Continue the previous performance diagnosis."
                       : isFixToolExecution
                         ? "Continue the previous fix/debug task."
-                        : "Continue the previous project edit."),
+                        : "Continue the previous implementation."),
                 ).trim();
+                const partialSummary =
+                  "The agent reached the safe tool-step limit before changing files.";
                 const assistantResult = buildPartialAssistantResultForContinuation({
                   isPerformanceToolExecution,
                   isFixToolExecution,
-                  summary: "The agent reached the safe tool-step limit before changing files.",
+                  summary: partialSummary,
                   source: "agent_max_steps_reached",
                 });
+
+                if (
+                  !isPerformanceToolExecution &&
+                  !isFixToolExecution &&
+                  typeof setWorkflowContext === "function"
+                ) {
+                  setWorkflowContext(
+                    createPartialImplementationWorkflowContext({
+                      lastUserGoal: originalGoal,
+                      partialSummary,
+                      assistantResult,
+                      source: "agent_max_steps_reached",
+                    }),
+                  );
+                }
+
                 const continueActionLabel =
                   assistantResult.suggestedActions[0] ||
                   (isPerformanceToolExecution
                     ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
                     : isFixToolExecution
                       ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING);
+                      : SUGGESTED_ACTION_LABEL.CONTINUE_IMPLEMENTATION);
                 const stopActionLabel =
                   assistantResult.suggestedActions.find(
                     (item) => item === SUGGESTED_ACTION_LABEL.STOP,
@@ -2313,7 +2339,7 @@ export default function AiPanel({
                             "assistant",
                             isPerformanceToolExecution
                               ? "Continuing with one focused performance diagnostic step."
-                              : "Continuing with one focused tool step.",
+                              : "Continuing with one focused implementation step.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
@@ -2322,11 +2348,11 @@ export default function AiPanel({
                                 ? "Continue the previous performance diagnosis.\n\n"
                                 : isFixToolExecution
                                   ? "Continue the previous fix/debug task.\n\n"
-                                  : "Continue the previous project edit.\n\n") +
+                                  : "Continue the previous implementation.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
                                 (isPerformanceToolExecution
                                   ? "The previous run reached the safe tool-step limit without changing files. Do not reread the same files. Do not read binary assets as text. Request exactly one focused next step: one missing text evidence file, one smallest safe write_file change if evidence is enough, or a clear explanation that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback."
-                                  : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused next tool call. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
+                                  : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused implementation tool call next. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,
@@ -2357,19 +2383,45 @@ export default function AiPanel({
                   `Cancelled — stopped ${cancelledToolName}. I did not continue after the denied tool request.`,
                 );
               } else if (agentResult?.stopReason === "empty_response") {
+                const originalGoal = String(
+                  latestUserText ||
+                    (isFixToolExecution
+                      ? "Continue the previous fix/debug task."
+                      : isPerformanceToolExecution
+                        ? "Continue the previous performance diagnosis."
+                        : "Continue the previous implementation."),
+                ).trim();
+                const partialSummary =
+                  "The model stopped after inspection without requesting the next action.";
                 const assistantResult = buildPartialAssistantResultForContinuation({
                   isPerformanceToolExecution,
                   isFixToolExecution,
-                  summary: "The model stopped after inspection without requesting the next action.",
+                  summary: partialSummary,
                   source: "agent_empty_response",
                 });
+
+                if (
+                  !isPerformanceToolExecution &&
+                  !isFixToolExecution &&
+                  typeof setWorkflowContext === "function"
+                ) {
+                  setWorkflowContext(
+                    createPartialImplementationWorkflowContext({
+                      lastUserGoal: originalGoal,
+                      partialSummary,
+                      assistantResult,
+                      source: "agent_empty_response",
+                    }),
+                  );
+                }
+
                 const continueActionLabel =
                   assistantResult.suggestedActions[0] ||
                   (isFixToolExecution
                     ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
                     : isPerformanceToolExecution
                       ? SUGGESTED_ACTION_LABEL.CONTINUE_DIAGNOSING
-                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING);
+                      : SUGGESTED_ACTION_LABEL.CONTINUE_IMPLEMENTATION);
 
                 appendMessage(
                   "assistant",
@@ -2377,26 +2429,19 @@ export default function AiPanel({
                     ? "The model stopped after fix inspection and did not request the next action. No further files were changed."
                     : isPerformanceToolExecution
                       ? "The model stopped after partial performance inspection and did not request the next diagnostic step. No files were changed."
-                      : "The model stopped after inspection and did not request the next edit. No further files were changed.",
+                      : "The model stopped after inspection and did not request the next implementation step. No further files were changed.",
                   {
                     actions: [
                       {
                         label: continueActionLabel,
                         onClick: () => {
-                          const originalGoal = String(
-                            latestUserText ||
-                              (isFixToolExecution
-                                ? "Continue the previous fix/debug task."
-                                : "Continue the previous project edit."),
-                          ).trim();
-
                           appendMessage(
                             "assistant",
                             isFixToolExecution
                               ? "Continuing the fix attempt. I will ask the model to request one concrete tool call next."
                               : isPerformanceToolExecution
                                 ? "Continuing the performance diagnosis. I will ask the model to request one concrete diagnostic step next."
-                                : "Continuing the edit attempt. I will ask the model to request one concrete tool call next.",
+                                : "Continuing the implementation. I will ask the model to request one concrete implementation step next.",
                           );
 
                           if (typeof sendWithPrompt === "function") {
@@ -2405,14 +2450,14 @@ export default function AiPanel({
                                 ? "Continue the previous fix/debug task.\n\n"
                                 : isPerformanceToolExecution
                                   ? "Continue the previous performance diagnosis.\n\n"
-                                  : "Continue the previous project edit.\n\n") +
+                                  : "Continue the previous implementation.\n\n") +
                                 `Original request: ${originalGoal}\n\n` +
                                 (isPerformanceToolExecution
                                   ? "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next diagnostic step: inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component; request one smallest safe write_file change if evidence is enough; or explain that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
                                   : "The project has already been inspected. Do not repeat broad inspection.\n" +
                                     (isFixToolExecution
                                       ? "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
-                                      : "Request exactly one concrete tool call next. If a file edit is needed, request write_file. If more inspection is genuinely needed, request one read_file only.")),
+                                      : "Request exactly one concrete implementation tool call next. If a file edit is needed, request write_file for the smallest safe continuation. If more inspection is genuinely needed, request one read_file only.")),
                               {
                                 silentUserAppend: true,
                                 forceAdvisoryTestOverride: true,

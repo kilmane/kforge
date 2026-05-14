@@ -20,6 +20,7 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   SHOW_CHANGES: "show_changes",
   ANOTHER_EDIT: "another_edit",
   START_IMPLEMENTATION: "start_implementation",
+  CONTINUE_IMPLEMENTATION: "continue_implementation",
   REFINE_BLUEPRINT: "refine_blueprint",
 });
 
@@ -36,6 +37,7 @@ export const ASSISTANT_ACTION_RESULT = Object.freeze({
 
 export const ASSISTANT_ACTION_TYPE = Object.freeze({
   PROJECT_EDIT: "project_edit",
+  IMPLEMENTATION: "implementation",
   FEATURE_BLUEPRINT: "feature_blueprint",
   FIX: "fix",
   PERFORMANCE: "performance",
@@ -50,6 +52,7 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   PREVIEW_APP: "Preview the app",
   SHOW_CHANGES: "Show changes",
   CONTINUE_EDITING: "Continue editing",
+  CONTINUE_IMPLEMENTATION: "Continue implementation",
   CONTINUE_FIXING: "Continue fixing",
   CONTINUE_DIAGNOSING: "Continue diagnosing",
   START_IMPLEMENTATION: "Start implementation",
@@ -190,6 +193,7 @@ export function buildSuggestedActionsForAssistantResult({
   if (
     result === ASSISTANT_ACTION_RESULT.BLOCKED &&
     (type === ASSISTANT_ACTION_TYPE.PROJECT_EDIT ||
+      type === ASSISTANT_ACTION_TYPE.IMPLEMENTATION ||
       type === ASSISTANT_ACTION_TYPE.FIX)
   ) {
     return [
@@ -214,6 +218,18 @@ export function buildSuggestedActionsForAssistantResult({
   ) {
     return [
       SUGGESTED_ACTION_LABEL.CONTINUE_FIXING,
+      SUGGESTED_ACTION_LABEL.STOP,
+    ];
+  }
+
+  if (
+    result === ASSISTANT_ACTION_RESULT.PARTIAL &&
+    type === ASSISTANT_ACTION_TYPE.IMPLEMENTATION
+  ) {
+    return [
+      SUGGESTED_ACTION_LABEL.CONTINUE_IMPLEMENTATION,
+      SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+      SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
       SUGGESTED_ACTION_LABEL.STOP,
     ];
   }
@@ -396,6 +412,58 @@ export function createImplementationInProgressWorkflowContext() {
     nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
     updatedAt: Date.now(),
     source: "send_with_prompt",
+  };
+}
+
+export function createPartialImplementationWorkflowContext({
+  lastUserGoal = "",
+  lastEditedPath = "",
+  editedPaths = [],
+  changedFileSummaries = [],
+  partialSummary = "",
+  assistantResult = null,
+  nextStep = WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+  source = "partial_implementation",
+} = {}) {
+  const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
+  const normalizedChangedFileSummaries =
+    normalizeChangedFileSummaries(changedFileSummaries);
+  const cleanLastEditedPath = String(lastEditedPath || "").trim();
+  const finalLastEditedPath =
+    cleanLastEditedPath ||
+    (normalizedEditedPaths.length > 0
+      ? normalizedEditedPaths[normalizedEditedPaths.length - 1]
+      : "");
+
+  const finalEditedPaths =
+    normalizedEditedPaths.length > 0
+      ? normalizedEditedPaths
+      : finalLastEditedPath
+        ? [finalLastEditedPath]
+        : [];
+
+  const finalAssistantResult =
+    assistantResult ||
+    buildAssistantResultProtocol({
+      actionResult: ASSISTANT_ACTION_RESULT.PARTIAL,
+      actionType: ASSISTANT_ACTION_TYPE.IMPLEMENTATION,
+      changedPaths: finalEditedPaths,
+      nextStep,
+      source,
+    });
+
+  return {
+    taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+    status: WORKFLOW_STATUS.IN_PROGRESS,
+    nextStep,
+    lastUserGoal: String(lastUserGoal || "").trim(),
+    lastEditedPath: finalLastEditedPath,
+    editedPaths: finalEditedPaths,
+    changedFileSummaries: normalizedChangedFileSummaries,
+    partialSummary: String(partialSummary || "").trim(),
+    assistantResult: finalAssistantResult,
+    updatedAt: Date.now(),
+    source,
   };
 }
 
