@@ -2936,6 +2936,74 @@ export default function App() {
     return isExplicitWorkflowPreviewRequest(s);
   }
 
+  function isShortCompletedWorkflowCasualAckIntent(text = "") {
+    const raw = String(text || "").trim();
+    const s = raw.toLowerCase();
+
+    if (!s) return false;
+    if (raw.length > 40) return false;
+    if (/[?]/.test(raw)) return false;
+
+    const words = s.split(/\s+/).filter(Boolean);
+    if (words.length > 5) return false;
+
+    const actionOrUnclearPattern =
+      /\b(what|now|next|preview|show|changes?|review|fix|debug|broken|error|bug|deploy|publish|manual|steps?|install|continue|edit|make|add|remove|change|open|run|test|why|how|can|could|please|again|more|logs?|supabase|vercel|netlify|slow|faster|performance|maybe|hmm|unsure|not sure|don't know|dont know|wait|bad|wrong|failed?|fail|problem|issue)\b/;
+
+    if (actionOrUnclearPattern.test(s)) return false;
+
+    return true;
+  }
+
+  function buildWorkflowSuccessAckMessage(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[.!…]+$/g, "");
+
+    if (s === "thanks" || s === "thank you" || s === "thx" || s === "ta") {
+      return "You're welcome.";
+    }
+
+    if (
+      s === "nice" ||
+      s === "cool" ||
+      s === "great" ||
+      s === "perfect" ||
+      s === "perfecto" ||
+      s === "awesome" ||
+      s === "wow" ||
+      s === "bravo" ||
+      s === "super" ||
+      s === "genial" ||
+      s === "merci" ||
+      s === "gracias" ||
+      s.includes("looks good") ||
+      s.includes("i like it") ||
+      s.includes("love it") ||
+      /^[👍👌🙌👏🙂😊😀😁🎉✨❤️💯✅]+$/.test(s)
+    ) {
+      return "Great — glad you like it.";
+    }
+
+    if (
+      s.includes("it works") ||
+      s.includes("works now") ||
+      s.includes("worked") ||
+      s.includes("all good") ||
+      s.includes("that worked") ||
+      s.includes("link works") ||
+      s.includes("links work") ||
+      s.includes("preview working") ||
+      s.includes("preview works") ||
+      s.includes("working now") ||
+      s.includes("now clickable")
+    ) {
+      return "Great — glad it is working now.";
+    }
+
+    return "Got it.";
+  }
   function isWorkflowSuccessAckIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -2961,7 +3029,8 @@ export default function App() {
       s.includes("preview working") ||
       s.includes("preview works") ||
       s.includes("working now") ||
-      s.includes("now clickable")
+      s.includes("now clickable") ||
+      isShortCompletedWorkflowCasualAckIntent(text)
     );
   }
 
@@ -3396,7 +3465,7 @@ export default function App() {
       if (completedWorkflowRoute) {
         if (completedWorkflowRoute.action === "success_ack") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
-          appendMessage("assistant", "Great — glad it is working now.");
+          appendMessage("assistant", buildWorkflowSuccessAckMessage(draft));
           return;
         }
 
@@ -3464,8 +3533,7 @@ export default function App() {
 
           appendMessage(
             "assistant",
-            "The last edit is complete, but your next message could mean more than one thing.\n\n" +
-              "Choose the next KForge action:",
+            "Done — choose what you'd like to do next:",
             {
               actions: [
                 {
@@ -3520,6 +3588,15 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "No problem — I’ll leave it there.",
                     );
                   },
                 },

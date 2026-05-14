@@ -55,6 +55,7 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   DEPLOY_NETLIFY: "Deploy to Netlify",
   OPEN_SERVICES: "Open Services",
   GIVE_MANUAL_STEPS: "Give manual steps",
+  NO_ACTION_NEEDED: "No action needed",
   CONNECT_GITHUB_FIRST: "Connect GitHub first",
   CHOOSE_VERCEL: "Choose Vercel",
   CHOOSE_NETLIFY: "Choose Netlify",
@@ -131,6 +132,7 @@ export function buildSuggestedActionsForAssistantResult({
       SUGGESTED_ACTION_LABEL.PREVIEW_APP,
       SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
       SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+      SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
     ];
   }
 
