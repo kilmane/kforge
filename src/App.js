@@ -3991,7 +3991,11 @@ export default function App() {
         ? "\n\nFeature Blueprint mode:\n" +
           "- Do not request tools and do not modify files yet.\n" +
           "- Produce a compact implementation blueprint for the requested feature.\n" +
-          "- Include: likely files to inspect/change, implementation steps, risks/unknowns, and a preview/check plan.\n" +
+          "- Use the heading: Feature Blueprint.\n" +
+          "- Include exactly these sections: Likely files to inspect/change, Implementation steps, Risks/unknowns, Preview/check plan.\n" +
+          "- Treat file paths as likely candidates until inspection confirms them. Do not imply inspected certainty.\n" +
+          "- Prefer KForge-native verification language such as Preview Panel → Preview instead of telling the user to run terminal commands, unless terminal commands are explicitly needed.\n" +
+          "- Keep bullets and numbered steps on separate lines so the plan is easy to scan.\n" +
           "- Keep it practical and concise. Do not claim files were changed.\n"
         : "";
 
