@@ -2307,6 +2307,13 @@ export default function App() {
 
     if (!s) return false;
 
+    const isApprovedImplementationStart =
+      /\b(start\s+implementation|start\s+implementing|begin\s+implementation|implement\s+from|modify\s+the\s+project\s+files)\b/.test(
+        s,
+      );
+
+    if (isApprovedImplementationStart) return false;
+
     const hasBlueprintSignal =
       /\b(feature\s+blueprint|implementation\s+blueprint|build\s+blueprint|planning\s+blueprint)\b/.test(
         s,
@@ -4227,9 +4234,9 @@ export default function App() {
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
                     sendWithPrompt(
-                      "Start implementation from the approved feature blueprint.\n\n" +
+                      "Start implementation from the approved plan.\n\n" +
                         `Original feature request: ${draft}\n\n` +
-                        "Modify the project files for this app using the blueprint above. Inspect the relevant existing files before writing and keep the first edit small and safe.",
+                        "Modify the project files for this app. Inspect the relevant existing files before writing and keep the first edit small and safe.",
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
