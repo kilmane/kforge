@@ -2107,12 +2107,26 @@ export default function App() {
         projectPath,
       );
 
+      const assistantResult = workflowContext?.assistantResult || null;
       const workflowStateBlock = workflowContext?.taskKind
         ? [
             "KForge workflow state:",
             `- taskKind: ${String(workflowContext.taskKind || "")}`,
             `- status: ${String(workflowContext.status || "")}`,
             `- nextStep: ${String(workflowContext.nextStep || "")}`,
+            assistantResult?.actionResult
+              ? `- assistantResult.actionResult: ${String(assistantResult.actionResult || "")}`
+              : "",
+            assistantResult?.actionType
+              ? `- assistantResult.actionType: ${String(assistantResult.actionType || "")}`
+              : "",
+            Array.isArray(assistantResult?.suggestedActions) &&
+            assistantResult.suggestedActions.length > 0
+              ? `- assistantResult.suggestedActions: ${assistantResult.suggestedActions.join(" / ")}`
+              : "",
+            assistantResult?.summary
+              ? `- assistantResult.summary: ${String(assistantResult.summary || "")}`
+              : "",
             workflowContext.lastEditedPath
               ? `- lastEditedPath: ${String(workflowContext.lastEditedPath || "")}`
               : "",
@@ -2122,6 +2136,7 @@ export default function App() {
               : "",
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
+            "If assistantResult is present, prefer actionResult, actionType, and suggestedActions before guessing from user wording.",
             "If implementation is completed and nextStep is preview, a vague yes/run/test/what now follow-up means guide to Preview, not another file edit.",
             "If the user reports a broken result, dead link, blank page, non-clickable UI, or anything not working after implementation, inspect and fix the files instead of routing to Preview.",
           ]
