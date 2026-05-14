@@ -649,27 +649,52 @@ function buildPostEditChangeSummary(context = null) {
   });
 }
 
-function buildPostEditNextStepMessage(context = null) {
-  const suggestedActions = Array.isArray(
-    context?.assistantResult?.suggestedActions,
-  )
-    ? context.assistantResult.suggestedActions
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    : [];
-
-  if (suggestedActions.length > 0) {
-    return (
-      `Next suggested actions:\n${suggestedActions.join(" / ")}.\n\n` +
-      "Use Preview Panel → Preview to run or view it. If dependencies are missing, use Preview Panel → Install first."
-    );
-  }
-
+function buildPostEditNextStepMessage() {
   return (
-    "Next:\nUse Preview Panel → Preview to run or view it, show changes, or make another edit.\n\n" +
+    "Next:\nChoose an action below, or use Preview Panel → Preview to run or view it.\n\n" +
     "If dependencies are missing, use Preview Panel → Install first."
   );
 }
+
+function buildPostEditCompletionActions({ context = null, appendMessage = null } = {}) {
+  if (typeof appendMessage !== "function") return [];
+
+  return [
+    {
+      label: SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+      onClick: () => {
+        appendMessage("assistant", buildPreviewHandoffMessage());
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+      onClick: () => {
+        appendMessage(
+          "assistant",
+          `Last implementation completed.\n\n${buildPostEditChangeSummary(
+            context,
+          )}\n\nThis is a changed-file review, not a Git-style diff.`,
+        );
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+      onClick: () => {
+        appendMessage(
+          "assistant",
+          "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
+        );
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+      onClick: () => {
+        appendMessage("assistant", "No problem — I will leave it there.");
+      },
+    },
+  ];
+}
+
 function getAssistantResultActionTypeForContinuation({
   isPerformanceToolExecution = false,
   isFixToolExecution = false,
@@ -1951,7 +1976,12 @@ export default function AiPanel({
               `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
               buildPostEditNextStepMessage(completedWorkflowContext);
 
-            appendMessage("assistant", writeCompletionMessage);
+            appendMessage("assistant", writeCompletionMessage, {
+              actions: buildPostEditCompletionActions({
+                context: completedWorkflowContext,
+                appendMessage,
+              }),
+            });
           } else if (typeof runAi === "function") {
             try {
               const continuationTools = [
@@ -2212,6 +2242,12 @@ export default function AiPanel({
                   `Done — updated ${fileCountLabel}.\n\n${buildPostEditChangeSummary(
                     completedWorkflowContext,
                   )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`,
+                  {
+                    actions: buildPostEditCompletionActions({
+                      context: completedWorkflowContext,
+                      appendMessage,
+                    }),
+                  },
                 );
               } else if (finalText) {
                 appendMessage("assistant", finalText);
@@ -2230,7 +2266,12 @@ export default function AiPanel({
                   )}\n\n` +
                   buildPostEditNextStepMessage(completedWorkflowContext);
 
-                appendMessage("assistant", agentWriteCompletionMessage);
+                appendMessage("assistant", agentWriteCompletionMessage, {
+                  actions: buildPostEditCompletionActions({
+                    context: completedWorkflowContext,
+                    appendMessage,
+                  }),
+                });
               } else if (agentResult?.stopReason === "max_steps_reached") {
                 const originalGoal = String(
                   latestUserText ||

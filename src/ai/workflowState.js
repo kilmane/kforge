@@ -260,7 +260,9 @@ export function buildCompletedWorkflowChangeSummary(context = null, options = {}
     context?.changedFileSummaries,
   );
   const fallbackLine = String(
-    options?.fallbackLine || "I do not have a detailed summary of each file yet.",
+    Object.prototype.hasOwnProperty.call(options || {}, "fallbackLine")
+      ? options.fallbackLine
+      : "I do not have a detailed summary of each file yet.",
   ).trim();
   const maxPaths =
     Number.isFinite(options?.maxPaths) && options.maxPaths > 0

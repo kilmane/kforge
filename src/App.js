@@ -965,6 +965,13 @@ function getCompletedWorkflowRouteDecision({
 
   const kind = promptTask?.kind || "unknown";
 
+  if (kind === WORKFLOW_TASK_KIND.PROJECT_EDIT) {
+    return {
+      action: "continue_normal",
+      prepareFixContext: false,
+    };
+  }
+
   if (kind === "success_ack") {
     return { action: "success_ack" };
   }
@@ -2261,7 +2268,7 @@ export default function App() {
       );
 
     const hasProjectAnchor =
-      /\b(app|project|website|site|page|screen|view|ui|interface|frontend|codebase|file|folder|component|route|layout)\b/.test(
+      /\b(app|project|website|site|page|screen|view|ui|interface|frontend|codebase|file|folder|component|route|layout|footer|header|navbar|nav|menu|sidebar|section|button|link|card|panel|banner|hero|form|input|modal|dialog)\b/.test(
         s,
       ) ||
       /\b(src|public|components|pages|app)\//.test(s) ||
@@ -2272,7 +2279,7 @@ export default function App() {
       /\b(that says|saying|with text|text that says|called|named)\b/.test(s);
 
     const hasDirectionalProjectPhrase =
-      /\b(to|in|inside|within|on|for)\s+(the\s+)?(app|project|page|screen|site|website|ui|interface|code|file|component)\b/.test(
+      /\b(to|in|inside|within|on|for)\s+(the\s+)?(app|project|page|screen|site|website|ui|interface|code|file|component|footer|header|navbar|nav|menu|sidebar|section|button|link|card|panel|banner|hero|form|input|modal|dialog)\b/.test(
         s,
       );
 
@@ -2281,7 +2288,7 @@ export default function App() {
       (
         hasProjectAnchor ||
         hasDirectionalProjectPhrase ||
-        /\b(app|project|page|screen|site|website|ui|interface)\b/.test(s)
+        /\b(app|project|page|screen|site|website|ui|interface|footer|header|navbar|nav|menu|sidebar|section|button|link|card|panel|banner|hero|form|input|modal|dialog)\b/.test(s)
       );
 
     if (!hasImplementationVerb && !hasConcreteProjectEdit) return false;
@@ -2907,11 +2914,6 @@ export default function App() {
       "open the app",
       "test it",
       "show it",
-      "what now",
-      "what next",
-      "next",
-      "next step",
-      "next steps",
     ];
 
     if (directRequests.includes(s)) return true;
@@ -3309,6 +3311,7 @@ export default function App() {
   const buildWorkflowPreviewRoutingMessage = useCallback((projectOpen, context = null) => {
     const summary = buildCompletedWorkflowChangeSummary(context, {
       maxPaths: 6,
+      fallbackLine: "",
     });
     const detectedTemplateName =
       projectTemplateInfo?.detectedTemplate?.name || "";
@@ -3509,8 +3512,93 @@ export default function App() {
 
       if (completedWorkflowRoute) {
         if (completedWorkflowRoute.action === "success_ack") {
+          const shouldShowNextChoices =
+            /\b(what\s+now|whatg\s+now|now what|next|options?|suggestions?)\b/i.test(
+              draft,
+            );
+          const followupGoal =
+            "Fix the previous project edit.\n\n" +
+            `User report: ${draft}\n\n` +
+            "The user is describing what happened after the last implementation. Inspect the relevant files before editing, then request the smallest safe fix.";
+          const completedWorkflowChoiceActions = shouldShowNextChoices
+            ? [
+                {
+                  label: "Preview",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowShowChangesMessage(workflowContext),
+                    );
+                  },
+                },
+                {
+                  label:
+                    modelWorkflowPolicy.mode === "advisory_only"
+                      ? "Fix last edit in test mode"
+                      : "Fix last edit",
+                  onClick: () => {
+                    setWorkflowContext(
+                      createBugfixWorkflowContext(
+                        workflowContext,
+                        "completed_workflow_success_ack_choice",
+                      ),
+                    );
+
+                    appendMessage(
+                      "assistant",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Continuing the fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                        : "Continuing the fix. I will inspect the relevant files before editing.",
+                    );
+
+                    sendWithPrompt(followupGoal, {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      forceAdvisoryTestOverride:
+                        modelWorkflowPolicy.mode === "advisory_only",
+                    });
+                  },
+                },
+                {
+                  label: "Make another edit",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "No problem — I’ll leave it there.",
+                    );
+                  },
+                },
+              ]
+            : [];
+
           if (!opts.silentUserAppend) appendMessage("user", draft);
-          appendMessage("assistant", buildWorkflowSuccessAckMessage(draft));
+          appendMessage(
+            "assistant",
+            shouldShowNextChoices
+              ? `${buildWorkflowSuccessAckMessage(draft)}\n\n${buildCompletedWorkflowChoiceMessage(draft)}`
+              : buildWorkflowSuccessAckMessage(draft),
+            shouldShowNextChoices
+              ? { actions: completedWorkflowChoiceActions }
+              : undefined,
+          );
           return;
         }
 
