@@ -2141,6 +2141,12 @@ export default function App() {
             assistantResult?.summary
               ? `- assistantResult.summary: ${String(assistantResult.summary || "")}`
               : "",
+            workflowContext.verificationStatus || assistantResult?.verificationStatus
+              ? `- verificationStatus: ${String(workflowContext.verificationStatus || assistantResult?.verificationStatus || "")}`
+              : "",
+            workflowContext.verificationSummary || assistantResult?.verificationSummary
+              ? `- verificationSummary: ${String(workflowContext.verificationSummary || assistantResult?.verificationSummary || "")}`
+              : "",
             workflowContext.lastEditedPath
               ? `- lastEditedPath: ${String(workflowContext.lastEditedPath || "")}`
               : "",
@@ -2150,7 +2156,8 @@ export default function App() {
               : "",
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
-            "If assistantResult is present, prefer actionResult, actionType, and suggestedActions before guessing from user wording.",
+            "If assistantResult is present, prefer actionResult, actionType, suggestedActions, verificationStatus, and verificationSummary before guessing from user wording.",
+            "If verificationStatus is not_run, suggested, or unknown, do not claim the app was verified. Suggest Preview, Show changes, or the smallest relevant check instead.",
             "If implementation is partial and nextStep is continue_implementation, a vague continue/go on/keep going follow-up means continue the preserved lastUserGoal with exactly one focused inspection/edit step. Do not restart from scratch and do not claim the feature is complete.",
             "If implementation is completed and nextStep is preview, a vague yes/run/test/what now follow-up means guide to Preview, not another file edit.",
             "If the user reports a broken result, dead link, blank page, non-clickable UI, or anything not working after implementation, inspect and fix the files instead of routing to Preview.",
