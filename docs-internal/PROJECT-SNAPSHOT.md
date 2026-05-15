@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **May 10th, 2026**
+Last Updated: **May 15th, 2026**
 
-Phase: **7 — Workspace Awareness complete / docs catch-up**
-Status: **Phase 7 workspace-awareness stack is stable; user-facing and internal docs are being refreshed**
+Phase: **Post Phase 10.3.1 — Verification follow-up stable / docs catch-up**
+Status: **Phase 10 Advanced Vibecoding baseline is stable through Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling. User-facing and internal docs are being refreshed after Phase 9 and Phase 10.**
 
 Stable restore tags now available:
 
@@ -25,6 +25,11 @@ Stable restore tags now available:
 * `phase-6.6-workflow-state-router-stable`
 * `phase-7.5-context-compression-stable`
 * `phase-7.6-workspace-snapshot-stable`
+* `phase-9.5-testing-middle-flow-stable`
+* `phase-10.1-feature-blueprints-stable`
+* `phase-10.2-iterative-build-loops-stable`
+* `phase-10.3-self-verification-stable`
+* `phase-10.3.1-verification-followups-stable`
 
 ---
 
@@ -1790,6 +1795,9 @@ Local Project
 → smart provider/model policy hardening for advisory, guarded, and full-agent routes
 → workflow-state routing for blocked, in-progress, tool-waiting, completed, preview, and fix follow-ups
 → Phase 7 Workspace Awareness: Repo Explore, Code Scout, Project Stack Signals, Inspection Candidate Routing, Context Compression, and Workspace Snapshot
+→ Phase 8 Builder Loops: multi-file editing loops, change summaries, show-changes flow, and preview handoff intelligence
+→ Phase 9 Developer Assistants: Error Fixer, Supabase Assistant, Deploy Assistant, Performance Assistant, and Assistant Result Protocol / Logical Workflow Outcomes
+→ Phase 10 Advanced Vibecoding baseline: Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling
 
 Important warning for future work:
 

@@ -528,17 +528,40 @@ Examples:
 * “Create a starter app” → KForge may guide you to **Preview → Generate**
 * “Run git status” → KForge may guide you to **Terminal**
 
+## Planning features before editing
+
+For larger or unclear feature requests, KForge may produce a **Feature Blueprint** before editing files.
+
+A blueprint is a planning step. It should describe:
+
+* the likely files involved
+* the implementation steps
+* risks or assumptions
+* how to preview or check the result
+
+A blueprint should not claim files were changed. From there, you can choose to start implementation or refine the plan.
+
 ## After KForge edits files
 
-After KForge completes an implementation edit, it may suggest a few natural next steps:
+After KForge completes an implementation edit, it may show:
 
-* **Preview** — use **Preview Panel → Preview** to run or view the project
+* **Changed** — the files KForge recorded as changed
+* **Verification** — what has or has not been checked
+* suggested next action buttons
+
+Common suggested actions include:
+
+* **Preview the app** — use **Preview Panel → Preview** to run or view the project
+* **Verify changes** — check the result before treating it as finished
 * **Show changes** — ask KForge to review the changed files it recorded
-* **Another edit** — describe the next change you want
+* **Continue editing** — describe the next change you want
+* **No action needed** — leave the completed workflow alone
+
+If KForge only completed part of a larger implementation, it may suggest **Continue implementation** so the work can proceed in a controlled loop.
 
 If dependencies are missing, use **Preview Panel → Install** first.
 
-KForge should not pretend that chat itself has started the preview. The chat can guide you to the correct Preview workflow, but the Preview panel is where the project is actually run, opened, or guided.
+KForge should not pretend that chat itself has started the preview, run a build, or passed tests. The chat can guide you to the correct Preview workflow, but the Preview panel is where the project is actually run, opened, or guided.
 
 ## Test connection
 

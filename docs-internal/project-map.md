@@ -1137,16 +1137,35 @@ Current milestone includes:
 * workspace activity indicators
 * animated activity feedback
 * AI-panel Help dropdown placement
+* Phase 7 workspace awareness stack
+* Phase 8 builder-loop foundations
+* Phase 9 developer assistants
+* Phase 9.5 assistant result protocol and controlled suggested actions
+* Phase 10.1 feature blueprints
+* Phase 10.2 iterative build-loop continuation
+* Phase 10.3 self-verification truthfulness
+* Phase 10.3.1 user-supplied verification follow-up handling
 
 ---
 
 # 11 Next Architecture Lane
 
-Next roadmap phases:
+Current post-Phase-10 docs lane:
 
-```text
-Phase 5.4 — Future Template Expansion
-```
+* Post Phase 10 Docs — refresh user-facing and internal documentation after Phase 9 and Phase 10
+
+Next major product lane:
+
+* Phase 11 — Builder Reliability / Meaningful App Building
+
+Focus:
+
+* implementation quality
+* recovery loops
+* useful app generation
+* preview-error repair
+* avoiding destructive rewrites
+* making KForge capable of building meaningful small apps
 
 Possible future integrations:
 
@@ -1155,12 +1174,6 @@ Possible future integrations:
 * Auth0
 * Vercel API integration
 * Netlify API integration
-
-Longer term:
-
-```text
-Phase 6 — Model Routing & Guidance
-```
 
 ---
 
