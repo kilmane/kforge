@@ -4154,6 +4154,8 @@ export default function App() {
 
         const isFixNoToolRecovery =
           promptTask.kind === "broken_preview_debug";
+        const isPartialImplementationNoToolRecovery =
+          promptTask.source === "partial_implementation_continuation";
 
         // Append cleaned assistant output (keeps transcript readable)
         if (shouldShowAdvisoryNoActionRecovery) {
@@ -4211,27 +4213,42 @@ export default function App() {
             isFixNoToolRecovery
               ? "The model replied without requesting a KForge tool, so no fix was made.\n\n" +
                 "This was a fix/debug request. I can ask it to continue with one concrete fix tool request, or stop here."
-              : "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
-                "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
+              : isPartialImplementationNoToolRecovery
+                ? "The model replied without requesting a KForge tool, so the implementation was not continued.\n\n" +
+                  "This was a partial implementation continuation. I can ask it to continue with one concrete implementation tool request, or stop here."
+                : "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
+                  "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
             {
               actions: [
                 {
                   label: isFixNoToolRecovery
                     ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                    : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                    : isPartialImplementationNoToolRecovery
+                      ? SUGGESTED_ACTION_LABEL.CONTINUE_IMPLEMENTATION
+                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                   onClick: () => {
                     sendWithPrompt(
                       (isFixNoToolRecovery
                           ? "Continue the previous fix/debug task.\n\n"
-                          : "Continue the previous project edit.\n\n") +
-                        `Original request: ${draft}\n\n` +
+                          : isPartialImplementationNoToolRecovery
+                            ? "Continue the previous implementation.\n\n"
+                            : "Continue the previous project edit.\n\n") +
+                        `Original request: ${
+                          isPartialImplementationNoToolRecovery
+                            ? String(workflowContext?.lastUserGoal || draft).trim()
+                            : draft
+                        }\n\n` +
                         (isFixNoToolRecovery
                           ? "Your previous reply promised a fix/debug action but did not request a tool. Request exactly one fenced tool block now.\n"
-                          : "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n") +
+                          : isPartialImplementationNoToolRecovery
+                            ? "Your previous reply promised an implementation continuation but did not request a tool. Request exactly one fenced tool block now.\n"
+                            : "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n") +
                         "If inspection is needed, request one read_file or list_dir tool first. For a static project, index.html is often the first file to inspect.\n" +
                         (isFixNoToolRecovery
                           ? "If a file fix is possible, request one write_file tool for the smallest safe fix. Do not give only prose."
-                          : "If editing is possible, request one write_file tool. Do not give only prose."),
+                          : isPartialImplementationNoToolRecovery
+                            ? "If continuing implementation is possible, request one write_file tool for the smallest safe continuation. Do not give only prose."
+                            : "If editing is possible, request one write_file tool. Do not give only prose."),
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
