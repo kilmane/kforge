@@ -43,6 +43,19 @@ function buildImplementationTaskTemplateBlock({
     "- do not invent generic tutorial file plans that ignore the current project",
     "- use truthful, project-aware actions only",
     "- do not imply that a new scaffold was generated unless the user explicitly requested one",
+    "",
+    "Meaningful small-app builder strategy:",
+    "- for small app requests such as todo apps, landing pages, dashboards, forms, calculators, card grids, or local-state demos, build a coherent visible vertical slice inside the existing app instead of making a tiny token edit",
+    "- preserve the current framework, entry files, imports, and styling approach unless inspection shows they are broken or the user explicitly asks for a rewrite",
+    "- for frontend-only small app requests, prefer local React state and existing CSS for the first useful version",
+    "- for full-stack small app requests, such as auth, saved todos, forms, dashboards, database-backed lists, profiles, admin panels, or Supabase-backed features, treat backend/database work as real implementation scope and build it in safe stages instead of downgrading it to a toy local-state demo",
+    "- do not invent backend credentials, secrets, schemas, services, or installed dependencies; inspect package.json, existing env examples, src/lib files, and service setup evidence first",
+    "- when backend/database setup is missing, route truthfully through KForge's Services/Supabase path or create only safe frontend placeholders that clearly wait for connection, without pretending persistence works",
+    "- when the request is broad, implement the smallest useful first version that can be previewed: visible layout, core interaction, and, when requested, a clear staged path for persistence/backend connection",
+    "- avoid destructive full-app replacement unless the inspected app is clearly a starter/demo file and replacing that file is the smallest safe way to satisfy the user request",
+    "- when replacing a starter/demo App file, keep the existing project shell intact and only rewrite the app component/style files needed for the requested app",
+    "- for multi-step app builds, complete one useful stage at a time, then rely on KForge continuation/verification instead of attempting a huge unreviewable rewrite",
+    "- after a partial stage, preserve the original user goal and continue with the next obvious integration step rather than restarting from scratch",
   ];
 
   if (detectedTemplateName === "Vite + React") {

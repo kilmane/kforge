@@ -3115,6 +3115,73 @@ export default function App() {
     );
   }
 
+  function isUserSuppliedVerificationSuccessWithFreshEditIntent(
+    text = "",
+    workflowContext = null,
+  ) {
+    if (!isCompletedImplementationWorkflow(workflowContext)) return false;
+    if (workflowContext?.nextStep !== WORKFLOW_NEXT_STEP.PREVIEW) return false;
+
+    const status = getWorkflowVerificationStatus(workflowContext);
+    const canReportPreviewResult =
+      !status ||
+      status === VERIFICATION_STATUS.NOT_RUN ||
+      status === VERIFICATION_STATUS.SUGGESTED ||
+      status === VERIFICATION_STATUS.UNKNOWN ||
+      status === VERIFICATION_STATUS.PASSED;
+
+    if (!canReportPreviewResult) return false;
+
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s || s.length > 260) return false;
+
+    const reportsRuntimeProblem =
+      /\b(broken|breaks?|blank|error|failed?|fails?|not\s+working|doesn'?t\s+work|issue|problem|bug|wrong|stuck|crash|crashed|dead|missing)\b/.test(
+        s,
+      );
+
+    if (reportsRuntimeProblem) return false;
+
+    const hasVerificationSubject =
+      /\b(preview|app|site|page|ui|screen|result|check|checked|test|tested|verify|verified|verification)\b/.test(
+        s,
+      );
+
+    const hasPositiveOutcome =
+      /\b(done|ok|okay|passed|pass|works?|working|fine|good|great|sorted|success|successful|confirmed|clear|clean|all\s+good|looks\s+good|seems\s+good|looks\s+fine)\b/.test(
+        s,
+      );
+
+    const hasVerificationReport =
+      (hasVerificationSubject && hasPositiveOutcome) ||
+      /\bpreview\s+(ok|okay|passed|pass|works?|working|done|fine|good|great)\b/.test(
+        s,
+      ) ||
+      /\b(ok|okay|passed|pass|works?|working|done|fine|good|great)\b.*\b(preview|app|ui|screen|page)\b/.test(
+        s,
+      );
+
+    if (!hasVerificationReport) return false;
+
+    const hasFreshEditAction =
+      /\b(make|improve|update|change|polish|style|restyle|redesign|moderni[sz]e|enhance|add|remove|replace|tweak|adjust)\b/.test(
+        s,
+      ) ||
+      /\bcan\s+you\b/.test(s);
+
+    const hasFreshEditTarget =
+      /\b(ui|ux|look|looks|appearance|visual|design|style|styling|color|colour|colors|colours|palette|theme|modern|vibrant|dull|poor|boring|layout|app|page|screen|button|card|form|dashboard|todo|feature|component)\b/.test(
+        s,
+      ) ||
+      /\b(src|public|components|pages|app)\//.test(s) ||
+      /\b[\w./-]+\.(js|jsx|ts|tsx|css|html|json|md|rs|py)\b/.test(s);
+
+    return hasFreshEditAction && hasFreshEditTarget;
+  }
+
   function isUserSuppliedVerificationSuccessIntent(
     text = "",
     workflowContext = null,
@@ -3266,6 +3333,20 @@ export default function App() {
           kind: "unknown",
           confidence: "low",
           source: "empty_prompt",
+        };
+      }
+
+      if (
+        isCompletedImplementationWorkflow(workflowContext) &&
+        isUserSuppliedVerificationSuccessWithFreshEditIntent(
+          text,
+          workflowContext,
+        )
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "workflow_verification_success_with_fresh_edit",
         };
       }
 
