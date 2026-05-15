@@ -2122,6 +2122,12 @@ export default function App() {
             `- taskKind: ${String(workflowContext.taskKind || "")}`,
             `- status: ${String(workflowContext.status || "")}`,
             `- nextStep: ${String(workflowContext.nextStep || "")}`,
+            workflowContext.lastUserGoal
+              ? `- lastUserGoal: ${String(workflowContext.lastUserGoal || "")}`
+              : "",
+            workflowContext.partialSummary
+              ? `- partialSummary: ${String(workflowContext.partialSummary || "")}`
+              : "",
             assistantResult?.actionResult
               ? `- assistantResult.actionResult: ${String(assistantResult.actionResult || "")}`
               : "",
@@ -2145,6 +2151,7 @@ export default function App() {
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
             "If assistantResult is present, prefer actionResult, actionType, and suggestedActions before guessing from user wording.",
+            "If implementation is partial and nextStep is continue_implementation, a vague continue/go on/keep going follow-up means continue the preserved lastUserGoal with exactly one focused inspection/edit step. Do not restart from scratch and do not claim the feature is complete.",
             "If implementation is completed and nextStep is preview, a vague yes/run/test/what now follow-up means guide to Preview, not another file edit.",
             "If the user reports a broken result, dead link, blank page, non-clickable UI, or anything not working after implementation, inspect and fix the files instead of routing to Preview.",
           ]
@@ -2397,10 +2404,29 @@ export default function App() {
       s.includes("test") ||
       s.includes("preview") ||
       s.includes("start") ||
+      s.includes("continue") ||
+      s.includes("go on") ||
+      s.includes("carry on") ||
+      s.includes("keep going") ||
       s.includes("open it") ||
       s.includes("show me") ||
       s.includes("launch")
     );
+  }
+
+  function isPartialImplementationContinuationIntent(text = "", context = null) {
+    if (
+      context?.taskKind !== WORKFLOW_TASK_KIND.IMPLEMENTATION ||
+      context?.nextStep !== WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION
+    ) {
+      return false;
+    }
+
+    if (isWorkflowBugfixIntent(text)) return false;
+    if (isWorkflowShowChangesIntent(text)) return false;
+    if (isExplicitWorkflowPreviewRequest(text)) return false;
+
+    return isWorkflowContinuationIntent(text);
   }
 
 
@@ -3180,6 +3206,14 @@ export default function App() {
           kind: "broken_preview_debug",
           confidence: "high",
           source: "existing_intent_helpers",
+        };
+      }
+
+      if (projectOpen && isPartialImplementationContinuationIntent(text, workflowContext)) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "partial_implementation_continuation",
         };
       }
 
