@@ -974,6 +974,10 @@ function getCompletedWorkflowRouteDecision({
     };
   }
 
+  if (kind === "verification_already_success") {
+    return { action: "verification_already_success" };
+  }
+
   if (kind === "verification_success") {
     return { action: "verification_success" };
   }
@@ -3157,6 +3161,59 @@ export default function App() {
     return (hasVerificationSubject && hasPositiveOutcome) || shortPositiveResult;
   }
 
+  function isPreviewVerificationPassedWorkflow(workflowContext = null) {
+    if (!isCompletedImplementationWorkflow(workflowContext)) return false;
+    if (workflowContext?.nextStep !== WORKFLOW_NEXT_STEP.PREVIEW) return false;
+
+    return getWorkflowVerificationStatus(workflowContext) === VERIFICATION_STATUS.PASSED;
+  }
+
+  function isUserSuppliedVerificationAlreadyPassedIntent(
+    text = "",
+    workflowContext = null,
+  ) {
+    if (!isPreviewVerificationPassedWorkflow(workflowContext)) return false;
+
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s || s.length > 120) return false;
+    if (/[?]/.test(s)) return false;
+
+    const asksForNextAction =
+      /\b(what\s+now|now\s+what|next|options?|suggestions?|show\s+changes?|review|fix|debug|edit|change|add|remove|deploy|publish|manual|steps?)\b/.test(
+        s,
+      );
+
+    if (asksForNextAction) return false;
+
+    const reportsProblem =
+      /\b(broken|breaks?|blank|error|failed?|fails?|not\s+working|doesn'?t\s+work|issue|problem|bug|wrong|bad|stuck|crash|crashed|dead|missing)\b/.test(
+        s,
+      );
+
+    if (reportsProblem) return false;
+
+    const hasVerificationSubject =
+      /\b(preview|app|site|page|ui|screen|result|check|checked|test|tested|verify|verified|verification)\b/.test(
+        s,
+      );
+
+    const hasPositiveOutcome =
+      /\b(done|ok|okay|passed|pass|works?|working|fine|good|great|sorted|success|successful|confirmed|clear|clean|all\s+good|looks\s+good|seems\s+good|looks\s+fine)\b/.test(
+        s,
+      );
+
+    const shortPositiveResult =
+      s.length <= 40 &&
+      /\b(done|ok|okay|passed|works?|working|fine|good|sorted|all\s+good|looks\s+good)\b/.test(
+        s,
+      );
+
+    return (hasVerificationSubject && hasPositiveOutcome) || shortPositiveResult;
+  }
+
   function isWorkflowSuccessAckIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3209,6 +3266,17 @@ export default function App() {
           kind: "unknown",
           confidence: "low",
           source: "empty_prompt",
+        };
+      }
+
+      if (
+        isCompletedImplementationWorkflow(workflowContext) &&
+        isUserSuppliedVerificationAlreadyPassedIntent(text, workflowContext)
+      ) {
+        return {
+          kind: "verification_already_success",
+          confidence: "high",
+          source: "workflow_verification_already_passed",
         };
       }
 
@@ -3685,6 +3753,58 @@ export default function App() {
           });
 
       if (completedWorkflowRoute) {
+        if (completedWorkflowRoute.action === "verification_already_success") {
+          const verifiedWorkflowContext = {
+            ...workflowContext,
+            updatedAt: Date.now(),
+            source: "user_supplied_verification_already_passed",
+          };
+
+          setWorkflowContext(verifiedWorkflowContext);
+
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage(
+            "assistant",
+            "Already noted — Preview was checked and passed.\n\n" +
+              "Verification:\n" +
+              "- Preview was checked by you and passed.\n" +
+              "- Build and automated tests have not been run.\n\n" +
+              "Next:\nChoose what you'd like to do next.",
+            {
+              actions: [
+                {
+                  label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowShowChangesMessage(verifiedWorkflowContext),
+                    );
+                  },
+                },
+                {
+                  label: "Make another edit",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "No problem — I’ll leave it there.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
+          return;
+        }
+
         if (completedWorkflowRoute.action === "verification_success") {
           const verificationSummary =
             "Preview was checked by you and passed. Build and automated tests have not been run.";
