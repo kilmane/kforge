@@ -31,6 +31,7 @@ import {
   createCompletedImplementationWorkflowContext,
   createPartialImplementationWorkflowContext,
   SUGGESTED_ACTION_LABEL,
+  VERIFICATION_STATUS,
   WORKFLOW_NEXT_STEP,
 } from "../workflowState.js";
 
@@ -651,6 +652,47 @@ function buildPostEditChangeSummary(context = null) {
   });
 }
 
+function buildPostEditVerificationMessage(context = null) {
+  const assistantResult = context?.assistantResult || null;
+  const verificationStatus = String(
+    context?.verificationStatus ||
+      assistantResult?.verificationStatus ||
+      VERIFICATION_STATUS.UNKNOWN,
+  ).trim();
+  const verificationSummary = String(
+    context?.verificationSummary ||
+      assistantResult?.verificationSummary ||
+      "",
+  ).trim();
+
+  if (verificationStatus === VERIFICATION_STATUS.PASSED) {
+    return `Verification:\n- ${verificationSummary || "A verification step was completed."}`;
+  }
+
+  if (verificationStatus === VERIFICATION_STATUS.FAILED) {
+    return (
+      "Verification:\n" +
+      `- ${verificationSummary || "A verification step failed or reported an issue."}\n` +
+      "- Suggested next action: Fix the error."
+    );
+  }
+
+  if (verificationStatus === VERIFICATION_STATUS.SUGGESTED) {
+    return (
+      "Verification:\n" +
+      `- ${verificationSummary || "A verification step is suggested next."}\n` +
+      "- Suggested next check: Preview the app."
+    );
+  }
+
+  return (
+    "Verification:\n" +
+    "- I have not run Preview, build, or tests from this completion.\n" +
+    "- Suggested next check: Preview the app.\n" +
+    "- If Preview fails, choose Fix the error."
+  );
+}
+
 function buildPostEditNextStepMessage() {
   return (
     "Next:\nChoose an action below, or use Preview Panel → Preview to run or view it.\n\n" +
@@ -666,6 +708,17 @@ function buildPostEditCompletionActions({ context = null, appendMessage = null }
       label: SUGGESTED_ACTION_LABEL.PREVIEW_APP,
       onClick: () => {
         appendMessage("assistant", buildPreviewHandoffMessage());
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.VERIFY_CHANGES,
+      onClick: () => {
+        appendMessage(
+          "assistant",
+          `${buildPostEditVerificationMessage(
+            context,
+          )}\n\nUse Preview Panel → Preview for the next check. If dependencies are missing, use Preview Panel → Install first.`,
+        );
       },
     },
     {
@@ -1982,6 +2035,7 @@ export default function AiPanel({
             const writeCompletionMessage =
               `Done — updated ${fileCountLabel}.\n\n` +
               `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
+              `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
               buildPostEditNextStepMessage(completedWorkflowContext);
 
             appendMessage("assistant", writeCompletionMessage, {
@@ -2249,6 +2303,8 @@ export default function AiPanel({
                   "assistant",
                   `Done — updated ${fileCountLabel}.\n\n${buildPostEditChangeSummary(
                     completedWorkflowContext,
+                  )}\n\n${buildPostEditVerificationMessage(
+                    completedWorkflowContext,
                   )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`,
                   {
                     actions: buildPostEditCompletionActions({
@@ -2272,6 +2328,7 @@ export default function AiPanel({
                   `${buildPostEditChangeSummary(
                     completedWorkflowContext,
                   )}\n\n` +
+                  `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
                   buildPostEditNextStepMessage(completedWorkflowContext);
 
                 appendMessage("assistant", agentWriteCompletionMessage, {

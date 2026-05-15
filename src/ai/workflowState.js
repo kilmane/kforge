@@ -18,6 +18,7 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   FIX: "fix",
   PREVIEW: "preview",
   SHOW_CHANGES: "show_changes",
+  VERIFY: "verify",
   ANOTHER_EDIT: "another_edit",
   START_IMPLEMENTATION: "start_implementation",
   CONTINUE_IMPLEMENTATION: "continue_implementation",
@@ -45,12 +46,14 @@ export const ASSISTANT_ACTION_TYPE = Object.freeze({
   DEPLOY: "deploy",
   SERVICES: "services",
   MANUAL: "manual",
+  SELF_VERIFICATION: "self_verification",
   UNKNOWN: "unknown",
 });
 
 export const SUGGESTED_ACTION_LABEL = Object.freeze({
   PREVIEW_APP: "Preview the app",
   SHOW_CHANGES: "Show changes",
+  VERIFY_CHANGES: "Verify changes",
   CONTINUE_EDITING: "Continue editing",
   CONTINUE_IMPLEMENTATION: "Continue implementation",
   CONTINUE_FIXING: "Continue fixing",
@@ -70,6 +73,14 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   CHOOSE_NETLIFY: "Choose Netlify",
   INSPECT_FIRST: "Inspect first",
   STOP: "Stop",
+});
+
+export const VERIFICATION_STATUS = Object.freeze({
+  NOT_RUN: "not_run",
+  SUGGESTED: "suggested",
+  PASSED: "passed",
+  FAILED: "failed",
+  UNKNOWN: "unknown",
 });
 
 function normalizeWorkflowPathList(paths = []) {
@@ -126,6 +137,14 @@ function normalizeAssistantActionType(actionType = "") {
     : ASSISTANT_ACTION_TYPE.UNKNOWN;
 }
 
+function normalizeVerificationStatus(status = "") {
+  const cleanStatus = String(status || "").trim();
+
+  return Object.values(VERIFICATION_STATUS).includes(cleanStatus)
+    ? cleanStatus
+    : VERIFICATION_STATUS.UNKNOWN;
+}
+
 export function buildSuggestedActionsForAssistantResult({
   actionResult = ASSISTANT_ACTION_RESULT.AMBIGUOUS,
   actionType = ASSISTANT_ACTION_TYPE.UNKNOWN,
@@ -139,6 +158,7 @@ export function buildSuggestedActionsForAssistantResult({
   ) {
     return [
       SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+      SUGGESTED_ACTION_LABEL.VERIFY_CHANGES,
       SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
       SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
       SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
@@ -263,10 +283,13 @@ export function buildAssistantResultProtocol({
   changedPaths = [],
   nextStep = "",
   suggestedActions = null,
+  verificationStatus = VERIFICATION_STATUS.UNKNOWN,
+  verificationSummary = "",
   source = "",
 } = {}) {
   const normalizedActionResult = normalizeAssistantActionResult(actionResult);
   const normalizedActionType = normalizeAssistantActionType(actionType);
+  const normalizedVerificationStatus = normalizeVerificationStatus(verificationStatus);
   const normalizedChangedPaths = normalizeWorkflowPathList(changedPaths);
   const normalizedSuggestedActions = Array.isArray(suggestedActions)
     ? suggestedActions.map((item) => String(item || "").trim()).filter(Boolean)
@@ -282,6 +305,8 @@ export function buildAssistantResultProtocol({
     changedPaths: normalizedChangedPaths,
     nextStep: String(nextStep || "").trim(),
     suggestedActions: normalizedSuggestedActions,
+    verificationStatus: normalizedVerificationStatus,
+    verificationSummary: String(verificationSummary || "").trim(),
     updatedAt: Date.now(),
     source: String(source || "").trim(),
   };
@@ -474,6 +499,8 @@ export function createCompletedImplementationWorkflowContext({
   changeSummary = "",
   completedSummary = "",
   partialSummary = "",
+  verificationStatus = VERIFICATION_STATUS.NOT_RUN,
+  verificationSummary = "Preview, build, and tests have not been run yet.",
   assistantResult = null,
   nextStep = WORKFLOW_NEXT_STEP.PREVIEW,
   source = "tool_batch",
@@ -502,6 +529,8 @@ export function createCompletedImplementationWorkflowContext({
       actionType: ASSISTANT_ACTION_TYPE.PROJECT_EDIT,
       changedPaths: finalEditedPaths,
       nextStep,
+      verificationStatus,
+      verificationSummary,
       source,
     });
 
@@ -515,6 +544,8 @@ export function createCompletedImplementationWorkflowContext({
     changeSummary: String(changeSummary || "").trim(),
     completedSummary: String(completedSummary || "").trim(),
     partialSummary: String(partialSummary || "").trim(),
+    verificationStatus: normalizeVerificationStatus(verificationStatus),
+    verificationSummary: String(verificationSummary || "").trim(),
     assistantResult: finalAssistantResult,
     updatedAt: Date.now(),
     source,
