@@ -13,6 +13,11 @@ import { buildProjectStackContextBlock } from "./ai/workspace/projectStack";
 import { buildCodeScoutContextBlock } from "./ai/workspace/codeScout";
 import { buildInspectionCandidateRoutingContextBlock } from "./ai/workspace/inspectionCandidates";
 import { buildWorkspaceSnapshotContextBlock } from "./ai/workspace/workspaceSnapshot";
+import {
+  APP_INTENT,
+  buildFreeAppBrief,
+  renderStarterRecommendation,
+} from "./ai/planning/appBriefProtocol";
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -2323,6 +2328,58 @@ export default function App() {
       hasConcreteProjectEdit
     );
   }
+  function hasFreeAppBriefNewAppIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const workflowHints = [
+      "preview",
+      "run",
+      "install dependencies",
+      "supabase",
+      "openai",
+      "stripe",
+      "github",
+      "deploy",
+      "manual steps",
+      "don't use kforge",
+      "bypass kforge",
+    ];
+
+    if (workflowHints.some((hint) => s.includes(hint))) return false;
+    if (/^(how|what|why|when|where|should|can|could|would)\b/.test(s)) {
+      return false;
+    }
+
+    const hasStarterAction =
+      /\b(build|create|make|generate|start|set\s+up|i\s+need|need|i\s+want|want|would\s+like|looking\s+to|trying\s+to)\b/.test(
+        s,
+      );
+
+    if (!hasStarterAction) return false;
+
+    const brief = buildFreeAppBrief({ userText: text });
+
+    return brief?.intent === APP_INTENT.NEW_APP;
+  }
+
+  function hasFreeAppBriefStarterRoutingIntent(text = "") {
+    if (hasFreeAppBriefNewAppIntent(text)) return true;
+
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    return (
+      /\b(created|made|opened|open|ready|empty)\b.*\b(folder|project|directory)\b/.test(s) ||
+      /\b(folder|project|directory)\b.*\b(created|made|opened|open|ready|empty)\b/.test(s)
+    );
+  }
   function isFeatureBlueprintIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -2522,21 +2579,26 @@ export default function App() {
     );
   }
 
-  function buildNoProjectImplementationMessage() {
-    return (
-      "Open or create a project first in Explorer.\n\n" +
-      "Once a project folder is open, I can help you add that page or feature inside the current project."
-    );
+  function buildNoProjectImplementationMessage(userText = "") {
+    const folderState = {
+      projectOpen: false,
+      noProjectFolderOpen: true,
+    };
+    const brief = buildFreeAppBrief({ userText, folderState });
+
+    return renderStarterRecommendation(brief, folderState);
   }
-  function buildEmptyFolderImplementationRoutingMessage() {
-    return (
-      "The project folder is currently empty, so there is no existing app to modify.\n\n" +
-      "A good default here is Vite + React.\n\n" +
-      'You can now leave the chat and open: Preview -> Generate.' + "\n" +
-      'Select "Vite + React" to create a supported starter project.' + "\n\n" +
-      "If you prefer to bypass KForge, I can give manual setup steps in chat instead."
-    );
+
+  function buildEmptyFolderImplementationRoutingMessage(userText = "") {
+    const folderState = {
+      projectOpen: true,
+      emptyProjectFolder: true,
+    };
+    const brief = buildFreeAppBrief({ userText, folderState });
+
+    return renderStarterRecommendation(brief, folderState);
   }
+
   function isEmptyFolderPlanIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3534,7 +3596,7 @@ export default function App() {
         };
       }
 
-      if (!projectOpen && isNoProjectImplementationIntent(text)) {
+      if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text))) {
         return {
           kind: "no_project_implementation",
           confidence: "high",
@@ -3542,7 +3604,7 @@ export default function App() {
         };
       }
 
-      if (emptyProjectFolder && isNoProjectImplementationIntent(text)) {
+      if (emptyProjectFolder && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text))) {
         return {
           kind: "empty_folder_implementation",
           confidence: "high",
@@ -4197,7 +4259,7 @@ export default function App() {
         }
 
         if (directWorkflowHandoffRoute.action === "no_project_implementation") {
-          appendMessage("assistant", buildNoProjectImplementationMessage());
+          appendMessage("assistant", buildNoProjectImplementationMessage(draft));
           return;
         }
 
@@ -4209,7 +4271,7 @@ export default function App() {
         if (directWorkflowHandoffRoute.action === "empty_folder_implementation") {
           appendMessage(
             "assistant",
-            buildEmptyFolderImplementationRoutingMessage(),
+            buildEmptyFolderImplementationRoutingMessage(draft),
           );
           return;
         }
