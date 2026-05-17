@@ -4078,8 +4078,8 @@ export default function App() {
                 {
                   label:
                     modelWorkflowPolicy.mode === "advisory_only"
-                      ? "Fix last edit in test mode"
-                      : "Fix last edit",
+                      ? "Fix this in test mode"
+                      : "Fix this",
                   onClick: () => {
                     setWorkflowContext(
                       createBugfixWorkflowContext(
@@ -4225,8 +4225,8 @@ export default function App() {
                 {
                   label:
                     modelWorkflowPolicy.mode === "advisory_only"
-                      ? "Fix last edit in test mode"
-                      : "Fix last edit",
+                      ? "Fix this in test mode"
+                      : "Fix this",
                   onClick: () => {
                     setWorkflowContext(
                       createBugfixWorkflowContext(
