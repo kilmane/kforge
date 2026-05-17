@@ -2380,6 +2380,27 @@ export default function App() {
       /\b(folder|project|directory)\b.*\b(created|made|opened|open|ready|empty)\b/.test(s)
     );
   }
+
+  function isPostScaffoldReadyToBuildIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+    if (/^(how|what|why|when|where|should|can|could|would)\b/.test(s)) {
+      return false;
+    }
+
+    const hasScaffoldStatus =
+      /\b(generated|created|scaffolded|made)\b.*\b(template|starter|project|app|vite|react)\b/.test(s) ||
+      /\b(installed|install(ed)?)\b.*\b(dependencies|packages)\b/.test(s) ||
+      /\b(dependencies|packages)\b.*\b(installed|ready)\b/.test(s);
+
+    const hasBuildContinuation =
+      /\b(ready\s+to\s+build|ready\s+for\s+build|start\s+building|continue\s+building|build\s+the\s+app|build\s+it|make\s+the\s+app|start\s+implementation|continue\s+implementation)\b/.test(s);
+
+    return hasBuildContinuation && (hasScaffoldStatus || /\bready\b/.test(s));
+  }
   function isFeatureBlueprintIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3579,6 +3600,17 @@ export default function App() {
       }
 
 
+      if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isPostScaffoldReadyToBuildIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "post_scaffold_ready_to_build",
+        };
+      }
       if (isDependencyInstallWorkflowIntent(text)) {
         return {
           kind: "dependency_install",
