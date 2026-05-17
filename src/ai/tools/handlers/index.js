@@ -35,6 +35,37 @@ function isSourceLikeFile(path = "") {
   return /\.(js|jsx|ts|tsx|css|html|json|md|mjs|cjs)$/.test(p);
 }
 
+function isDestructiveRewriteGuardedFile(path = "") {
+  const p = String(path || "").toLowerCase();
+  return /\.(js|jsx|ts|tsx|css|html|mjs|cjs)$/.test(p);
+}
+
+function collectMeaningfulSourceLines(content = "") {
+  return String(content ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter((line) => line.length >= 8)
+    .filter((line) => !/^(?:import|export)\b/.test(line))
+    .filter((line) => !/^[{}()[\],;]+$/.test(line))
+    .slice(0, 500);
+}
+
+function countRetainedMeaningfulLines(existingLines, nextContent = "") {
+  const nextLines = new Set(collectMeaningfulSourceLines(nextContent));
+  return existingLines.filter((line) => nextLines.has(line)).length;
+}
+
+function looksLikeStarterOrPlaceholderSourceContent(content = "") {
+  const lower = String(content || "").toLowerCase();
+
+  return (
+    looksLikePlaceholderWrite(content) ||
+    (lower.includes("reactlogo") && lower.includes("vitelogo")) ||
+    (lower.includes("click on the vite and react logos") &&
+      lower.includes("learn react"))
+  );
+}
+
 function looksLikePlaceholderWrite(content = "") {
   const s = String(content || "").trim();
   const lower = s.toLowerCase();
@@ -89,6 +120,26 @@ function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
       "write_file blocked: this would shrink an existing source file by more than 80%. " +
       "Read the file first and provide the full intended file contents."
     );
+  }
+
+  if (
+    isDestructiveRewriteGuardedFile(path) &&
+    existingBytes >= 500 &&
+    nextBytes < existingBytes * 0.75 &&
+    !looksLikeStarterOrPlaceholderSourceContent(existing)
+  ) {
+    const existingLines = collectMeaningfulSourceLines(existing);
+    const retainedCount = countRetainedMeaningfulLines(existingLines, next);
+    const retainedRatio =
+      existingLines.length > 0 ? retainedCount / existingLines.length : 1;
+
+    if (existingLines.length >= 8 && retainedRatio < 0.35) {
+      return (
+        "write_file blocked: this edit appears to replace a substantial existing app/source file " +
+        "while preserving very little of its current implementation. Make the smallest targeted edit instead, " +
+        "or inspect and preserve the existing functionality."
+      );
+    }
   }
 
   return "";
