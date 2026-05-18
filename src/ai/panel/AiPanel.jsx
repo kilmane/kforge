@@ -21,6 +21,7 @@ import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
 import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
+import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
@@ -42,6 +43,45 @@ import {
  * We still clear them when the conversation is cleared (messages becomes empty).
  */
 const GLOBAL_SEEN_TOOL_KEYS = new Set();
+const MAX_PRE_WRITE_SNAPSHOT_BYTES = 200 * 1024;
+const PRE_WRITE_SNAPSHOT_LIMIT = 8;
+const PRE_WRITE_SNAPSHOT_SOURCE_RE =
+  /\.(c|cc|cpp|cs|css|go|html|java|js|jsx|json|kt|md|php|py|rb|rs|scss|ts|tsx|txt|vue|xml|ya?ml)$/i;
+
+function getTextByteLength(text = "") {
+  return new TextEncoder().encode(String(text || "")).length;
+}
+
+function isPreWriteSnapshotCandidatePath(path = "") {
+  const cleanPath = String(path || "").trim();
+  if (!cleanPath) return false;
+
+  const normalized = cleanPath.replaceAll("\\", "/").toLowerCase();
+  if (
+    normalized.includes("/node_modules/") ||
+    normalized.includes("/dist/") ||
+    normalized.includes("/build/") ||
+    normalized.includes("/.git/")
+  ) {
+    return false;
+  }
+
+  return PRE_WRITE_SNAPSHOT_SOURCE_RE.test(normalized);
+}
+
+function getSnapshotsForPaths(snapshots = [], paths = []) {
+  const wanted = new Set(
+    (Array.isArray(paths) ? paths : [])
+      .map((path) => String(path || "").trim())
+      .filter(Boolean),
+  );
+
+  if (wanted.size === 0) return [];
+
+  return (Array.isArray(snapshots) ? snapshots : []).filter((snapshot) =>
+    wanted.has(String(snapshot?.path || "").trim()),
+  );
+}
 
 function uidShort() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(
@@ -1445,6 +1485,7 @@ export default function AiPanel({
   }, [aiModel]);
 
   const pendingConsentRef = useRef(null);
+  const preWriteSnapshotsRef = useRef([]);
 
   // Local cache still used, but global is the real guard.
   const processedKeysRef = useRef(new Set());
@@ -1626,6 +1667,38 @@ export default function AiPanel({
     return await runToolHandler(toolName, args);
   }, []);
 
+  const capturePreWriteSnapshot = useCallback(async (path) => {
+    const cleanPath = String(path || "").trim();
+    if (!isPreWriteSnapshotCandidatePath(cleanPath)) return null;
+
+    try {
+      const previousContent = String((await openFile(cleanPath)) ?? "");
+      const byteLength = getTextByteLength(previousContent);
+
+      if (byteLength > MAX_PRE_WRITE_SNAPSHOT_BYTES) {
+        return null;
+      }
+
+      const snapshot = {
+        path: cleanPath,
+        previousContent,
+        byteLength,
+        capturedAt: Date.now(),
+      };
+
+      preWriteSnapshotsRef.current = [
+        ...preWriteSnapshotsRef.current.filter(
+          (item) => String(item?.path || "").trim() !== cleanPath,
+        ),
+        snapshot,
+      ].slice(-PRE_WRITE_SNAPSHOT_LIMIT);
+
+      return snapshot;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const runTool = useCallback(
     async ({ toolName, args }) => {
       const res = await runToolCall({
@@ -1634,6 +1707,10 @@ export default function AiPanel({
         requestConsent,
         invokeTool: async (toolName2, args2) => {
           try {
+            if (toolName2 === "write_file") {
+              await capturePreWriteSnapshot(args2?.path);
+            }
+
             return await invokeTool(toolName2, args2);
           } catch (err) {
             const msg = formatTauriError ? formatTauriError(err) : String(err);
@@ -1661,6 +1738,7 @@ export default function AiPanel({
       appendTranscript,
       requestConsent,
       invokeTool,
+      capturePreWriteSnapshot,
       formatTauriError,
       onWorkspaceTreeRefresh,
     ],
@@ -2021,6 +2099,10 @@ export default function AiPanel({
               createCompletedImplementationWorkflowContext({
                 lastEditedPath: latestWrittenPath || "",
                 editedPaths: successfulWritePaths,
+                preWriteSnapshots: getSnapshotsForPaths(
+                  preWriteSnapshotsRef.current,
+                  successfulWritePaths,
+                ),
                 source: "tool_batch",
               });
 
@@ -2223,6 +2305,10 @@ export default function AiPanel({
                 ? createCompletedImplementationWorkflowContext({
                     lastEditedPath: latestAgentWrittenPath || "",
                     editedPaths: agentSuccessfulWritePaths,
+                    preWriteSnapshots: getSnapshotsForPaths(
+                      preWriteSnapshotsRef.current,
+                      agentSuccessfulWritePaths,
+                    ),
                     source: "agent_continuation",
                   })
                 : null;

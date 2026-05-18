@@ -121,6 +121,28 @@ function normalizeChangedFileSummaries(changedFileSummaries = []) {
     .filter((item) => item.summary);
 }
 
+function normalizePreWriteSnapshots(preWriteSnapshots = []) {
+  const sourceSnapshots = Array.isArray(preWriteSnapshots)
+    ? preWriteSnapshots
+    : [];
+
+  return sourceSnapshots
+    .map((item) => {
+      const previousContent =
+        typeof item?.previousContent === "string" ? item.previousContent : "";
+
+      return {
+        path: String(item?.path || "").trim(),
+        previousContent,
+        byteLength: new TextEncoder().encode(previousContent).length,
+        capturedAt: Number.isFinite(Number(item?.capturedAt))
+          ? Number(item.capturedAt)
+          : Date.now(),
+      };
+    })
+    .filter((item) => item.path);
+}
+
 function normalizeAssistantActionResult(result = "") {
   const cleanResult = String(result || "").trim();
 
@@ -496,6 +518,7 @@ export function createCompletedImplementationWorkflowContext({
   lastEditedPath = "",
   editedPaths = [],
   changedFileSummaries = [],
+  preWriteSnapshots = [],
   changeSummary = "",
   completedSummary = "",
   partialSummary = "",
@@ -508,6 +531,8 @@ export function createCompletedImplementationWorkflowContext({
   const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
   const normalizedChangedFileSummaries =
     normalizeChangedFileSummaries(changedFileSummaries);
+  const normalizedPreWriteSnapshots =
+    normalizePreWriteSnapshots(preWriteSnapshots);
   const cleanLastEditedPath = String(lastEditedPath || "").trim();
   const finalLastEditedPath =
     cleanLastEditedPath ||
@@ -541,6 +566,7 @@ export function createCompletedImplementationWorkflowContext({
     lastEditedPath: finalLastEditedPath,
     editedPaths: finalEditedPaths,
     changedFileSummaries: normalizedChangedFileSummaries,
+    preWriteSnapshots: normalizedPreWriteSnapshots,
     changeSummary: String(changeSummary || "").trim(),
     completedSummary: String(completedSummary || "").trim(),
     partialSummary: String(partialSummary || "").trim(),

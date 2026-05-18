@@ -3720,6 +3720,21 @@ export default function App() {
     return paths;
   }, []);
 
+  const getWorkflowRestoreSnapshot = useCallback((context = null, path = "") => {
+    const cleanPath = String(path || "").trim();
+    const snapshots = Array.isArray(context?.preWriteSnapshots)
+      ? context.preWriteSnapshots
+      : [];
+
+    if (!cleanPath || snapshots.length === 0) return null;
+
+    return (
+      snapshots.find(
+        (snapshot) => String(snapshot?.path || "").trim() === cleanPath,
+      ) || null
+    );
+  }, []);
+
   const buildWorkflowShowChangesMessage = useCallback(
     (context = null) => {
       const editedPaths = getWorkflowEditedPaths(context);
@@ -4073,6 +4088,13 @@ export default function App() {
           const editedPaths = getWorkflowEditedPaths(workflowContext);
           const lastChangedPath =
             editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
+          const restoreSnapshot = getWorkflowRestoreSnapshot(
+            workflowContext,
+            lastChangedPath,
+          );
+          const canRestoreSnapshot =
+            restoreSnapshot?.path &&
+            typeof restoreSnapshot.previousContent === "string";
           const followupGoal =
             "Recover from a bad previous project edit.\n\n" +
             `User report: ${draft}\n\n` +
@@ -4085,11 +4107,16 @@ export default function App() {
 
           appendMessage(
             "assistant",
-            "I can help recover this, but I do not yet have a stored previous file snapshot to restore automatically.\n\n" +
+            (canRestoreSnapshot
+              ? "I can help recover this. I have an in-memory pre-write snapshot for the last changed file, so I can restore that saved version if you choose it.\n\n"
+              : "I can help recover this, but I do not yet have a stored previous file snapshot to restore automatically.\n\n") +
               (lastChangedPath
                 ? `Last changed file recorded: ${lastChangedPath}\n\n`
                 : "I also do not have a changed file path recorded for the last implementation.\n\n") +
               "Safe recovery options:\n" +
+              (canRestoreSnapshot
+                ? "- Restore the last saved version captured before the write.\n"
+                : "") +
               "- Review the last changed file before editing.\n" +
               "- Fix this by inspecting the relevant files first.\n" +
               "- Show the changed-file summary.\n" +
@@ -4097,6 +4124,58 @@ export default function App() {
               "If this project is under Git, you can also restore from Git or a backup in the terminal, but I will not claim that restore happened unless it actually happens.",
             {
               actions: [
+                ...(canRestoreSnapshot
+                  ? [
+                      {
+                        label: "Restore last saved version",
+                        onClick: async () => {
+                          try {
+                            await saveFile(
+                              restoreSnapshot.path,
+                              restoreSnapshot.previousContent,
+                            );
+
+                            setTabs((prev) =>
+                              prev.map((tab) =>
+                                tab.path === restoreSnapshot.path
+                                  ? {
+                                      ...tab,
+                                      content: restoreSnapshot.previousContent,
+                                      isDirty: false,
+                                    }
+                                  : tab,
+                              ),
+                            );
+                            setActiveFilePath(restoreSnapshot.path);
+
+                            try {
+                              await handleRefreshTree();
+                            } catch {
+                              // Restore succeeded; keep going if tree refresh fails.
+                            }
+
+                            setWorkflowContext({
+                              ...workflowContext,
+                              lastEditedPath: restoreSnapshot.path,
+                              editedPaths: [restoreSnapshot.path],
+                              source: "pre_write_snapshot_restore",
+                              updatedAt: Date.now(),
+                            });
+
+                            appendMessage(
+                              "assistant",
+                              `Restored ${restoreSnapshot.path} from the in-memory pre-write snapshot.\n\nVerification:\n- Preview, build, and tests have not been run after this restore.\n- Suggested next check: Preview the app.`,
+                            );
+                          } catch (err) {
+                            appendMessage(
+                              "assistant",
+                              `Restore failed: ${formatTauriError(err)}\n\nNo restore was completed.`,
+                            );
+                          }
+                        },
+                      },
+                    ]
+                  : []),
                 ...(lastChangedPath
                   ? [
                       {
@@ -4978,6 +5057,8 @@ export default function App() {
       buildWorkflowPreviewRoutingMessage,
       buildWorkflowShowChangesMessage,
       getWorkflowEditedPaths,
+      getWorkflowRestoreSnapshot,
+      handleRefreshTree,
       buildInputWithContext,
       openSettings,
       includeActiveFile,
