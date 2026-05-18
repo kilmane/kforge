@@ -740,8 +740,18 @@ function buildPostEditNextStepMessage() {
   );
 }
 
-function buildPostEditCompletionActions({ context = null, appendMessage = null } = {}) {
+function buildPostEditCompletionActions({
+  context = null,
+  appendMessage = null,
+  sendWithPrompt = null,
+} = {}) {
   if (typeof appendMessage !== "function") return [];
+
+  const editedPaths = Array.isArray(context?.editedPaths)
+    ? context.editedPaths.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const lastChangedPath =
+    editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
 
   return [
     {
@@ -759,6 +769,36 @@ function buildPostEditCompletionActions({ context = null, appendMessage = null }
             context,
           )}\n\nUse Preview Panel → Preview for the next check. If dependencies are missing, use Preview Panel → Install first.`,
         );
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.FIX_ERROR,
+      onClick: () => {
+        appendMessage(
+          "assistant",
+          "Starting preview-error triage. I will inspect the last changed file only first. If there is no concrete error evidence, I will ask for Preview logs instead of changing files.",
+        );
+
+        if (typeof sendWithPrompt === "function") {
+          sendWithPrompt(
+            "Repair a preview/build/runtime error after the completed implementation.\n\n" +
+              (lastChangedPath
+                ? `Last changed file from workflow state: ${lastChangedPath}\n\n`
+                : "No last changed file path is recorded in workflow state.\n\n") +
+              "The user chose Fix the error, but no concrete Preview/console log evidence has been provided in this button flow. Evidence-gated repair rules:\n" +
+              "- Request exactly one read_file tool call for the last changed file when available.\n" +
+              "- Do not call write_file on this first triage pass.\n" +
+              "- Do not list directories, inspect package.json, create files, or guess missing framework files unless pasted error evidence specifically mentions them.\n" +
+              "- After reading the file, if there is an obvious syntax/import/runtime problem in that file, explain the likely issue and ask the user to paste Preview logs before editing.\n" +
+              "- If no obvious issue is visible, say no safe code change is justified yet and ask the user to paste the exact Preview logs or browser console error.\n" +
+              "- Do not claim Preview/build/tests passed; the user must run Preview again after any later fix.",
+            {
+              silentUserAppend: true,
+              skipCompletedWorkflowRoute: true,
+              previewErrorEvidenceGate: true,
+            },
+          );
+        }
       },
     },
     {
@@ -2081,6 +2121,7 @@ export default function AiPanel({
           } else if (
             isPreviewIntent(latestUserText) &&
             triggerToolTaskKind !== "project_edit" &&
+            triggerToolTaskKind !== "broken_preview_debug" &&
             successfulWritePaths.length === 0 &&
             successfulDirPaths.length === 0
           ) {
@@ -2094,6 +2135,17 @@ export default function AiPanel({
               toolName: "read_file",
               args: { path: fallbackReadPath },
             });
+          } else if (
+            isFixToolExecution &&
+            successfulWritePaths.length === 0 &&
+            successfulDirPaths.length === 0
+          ) {
+            appendMessage(
+              "assistant",
+              "I inspected the relevant file for the reported preview problem.\n\n" +
+                "No files were changed.\n\n" +
+                "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
+            );
           } else if (successfulWritePaths.length > 0) {
             const completedWorkflowContext =
               createCompletedImplementationWorkflowContext({
@@ -2124,6 +2176,7 @@ export default function AiPanel({
               actions: buildPostEditCompletionActions({
                 context: completedWorkflowContext,
                 appendMessage,
+                sendWithPrompt,
               }),
             });
           } else if (typeof runAi === "function") {
@@ -2323,12 +2376,29 @@ export default function AiPanel({
               const finalText = String(agentResult?.text || "").trim();
               const isPerformanceToolExecution =
                 !isFixToolExecution && isPerformanceProjectRequest(latestUserText);
+              const isPreviewErrorEvidenceGate =
+                isFixToolExecution &&
+                triggerToolMessage?.meta?.previewErrorEvidenceGate === true;
 
               if (finalText && !agentMadeProjectChanges) {
-                if (isPerformanceToolExecution) {
+                if (isPreviewErrorEvidenceGate) {
+                  appendMessage(
+                    "assistant",
+                    "Preview-error triage stopped after inspection.\n\n" +
+                      "No files were changed.\n\n" +
+                      "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
+                  );
+                } else if (isPerformanceToolExecution) {
                   appendMessage(
                     "assistant",
                     `${finalText}\n\nNo files were changed by this performance diagnosis.`,
+                  );
+                } else if (isFixToolExecution) {
+                  appendMessage(
+                    "assistant",
+                    "I inspected the relevant file for the reported preview problem.\n\n" +
+                      "No files were changed.\n\n" +
+                      "I cannot safely confirm the cause from inspection alone. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
                   );
                 } else {
                   appendMessage(
@@ -2396,6 +2466,7 @@ export default function AiPanel({
                     actions: buildPostEditCompletionActions({
                       context: completedWorkflowContext,
                       appendMessage,
+                      sendWithPrompt,
                     }),
                   },
                 );

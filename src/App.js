@@ -988,7 +988,7 @@ function getCompletedWorkflowRouteDecision({
 
   const kind = promptTask?.kind || "unknown";
 
-  if (isCompletedWorkflowRecoveryIntent(promptText, promptTask)) {
+  if (isCompletedWorkflowRecoveryIntent(promptText)) {
     return {
       action: "recovery",
       prepareFixContext: false,
@@ -998,6 +998,13 @@ function getCompletedWorkflowRouteDecision({
     return {
       action: "continue_normal",
       prepareFixContext: false,
+    };
+  }
+
+  if (kind === "broken_preview_debug") {
+    return {
+      action: "continue_normal",
+      prepareFixContext: true,
     };
   }
 
@@ -5020,6 +5027,7 @@ export default function App() {
               meta: {
                 allowModelToolExecution: true,
                 modelToolExecutionKind: String(promptTask.kind || "unknown"),
+                previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
               },
             });
           }
