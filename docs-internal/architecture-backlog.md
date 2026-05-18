@@ -1,73 +1,45 @@
-Below is the **full updated copy** of your **Architecture Backlog** with the new item properly recorded using your template.
-I inserted it as a **new section** called **“Model Guidance & Routing System”** and marked it **Planned**.
+# Architecture Backlog
 
-No existing sections were altered except preserving formatting.
+This file is the parking bay for KForge architecture ideas that are not part of the current ship.
 
----
+Rule:
+If we say "later", we either do it now, explicitly drop it, or record it here with enough context to revisit intentionally.
 
-# 🧱 Architecture Backlog
-
-This file is the “parking bay” for anything we decide to do later.
-Rule: if we say “later”, we write it here immediately with enough context to execute.
+Last cleaned: 2026-05-18
 
 ---
 
-## Template (copy this)
+## Template
 
 ### Title
 
 Status: Shelved | Planned | In progress | Completed
 Added: YYYY-MM-DD
+Updated: YYYY-MM-DD
 
 **Why**
 
-* …
+- ...
 
 **Where**
 
-* File: …
-* Function(s): …
-* Notes: …
+- File: ...
+- Function(s): ...
+- Notes: ...
 
 **Plan**
 
-1. …
-2. …
-3. …
+1. ...
+2. ...
+3. ...
 
 **Risks / gotchas**
 
-* …
+- ...
 
 **Done when**
 
-* …
-
----
-
-# Template System — Expand Scaffold Templates
-
-Status: Completed
-Added: 2026-03-06
-
-**Why**
-
-* KForge originally supported generating a single scaffold template (**Vite + React**).
-* Template expansion allows users to generate different project types directly from the Preview panel.
-
-**Outcome**
-
-Phase **4.3.7 — Template Registry** replaced hardcoded scaffold buttons with a **registry-driven template system**.
-
-Current templates:
-
-Static HTML/CSS/JS
-Vite + React
-Next.js
-
-The **Generate menu now reads templates from the registry** rather than hardcoded UI logic.
-
-Future template additions will only require **registry entries + scaffold commands**.
+- ...
 
 ---
 
@@ -75,346 +47,162 @@ Future template additions will only require **registry entries + scaffold comman
 
 Status: Planned
 Added: 2026-03-19
+Updated: 2026-05-18
 
 **Why**
 
-KForge currently supports:
+KForge currently has enough starter coverage for the main beginner path, especially Static HTML, Vite + React, and Next.js.
 
-Static HTML
-Vite + React
-Next.js
+Additional templates may still be useful later, but they should be added only when there is a clear product need and a smoke-tested preview path.
 
-These cover a large portion of common web workflows.
+Candidate templates:
 
-However, expanding templates will allow KForge to support:
+- Astro: documentation, blogs, marketing sites, content-heavy sites.
+- Vue + Vite: frontend alternative to React.
+- Expo / React Native: mobile app workflows, with extra care because phone/device preview is more complex.
 
-content sites
-alternative frontend frameworks
-mobile apps
+**Where**
 
-without changing the core Preview Runner.
+- `src/runtime/templateRegistry.js`
+- `src/runtime/PreviewPanel.jsx`
+- `src/runtime/previewRunner.js`
+- `src-tauri/src/scaffold.rs`
 
-The Template Registry introduced in Phase 4.3.7 makes this expansion straightforward.
+**Plan**
 
----
+1. Choose one template at a time.
+2. Add the registry entry.
+3. Add scaffold support.
+4. Add preview detection.
+5. Smoke test generate, install, preview, and follow-up implementation routing.
 
-## Candidate templates
+**Risks / gotchas**
 
-### Astro
+- Some frameworks install dependencies during scaffold.
+- Dev servers may use different ports.
+- Mobile templates may require extra tooling and should not be treated like normal browser preview.
 
-Best suited for:
+**Done when**
 
-documentation
-blogs
-marketing sites
-content-heavy sites
-
-Reasons:
-
-* strong performance
-* modern component model
-* growing popularity
+- At least one additional template can be generated, installed, previewed, and routed safely without core UI rewrites.
 
 ---
 
-### Vue + Vite
-
-Purpose:
-
-frontend alternative to React
-
-Benefits:
-
-* large ecosystem
-* fits perfectly into Vite-based workflow
-
----
-
-### Expo / React Native (Mobile)
-
-Purpose:
-
-mobile application development
-
-Expo allows developers to build:
-
-iOS apps
-Android apps
-
-using the **React ecosystem**, which aligns well with KForge’s current toolchain.
-
----
-
-## Where
-
-```
-src/runtime/templateRegistry.js
-src/runtime/PreviewPanel.jsx
-src-tauri/src/scaffold.rs
-```
-
----
-
-## Plan
-
-1. Add registry entries for new templates.
-2. Implement scaffold commands in Rust backend.
-3. Ensure Preview Runner can detect dev server URLs.
-4. Expand registry detection hints.
-
-Example registry entry:
-
-```
-{
-id: "astro",
-name: "Astro",
-scaffold: "scaffold_astro"
-}
-```
-
----
-
-## Risks / gotchas
-
-* Some frameworks install dependencies during scaffold.
-* Dev servers may use different ports.
-* Mobile templates may require additional tooling.
-
----
-
-## Done when
-
-* At least one additional template is added successfully.
-* Template registry expansion requires **no UI changes**.
-* Preview Runner can start and open each template correctly.
-
----
-
-# Unified Service Integration Layer
+# Service Integration Registry / Unified Services
 
 Status: Planned
 Added: 2026-03-20
+Updated: 2026-05-18
 
 **Why**
 
-Future phases will introduce integrations such as:
+KForge now has Services flows such as Supabase and Deploy guidance. Future services should not become one-off custom integrations with duplicated UI and setup logic.
 
-Supabase
-Stripe
-OpenAI services
-other external APIs
-
-Without a shared integration architecture, each service risks becoming a **one-off custom integration**, leading to duplicated UI patterns and backend logic.
-
-Creating a unified integration layer allows KForge to support external services consistently and extend the platform without repeated engineering work.
-
-This pattern allows future services to **plug into the same runtime system** rather than requiring unique UI and backend implementations.
-
----
-
-**Concept**
-
-Introduce a **Service Integration Registry** similar to the existing Template Registry.
-
-Instead of hardcoding integrations, each service would define metadata such as:
-
-service id
-display name
-required environment variables
-setup instructions
-optional client setup files
-
-Example conceptual registry entry:
-
-```
-{
-id: "supabase",
-name: "Supabase",
-envVars: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
-clientSetup: "generate_supabase_client"
-}
-```
-
-This allows KForge to treat services as **configurable integrations** rather than custom features.
-
----
+A registry-like layer may still be useful if KForge adds more service integrations.
 
 **Where**
 
-Possible future structure:
-
-```
-src/runtime/serviceRegistry.js
-src/runtime/ServicePanel.jsx
-src-tauri/src/service.rs
-```
-
-The service registry would define integrations while the runtime layer handles setup workflows.
-
----
+- `src/runtime/ServicePanel.jsx`
+- possible future `src/runtime/serviceRegistry.js`
+- possible future service backend modules
+- service-related helpers in `src/App.js`
 
 **Plan**
 
-1. Create a service registry system similar to the Template Registry.
-2. Define metadata structure for integrations.
-3. Implement a simple UI surface for connecting services.
-4. Allow integrations to generate client setup code when needed.
-5. Support environment variable configuration.
-
----
-
-**Benefits**
-
-* New services become **registry entries rather than new subsystems**
-* Consistent user workflow for integrations
-* Reduced duplicated logic
-* Easier future expansion
-
----
+1. Identify repeated metadata across existing services:
+   - service id
+   - display name
+   - required environment variables
+   - setup actions
+   - generated client/helper files
+   - docs / handoff text
+2. Extract only the repeated parts into registry-like metadata.
+3. Keep service flows truthful and beginner-safe.
+4. Avoid turning KForge into a full DevOps dashboard.
 
 **Risks / gotchas**
 
-* Some services require authentication flows.
-* Environment variable handling must remain secure.
-* Avoid turning KForge into a full DevOps dashboard.
-
----
+- Some services require authentication flows.
+- Environment variable handling must remain secure.
+- Services must not imply cloud setup happened unless it actually happened.
+- Over-abstracting too early could slow development.
 
 **Done when**
 
-* At least one integration (Supabase) works through the registry.
-* New integrations can be added without modifying core UI logic.
+- A new service can be added mostly through metadata/configuration without duplicating the whole UI and routing pattern.
 
 ---
 
-# Model Guidance & Routing System
+# AI-Assisted Planning and Model Quality Warnings
 
 Status: Planned
 Added: 2026-03-29
+Updated: 2026-05-18
 
 **Why**
 
-Different AI models perform better for different tasks.
+KForge already has model policy, advisory/test-mode warnings, and free app brief planning. The remaining roadmap includes:
 
-During development of the tool-calling agent loop (Phase 4.10), testing revealed that weaker models may:
+- Phase 11.5 — Optional AI-Assisted App Brief Planning
+- Phase 11.6 — AI Planning Quality / Model Warnings
 
-* struggle with structured tool calls
-* loop tool requests
-* ignore tool results
-* produce unreliable multi-step reasoning
+The product direction is:
 
-However, those same models are extremely good for:
-
-* brainstorming
-* fast ideation
-* lightweight chat
-
-Users therefore benefit from selecting **different models for different tasks**.
-
-Without guidance, beginners may unknowingly choose a weaker model for tool-based workflows and experience degraded results.
-
-A lightweight guidance layer would help users choose the right model while preserving full control.
-
----
-
-**Concept**
-
-Introduce a **Model Guidance / Model Routing layer** that helps users choose the best model for the task they are performing.
-
-Example guidance:
-
-| Task                     | Suggested provider |
-| ------------------------ | ------------------ |
-| Chat / brainstorming     | Groq               |
-| Idea exploration         | Groq               |
-| Planning                 | OpenAI / Claude    |
-| Tool-based agent actions | OpenAI / Claude    |
-| Code reasoning           | OpenAI / Claude    |
-| Code edits               | OpenAI / Claude    |
-
-The system should provide **calm hints**, not restrictions.
-
----
+- Free Mode should remain available by default and not require API keys.
+- AI-assisted planning can be offered later as a more reliable optional path.
+- KForge should be honest when weak/free models are risky for coding, planning, or tool-heavy work.
 
 **Where**
 
-Possible future structure:
-
-```
-src/ai/models/modelRegistry.js
-src/ai/models/modelCapabilities.js
-src/ai/panel/AiPanel.jsx
-src/ai/agent/agentRunner.js
-```
-
-Possible additional configuration surface:
-
-```
-src/runtime/settings/ModelSettingsPanel.jsx
-```
-
----
+- `src/App.js`
+- `src/ai/modelWorkflowPolicy.js`
+- `src/ai/modelPresets.js`
+- `src/ai/planning/appBriefProtocol.js`
+- `src/ai/panel/ProviderControlsPanel.jsx`
+- possible future planning module for AI-assisted app briefs
 
 **Plan**
 
-1. Introduce a **model capability registry** describing strengths of each provider.
-2. Add optional **model hints** inside the AI panel when a task may benefit from a different model.
-3. Allow KForge to detect when a prompt requires tool access or deep reasoning.
-4. Suggest stronger models when necessary (OpenAI / Claude).
-5. Optionally introduce **task templates** such as:
-
-   * Brainstorm
-   * Plan architecture
-   * Explain project
-   * Debug code
-6. In the long term, support **agent workflows** that use different models for different steps.
-
-Example future capability metadata:
-
-```
-groq/llama3
-capabilities:
-  chat: excellent
-  brainstorming: excellent
-  reasoning: medium
-  tool_calling: weak
-```
-
----
+1. Keep the current Free App Brief Protocol as the default.
+2. Add optional AI-assisted planning only if Free Mode proves insufficient.
+3. Explain the tradeoff clearly before building:
+   - free/no AI required, less reliable
+   - AI-assisted, more reliable, requires configured model
+4. Keep user control over provider/model selection.
+5. Make model quality warnings clear without blocking safe workflows unnecessarily.
 
 **Risks / gotchas**
 
-* Must not force users to switch models.
-* Avoid overwhelming beginners with provider comparisons.
-* Do not introduce a complex model dashboard.
-* Must remain provider-agnostic.
-* Should avoid bias toward a single AI provider.
-
----
+- Cost is a major concern.
+- Too much model-routing UI could confuse beginners.
+- Weak models should not be marketed as reliable builders.
+- KForge must not pretend AI-assisted planning is available unless a suitable model is configured.
 
 **Done when**
 
-* KForge can suggest appropriate models for different task types.
-* The AI panel can display optional model hints.
-* Users retain full control over provider selection.
-* The system remains calm, lightweight, and non-intrusive.
+- Users can clearly choose between Free Mode and optional AI-assisted planning.
+- KForge explains model quality/cost tradeoffs before relying on AI-assisted planning.
+- Weak/advisory models remain safe but honestly labelled.
 
 ---
 
-### Packaging-Readiness Extension — Preview & Deploy Tooling Rules
+# Packaging Readiness — Preview & Deploy Tooling Rules
 
 Status: Planned
 Added: 2026-02-26
+Updated: 2026-05-18
 
 **Why**
 
-* Preview and deploy features introduce external tooling dependencies (Node, pnpm, Git, Vercel CLI, Netlify CLI).
-* These must be handled deliberately to avoid hidden runtime assumptions.
-* Packaging constraints (process management, port handling, sandbox safety) must be formalized once the features are stable.
+Preview and deploy features depend on external tooling such as Node, pnpm, Git, Vercel, and Netlify. Before beta/packaging, KForge needs clear rules for what is bundled, what is required from the user, and what errors should be surfaced.
 
 **Where**
 
-* File: packaging-readiness.md
+- packaging docs / release notes
+- `src/runtime/PreviewPanel.jsx`
+- `src/runtime/previewRunner.js`
+- `src/runtime/ServicePanel.jsx`
+- deployment/service helpers
 
 **Plan**
 
@@ -422,64 +210,67 @@ Added: 2026-02-26
 2. Define process lifecycle management.
 3. Define port safety rules.
 4. Define deploy safety rules.
+5. Make missing-tool errors beginner-readable.
+6. Avoid claiming Preview/deploy success unless the tool result confirms it.
+
+**Risks / gotchas**
+
+- Packaged app behavior may differ from dev mode.
+- Windows process and port cleanup can be fragile.
+- Deploy providers may change UI/CLI behavior.
+- KForge should not become a general DevOps dashboard.
 
 **Done when**
 
-* Preview Runner and deploy pipeline are stable.
+- Preview and deploy requirements are documented clearly enough for beta users.
+- Missing tools and failed processes produce useful recovery guidance.
 
 ---
 
-### Project root authority lives in App.js
-
-Status: Completed
-Added: 2026-02-12
-
-(unchanged section)
-
----
-
-### Manual Explorer refresh
-
-Status: Completed
-Added: 2026-02-12
-
-(unchanged section)
-
----
-
-### Transactional project open/create flows
-
-Status: Planned
-Added: 2026-02-12
-
-(unchanged section)
-
----
-
-### Non-blocking error surface
-
-Status: Planned
-Added: 2026-02-12
-
-(unchanged section)
-
----
-
-### Starter templates strategy
-
-Status: Deferred
-Added: 2026-02-12
-
-(unchanged section)
-
----
-
-### AI panel runtime separation
+# Recovery / Revert Follow-up Candidates
 
 Status: Shelved
-Added: 2026-02-12
+Added: 2026-05-18
+Updated: 2026-05-18
 
-(unchanged section)
+**Why**
 
----
+Phase 11.3.2 added truthful recovery routing and in-memory pre-write snapshot restore. The core recovery/revert flow is stable.
 
+These ideas are not current commitments. They should only be picked up if testing shows real user value.
+
+**Candidates**
+
+1. Git-based restore
+
+   Consider only if KForge can do it safely with explicit user confirmation and clear status/diff guidance. Must not accidentally discard unrelated user work.
+
+2. Multi-file restore choice
+
+   Consider only if multi-file bad edits become common and the current single last-file restore is not enough. Needs careful UI to avoid confusing users.
+
+3. Post-destructive-block continuation polish
+
+   Consider if models loop after the destructive rewrite guard blocks a bad write. The goal would be to steer the model toward a smaller targeted edit instead of repeated broad rewrites.
+
+**Where**
+
+- `src/App.js`
+- `src/ai/panel/AiPanel.jsx`
+- `src/ai/tools/handlers/index.js`
+- possible Git/runtime tooling if Git restore is intentionally selected later
+
+**Decision rule**
+
+Do not implement these just because they sound impressive.
+
+Only proceed if:
+
+- the value is clear from testing,
+- the complexity is small enough,
+- the UX will not confuse users,
+- KForge truthfulness and file-safety guarantees remain strong.
+
+**Done when**
+
+- One of these candidates is intentionally selected for a dedicated ship, or explicitly removed from the backlog.
