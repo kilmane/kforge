@@ -958,10 +958,26 @@ function getBlockedModelPolicyRouteDecision({
 
   return { action: "blocked_model_policy_followup" };
 }
+function isCompletedWorkflowRecoveryIntent(text = "", promptTask = null) {
+  const s = String(text || "").toLowerCase();
+
+  if (promptTask?.kind === "broken_preview_debug") {
+    return true;
+  }
+
+  return (
+    /\b(revert|restore|undo|roll\s*back|rollback)\b/.test(s) ||
+    /\b(go\s+back|put\s+it\s+back|bring\s+it\s+back)\b/.test(s) ||
+    /\b(previous|last|old)\s+(version|state|file|copy)\b/.test(s) ||
+    /\b(you\s+broke\s+it|broke\s+it|broken|this\s+is\s+wrong|that\s+is\s+wrong|wrong|bad\s+edit|bad\s+change)\b/.test(s)
+  );
+}
+
 function getCompletedWorkflowRouteDecision({
   workflowContext = null,
   promptTask = null,
   isExplicitPreviewRequest = false,
+  promptText = "",
 } = {}) {
   if (
     workflowContext?.taskKind !== WORKFLOW_TASK_KIND.IMPLEMENTATION ||
@@ -972,6 +988,12 @@ function getCompletedWorkflowRouteDecision({
 
   const kind = promptTask?.kind || "unknown";
 
+  if (isCompletedWorkflowRecoveryIntent(promptText, promptTask)) {
+    return {
+      action: "recovery",
+      prepareFixContext: false,
+    };
+  }
   if (kind === WORKFLOW_TASK_KIND.PROJECT_EDIT) {
     return {
       action: "continue_normal",
@@ -3925,6 +3947,7 @@ export default function App() {
             workflowContext,
             promptTask,
             isExplicitPreviewRequest: isExplicitWorkflowPreviewRequest(draft),
+            promptText: draft,
           });
 
       if (completedWorkflowRoute) {
@@ -4037,6 +4060,109 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       "No problem — I’ll leave it there.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
+          return;
+        }
+
+        if (completedWorkflowRoute.action === "recovery") {
+          const editedPaths = getWorkflowEditedPaths(workflowContext);
+          const lastChangedPath =
+            editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
+          const followupGoal =
+            "Recover from a bad previous project edit.\n\n" +
+            `User report: ${draft}\n\n` +
+            (lastChangedPath
+              ? `Last changed file from workflow state: ${lastChangedPath}\n\n`
+              : "No last changed file path is recorded in workflow state.\n\n") +
+            "Do not claim a previous version was restored unless a real restore tool action or user-confirmed Git restore has happened. Inspect the relevant files before editing, then make the smallest safe fix.";
+
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+
+          appendMessage(
+            "assistant",
+            "I can help recover this, but I do not yet have a stored previous file snapshot to restore automatically.\n\n" +
+              (lastChangedPath
+                ? `Last changed file recorded: ${lastChangedPath}\n\n`
+                : "I also do not have a changed file path recorded for the last implementation.\n\n") +
+              "Safe recovery options:\n" +
+              "- Review the last changed file before editing.\n" +
+              "- Fix this by inspecting the relevant files first.\n" +
+              "- Show the changed-file summary.\n" +
+              "- Stop without making another change.\n\n" +
+              "If this project is under Git, you can also restore from Git or a backup in the terminal, but I will not claim that restore happened unless it actually happens.",
+            {
+              actions: [
+                ...(lastChangedPath
+                  ? [
+                      {
+                        label: "Review last changed file",
+                        onClick: () => {
+                          appendMessage(
+                            "assistant",
+                            `Reviewing ${lastChangedPath}. I will read the file and summarize what is currently there. This is not an exact diff or restore.`,
+                          );
+
+                          sendWithPrompt(
+                            "Review the last changed file from the completed implementation.\n\n" +
+                              `Read this file and summarize the relevant current content without editing it:\n${lastChangedPath}\n\n` +
+                              "Do not write files. Do not claim to show an exact diff or restored version unless a real diff/restore is available. Request exactly one read_file tool call for that path.",
+                            {
+                              silentUserAppend: true,
+                              skipCompletedWorkflowRoute: true,
+                            },
+                          );
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  label:
+                    modelWorkflowPolicy.mode === "advisory_only"
+                      ? "Fix this in test mode"
+                      : "Fix this",
+                  onClick: () => {
+                    setWorkflowContext(
+                      createBugfixWorkflowContext(
+                        workflowContext,
+                        "completed_workflow_recovery_choice",
+                      ),
+                    );
+
+                    appendMessage(
+                      "assistant",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Continuing the recovery fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                        : "Continuing the recovery fix. I will inspect the relevant files before editing and will not claim anything was restored unless it actually was.",
+                    );
+
+                    sendWithPrompt(followupGoal, {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      forceAdvisoryTestOverride:
+                        modelWorkflowPolicy.mode === "advisory_only",
+                    });
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowShowChangesMessage(workflowContext),
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Stopped - no recovery action taken.",
                     );
                   },
                 },
