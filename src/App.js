@@ -3156,6 +3156,17 @@ export default function App() {
       .trim()
       .replace(/[.!…]+$/g, "");
 
+    if (s === "something else" || s === "3") {
+      return (
+        "What happened in Preview?\n\n" +
+        "Choose one:\n" +
+        "1. Preview worked\n" +
+        "2. Preview failed\n" +
+        "3. Paste the exact Preview message, browser console error, or screenshot text\n" +
+        "4. Stop"
+      );
+    }
+
     if (s === "thanks" || s === "thank you" || s === "thx" || s === "ta") {
       return "You're welcome.";
     }

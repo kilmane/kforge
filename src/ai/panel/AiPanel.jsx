@@ -681,7 +681,12 @@ function buildInstallHandoffMessage() {
 function buildPreviewHandoffMessage() {
   return (
     "KForge can help with this through the Preview panel.\n\n" +
-    "You can now leave the chat and open: Preview Panel → Preview.\n\n" +
+    "Open: Preview Panel → Preview.\n\n" +
+    "After checking Preview, reply with one of:\n" +
+    "1. Preview worked\n" +
+    "2. Preview failed\n" +
+    "3. Something else\n" +
+    "4. Stop\n\n" +
     "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
   );
 }
