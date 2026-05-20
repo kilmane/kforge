@@ -988,6 +988,10 @@ function getCompletedWorkflowRouteDecision({
 
   const kind = promptTask?.kind || "unknown";
 
+  if (kind === "verification_failed") {
+    return { action: "verification_failed" };
+  }
+
   if (isCompletedWorkflowRecoveryIntent(promptText)) {
     return {
       action: "recovery",
@@ -3156,17 +3160,6 @@ export default function App() {
       .trim()
       .replace(/[.!…]+$/g, "");
 
-    if (s === "something else" || s === "3") {
-      return (
-        "What happened in Preview?\n\n" +
-        "Choose one:\n" +
-        "1. Preview worked\n" +
-        "2. Preview failed\n" +
-        "3. Paste the exact Preview message, browser console error, or screenshot text\n" +
-        "4. Stop"
-      );
-    }
-
     if (s === "thanks" || s === "thank you" || s === "thx" || s === "ta") {
       return "You're welcome.";
     }
@@ -3318,6 +3311,15 @@ export default function App() {
     if (!s || s.length > 120) return false;
     if (/[?]/.test(s)) return false;
 
+    if (
+      s === "1" ||
+      s === "preview succeeded" ||
+      s === "preview success" ||
+      s === "preview worked"
+    ) {
+      return true;
+    }
+
     const asksForNextAction =
       /\b(what\s+now|now\s+what|next|options?|suggestions?|show\s+changes?|review|fix|debug|edit|change|add|remove|deploy|publish|manual|steps?)\b/.test(
         s,
@@ -3349,6 +3351,45 @@ export default function App() {
       );
 
     return (hasVerificationSubject && hasPositiveOutcome) || shortPositiveResult;
+  }
+
+  function isUserSuppliedVerificationFailureIntent(
+    text = "",
+    workflowContext = null,
+  ) {
+    if (!isPreviewVerificationPendingWorkflow(workflowContext)) return false;
+
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s || s.length > 160) return false;
+    if (/[?]/.test(s)) return false;
+
+    if (
+      s === "2" ||
+      s === "preview failed" ||
+      s === "preview fail" ||
+      s === "preview broken"
+    ) {
+      return true;
+    }
+
+    const hasPreviewSubject =
+      /\b(preview|app|site|page|ui|screen|browser|result|check|checked|test|tested|verify|verified|verification)\b/.test(
+        s,
+      );
+
+    const hasFailureOutcome =
+      /\b(broken|breaks?|blank|error|failed?|fails?|not\s+working|doesn'?t\s+work|issue|problem|bug|wrong|bad|stuck|crash|crashed|dead|missing)\b/.test(
+        s,
+      );
+
+    const shortFailureResult =
+      s.length <= 60 &&
+      /\b(failed?|broken|blank|error|crash|crashed|stuck|bad)\b/.test(s);
+
+    return (hasPreviewSubject && hasFailureOutcome) || shortFailureResult;
   }
 
   function isPreviewVerificationPassedWorkflow(workflowContext = null) {
@@ -3481,6 +3522,17 @@ export default function App() {
           kind: "verification_already_success",
           confidence: "high",
           source: "workflow_verification_already_passed",
+        };
+      }
+
+      if (
+        isCompletedImplementationWorkflow(workflowContext) &&
+        isUserSuppliedVerificationFailureIntent(text, workflowContext)
+      ) {
+        return {
+          kind: "verification_failed",
+          confidence: "high",
+          source: "workflow_verification_failure_result",
         };
       }
 
@@ -4098,6 +4150,43 @@ export default function App() {
                 },
               ],
             },
+          );
+          return;
+        }
+
+        if (completedWorkflowRoute.action === "verification_failed") {
+          const verificationSummary =
+            "Preview was reported as failed by the user. Exact Preview logs, browser console errors, displayed errors, or screenshot text are still needed before editing.";
+
+          const failedWorkflowContext = {
+            ...workflowContext,
+            verificationStatus: VERIFICATION_STATUS.FAILED,
+            verificationSummary,
+            assistantResult: workflowContext?.assistantResult
+              ? {
+                  ...workflowContext.assistantResult,
+                  verificationStatus: VERIFICATION_STATUS.FAILED,
+                  verificationSummary,
+                  updatedAt: Date.now(),
+                  source: "user_supplied_verification_failure",
+                }
+              : workflowContext?.assistantResult,
+            updatedAt: Date.now(),
+            source: "user_supplied_verification_failure",
+          };
+
+          setWorkflowContext(failedWorkflowContext);
+
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage(
+            "assistant",
+            "Preview reported as failed.\n\n" +
+              "Please paste the exact evidence before I try to fix it:\n" +
+              "- Preview panel logs\n" +
+              "- Browser console error\n" +
+              "- Error shown on the page\n" +
+              "- Screenshot text\n\n" +
+              "I will not edit files until there is concrete failure evidence.",
           );
           return;
         }
