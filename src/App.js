@@ -3527,6 +3527,52 @@ export default function App() {
     return (hasVerificationSubject && hasPositiveOutcome) || shortPositiveResult;
   }
 
+  function getOrphanWorkflowResultPolarity(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (
+      /\b(failed?|fails?|error|broken|breaks?|blank|not\s+working|doesn'?t\s+work|issue|problem|bug|wrong|bad|stuck|crash|crashed|dead|missing)\b/.test(
+        s,
+      )
+    ) {
+      return "failure";
+    }
+
+    if (
+      /\b(ok|okay|passed|pass|works?|working|fine|good|great|sorted|success|successful|confirmed|clear|clean|done|connected|installed|deployed|published|pushed|all\s+good|looks\s+good|seems\s+good|looks\s+fine)\b/.test(
+        s,
+      )
+    ) {
+      return "success";
+    }
+
+    return "unknown";
+  }
+
+  function isOrphanWorkflowResultReportIntent(text = "", workflowContext = null) {
+    if (isDirectHandoffWorkflow(workflowContext)) return false;
+    if (isPreviewVerificationPendingWorkflow(workflowContext)) return false;
+
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s || s.length > 220) return false;
+    if (/[?]/.test(s)) return false;
+    if (/^(how|why|what|when|where)\b/.test(s)) return false;
+    if (isExplicitProjectEditOperationIntent(text)) return false;
+
+    const hasWorkflowSubject =
+      /\b(preview|app\s+check|install|dependency|dependencies|package|deploy|deployment|publish|published|service|connection|connected|connect|git|github|repo|repository|push|pushed|build|test|tests?)\b/.test(
+        s,
+      );
+
+    if (!hasWorkflowSubject) return false;
+
+    return getOrphanWorkflowResultPolarity(text) !== "unknown";
+  }
   function isWorkflowSuccessAckIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3620,6 +3666,16 @@ export default function App() {
         };
       }
 
+      if (
+        projectOpen &&
+        isOrphanWorkflowResultReportIntent(text, workflowContext)
+      ) {
+        return {
+          kind: "orphan_result_report",
+          confidence: "medium",
+          source: "orphan_workflow_result_report",
+        };
+      }
       if (
         isCompletedImplementationWorkflow(workflowContext) &&
         isWorkflowSuccessAckIntent(text)
@@ -4125,6 +4181,195 @@ export default function App() {
         );
       }
 
+      if (
+        !opts.skipCompletedWorkflowRoute &&
+        promptTask.kind === "orphan_result_report"
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        const resultPolarity = getOrphanWorkflowResultPolarity(draft);
+        const resultTone =
+          resultPolarity === "failure"
+            ? "It sounds like something failed."
+            : resultPolarity === "success"
+              ? "It sounds like something succeeded."
+              : "I heard a workflow result.";
+
+        appendMessage(
+          "assistant",
+          `${resultTone}\n\n` +
+            "I do not have an active waiting workflow state to attach this result to.\n\n" +
+            "Choose which workflow this result belongs to:",
+          {
+            actions: [
+              {
+                label: "App check / Preview result",
+                onClick: () => {
+                  if (resultPolarity === "failure") {
+                    setWorkflowContext(
+                      createDirectHandoffWorkflowContext({
+                        handoffType: "preview",
+                        nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+                        expectedResult: "logs_or_error",
+                        lastUserGoal: draft,
+                        verificationStatus: VERIFICATION_STATUS.FAILED,
+                        verificationSummary:
+                          "Preview was reported as failed by you. Concrete error evidence is needed before fixing.",
+                        source: "orphan_result_preview_failure",
+                      }),
+                    );
+
+                    appendMessage(
+                      "assistant",
+                      "Preview reported as failed.\n\n" +
+                        "Please paste the exact evidence before I try to fix it:\n" +
+                        "- Preview panel logs\n" +
+                        "- Browser console error\n" +
+                        "- Error shown on the page\n" +
+                        "- Screenshot text\n\n" +
+                        "I will not edit files until there is concrete failure evidence.",
+                    );
+                    return;
+                  }
+
+                  setWorkflowContext({
+                    taskKind: WORKFLOW_TASK_KIND.DIRECT_HANDOFF,
+                    status: WORKFLOW_STATUS.COMPLETED,
+                    nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+                    handoffType: "preview",
+                    expectedResult: "success_or_failure",
+                    lastUserGoal: draft,
+                    verificationStatus: VERIFICATION_STATUS.PASSED,
+                    verificationSummary:
+                      "Preview was checked by you and passed. Build and automated tests have not been run.",
+                    updatedAt: Date.now(),
+                    source: "orphan_result_preview_success",
+                  });
+
+                  appendMessage(
+                    "assistant",
+                    "Great — Preview was checked and passed.\n\n" +
+                      "Verification:\n" +
+                      "- Preview was checked by you and passed.\n" +
+                      "- Build and automated tests have not been run.\n\n" +
+                      "Next:\nChoose what you'd like to do next.",
+                  );
+                },
+              },
+              {
+                label: "Install / dependency result",
+                onClick: () => {
+                  setWorkflowContext(
+                    createDirectHandoffWorkflowContext({
+                      handoffType: "install",
+                      nextStep: WORKFLOW_NEXT_STEP.INSTALL,
+                      expectedResult: "install_result_or_error",
+                      lastUserGoal: draft,
+                      source: "orphan_result_install",
+                    }),
+                  );
+
+                  appendMessage(
+                    "assistant",
+                    "Got it — I’ll treat that as an install/dependency result.\n\n" +
+                      "If it failed, paste the exact install log. If it succeeded, you can continue with Preview or the next project edit.",
+                  );
+                },
+              },
+              {
+                label: "Deploy / publish result",
+                onClick: () => {
+                  setWorkflowContext(
+                    createDirectHandoffWorkflowContext({
+                      handoffType: "deploy",
+                      nextStep: WORKFLOW_NEXT_STEP.DEPLOY,
+                      expectedResult: "deploy_result_or_logs",
+                      lastUserGoal: draft,
+                      source: "orphan_result_deploy",
+                    }),
+                  );
+
+                  appendMessage(
+                    "assistant",
+                    "Got it — I’ll treat that as a deploy/publish result.\n\n" +
+                      "If deployment failed, paste the provider/deploy log. If it succeeded, paste the live URL if you want help checking it.",
+                  );
+                },
+              },
+              {
+                label: "Service connection result",
+                onClick: () => {
+                  setWorkflowContext(
+                    createDirectHandoffWorkflowContext({
+                      handoffType: "service",
+                      nextStep: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+                      expectedResult: "connection_result_or_logs",
+                      lastUserGoal: draft,
+                      source: "orphan_result_service",
+                    }),
+                  );
+
+                  appendMessage(
+                    "assistant",
+                    "Got it — I’ll treat that as a service connection result.\n\n" +
+                      "If the connection failed, paste the service error or setup log. If it succeeded, tell me the next setup step you want.",
+                  );
+                },
+              },
+              {
+                label: "Git / repository result",
+                onClick: () => {
+                  setWorkflowContext(
+                    createDirectHandoffWorkflowContext({
+                      handoffType: "git",
+                      nextStep: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+                      expectedResult: "git_result_or_logs",
+                      lastUserGoal: draft,
+                      source: "orphan_result_git",
+                    }),
+                  );
+
+                  appendMessage(
+                    "assistant",
+                    "Got it — I’ll treat that as a Git/repository result.\n\n" +
+                      "If push/connect failed, paste the Git or GitHub error. If it succeeded, you can continue with deploy, preview, or editing.",
+                  );
+                },
+              },
+              {
+                label: "Build / test result",
+                onClick: () => {
+                  setWorkflowContext(
+                    createDirectHandoffWorkflowContext({
+                      handoffType: "build_test",
+                      nextStep: WORKFLOW_NEXT_STEP.VERIFY,
+                      expectedResult: "build_or_test_result",
+                      lastUserGoal: draft,
+                      source: "orphan_result_build_test",
+                    }),
+                  );
+
+                  appendMessage(
+                    "assistant",
+                    "Got it — I’ll treat that as a build/test result.\n\n" +
+                      "If it failed, paste the build or test output. If it passed, tell me whether you want to preview, deploy, or continue editing.",
+                  );
+                },
+              },
+              {
+                label: "Something else",
+                onClick: () => {
+                  appendMessage(
+                    "assistant",
+                    "Got it. Tell me what workflow this result belongs to and paste any relevant log, error, URL, or status text.",
+                  );
+                },
+              },
+            ],
+          },
+        );
+        return;
+      }
       const directHandoffFollowupRoute = opts.skipCompletedWorkflowRoute
         ? null
         : getDirectHandoffFollowupRouteDecision({
