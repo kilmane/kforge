@@ -2557,6 +2557,37 @@ export default function App() {
   }
 
 
+  function isExplicitProjectEditOperationIntent(text = "") {
+    const raw = String(text || "");
+    const s = raw.toLowerCase().trim();
+
+    if (!s) return false;
+
+    if (
+      /^(how|why|what|when|where)\b/.test(s) ||
+      /\b(explain|manual steps|guide me|show me how)\b/.test(s)
+    ) {
+      return false;
+    }
+
+    const hasEditOperation =
+      /\b(change|update|edit|modify|replace|add|remove|delete|rename|create|build|implement|wire|connect|move|style|restyle|redesign|make)\b/.test(
+        s,
+      );
+
+    if (!hasEditOperation) return false;
+
+    const hasProjectTarget =
+      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|component|page|screen|layout|heading|title|button|footer|navbar|text|copy|label|style|ui|ux|app|file)\b/.test(
+        s,
+      );
+
+    const hasQuotedContent =
+      /["'“”‘’`][^"'“”‘’`]+["'“”‘’`]/.test(raw) &&
+      /\b(to|with|say|says|called|named)\b/.test(s);
+
+    return hasProjectTarget || hasQuotedContent;
+  }
   function isPreviewIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3754,6 +3785,18 @@ export default function App() {
           kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
           confidence: "high",
           source: "existing_intent_helpers",
+        };
+      }
+
+      if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isExplicitProjectEditOperationIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "explicit_project_edit_operation",
         };
       }
 
