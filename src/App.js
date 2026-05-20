@@ -27,6 +27,7 @@ import {
   createAdvisoryTestOverrideWorkflowContext,
   createBlockedProjectEditWorkflowContext,
   createBugfixWorkflowContext,
+  createDirectHandoffWorkflowContext,
   createImplementationInProgressWorkflowContext,
   SUGGESTED_ACTION_LABEL,
   VERIFICATION_STATUS,
@@ -916,6 +917,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
     return { action: "deploy_service" };
   }
 
+  if (kind === "preview_followup") {
+    return { action: "preview_followup" };
+  }
+
   if (kind === "dependency_install") {
     return { action: "dependency_install" };
   }
@@ -973,6 +978,47 @@ function isCompletedWorkflowRecoveryIntent(text = "", promptTask = null) {
   );
 }
 
+function isDirectHandoffWorkflow(context = null) {
+  return (
+    context?.taskKind === WORKFLOW_TASK_KIND.DIRECT_HANDOFF &&
+    context?.status === WORKFLOW_STATUS.WAITING_FOR_USER_RESULT
+  );
+}
+
+function isDirectPreviewHandoffWorkflow(context = null) {
+  return (
+    isDirectHandoffWorkflow(context) &&
+    (
+      context?.handoffType === "preview" ||
+      context?.nextStep === WORKFLOW_NEXT_STEP.PREVIEW
+    )
+  );
+}
+
+function getDirectHandoffFollowupRouteDecision({
+  workflowContext = null,
+  promptTask = null,
+} = {}) {
+  if (!isDirectHandoffWorkflow(workflowContext)) return null;
+
+  const kind = promptTask?.kind || "unknown";
+
+  if (isDirectPreviewHandoffWorkflow(workflowContext)) {
+    if (kind === "verification_failed") {
+      return { action: "direct_preview_failed" };
+    }
+
+    if (kind === "verification_success") {
+      return { action: "direct_preview_success" };
+    }
+
+    if (kind === "preview_followup") {
+      return { action: "direct_preview_repeat" };
+    }
+  }
+
+  return null;
+}
 function getCompletedWorkflowRouteDecision({
   workflowContext = null,
   promptTask = null,
@@ -3249,8 +3295,13 @@ export default function App() {
   }
 
   function isPreviewVerificationPendingWorkflow(workflowContext = null) {
-    if (!isCompletedImplementationWorkflow(workflowContext)) return false;
-    if (workflowContext?.nextStep !== WORKFLOW_NEXT_STEP.PREVIEW) return false;
+    const isCompletedPreviewWorkflow =
+      isCompletedImplementationWorkflow(workflowContext) &&
+      workflowContext?.nextStep === WORKFLOW_NEXT_STEP.PREVIEW;
+
+    const isDirectPreviewWorkflow = isDirectPreviewHandoffWorkflow(workflowContext);
+
+    if (!isCompletedPreviewWorkflow && !isDirectPreviewWorkflow) return false;
 
     const status = getWorkflowVerificationStatus(workflowContext);
 
@@ -3545,10 +3596,7 @@ export default function App() {
         };
       }
 
-      if (
-        isCompletedImplementationWorkflow(workflowContext) &&
-        isUserSuppliedVerificationAlreadyPassedIntent(text, workflowContext)
-      ) {
+      if (isUserSuppliedVerificationAlreadyPassedIntent(text, workflowContext)) {
         return {
           kind: "verification_already_success",
           confidence: "high",
@@ -3556,10 +3604,7 @@ export default function App() {
         };
       }
 
-      if (
-        isCompletedImplementationWorkflow(workflowContext) &&
-        isUserSuppliedVerificationFailureIntent(text, workflowContext)
-      ) {
+      if (isUserSuppliedVerificationFailureIntent(text, workflowContext)) {
         return {
           kind: "verification_failed",
           confidence: "high",
@@ -3567,10 +3612,7 @@ export default function App() {
         };
       }
 
-      if (
-        isCompletedImplementationWorkflow(workflowContext) &&
-        isUserSuppliedVerificationSuccessIntent(text, workflowContext)
-      ) {
+      if (isUserSuppliedVerificationSuccessIntent(text, workflowContext)) {
         return {
           kind: "verification_success",
           confidence: "high",
@@ -3876,10 +3918,13 @@ export default function App() {
     [getWorkflowEditedPaths],
   );
   const buildWorkflowPreviewRoutingMessage = useCallback((projectOpen, context = null) => {
-    const summary = buildCompletedWorkflowChangeSummary(context, {
-      maxPaths: 6,
-      fallbackLine: "",
-    });
+    const isDirectPreviewContext = isDirectPreviewHandoffWorkflow(context);
+    const summary = isDirectPreviewContext
+      ? ""
+      : buildCompletedWorkflowChangeSummary(context, {
+          maxPaths: 6,
+          fallbackLine: "",
+        });
     const detectedTemplateName =
       projectTemplateInfo?.detectedTemplate?.name || "";
     const detectedTemplateId = projectTemplateInfo?.detectedTemplate?.id || "";
@@ -3899,7 +3944,14 @@ export default function App() {
       templateId.includes("vite") ||
       templateId.includes("next");
 
-    const prefix = `Last implementation completed.\n\n${summary}\n\n`;
+    const prefix = isDirectPreviewContext
+      ? ""
+      : `Last implementation completed.\n\n${summary}\n\n`;
+
+    const outcomeInstructions =
+      "\n\nAfter checking Preview, reply with one of:\n" +
+      "1. Preview succeeded\n" +
+      "2. Preview failed";
 
     if (!projectOpen) {
       return (
@@ -3915,8 +3967,9 @@ export default function App() {
         prefix +
         `Detected preview target: ${templateLabel}.\n\n` +
         "For Expo/mobile projects, KForge's Preview panel gives the right guidance, but the real phone preview happens outside the chat through Expo/Expo Go.\n\n" +
-        "Next:\nLeave the chat and open: Preview Panel.\n\n" +
-        "Use Install first if dependencies are not installed yet, then follow the Expo phone preview guidance there."
+        "Next:\nOpen: Preview Panel.\n\n" +
+        "Use Install first if dependencies are not installed yet, then follow the Expo phone preview guidance there." +
+        outcomeInstructions
       );
     }
 
@@ -3925,8 +3978,9 @@ export default function App() {
         prefix +
         `Detected preview target: ${templateLabel}.\n\n` +
         "This looks like a static/simple project.\n\n" +
-        "Next:\nLeave the chat and open: Preview Panel → Preview.\n\n" +
-        "KForge should use the static preview flow when the project is detected correctly."
+        "Next:\nOpen: Preview Panel → Preview.\n\n" +
+        "KForge should use the static preview flow when the project is detected correctly." +
+        outcomeInstructions
       );
     }
 
@@ -3935,8 +3989,9 @@ export default function App() {
         prefix +
         `Detected preview target: ${templateLabel}.\n\n` +
         "This looks like a package-based web app.\n\n" +
-        "Next:\nLeave the chat and open: Preview Panel.\n\n" +
-        "Use Install first if dependencies are not installed yet, then use Preview to run the app."
+        "Next:\nOpen: Preview Panel → Preview.\n\n" +
+        "Use Install first if dependencies are not installed yet, then use Preview to run the app." +
+        outcomeInstructions
       );
     }
 
@@ -3944,8 +3999,9 @@ export default function App() {
       prefix +
       `Detected preview target: ${templateLabel}.\n\n` +
       "KForge can help with this through the Preview panel.\n\n" +
-      "Next:\nLeave the chat and open: Preview Panel → Preview.\n\n" +
-      "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge."
+      "Next:\nOpen: Preview Panel → Preview.\n\n" +
+      "If this project uses a special preview flow, Preview may provide guidance rather than directly running the app inside KForge." +
+      outcomeInstructions
     );
   }, [
     projectTemplateInfo?.detectedTemplate?.id,
@@ -4069,6 +4125,91 @@ export default function App() {
         );
       }
 
+      const directHandoffFollowupRoute = opts.skipCompletedWorkflowRoute
+        ? null
+        : getDirectHandoffFollowupRouteDecision({
+            workflowContext,
+            promptTask,
+          });
+
+      if (directHandoffFollowupRoute) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        if (directHandoffFollowupRoute.action === "direct_preview_success") {
+          const verifiedWorkflowContext = {
+            ...workflowContext,
+            status: WORKFLOW_STATUS.COMPLETED,
+            verificationStatus: VERIFICATION_STATUS.PASSED,
+            verificationSummary: "Preview was checked by you and passed. Build and automated tests have not been run.",
+            updatedAt: Date.now(),
+            source: "direct_handoff_preview_success",
+          };
+
+          setWorkflowContext(verifiedWorkflowContext);
+
+          appendMessage(
+            "assistant",
+            "Great — Preview was checked and passed.\n\n" +
+              "Verification:\n" +
+              "- Preview was checked by you and passed.\n" +
+              "- Build and automated tests have not been run.\n\n" +
+              "Next:\nChoose what you'd like to do next.",
+            {
+              actions: [
+                {
+                  label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me the next edit, and I will route it from the current project state.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                  onClick: () => {
+                    appendMessage("assistant", "No problem — I'll leave it there.");
+                  },
+                },
+              ],
+            },
+          );
+          return;
+        }
+
+        if (directHandoffFollowupRoute.action === "direct_preview_failed") {
+          const failedWorkflowContext = {
+            ...workflowContext,
+            verificationStatus: VERIFICATION_STATUS.FAILED,
+            verificationSummary: "Preview was reported as failed by you. Concrete error evidence is needed before fixing.",
+            expectedResult: "logs_or_error",
+            updatedAt: Date.now(),
+            source: "direct_handoff_preview_failed",
+          };
+
+          setWorkflowContext(failedWorkflowContext);
+
+          appendMessage(
+            "assistant",
+            "Preview reported as failed.\n\n" +
+              "Please paste the exact evidence before I try to fix it:\n" +
+              "- Preview panel logs\n" +
+              "- Browser console error\n" +
+              "- Error shown on the page\n" +
+              "- Screenshot text\n\n" +
+              "I will not edit files until there is concrete failure evidence.",
+          );
+          return;
+        }
+
+        if (directHandoffFollowupRoute.action === "direct_preview_repeat") {
+          appendMessage(
+            "assistant",
+            buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+          );
+          return;
+        }
+      }
       const completedWorkflowRoute = opts.skipCompletedWorkflowRoute
         ? null
         : getCompletedWorkflowRouteDecision({
@@ -4637,6 +4778,69 @@ export default function App() {
       if (directWorkflowHandoffRoute) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
 
+        const directAction = directWorkflowHandoffRoute.action;
+        const isPreviewHandoff =
+          directAction === "preview_followup" ||
+          (
+            directAction === "dependency_install" &&
+            !isDependencyInstallIntent(draft)
+          );
+
+        const directHandoffTypeByAction = {
+          expo_terminal_choice: "expo_terminal_choice",
+          no_project_implementation: "open_project",
+          no_project_performance: "open_project",
+          empty_folder_implementation: "empty_folder",
+          empty_folder_performance: "empty_folder",
+          manual_performance: "manual",
+          empty_folder_plan: "empty_folder",
+          provider_setup: "provider_setup",
+          supabase_service: "supabase",
+          deploy_service: "deploy",
+          dependency_install: isPreviewHandoff ? "preview" : "install",
+          preview_followup: "preview",
+          expo_phone_preview: "expo_phone_preview",
+        };
+
+        const directNextStepByType = {
+          preview: WORKFLOW_NEXT_STEP.PREVIEW,
+          install: WORKFLOW_NEXT_STEP.INSTALL,
+          deploy: WORKFLOW_NEXT_STEP.DEPLOY,
+          supabase: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          provider_setup: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
+          empty_folder: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
+          expo_phone_preview: WORKFLOW_NEXT_STEP.PREVIEW,
+          expo_terminal_choice: WORKFLOW_NEXT_STEP.PREVIEW,
+          manual: "",
+        };
+
+        const directExpectedResultByType = {
+          preview: "success_or_failure",
+          install: "install_result_or_error",
+          deploy: "deploy_result_or_logs",
+          supabase: "connection_result_or_logs",
+          provider_setup: "connection_result_or_logs",
+          open_project: "project_opened_or_needs_help",
+          empty_folder: "starter_generated_or_needs_help",
+          expo_phone_preview: "preview_result_or_logs",
+          expo_terminal_choice: "choice_or_manual_result",
+          manual: "manual_result_or_question",
+        };
+
+        const directHandoffType =
+          directHandoffTypeByAction[directAction] || directAction || "unknown";
+
+        const directHandoffContext = createDirectHandoffWorkflowContext({
+          handoffType: directHandoffType,
+          nextStep: directNextStepByType[directHandoffType] || "",
+          expectedResult: directExpectedResultByType[directHandoffType] || "",
+          lastUserGoal: draft,
+          source: `direct_handoff_${directAction}`,
+        });
+
+        setWorkflowContext(directHandoffContext);
+
         if (directWorkflowHandoffRoute.action === "expo_terminal_choice") {
           appendMessage(
             "assistant",
@@ -4696,10 +4900,20 @@ export default function App() {
           return;
         }
 
+        if (directWorkflowHandoffRoute.action === "preview_followup") {
+          appendMessage(
+            "assistant",
+            buildWorkflowPreviewRoutingMessage(projectOpen, directHandoffContext),
+          );
+          return;
+        }
+
         if (directWorkflowHandoffRoute.action === "dependency_install") {
           appendMessage(
             "assistant",
-            buildPreviewInstallRoutingMessage(projectOpen),
+            directHandoffContext?.handoffType === "preview"
+              ? buildWorkflowPreviewRoutingMessage(projectOpen, directHandoffContext)
+              : buildPreviewInstallRoutingMessage(projectOpen),
           );
           return;
         }

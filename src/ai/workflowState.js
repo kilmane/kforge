@@ -2,6 +2,7 @@ export const WORKFLOW_TASK_KIND = Object.freeze({
   PROJECT_EDIT: "project_edit",
   IMPLEMENTATION: "implementation",
   FEATURE_BLUEPRINT: "feature_blueprint",
+  DIRECT_HANDOFF: "direct_handoff",
 });
 
 export const WORKFLOW_STATUS = Object.freeze({
@@ -10,6 +11,7 @@ export const WORKFLOW_STATUS = Object.freeze({
   IN_PROGRESS: "in_progress",
   TOOL_WAITING: "tool_waiting",
   COMPLETED: "completed",
+  WAITING_FOR_USER_RESULT: "waiting_for_user_result",
 });
 
 export const WORKFLOW_NEXT_STEP = Object.freeze({
@@ -23,6 +25,10 @@ export const WORKFLOW_NEXT_STEP = Object.freeze({
   START_IMPLEMENTATION: "start_implementation",
   CONTINUE_IMPLEMENTATION: "continue_implementation",
   REFINE_BLUEPRINT: "refine_blueprint",
+  INSTALL: "install",
+  CONNECT_SERVICE: "connect_service",
+  DEPLOY: "deploy",
+  OPEN_PROJECT: "open_project",
 });
 
 export const ASSISTANT_ACTION_RESULT = Object.freeze({
@@ -40,6 +46,7 @@ export const ASSISTANT_ACTION_TYPE = Object.freeze({
   PROJECT_EDIT: "project_edit",
   IMPLEMENTATION: "implementation",
   FEATURE_BLUEPRINT: "feature_blueprint",
+  DIRECT_HANDOFF: "direct_handoff",
   FIX: "fix",
   PERFORMANCE: "performance",
   PREVIEW: "preview",
@@ -388,6 +395,31 @@ export function buildCompletedWorkflowChangeSummary(context = null, options = {}
   );
 }
 
+export function createDirectHandoffWorkflowContext({
+  handoffType = "",
+  expectedResult = "",
+  nextStep = "",
+  lastUserGoal = "",
+  source = "direct_handoff",
+  verificationStatus = VERIFICATION_STATUS.UNKNOWN,
+  verificationSummary = "",
+} = {}) {
+  const cleanHandoffType = String(handoffType || "").trim();
+  const cleanNextStep = String(nextStep || cleanHandoffType || "").trim();
+
+  return {
+    taskKind: WORKFLOW_TASK_KIND.DIRECT_HANDOFF,
+    status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+    nextStep: cleanNextStep,
+    handoffType: cleanHandoffType,
+    expectedResult: String(expectedResult || "").trim(),
+    lastUserGoal: String(lastUserGoal || "").trim(),
+    verificationStatus: normalizeVerificationStatus(verificationStatus),
+    verificationSummary: String(verificationSummary || "").trim(),
+    updatedAt: Date.now(),
+    source: String(source || "").trim(),
+  };
+}
 export function createAdvisoryTestOverrideWorkflowContext(
   previousContext = null,
 ) {
