@@ -177,7 +177,7 @@ function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
 
   if (
     isDestructiveRewriteGuardedFile(path) &&
-    existingBytes >= 500 &&
+    existingBytes >= 300 &&
     nextBytes < existingBytes * 0.75 &&
     !looksLikeStarterOrPlaceholderSourceContent(existing)
   ) {
