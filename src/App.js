@@ -3214,6 +3214,9 @@ export default function App() {
   function isExplicitWorkflowPreviewRequest(text = "") {
     const s = String(text || "")
       .toLowerCase()
+      .trim()
+      .replace(/[.!?]+$/g, "")
+      .replace(/\s+please$/i, "")
       .trim();
 
     if (!s) return false;
@@ -3241,7 +3244,7 @@ export default function App() {
 
     if (directRequests.includes(s)) return true;
 
-    return /^(please\s+)?(preview|run|start|open|test|show)\s+(it|the app|app|preview|now)$/i.test(
+    return /^(can\s+you\s+|could\s+you\s+)?(please\s+)?(preview|run|start|open|test|show)\s+(it|the app|app|preview|now)$/i.test(
       s,
     );
   }
@@ -5096,10 +5099,23 @@ export default function App() {
         }
 
         if (completedWorkflowRoute.action === "preview") {
+          const directPreviewContext = createDirectHandoffWorkflowContext({
+            handoffType: "preview",
+            nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+            expectedResult: "success_or_failure",
+            lastUserGoal: draft,
+            verificationStatus: VERIFICATION_STATUS.SUGGESTED,
+            verificationSummary:
+              "Preview handoff was requested. Waiting for the user to report whether Preview succeeded or failed.",
+            source: "completed_workflow_typed_preview_handoff",
+          });
+
+          setWorkflowContext(directPreviewContext);
+
           if (!opts.silentUserAppend) appendMessage("user", draft);
           appendMessage(
             "assistant",
-            buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+            buildWorkflowPreviewRoutingMessage(projectOpen, directPreviewContext),
           );
           return;
         }
