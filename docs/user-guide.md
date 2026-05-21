@@ -560,6 +560,16 @@ Common suggested actions include:
 If KForge only completed part of a larger implementation, it may suggest **Continue implementation** so the work can proceed in a controlled loop.
 
 If dependencies are missing, use **Preview Panel → Install** first.
+When KForge hands you to Preview, it may ask you to reply with:
+
+1. **Preview succeeded**
+2. **Preview failed**
+
+KForge should use that reply as a user-supplied Preview result. It should not claim chat itself ran Preview.
+
+If you only say something vague such as “the app is broken,” KForge may ask what kind of problem it is before editing. For example, it may ask whether it is a Preview/runtime error, something visual, content/functionality, or something else.
+
+If you ask KForge to change exact text and the inspected file does not contain that exact text, KForge should stop safely. It may offer to review the inspected file, search for the text, ask you for the exact text/path, or stop. It should not attempt a broad rewrite just because the target text was not found.
 
 KForge should not pretend that chat itself has started the preview, run a build, or passed tests. The chat can guide you to the correct Preview workflow, but the Preview panel is where the project is actually run, opened, or guided.
 
@@ -1121,6 +1131,7 @@ Check:
 * whether dependencies were installed
 * whether the project is static, framework, or mobile
 * whether the workflow actually belongs outside KForge for mobile preview
+If Preview fails, KForge should ask for concrete evidence before changing files. Useful evidence includes Preview panel logs, browser console errors, page error text, or screenshot text. KForge should inspect before editing and should not claim it reproduced the failure unless it actually has evidence.
 
 ## I cannot delete or rename my project folder
 

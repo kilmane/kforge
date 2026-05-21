@@ -1148,24 +1148,26 @@ Current milestone includes:
 
 ---
 
-# 11 Next Architecture Lane
+# 11 Current Builder Reliability Lane
 
-Current post-Phase-10 docs lane:
-
-* Post Phase 10 Docs — refresh user-facing and internal documentation after Phase 9 and Phase 10
-
-Next major product lane:
+Current major product lane:
 
 * Phase 11 — Builder Reliability / Meaningful App Building
 
-Focus:
+Completed Phase 11 focus so far:
 
-* implementation quality
-* recovery loops
-* useful app generation
-* preview-error repair
-* avoiding destructive rewrites
-* making KForge capable of building meaningful small apps
+* implementation quality and useful small-app generation
+* recovery/revert loops with truthful restore behavior
+* destructive rewrite protection and fake-placeholder write blocking
+* Preview-error repair with evidence-gated fixing
+* direct Preview handoff state with 1 / 2 outcome handling
+* vague broken-app clarification before editing
+* exact-target-text-not-found stop behavior
+
+Next planned roadmap items:
+
+* Phase 11.5 — Optional AI-Assisted App Brief Planning
+* Phase 11.6 — AI Planning Quality / Model Warnings
 
 Possible future integrations:
 

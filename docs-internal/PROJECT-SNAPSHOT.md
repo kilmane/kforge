@@ -1798,6 +1798,7 @@ Local Project
 → Phase 8 Builder Loops: multi-file editing loops, change summaries, show-changes flow, and preview handoff intelligence
 → Phase 9 Developer Assistants: Error Fixer, Supabase Assistant, Deploy Assistant, Performance Assistant, and Assistant Result Protocol / Logical Workflow Outcomes
 → Phase 10 Advanced Vibecoding baseline: Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling
+→ Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, and exact-text-not-found stop behavior
 
 Important warning for future work:
 
