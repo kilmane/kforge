@@ -466,6 +466,37 @@ Must NOT:
 
 ---
 
+# 2.12.1 Empty-Folder App Brief Planning Options
+
+Workspace state:
+
+* project folder open
+* folder is empty
+
+Prompt:
+
+* I want to build a todo app with saved tasks
+
+Expected behavior:
+
+* show the Free App Brief starter recommendation first
+* state that no AI model call or AI tokens were used for the Free App Brief
+* offer **Use AI-assisted brief** as an optional action
+* explain that AI-assisted planning uses the current configured model and quality depends on that model
+* point first-time users to **Change Provider/Model** in the AI header
+* when the action is clicked, show a brief working acknowledgement before the model response
+* the AI-assisted brief must remain planning-only
+
+Must NOT:
+
+* edit files
+* request tools
+* preview, deploy, or claim anything was created
+* route the AI-assisted button back into the Free Brief handoff
+* hide that quality depends on the configured model
+
+---
+
 # 2.13 Latest-Request Obedience
 
 Prompt sequence:

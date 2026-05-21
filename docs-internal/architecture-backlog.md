@@ -141,48 +141,46 @@ Updated: 2026-05-18
 
 **Why**
 
-KForge already has model policy, advisory/test-mode warnings, and free app brief planning. The remaining roadmap includes:
+KForge already has model policy, advisory/test-mode warnings, Free App Brief planning, and a planning-only AI-Assisted App Brief option. The remaining roadmap is now focused on:
 
-- Phase 11.5 — Optional AI-Assisted App Brief Planning
-- Phase 11.6 — AI Planning Quality / Model Warnings
+- Phase 11.6 — Model Presets, Quality Tiers & Warnings
 
 The product direction is:
 
-- Free Mode should remain available by default and not require API keys.
-- AI-assisted planning can be offered later as a more reliable optional path.
+- Free App Brief should remain available by default and not require API keys.
+- AI-Assisted App Brief is optional and uses the current configured model, with clear quality caveats.
 - KForge should be honest when weak/free models are risky for coding, planning, or tool-heavy work.
+- Weak/free/cheap models should not be marketed as reliable builders.
 
 **Where**
 
-- `src/App.js`
 - `src/ai/modelWorkflowPolicy.js`
 - `src/ai/modelPresets.js`
-- `src/ai/planning/appBriefProtocol.js`
 - `src/ai/panel/ProviderControlsPanel.jsx`
-- possible future planning module for AI-assisted app briefs
+- `docs/PRESETS_INVENTORY.md`
+- `docs/presets.json`
 
 **Plan**
 
-1. Keep the current Free App Brief Protocol as the default.
-2. Add optional AI-assisted planning only if Free Mode proves insufficient.
-3. Explain the tradeoff clearly before building:
-   - free/no AI required, less reliable
-   - AI-assisted, more reliable, requires configured model
-4. Keep user control over provider/model selection.
-5. Make model quality warnings clear without blocking safe workflows unnecessarily.
+1. Rename Phase 11.6 to **Model Presets, Quality Tiers & Warnings**.
+2. Clean up curated presets so normal builder presets focus on reputable builder-capable models.
+3. Move any retained weak/free/cheap models into an Experimental / test-only tier, with one or two maximum unless testing proves otherwise.
+4. Keep custom providers supported, but treat unknown/custom/weak models as unverified and guarded.
+5. Make model quality warnings visible without blocking safe workflows unnecessarily.
 
 **Risks / gotchas**
 
 - Cost is a major concern.
 - Too much model-routing UI could confuse beginners.
 - Weak models should not be marketed as reliable builders.
-- KForge must not pretend AI-assisted planning is available unless a suitable model is configured.
+- Users can still add weak models through custom providers, so guardrails remain necessary.
 
 **Done when**
 
-- Users can clearly choose between Free Mode and optional AI-assisted planning.
-- KForge explains model quality/cost tradeoffs before relying on AI-assisted planning.
-- Weak/advisory models remain safe but honestly labelled.
+- Main presets focus on reputable builder-capable models.
+- Weak/free/cheap presets are removed or clearly marked Experimental / test only.
+- KForge explains model quality/cost tradeoffs before relying on AI-assisted planning or code edits.
+- Weak/advisory/custom models remain safe but honestly labelled.
 
 ---
 

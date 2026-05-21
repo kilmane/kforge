@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **May 15th, 2026**
+Last Updated: **May 21st, 2026**
 
-Phase: **Post Phase 10.3.1 — Verification follow-up stable / docs catch-up**
-Status: **Phase 10 Advanced Vibecoding baseline is stable through Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling. User-facing and internal docs are being refreshed after Phase 9 and Phase 10.**
+Phase: **Phase 11.5 — Optional AI-Assisted App Brief Planning**
+Status: **Phase 11 Builder Reliability is stable through Preview/recovery UX polish, and KForge now supports an optional planning-only AI-Assisted App Brief beside the default Free App Brief path.**
 
 Stable restore tags now available:
 
@@ -1798,7 +1798,7 @@ Local Project
 → Phase 8 Builder Loops: multi-file editing loops, change summaries, show-changes flow, and preview handoff intelligence
 → Phase 9 Developer Assistants: Error Fixer, Supabase Assistant, Deploy Assistant, Performance Assistant, and Assistant Result Protocol / Logical Workflow Outcomes
 → Phase 10 Advanced Vibecoding baseline: Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling
-→ Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, and exact-text-not-found stop behavior
+→ Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, exact-text-not-found stop behavior, and optional planning-only AI-Assisted App Briefs beside the default Free App Brief path
 
 Important warning for future work:
 

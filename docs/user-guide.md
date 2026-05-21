@@ -541,6 +541,21 @@ A blueprint is a planning step. It should describe:
 
 A blueprint should not claim files were changed. From there, you can choose to start implementation or refine the plan.
 
+## App brief planning before generating a starter
+
+When a project folder is empty, KForge can recommend a starter before any files are generated.
+
+KForge may show two planning paths:
+
+* **Free App Brief** — uses built-in starter guidance. No AI model call or AI tokens are used. This is the default beginner path.
+* **AI-Assisted App Brief** — optional. Uses the current configured AI model for a more detailed brief. Quality depends on the model.
+
+The AI-assisted path is still planning-only. It should not edit files, request tools, preview, deploy, or claim anything was created.
+
+To choose or change the model first, use **Change Provider/Model** in the AI header.
+
+After choosing a starter, use **Preview → Generate**, then **Preview → Install**, then return to chat to continue the build.
+
 ## After KForge edits files
 
 After KForge completes an implementation edit, it may show:

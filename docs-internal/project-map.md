@@ -1164,10 +1164,13 @@ Completed Phase 11 focus so far:
 * vague broken-app clarification before editing
 * exact-target-text-not-found stop behavior
 
-Next planned roadmap items:
+Recent completed roadmap items:
 
-* Phase 11.5 — Optional AI-Assisted App Brief Planning
-* Phase 11.6 — AI Planning Quality / Model Warnings
+* Phase 11.5 — Optional AI-Assisted App Brief Planning: Free App Brief remains the default, and empty-folder / no-project starter guidance can now offer a planning-only **Use AI-assisted brief** action that uses the current configured model without allowing file tools.
+
+Next planned roadmap item:
+
+* Phase 11.6 — Model Presets, Quality Tiers & Warnings
 
 Possible future integrations:
 
