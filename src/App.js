@@ -998,12 +998,19 @@ function isDirectPreviewHandoffWorkflow(context = null) {
 function getDirectHandoffFollowupRouteDecision({
   workflowContext = null,
   promptTask = null,
+  text = "",
 } = {}) {
   if (!isDirectHandoffWorkflow(workflowContext)) return null;
 
   const kind = promptTask?.kind || "unknown";
+  const s = String(text || "").toLowerCase().trim();
 
   if (isDirectPreviewHandoffWorkflow(workflowContext)) {
+    if (workflowContext?.expectedResult === "success_or_failure") {
+      if (s === "1") return { action: "direct_preview_success" };
+      if (s === "2") return { action: "direct_preview_failed" };
+    }
+
     if (kind === "verification_failed") {
       return { action: "direct_preview_failed" };
     }
@@ -4388,6 +4395,7 @@ export default function App() {
         : getDirectHandoffFollowupRouteDecision({
             workflowContext,
             promptTask,
+            text: draft,
           });
 
       if (directHandoffFollowupRoute) {
