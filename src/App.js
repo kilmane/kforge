@@ -3699,6 +3699,17 @@ export default function App() {
       }
 
       if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isExplicitProjectEditOperationIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "explicit_project_edit_operation",
+        };
+      }
+      if (
         isSupabaseServiceWorkflowIntent(text) &&
         !hasManualOrAdvisoryIntent(text)
       ) {
@@ -3747,17 +3758,6 @@ export default function App() {
         };
       }
 
-      if (
-        projectOpen &&
-        !emptyProjectFolder &&
-        isExplicitProjectEditOperationIntent(text)
-      ) {
-        return {
-          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
-          confidence: "high",
-          source: "explicit_project_edit_operation",
-        };
-      }
       if (isWorkflowBugfixIntent(text)) {
         return {
           kind: "broken_preview_debug",

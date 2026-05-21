@@ -83,8 +83,16 @@ function looksLikePlaceholderWrite(content = "") {
     /^todo\b/i,
   ];
 
+  const fakePreservationPatterns = [
+    /\bother\s+(?:code|content|file|lines|parts|implementation)\s+remains?\s+unchanged\b/i,
+    /\b(?:rest|remainder)\s+of\s+(?:the\s+)?(?:file|code|content|component|implementation)\s+(?:remains?\s+)?unchanged\b/i,
+    /\bexisting\s+(?:code|content|file|lines|parts|implementation)\s+(?:remains?\s+)?unchanged\b/i,
+    /\bunchanged\s+(?:code|content|file|lines|parts|implementation)\s+(?:omitted|elided|not shown)\b/i,
+  ];
+
   return (
     placeholderPatterns.some((re) => re.test(s)) ||
+    fakePreservationPatterns.some((re) => re.test(s)) ||
     lower.includes("updated content with a clickable link") ||
     lower.includes("replace with actual") ||
     lower.includes("rest of file unchanged")
