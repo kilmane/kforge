@@ -48,6 +48,30 @@ const PRE_WRITE_SNAPSHOT_LIMIT = 8;
 const PRE_WRITE_SNAPSHOT_SOURCE_RE =
   /\.(c|cc|cpp|cs|css|go|html|java|js|jsx|json|kt|md|php|py|rb|rs|scss|ts|tsx|txt|vue|xml|ya?ml)$/i;
 
+function isExactTargetTextNotFoundReport(text = "") {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+
+  if (!s) return false;
+
+  const saysNotFound =
+    /\b(not\s+found|not\s+present|isn'?t\s+present|doesn'?t\s+exist|does\s+not\s+exist)\b/.test(
+      s,
+    ) ||
+    /\b(did\s+not|didn'?t|could\s+not|couldn'?t|cannot|can'?t)\s+find\b/.test(
+      s,
+    );
+
+  if (!saysNotFound) return false;
+
+  const refersToExactTarget =
+    /\b(exact|requested|target|specified|provided|given)\b/.test(s) &&
+    /\b(text|string|phrase|wording|content|footer|heading|copy)\b/.test(s);
+
+  return refersToExactTarget;
+}
+
 function getTextByteLength(text = "") {
   return new TextEncoder().encode(String(text || "")).length;
 }
@@ -2209,6 +2233,12 @@ export default function AiPanel({
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
+              const agentSuccessfulReadPaths = Array.isArray(batchCalls)
+                ? batchCalls
+                    .filter((call) => call?.toolName === "read_file")
+                    .map((call) => String(call?.args?.path || "").trim())
+                    .filter(Boolean)
+                : [];
               const isPerformanceContinuation =
                 isPerformanceProjectRequest(latestUserText);
               const performanceDiagnosticReadKeys = new Set();
@@ -2321,6 +2351,11 @@ export default function AiPanel({
 
                   const result = await runTool({ toolName, args });
 
+                  if (result?.ok && toolName === "read_file") {
+                    const path = String(args?.path || "").trim();
+                    if (path) agentSuccessfulReadPaths.push(path);
+                  }
+
                   if (
                     result?.ok &&
                     isPerformanceContinuation &&
@@ -2377,6 +2412,12 @@ export default function AiPanel({
               }
 
               const finalText = String(agentResult?.text || "").trim();
+              const exactTargetTextNotFound =
+                isExactTargetTextNotFoundReport(finalText);
+              const inspectedPathForNoChange =
+                agentSuccessfulReadPaths.length > 0
+                  ? agentSuccessfulReadPaths[agentSuccessfulReadPaths.length - 1]
+                  : String(activeTab?.path || "").trim();
               const isPerformanceToolExecution =
                 !isFixToolExecution && isPerformanceProjectRequest(latestUserText);
               const isPreviewErrorEvidenceGate =
@@ -2402,6 +2443,78 @@ export default function AiPanel({
                     "I inspected the relevant file for the reported preview problem.\n\n" +
                       "No files were changed.\n\n" +
                       "I cannot safely confirm the cause from inspection alone. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
+                  );
+                } else if (exactTargetTextNotFound) {
+                  const inspectedPathLine = inspectedPathForNoChange
+                    ? `\n\nInspected file: ${inspectedPathForNoChange}`
+                    : "";
+
+                  appendMessage(
+                    "assistant",
+                    `${finalText}\n\n` +
+                      "No files were changed.\n\n" +
+                      "I inspected the file and did not find that exact requested text, so I stopped instead of attempting a broad rewrite." +
+                      inspectedPathLine,
+                    {
+                      actions: [
+                        ...(inspectedPathForNoChange
+                          ? [
+                              {
+                                label: "Review inspected file",
+                                onClick: () => {
+                                  if (typeof sendWithPrompt === "function") {
+                                    sendWithPrompt(
+                                      "Review the inspected file only.\n\n" +
+                                        `Original request: ${latestUserText}\n\n` +
+                                        `Read this file and summarize the relevant current content without editing it:\n${inspectedPathForNoChange}\n\n` +
+                                        "Request exactly one read_file tool call for that path. Do not write files.",
+                                      {
+                                        silentUserAppend: true,
+                                        forceAdvisoryTestOverride: true,
+                                      },
+                                    );
+                                  }
+                                },
+                              },
+                              {
+                                label: "Search project",
+                                onClick: () => {
+                                  if (typeof sendWithPrompt === "function") {
+                                    sendWithPrompt(
+                                      "Search for the exact requested text before editing.\n\n" +
+                                        `Original request: ${latestUserText}\n\n` +
+                                        `Start with this inspected file:\n${inspectedPathForNoChange}\n\n` +
+                                        "Request exactly one search_in_file tool call for that file. If the exact target text is not explicit in the original request, ask the user to paste the exact text and path. Do not write files.",
+                                      {
+                                        silentUserAppend: true,
+                                        forceAdvisoryTestOverride: true,
+                                      },
+                                    );
+                                  }
+                                },
+                              },
+                            ]
+                          : []),
+                        {
+                          label: "Tell me exact text/path",
+                          onClick: () => {
+                            appendMessage(
+                              "assistant",
+                              "Please paste the exact text to find and the file path if you know it. I will inspect/search first and will not edit files unless the target is found.",
+                            );
+                          },
+                        },
+                        {
+                          label: SUGGESTED_ACTION_LABEL.STOP,
+                          onClick: () => {
+                            appendMessage(
+                              "assistant",
+                              "Stopped - no files changed.",
+                            );
+                          },
+                        },
+                      ],
+                    },
                   );
                 } else {
                   appendMessage(
