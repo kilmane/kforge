@@ -3747,6 +3747,17 @@ export default function App() {
         };
       }
 
+      if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isExplicitProjectEditOperationIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "explicit_project_edit_operation",
+        };
+      }
       if (isWorkflowBugfixIntent(text)) {
         return {
           kind: "broken_preview_debug",
@@ -3883,18 +3894,6 @@ export default function App() {
           kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
           confidence: "high",
           source: "existing_intent_helpers",
-        };
-      }
-
-      if (
-        projectOpen &&
-        !emptyProjectFolder &&
-        isExplicitProjectEditOperationIntent(text)
-      ) {
-        return {
-          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
-          confidence: "high",
-          source: "explicit_project_edit_operation",
         };
       }
 
