@@ -91,6 +91,41 @@ function looksLikePlaceholderWrite(content = "") {
   );
 }
 
+function getHtmlEmptyDivIds(content = "") {
+  return [...String(content ?? "").matchAll(/<div\b[^>]*\bid=["']([^"']+)["'][^>]*>\s*<\/div>/gi)]
+    .map((match) => String(match[1] || "").trim())
+    .filter(Boolean);
+}
+
+function getPrimaryHtmlMountId(content = "") {
+  const ids = getHtmlEmptyDivIds(content);
+
+  if (ids.includes("root")) return "root";
+
+  return ids[0] || "";
+}
+
+function shouldBlockIndexHtmlMountIdChange({
+  path,
+  existingContent,
+  nextContent,
+}) {
+  const p = String(path || "").replaceAll("\\", "/").toLowerCase();
+
+  if (!p.endsWith("index.html")) return "";
+
+  const existingMountId = getPrimaryHtmlMountId(existingContent);
+  const nextMountId = getPrimaryHtmlMountId(nextContent);
+
+  if (!existingMountId || !nextMountId) return "";
+  if (existingMountId === nextMountId) return "";
+
+  return (
+    "write_file blocked: this would change the app mount id in index.html " +
+    `from "${existingMountId}" to "${nextMountId}". ` +
+    "For React/Vite apps, preserve the existing mount id unless you also inspect and update the matching main entry file."
+  );
+}
 function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
   const next = String(nextContent ?? "");
   const existing =
@@ -102,6 +137,16 @@ function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
 
   if (!isSourceLikeFile(path) || existing == null) {
     return "";
+  }
+
+  const indexHtmlMountIdBlock = shouldBlockIndexHtmlMountIdChange({
+    path,
+    existingContent: existing,
+    nextContent: next,
+  });
+
+  if (indexHtmlMountIdBlock) {
+    return indexHtmlMountIdBlock;
   }
 
   const existingBytes = new TextEncoder().encode(existing).length;

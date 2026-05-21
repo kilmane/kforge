@@ -3946,6 +3946,20 @@ export default function App() {
     );
   }, []);
 
+  function createShowChangesReviewWorkflowContext(
+    context = null,
+    source = "show_changes_review",
+  ) {
+    return {
+      ...(context || {}),
+      taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+      status: WORKFLOW_STATUS.COMPLETED,
+      nextStep: WORKFLOW_NEXT_STEP.SHOW_CHANGES,
+      expectedResult: "changed_file_review_or_next_action",
+      updatedAt: Date.now(),
+      source,
+    };
+  }
   const buildWorkflowShowChangesMessage = useCallback(
     (context = null) => {
       const editedPaths = getWorkflowEditedPaths(context);
@@ -4487,9 +4501,17 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        verifiedWorkflowContext,
+                        "verification_show_changes",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+
                     appendMessage(
                       "assistant",
-                      buildWorkflowShowChangesMessage(verifiedWorkflowContext),
+                      buildWorkflowShowChangesMessage(showChangesContext),
                     );
                   },
                 },
@@ -4553,9 +4575,17 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        verifiedWorkflowContext,
+                        "verification_show_changes",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+
                     appendMessage(
                       "assistant",
-                      buildWorkflowShowChangesMessage(verifiedWorkflowContext),
+                      buildWorkflowShowChangesMessage(showChangesContext),
                     );
                   },
                 },
@@ -4766,9 +4796,17 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        workflowContext,
+                        "workflow_show_changes_action",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+
                     appendMessage(
                       "assistant",
-                      buildWorkflowShowChangesMessage(workflowContext),
+                      buildWorkflowShowChangesMessage(showChangesContext),
                     );
                   },
                 },
@@ -4810,9 +4848,17 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        workflowContext,
+                        "workflow_show_changes_action",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+
                     appendMessage(
                       "assistant",
-                      buildWorkflowShowChangesMessage(workflowContext),
+                      buildWorkflowShowChangesMessage(showChangesContext),
                     );
                   },
                 },
@@ -4885,7 +4931,14 @@ export default function App() {
         }
 
         if (completedWorkflowRoute.action === "show_changes") {
-          const editedPaths = getWorkflowEditedPaths(workflowContext);
+          const showChangesContext = createShowChangesReviewWorkflowContext(
+            workflowContext,
+            "completed_workflow_show_changes",
+          );
+
+          setWorkflowContext(showChangesContext);
+
+          const editedPaths = getWorkflowEditedPaths(showChangesContext);
           const lastChangedPath =
             editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
 
@@ -4893,7 +4946,7 @@ export default function App() {
 
           appendMessage(
             "assistant",
-            buildWorkflowShowChangesMessage(workflowContext),
+            buildWorkflowShowChangesMessage(showChangesContext),
             {
               actions: lastChangedPath
                 ? [
@@ -4957,9 +5010,17 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
                   onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        workflowContext,
+                        "workflow_show_changes_action",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+
                     appendMessage(
                       "assistant",
-                      buildWorkflowShowChangesMessage(workflowContext),
+                      buildWorkflowShowChangesMessage(showChangesContext),
                     );
                   },
                 },
