@@ -978,6 +978,44 @@ function isCompletedWorkflowRecoveryIntent(text = "", promptTask = null) {
   );
 }
 
+function isVagueCompletedWorkflowIssueReport(text = "", promptTask = null) {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+
+  if (!s || s.length > 120) return false;
+
+  const kind = promptTask?.kind || "unknown";
+  const isIssueRoute =
+    kind === "verification_failed" || kind === "broken_preview_debug";
+  if (!isIssueRoute) return false;
+
+  if (
+    s === "2" ||
+    s === "preview failed" ||
+    s === "preview fail" ||
+    s === "preview broken"
+  ) {
+    return false;
+  }
+
+  const reportsIssue =
+    /\b(broken|breaks?|blank|error|failed?|fails?|not\s+working|doesn'?t\s+work|issue|problem|bug|wrong|bad|stuck|crash|crashed|dead|missing)\b/.test(
+      s,
+    );
+
+  if (!reportsIssue) return false;
+
+  const hasConcreteEvidence =
+    /\b(preview\s+panel|browser\s+console|console|logs?|stack\s+trace|traceback|uncaught|exception|vite|terminal|error\s+message|screenshot|line\s+\d+|src\/|public\/|\.jsx|\.js|\.tsx|\.ts|\.css|\.html)\b/.test(
+      s,
+    );
+
+  if (hasConcreteEvidence) return false;
+
+  return /\b(app|it|this|page|site|screen|ui|preview)\b/.test(s);
+}
+
 function isDirectHandoffWorkflow(context = null) {
   return (
     context?.taskKind === WORKFLOW_TASK_KIND.DIRECT_HANDOFF &&
@@ -1040,6 +1078,10 @@ function getCompletedWorkflowRouteDecision({
   }
 
   const kind = promptTask?.kind || "unknown";
+
+  if (isVagueCompletedWorkflowIssueReport(promptText, promptTask)) {
+    return { action: "clarify_issue_report" };
+  }
 
   if (kind === "verification_failed") {
     return { action: "verification_failed" };
@@ -4486,6 +4528,76 @@ export default function App() {
           });
 
       if (completedWorkflowRoute) {
+        if (completedWorkflowRoute.action === "clarify_issue_report") {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+
+          appendMessage(
+            "assistant",
+            "I do not yet know what kind of problem this is, so I will not edit files yet.\n\n" +
+              "What is broken?\n" +
+              "- Preview/runtime error\n" +
+              "- Something looks wrong\n" +
+              "- Content/functionality is wrong\n" +
+              "- Something else\n\n" +
+              "Choose the closest option or describe the issue in one short sentence. If it is a Preview/runtime error, paste the Preview panel logs, browser console error, page error text, or screenshot text.",
+            {
+              actions: [
+                {
+                  label: "Preview/runtime error",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Please paste the exact Preview/runtime evidence before I try to fix it:\n" +
+                        "- Preview panel logs\n" +
+                        "- Browser console error\n" +
+                        "- Error shown on the page\n" +
+                        "- Screenshot text\n\n" +
+                        "I will not edit files until there is concrete failure evidence.",
+                    );
+                  },
+                },
+                {
+                  label: "Something looks wrong",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me what looks wrong and what you expected to see instead. I will not edit files until the visual issue is specific enough to inspect safely.",
+                    );
+                  },
+                },
+                {
+                  label: "Content/functionality is wrong",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Tell me what should be different and which page, feature, or file is affected if you know. I will inspect before editing and make the smallest safe change.",
+                    );
+                  },
+                },
+                {
+                  label: "Something else",
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Briefly describe what happened. I will ask for evidence or inspect first before any file edit.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Stopped - no files changed.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
+          return;
+        }
+
         if (completedWorkflowRoute.action === "verification_already_success") {
           const verifiedWorkflowContext = {
             ...workflowContext,
