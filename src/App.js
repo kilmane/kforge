@@ -2779,6 +2779,20 @@ export default function App() {
     return renderStarterRecommendation(brief, folderState);
   }
 
+  function buildAiAssistedAppBriefPrompt(userText = "", folderContext = "") {
+    const safeUserText = String(userText || "").trim();
+    const safeFolderContext = String(folderContext || "").trim();
+
+    return (
+      "Create an AI-assisted app brief only. Do not edit files, request tools, preview, deploy, or claim anything was created.\n\n" +
+      (safeFolderContext ? `Project state:\n${safeFolderContext}\n\n` : "") +
+      `Original app request:\n${safeUserText || "The user wants help choosing an app starter."}\n\n` +
+      "Use the heading: AI-Assisted App Brief.\n" +
+      "Include exactly these sections: App goal, Recommended starter, Why this starter, Key screens/features, Data/API/back-end needs, Risks/unknowns, Next step.\n" +
+      "Be honest that this uses the current configured AI model and quality depends on that model.\n" +
+      "Keep planning separate from implementation. End by asking the user to choose Preview → Generate for the starter or ask to refine the brief."
+    );
+  }
   function isEmptyFolderPlanIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -5212,9 +5226,11 @@ export default function App() {
         }
       }
 
-      const directWorkflowHandoffRoute = getDirectWorkflowHandoffRouteDecision({
-        promptTask,
-      });
+      const directWorkflowHandoffRoute = opts.skipDirectWorkflowHandoffRoute
+        ? null
+        : getDirectWorkflowHandoffRouteDecision({
+            promptTask,
+          });
 
       if (directWorkflowHandoffRoute) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
@@ -5291,7 +5307,31 @@ export default function App() {
         }
 
         if (directWorkflowHandoffRoute.action === "no_project_implementation") {
-          appendMessage("assistant", buildNoProjectImplementationMessage(draft));
+          appendMessage("assistant", buildNoProjectImplementationMessage(draft), {
+            actions: [
+              {
+                label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
+                onClick: () => {
+                  appendMessage(
+                    "assistant",
+                    "Preparing AI-assisted app brief with the current configured model...",
+                  );
+                  sendWithPrompt(
+                    buildAiAssistedAppBriefPrompt(
+                      draft,
+                      "No project folder is open yet.",
+                    ),
+                    {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      skipDirectWorkflowHandoffRoute: true,
+                      suppressToolsForPrompt: true,
+                    },
+                  );
+                },
+              },
+            ],
+          });
           return;
         }
 
@@ -5304,6 +5344,31 @@ export default function App() {
           appendMessage(
             "assistant",
             buildEmptyFolderImplementationRoutingMessage(draft),
+            {
+              actions: [
+                {
+                  label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
+                  onClick: () => {
+                    appendMessage(
+                      "assistant",
+                      "Preparing AI-assisted app brief with the current configured model...",
+                    );
+                    sendWithPrompt(
+                      buildAiAssistedAppBriefPrompt(
+                        draft,
+                        "The open project folder is empty.",
+                      ),
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                        suppressToolsForPrompt: true,
+                      },
+                    );
+                  },
+                },
+              ],
+            },
           );
           return;
         }
@@ -5467,6 +5532,7 @@ export default function App() {
         promptTask.kind === WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT;
 
       const shouldSuppressToolsForPrompt =
+        opts.suppressToolsForPrompt === true ||
         isFeatureBlueprintTask ||
         hasManualOrAdvisoryIntent(draft) ||
         (!modelWorkflowPolicy.allowToolCalls && !isAdvisoryTestOverride);
@@ -5573,6 +5639,7 @@ export default function App() {
         const shouldSuppressReturnedToolBlocks =
           toolBlocks.length > 0 &&
           (
+            shouldSuppressToolsForPrompt ||
             cleanedLower.includes("you can now leave the chat and open:") ||
             cleanedLower.includes("if you prefer to bypass kforge") ||
             cleanedLower.includes("stay in the chat and i can help you manually instead") ||

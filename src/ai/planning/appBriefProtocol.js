@@ -291,7 +291,9 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
   const recommendation =
     `Recommended project template:\n${recommendationLabel(brief.recommendedStarter)}.\n\n` +
     `Why:\n${brief.reason}\n\n` +
-    "Recommendation mode:\nFree Mode — KForge used built-in starter guidance. No AI model call or AI tokens were used.\n\n";
+    "Planning options:\n" +
+    "- Free App Brief — used now. KForge used built-in starter guidance. No AI model call or AI tokens were used.\n" +
+    "- AI-Assisted App Brief — optional. More detailed planning can use the current configured AI model when you choose that path, but quality depends on the model.\n  To choose or change the model first, use Change Provider/Model in the AI header.\n\n";
 
   const backendNote =
     brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER
