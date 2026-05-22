@@ -121,6 +121,52 @@ function recommendationLabel(recommendedStarter) {
   return "ask one focused question first";
 }
 
+function buildModelAdviceForBrief(brief = EMPTY_APP_BRIEF) {
+  const base =
+    "Model advice:\n" +
+    "- KForge treats curated presets as reviewed suggestions. Manual, custom, local, and unverified models are user-managed.\n";
+
+  if (brief.recommendedStarter === STARTER_RECOMMENDATION.STATIC_HTML) {
+    return (
+      base +
+      "- Light tasks is enough for planning or manual guidance.\n" +
+      "- Use a curated Recommended builder preset for automatic project edits.\n" +
+      "- High capability is optional and usually unnecessary for a simple static starter.\n" +
+      "- Weak / test only and Custom / unverified are not KForge recommendations for automatic edits.\n\n"
+    );
+  }
+
+  if (
+    brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER ||
+    brief.recommendedStarter === STARTER_RECOMMENDATION.EXPO
+  ) {
+    return (
+      base +
+      "- Recommended: curated High capability preset for backend, auth, persistence, mobile, or more complex builds.\n" +
+      "- Acceptable: curated Recommended builder preset if you build in smaller steps.\n" +
+      "- Light tasks is fine for planning or manual guidance only.\n" +
+      "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
+    );
+  }
+
+  if (brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT) {
+    return (
+      base +
+      "- Recommended: curated Recommended builder preset for normal small app builds.\n" +
+      "- Optional: curated High capability preset for complex UI, multi-file work, or a more polished first attempt.\n" +
+      "- Light tasks is fine for planning or manual guidance only.\n" +
+      "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
+    );
+  }
+
+  return (
+    base +
+    "- Light tasks is enough for planning or manual guidance.\n" +
+    "- Use a curated Recommended builder or High capability preset before automatic project edits.\n" +
+    "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
+  );
+}
+
 export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
   const text = normalizeText(userText);
   const appGoal = cleanAppGoal(userText);
@@ -288,9 +334,12 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
     ? `You want to build:\n${brief.appGoal}\n\n`
     : "";
 
+  const modelAdvice = buildModelAdviceForBrief(brief);
+
   const recommendation =
     `Recommended project template:\n${recommendationLabel(brief.recommendedStarter)}.\n\n` +
     `Why:\n${brief.reason}\n\n` +
+    modelAdvice +
     "Planning options:\n" +
     "- Free App Brief — used now. KForge used built-in starter guidance. No AI model call or AI tokens were used.\n" +
     "- AI-Assisted App Brief — optional. More detailed planning can use the current configured AI model when you choose that path, but quality depends on the model.\n  To choose or change the model first, use Change Provider/Model in the AI header.\n\n";
