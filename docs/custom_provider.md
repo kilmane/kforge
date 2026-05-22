@@ -249,23 +249,23 @@ KForge uses two separate ideas:
 
 - **Free**
   - no billing required on that route / tier
-- **Paid (low cost)**
-  - cheap paid usage
-- **Paid (standard)**
-  - normal day-to-day paid usage
-- **Paid (expensive)**
-  - premium or heavier-cost usage
+- **Lower-cost paid**
+  - lower-cost paid usage
+- **Standard paid**
+  - standard paid usage
+- **Higher-cost paid**
+  - higher-cost paid usage
 - **Unknown**
   - pricing unclear or provider-dependent
 
 ### Usage modes
 
-- **Sandbox**
-  - cheap, disposable, or experimental work
-- **Main**
-  - daily-driver models
-- **Heavy**
-  - expensive or high-capability models; use sparingly
+- **Light tasks**
+  - light tasks, quick checks, or low-risk experiments
+- **Recommended builder**
+  - recommended builder models
+- **High capability**
+  - high capability models for harder tasks
 
 For Custom endpoints, **you are the source of truth**.
 KForge provides organisational hints, not guarantees.

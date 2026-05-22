@@ -123,9 +123,9 @@ Cost labels are a quick reminder about likely cost.
 Examples:
 
 * 🔵 **Free** — no direct charge expected on that route, but limits may apply
-* 🟢 **Paid / Sandbox** — low-cost paid use or safe testing
-* 🟡 **Paid / Main** — normal day-to-day paid use
-* 🔴 **Paid / Heavy** — expensive, large, or high-capability use
+* 🟢 **Lower-cost paid / light tasks** — lower-cost paid use or safe testing
+* 🟡 **Standard paid / recommended builder** — normal day-to-day paid use
+* 🔴 **Higher-cost paid / high capability** — higher-cost, larger, or high-capability use
 * ⚪ **Unknown** — pricing is unclear, provider-dependent, or account-dependent
 
 Cost labels are advisory.
@@ -140,13 +140,13 @@ Usage labels describe how a model is intended to be used.
 
 Examples:
 
-* **Sandbox** — testing, quick experiments, low-risk prompts
-* **Main** — normal day-to-day work
-* **Heavy** — large, expensive, slow, or high-capability tasks
+* **Light tasks** — quick checks, low-risk prompts, and careful edits
+* **Recommended builder** — normal day-to-day project work
+* **High capability** — harder, more complex, or critical tasks
 
-A Heavy label does not block you from using a model.
+A High capability label does not block you from using a model.
 
-It is only a reminder to use it carefully.
+It is only a reminder that the model is intended for harder work.
 
 ---
 
@@ -157,10 +157,10 @@ Notes are short explanations shown with some model suggestions or documentation.
 They may explain things such as:
 
 * the model is good for coding
-* the model is a cheap starter option
+* the model is a lightweight starter option
 * availability may change
 * pricing depends on the provider
-* the model is best used sparingly
+* the model is intended for harder tasks
 
 Notes are not error messages.
 

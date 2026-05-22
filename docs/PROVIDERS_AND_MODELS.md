@@ -58,7 +58,7 @@ Important:
 
 Trade-offs:
 - often flexible
-- sometimes cheaper
+- sometimes lower-cost
 - sometimes temporarily free
 - free routes may rotate or disappear
 - excellent for experimentation and routing flexibility
@@ -139,16 +139,16 @@ These labels are **guidance**, not enforcement.
 ### Cost (color labels)
 
 - 🔵 Free — no billing required on that route / tier
-- 🟢 Paid (low cost)
-- 🟡 Paid (standard)
-- 🔴 Paid (expensive)
+- 🟢 Lower-cost paid
+- 🟡 Standard paid
+- 🔴 Higher-cost paid
 - ⚪ Unknown — provider-dependent or unclear
 
 ### Usage modes
 
-- **Sandbox** — testing, quick iterations, throwaway work
-- **Main** — day-to-day default usage
-- **Heavy** — high capability; use sparingly
+- **Light tasks** — quick checks, low-risk prompts, and careful edits
+- **Recommended builder** — default project work
+- **High capability** — harder, more complex, or critical work
 
 A model’s color indicates **expected cost guidance**.
 Its usage mode indicates **when it is intended to be used**.

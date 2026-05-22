@@ -316,7 +316,7 @@ If a key is leaked, delete or rotate it immediately in the provider’s console.
 
 Start with small credit amounts when testing paid APIs.
 
-Use KForge’s model labels to avoid accidentally using expensive models for simple tasks.
+Use KForge’s model labels to avoid using higher-cost models for simple tasks.
 
 ---
 
@@ -346,7 +346,7 @@ KForge model labels are guidance, not enforcement.
 | Label             | Meaning                       | Typical use                 |
 | ----------------- | ----------------------------- | --------------------------- |
 | 🔵 Weak / test only | Free or no-billing route      | Testing and experimentation only |
-| 🟢 Guarded / limited | Low-cost or limited paid model | Light work and careful edits |
+| 🟢 Light tasks | Low-cost or limited paid model | Light work and careful edits |
 | 🟡 Recommended builder | Builder-capable paid model | Default project work |
 | 🔴 High capability | Higher-capability model       | Complex or critical tasks   |
 | ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully before use |

@@ -129,7 +129,7 @@ For Ollama Cloud, the label is advisory. KForge cannot automatically know your O
 
 Use this practical guide:
 
-### Free / Sandbox
+### Free / test-only
 
 Choose this for:
 
@@ -143,7 +143,7 @@ Example:
 
 `gpt-oss:20b`
 
-### Paid / Main
+### Standard paid / recommended builder
 
 Choose this for:
 
@@ -160,15 +160,15 @@ Examples:
 
 `kimi-k2.6`
 
-### Paid / Heavy
+### Higher-cost paid / high capability
 
 Choose this for:
 
 * very large models
 * long prompts
 * agent-style workflows
-* expensive or slow experiments
-* anything you do not want to spam repeatedly
+* higher-cost or slower experiments
+* anything you do not want to run repeatedly
 
 Examples:
 

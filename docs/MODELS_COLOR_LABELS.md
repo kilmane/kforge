@@ -16,7 +16,7 @@ These labels are designed for human decision-making, not billing precision.
 | Label | Cost Meaning | Typical Use |
 |---|---|---|
 | 🔵 Weak / test only | Free or rotating models | Testing / experimentation only |
-| 🟢 Guarded / limited | Low-cost or limited paid models | Light work / careful edits |
+| 🟢 Light tasks | Low-cost or limited paid models | Light work / careful edits |
 | 🟡 Recommended builder | Builder-capable paid models | Default project work |
 | 🔴 High capability | Higher-capability models | Complex / critical tasks |
 | ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully |
@@ -37,7 +37,7 @@ These labels are designed for human decision-making, not billing precision.
 
 ---
 
-## 🟢 Guarded / limited
+## 🟢 Light tasks
 
 ### Meaning
 - Lower-cost paid route
@@ -67,7 +67,7 @@ Lower-cost or limited model. Suitable for light work and careful edits.
 
 ### Usage
 - Default development work
-- Your day-to-day workhorse
+- Your normal project-work option
 - Be mindful, not paranoid
 
 **Examples:**

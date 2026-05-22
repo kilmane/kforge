@@ -24,7 +24,7 @@ Legend:
 - ⚪ Unknown
 
 Usage:
-- Guarded / limited — light work, careful edits, quick iterations
+- Light tasks — light work, careful edits, quick iterations
 - Recommended builder — default day-to-day project work
 - High capability — stronger option for complex or critical tasks; use carefully
 
@@ -36,7 +36,7 @@ Usage:
 |---|---|---|---|
 | claude-opus-4-7 | 🔴 Paid | High capability | High capability option for harder reasoning/coding tasks |
 | claude-sonnet-4-6 | 🟡 Paid | Recommended builder | Balanced default for dev + writing |
-| claude-haiku-4-5 | 🟢 Paid | Guarded / limited | Fast lightweight option for small guarded tasks |
+| claude-haiku-4-5 | 🟢 Paid | Light tasks | Fast lightweight option for small guarded tasks |
 
 ✅ No free Claude — consistent with provider pricing.
 
@@ -61,7 +61,7 @@ Usage:
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
 | deepseek-reasoner | 🟡 Paid | Recommended builder | Stronger reasoning; slower/costlier |
-| deepseek-chat | 🟢 Paid | Guarded / limited | Lightweight general chat |
+| deepseek-chat | 🟢 Paid | Light tasks | Lightweight general chat |
 
 ---
 
@@ -72,8 +72,8 @@ Usage:
 | gemini-3.1-pro-preview | 🔴 Paid | High capability | High capability preview model; availability may change |
 | gemini-2.5-pro | 🟡 Paid | Recommended builder | Strong reasoning; older than Gemini 3.1 Pro Preview |
 | gemini-3-flash-preview | 🟡 Paid | Recommended builder | Preview; may change quickly |
-| gemini-2.5-flash | 🟢 Paid | Guarded / limited | Fast |
-| gemini-2.5-flash-lite | 🟢 Paid | Guarded / limited | Fast lightweight option |
+| gemini-2.5-flash | 🟢 Paid | Light tasks | Fast |
+| gemini-2.5-flash-lite | 🟢 Paid | Light tasks | Fast lightweight option |
 
 ⚠ Google currently offers free-tier access for several Gemini API models, but labels here remain conservative KForge guidance rather than an exhaustive pricing promise for every account tier.
 
@@ -84,7 +84,7 @@ Usage:
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
 | llama-3.3-70b-versatile | 🟡 Paid | Recommended builder | Large Groq-hosted option; designed for fast inference |
-| llama-3.1-8b-instant | 🟢 Paid | Guarded / limited | Very fast |
+| llama-3.1-8b-instant | 🟢 Paid | Light tasks | Very fast |
 
 ---
 
@@ -93,7 +93,7 @@ Usage:
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
 | codestral-latest | 🟡 Paid | Recommended builder | Coding-focused |
-| mistral-small-latest | 🟢 Paid | Guarded / limited | General starter |
+| mistral-small-latest | 🟢 Paid | Light tasks | General starter |
 
 ⚠ Exact hosted model aliases can evolve. Re-check provider docs when updating presets.
 
@@ -107,8 +107,8 @@ Usage:
 | deepseek-coder:6.7b | 🟡 Paid* | Recommended builder | Local |
 | llama3.1:8b | 🟡 Paid* | Recommended builder | Local default |
 | qwen2.5-coder:7b | 🟡 Paid* | Recommended builder | Local |
-| mistral:7b | 🟢 Paid* | Guarded / limited | Fast |
-| qwen2.5-coder:1.5b | 🟢 Paid* | Guarded / limited | Very fast |
+| mistral:7b | 🟢 Paid* | Light tasks | Fast |
+| qwen2.5-coder:1.5b | 🟢 Paid* | Light tasks | Very fast |
 
 \* Paid refers to local hardware / energy cost, not API billing.
 
@@ -136,7 +136,7 @@ Example starter model ID:
 |---|---|---|---|
 | gpt-5.4 | 🔴 Paid | High capability | Frontier model for complex coding and reasoning |
 | gpt-5.4-mini | 🟡 Paid | Recommended builder | Balanced default for day-to-day dev + general work |
-| gpt-5.4-nano | 🟢 Paid | Guarded / limited | Lightweight GPT-5.4-class option |
+| gpt-5.4-nano | 🟢 Paid | Light tasks | Lightweight GPT-5.4-class option |
 
 ---
 
