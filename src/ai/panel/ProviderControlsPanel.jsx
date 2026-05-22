@@ -69,10 +69,10 @@ function normalizeCost(raw) {
 function costLabel(cost) {
   const c = normalizeCost(cost);
   if (c === "free") return "🔵 Free";
-  if (c === "paid_sandbox") return "🟢 Paid";
-  if (c === "paid_main") return "🟡 Paid";
-  if (c === "paid_heavy") return "🔴 Paid";
-  return "⚪ Unknown";
+  if (c === "paid_sandbox") return "🟢 Lower-cost paid";
+  if (c === "paid_main") return "🟡 Standard paid";
+  if (c === "paid_heavy") return "🔴 Higher-cost paid";
+  return "⚪ Unknown cost";
 }
 
 function CostBadge({ tag }) {
@@ -114,7 +114,7 @@ function normalizeTier(tier) {
 
 function tierLabel(tier) {
   const t = normalizeTier(tier);
-  if (t === "sandbox") return "Guarded / limited";
+  if (t === "sandbox") return "Light tasks";
   if (t === "main") return "Recommended builder";
   if (t === "heavy") return "High capability";
   if (t === "free") return "Weak / test only";
@@ -988,8 +988,9 @@ export default function ProviderControlsPanel({
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           <TierPill tier={r.tier} />
-                          <MetaPill title="Usage">{r.usage}</MetaPill>
-                          <MetaPill title="Cost">{r.cost}</MetaPill>
+                          <MetaPill title="Cost">
+                            {r.cost ? costLabel(r.cost) : ""}
+                          </MetaPill>
                         </div>
                       </div>
                       {r.note ? (
