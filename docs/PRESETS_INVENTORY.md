@@ -24,9 +24,9 @@ Legend:
 - ⚪ Unknown
 
 Usage:
-- Sandbox — testing, quick iterations
-- Main — default day-to-day use
-- Heavy — high capability; use sparingly
+- Guarded / limited — light work, careful edits, quick iterations
+- Recommended builder — default day-to-day project work
+- High capability — stronger option for complex or critical tasks; use carefully
 
 ---
 

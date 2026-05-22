@@ -345,11 +345,11 @@ KForge model labels are guidance, not enforcement.
 
 | Label             | Meaning                       | Typical use                 |
 | ----------------- | ----------------------------- | --------------------------- |
-| 🔵 Free — Sandbox | Free or no-billing route      | Testing and experimentation |
-| 🟢 Paid — Sandbox | Low-cost paid model           | Testing and light work      |
-| 🟡 Paid — Main    | Mid-cost paid model           | Default development work    |
-| 🔴 Paid — Heavy   | Higher-cost model             | Complex or critical tasks   |
-| ⚪ Unknown         | Provider-dependent or unclear | Check before using heavily  |
+| 🔵 Weak / test only | Free or no-billing route      | Testing and experimentation only |
+| 🟢 Guarded / limited | Low-cost or limited paid model | Light work and careful edits |
+| 🟡 Recommended builder | Builder-capable paid model | Default project work |
+| 🔴 High capability | Higher-capability model       | Complex or critical tasks   |
+| ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully before use |
 
 ---
 

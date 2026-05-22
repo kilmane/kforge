@@ -142,7 +142,7 @@ Recommended rollout:
 
 Constraint:
 - `cost` and `usage` are separate on purpose.
-- “Free implies sandbox” is a recommendation, not a hard validation rule (but we can warn if free+heavy).
+- Free routes should not be marketed as reliable builders; if kept, they should map to Weak / test only or guarded guidance.
 
 ---
 

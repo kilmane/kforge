@@ -187,7 +187,7 @@ The agreed product direction is:
 **Done when**
 
 - Main presets focus on reputable builder-capable models.
-- Weak/free/cheap presets are removed or clearly marked Experimental / test only.
+- Weak/free/cheap presets are removed or clearly marked Weak / test only, not reliable builders.
 - Custom/local/manual models are clearly labelled as user-managed and unverified.
 - KForge explains model quality/cost tradeoffs before relying on AI-assisted planning or code edits.
 - Weak/advisory/custom/local models remain safe but honestly labelled.

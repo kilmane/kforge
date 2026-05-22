@@ -15,15 +15,15 @@ These labels are designed for human decision-making, not billing precision.
 
 | Label | Cost Meaning | Typical Use |
 |---|---|---|
-| 🔵 Free — Sandbox | Free models | Testing / experimentation |
-| 🟢 Paid — Sandbox | Low-cost paid models | Testing / experimentation |
-| 🟡 Paid — Main | Mid-cost paid models | Default development work |
-| 🔴 Paid — Heavy | High-cost paid models | Complex / critical tasks |
-| ⚪ Unknown | Pricing unclear | Use with caution |
+| 🔵 Weak / test only | Free or rotating models | Testing / experimentation only |
+| 🟢 Guarded / limited | Low-cost or limited paid models | Light work / careful edits |
+| 🟡 Recommended builder | Builder-capable paid models | Default project work |
+| 🔴 High capability | Higher-capability models | Complex / critical tasks |
+| ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully |
 
 ---
 
-## 🔵 Free — Sandbox
+## 🔵 Weak / test only
 
 ### Meaning
 - No billing required
@@ -31,34 +31,34 @@ These labels are designed for human decision-making, not billing precision.
 - Often rate-limited or capability-capped
 
 ### Usage
-- Safe to experiment
-- Ideal for quick tests and learning
-- “Mess around mode”
+- Suitable for low-risk testing
+- Useful for quick checks, learning, and non-critical prompts
+- Not reliable for real project builds
 
 ---
 
-## 🟢 Paid — Sandbox
+## 🟢 Guarded / limited
 
 ### Meaning
-- Paid, but cheap
+- Lower-cost paid route
 - Low per-request cost
-- Designed to be disposable
+- Limited capability compared with builder-focused models
 
 ### Usage
-- Safe for testing and iteration
-- OK to spam
-- “Mess around mode (paid)”
+- Suitable for light work and careful iteration
+- Not recommended for important project edits
+- Guarded use only
 
 **Examples:**
 - `gpt-5.4-nano`
 - `gpt-4.1-nano`
 
 **Tooltip:**
-Low-cost paid model. Suitable for testing and experimentation.
+Lower-cost or limited model. Suitable for light work and careful edits.
 
 ---
 
-## 🟡 Paid — Main
+## 🟡 Recommended builder
 
 ### Meaning
 - Paid
@@ -79,11 +79,11 @@ Balanced paid model for daily development.
 
 ---
 
-## 🔴 Paid — Heavy
+## 🔴 High capability
 
 ### Meaning
-- Expensive
-- High capability
+- Higher-cost or higher-capability route
+- Stronger reasoning and coding capability
 - Optimised for quality, not volume
 
 ### Usage
@@ -96,20 +96,20 @@ Balanced paid model for daily development.
 - advanced reasoning models
 
 **Tooltip:**
-High-cost model. Use when accuracy matters.
+Higher-capability model. Use for complex or accuracy-sensitive tasks.
 
 ---
 
-## ⚪ Unknown
+## ⚪ Custom / unverified
 
 ### Meaning
-- Pricing unclear
+- Provider-dependent or unclear model quality
 - Custom endpoints
 - Gateway- or provider-dependent
 
 ### Usage
-- Use with caution
-- Assume paid until proven otherwise
+- Review carefully before use
+- Treat as user-managed and unverified unless KForge explicitly curates it
 
 ---
 
