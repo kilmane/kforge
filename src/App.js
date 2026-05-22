@@ -354,7 +354,7 @@ function modelHelperText(providerId) {
   const legend =
     "\n\n" +
     "Model quality guide:\n" +
-    "Guarded / limited — lower-cost or limited model; use for light work\n" +
+    "Light tasks — lower-cost or limited model; use for light work\n" +
     "Weak / test only — free or rotating route; not reliable for builds\n" +
     "Recommended builder — default for real project work\n" +
     "High capability — stronger option for complex tasks\n" +
@@ -2833,7 +2833,7 @@ export default function App() {
     if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "advisory_only") {
       return (
         "This looks like a project edit.\n\n" +
-        "The selected provider/model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
+        "The selected provider/model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
         "Recommended: switch to a stronger coding-capable model.\n\n" +
         "If you continue with this model, you are testing it at your own risk. KForge will still keep file-write approval and path safety active."
       );
@@ -2842,7 +2842,7 @@ export default function App() {
     if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "guarded_edit") {
       return (
         "This looks like a project edit.\n\n" +
-        "The selected provider/model is in guarded-edit mode, so KForge will prefer Patch Preview before applying project changes."
+        "This model is in a cautious editing mode, so KForge will prefer Patch Preview before applying project changes."
       );
     }
 
@@ -4240,7 +4240,7 @@ export default function App() {
 
                   appendMessage(
                     "assistant",
-                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
+                    "Continuing in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
                   );
 
                   sendWithPrompt(goal || draft, {
@@ -4918,7 +4918,7 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the recovery fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                        ? "Continuing the recovery fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
                         : "Continuing the recovery fix. I will inspect the relevant files before editing and will not claim anything was restored unless it actually was.",
                     );
 
@@ -5015,7 +5015,7 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                        ? "Continuing the fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
                         : "Continuing the fix. I will inspect the relevant files before editing.",
                     );
 
@@ -5190,7 +5190,7 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the fix in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                        ? "Continuing the fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
                         : "Continuing the fix. I will inspect the relevant files before editing.",
                     );
 
@@ -5445,7 +5445,7 @@ export default function App() {
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
-          "This model is weak/advisory for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
+          "This model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
             "Recommended: switch to a stronger coding-capable model.\n\n" +
             "If you continue, you are testing this model at your own risk. KForge will keep file-write approval and path safety active, and Cancel will stop the tool flow.",
           {
@@ -5455,7 +5455,7 @@ export default function App() {
                 onClick: () => {
                   appendMessage(
                     "assistant",
-                    "Continuing in test mode. You are testing this weak/advisory model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
+                    "Continuing in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
                   );
 
                   sendWithPrompt(draft, {
@@ -5540,7 +5540,7 @@ export default function App() {
 
       const advisoryOverrideInstruction = isAdvisoryTestOverride
         ? "\n\nADVISORY MODEL TEST MODE:\n" +
-          "The user explicitly clicked Continue in test mode for this weak/advisory model.\n" +
+          "The user explicitly clicked Continue in test mode for this Weak / test only model.\n" +
           "The user accepts that result quality may be unreliable, incomplete, or incorrect.\n" +
           "You may request normal KForge tools for this test, but every file write still requires user approval.\n" +
           "Inspect before writing and keep changes small.\n"
@@ -5693,7 +5693,7 @@ export default function App() {
         if (shouldShowAdvisoryNoActionRecovery) {
           appendMessage(
             "assistant",
-            "The weak/advisory model did not produce an actionable tool request or file edit.\n\n" +
+            "The Weak / test only model did not produce an actionable tool request or file edit.\n\n" +
               "Recommended: switch to a stronger coding-capable model for project edits.\n\n" +
               "You can still continue testing this model at your own risk. KForge will keep file-write approval and path safety active.",
             {
@@ -5723,7 +5723,7 @@ export default function App() {
                         "3. Create the new component inside src, using the project’s existing React style.\n" +
                         "4. Import and render or route that component from the existing app entry point.\n" +
                         "5. Preview the app and confirm the new page or section is visible.\n\n" +
-                        "For reliable automatic edits, switch to a stronger coding-capable model. This weak/advisory model did not produce an actionable edit.",
+                        "For reliable automatic edits, switch to a stronger coding-capable model. This Weak / test only model did not produce an actionable edit.",
                     );
                   },
                 },

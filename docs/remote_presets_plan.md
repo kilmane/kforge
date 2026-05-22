@@ -95,7 +95,7 @@ Call this schema **v0**.
 Once remote fetching is implemented and stable, KForge can migrate to schema **v1**, which separates:
 
 - `cost` (drives color label)
-- `usage` (sandbox/main/heavy)
+- `usage` (internal values: `sandbox`, `main`, `heavy`; UI labels: Light tasks, Recommended builder, High capability)
 
 Recommended rollout:
 1. Publish `presets.json` in v0 format (matches current code)
@@ -127,18 +127,18 @@ Recommended rollout:
 | cost value | UI meaning |
 |---|---|
 | free | 🔵 Free |
-| paid_sandbox | 🟢 Paid (low cost) |
-| paid_main | 🟡 Paid (standard) |
-| paid_heavy | 🔴 Paid (expensive) |
+| paid_sandbox | 🟢 Lower-cost paid |
+| paid_main | 🟡 Standard paid |
+| paid_heavy | 🔴 Higher-cost paid |
 | unknown | ⚪ Unknown |
 
 ### Usage enum (drives usage mode)
 
 | usage value | UI meaning |
 |---|---|
-| sandbox | Sandbox |
-| main | Main |
-| heavy | Heavy |
+| sandbox | Light tasks |
+| main | Recommended builder |
+| heavy | High capability |
 
 Constraint:
 - `cost` and `usage` are separate on purpose.
@@ -154,7 +154,7 @@ Constraint:
       "providers": {
         "openai": [
           { "id": "gpt-5.4-mini", "cost": "paid_main", "usage": "main", "note": "Day-to-day" },
-          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Cheap paid testing" }
+          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Light tasks / careful testing" }
         ],
         "openrouter": [
           {
