@@ -9,7 +9,7 @@ export const MODEL_PRESETS = {
     {
       id: "gpt-5.4-nano",
       tier: "sandbox",
-      note: "Cheapest GPT-5.4-class option; good for lightweight testing.",
+      note: "Lightweight GPT-5.4-class option; suitable for guarded quick checks.",
     },
     {
       id: "gpt-5.4-mini",
@@ -19,7 +19,7 @@ export const MODEL_PRESETS = {
     {
       id: "gpt-5.4",
       tier: "heavy",
-      note: "Highest capability; use sparingly for harder reasoning/coding.",
+      note: "High capability option for harder reasoning/coding tasks.",
     },
   ],
 
@@ -30,7 +30,7 @@ export const MODEL_PRESETS = {
     {
       id: "gemini-2.5-flash-lite",
       tier: "sandbox",
-      note: "Fast + cheap; good for quick iterations.",
+      note: "Fast lightweight option for quick guarded iterations.",
     },
     {
       id: "gemini-2.5-flash",
@@ -61,7 +61,7 @@ export const MODEL_PRESETS = {
     {
       id: "claude-haiku-4-5",
       tier: "sandbox",
-      note: "Cheap + fast; great for small tasks.",
+      note: "Fast lightweight option for small guarded tasks.",
     },
     {
       id: "claude-sonnet-4-6",
@@ -71,7 +71,7 @@ export const MODEL_PRESETS = {
     {
       id: "claude-opus-4-7",
       tier: "heavy",
-      note: "Highest capability; expensive—use sparingly.",
+      note: "High capability option for harder reasoning/coding tasks.",
     },
   ],
 
@@ -82,7 +82,7 @@ export const MODEL_PRESETS = {
     {
       id: "deepseek-chat",
       tier: "sandbox",
-      note: "Cheap/general chat + coding.",
+      note: "Lightweight general chat + coding option.",
     },
     {
       id: "deepseek-reasoner",
@@ -103,7 +103,7 @@ export const MODEL_PRESETS = {
     {
       id: "llama-3.3-70b-versatile",
       tier: "main",
-      note: "Bigger model; better quality, still fast.",
+      note: "Larger Groq-hosted option; still designed for fast inference.",
     },
   ],
 
@@ -131,7 +131,7 @@ export const MODEL_PRESETS = {
     {
       id: "mistral-small-latest",
       tier: "unknown",
-      note: "Endpoint-dependent; often a good low-cost starter.",
+      note: "Endpoint-dependent; starter suitability depends on the host.",
     },
     {
       id: "codestral-latest",
@@ -164,7 +164,7 @@ export const MODEL_PRESETS = {
     {
       id: "llama3.1:8b",
       tier: "main",
-      note: "Local default; better quality than tiny models.",
+      note: "Local default; more capable than tiny local models, depending on hardware.",
     },
     {
       id: "qwen2.5-coder:7b",
@@ -179,7 +179,7 @@ export const MODEL_PRESETS = {
     {
       id: "codellama:13b",
       tier: "heavy",
-      note: "Bigger local model; slower—use sparingly.",
+      note: "Larger local model; may be slower depending on hardware.",
     },
   ],
 

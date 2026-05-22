@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-04-19",
+  "updated_at": "2026-05-22",
   "notes": "Refreshed from current KForge preset guidance. Labels are advisory only.",
   "providers": {
     "claude": [
@@ -8,7 +8,7 @@
         "id": "claude-opus-4-7",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "Highest capability; use sparingly"
+        "note": "High capability option for harder reasoning/coding tasks"
       },
       {
         "id": "claude-sonnet-4-6",
@@ -20,7 +20,7 @@
         "id": "claude-haiku-4-5",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Cheap + fast; small tasks"
+        "note": "Fast lightweight option for small guarded tasks"
       }
     ],
     "custom": [
@@ -46,7 +46,7 @@
         "id": "mistral-small-latest",
         "cost": "unknown",
         "usage": "sandbox",
-        "note": "Endpoint-dependent; often a good low-cost starter"
+        "note": "Endpoint-dependent; starter suitability depends on the host"
       },
       {
         "id": "codestral-latest",
@@ -66,7 +66,7 @@
         "id": "deepseek-chat",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Cheap general chat"
+        "note": "Lightweight general chat"
       }
     ],
     "gemini": [
@@ -74,7 +74,7 @@
         "id": "gemini-3.1-pro-preview",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "Current high-capability preview model"
+        "note": "High capability preview model; availability may change"
       },
       {
         "id": "gemini-2.5-pro",
@@ -98,7 +98,7 @@
         "id": "gemini-2.5-flash-lite",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Fast + cheap"
+        "note": "Fast lightweight option"
       }
     ],
     "groq": [
@@ -106,7 +106,7 @@
         "id": "llama-3.3-70b-versatile",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Large + fast"
+        "note": "Large Groq-hosted option; designed for fast inference"
       },
       {
         "id": "llama-3.1-8b-instant",
@@ -184,7 +184,7 @@
         "id": "gpt-5.4-nano",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Cheapest GPT-5.4-class option"
+        "note": "Lightweight GPT-5.4-class option"
       }
     ],
     "openrouter": [
