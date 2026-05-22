@@ -353,11 +353,12 @@ function modelHelperText(providerId) {
 
   const legend =
     "\n\n" +
-    "Tier legend:\n" +
-    "🟢 Sandbox (Paid-cheap) — safe to spam / iterate\n" +
-    "🔵 Free — no billing, but often rate-limited / may rotate\n" +
-    "🟠 Main — default workhorse\n" +
-    "🔴 Heavy — expensive / use sparingly";
+    "Model quality guide:\n" +
+    "Guarded / limited — lower-cost or limited model; use for light work\n" +
+    "Weak / test only — free or rotating route; not reliable for builds\n" +
+    "Recommended builder — default for real project work\n" +
+    "High capability — stronger option for complex tasks\n" +
+    "Custom / unverified — user-managed model; review carefully";
 
   if (providerId === "openrouter") {
     return (
