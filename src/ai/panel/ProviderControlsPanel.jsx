@@ -114,10 +114,10 @@ function normalizeTier(tier) {
 
 function tierLabel(tier) {
   const t = normalizeTier(tier);
-  if (t === "sandbox") return "Experimental / guarded";
+  if (t === "sandbox") return "Guarded / limited";
   if (t === "main") return "Recommended builder";
   if (t === "heavy") return "High capability";
-  if (t === "free") return "Experimental / test only";
+  if (t === "free") return "Weak / test only";
   return "Custom / unverified";
 }
 
@@ -682,8 +682,8 @@ export default function ProviderControlsPanel({
       {/* OpenRouter note (free models can rotate) */}
       {aiProvider === "openrouter" && (
         <div className="mt-2 text-[11px] opacity-60">
-          ℹ️ OpenRouter free models may rotate, be deprecated, or be unreliable
-          for project edits. Treat them as experimental/test-only.
+          ℹ️ OpenRouter free models may rotate, be deprecated, weak, or unreliable
+          for project edits. Use them for testing or experimentation, not reliable builds.
         </div>
       )}
 
