@@ -135,9 +135,9 @@ A registry-like layer may still be useful if KForge adds more service integratio
 
 # AI-Assisted Planning and Model Quality Warnings
 
-Status: Planned
+Status: Active
 Added: 2026-03-29
-Updated: 2026-05-18
+Updated: 2026-05-22
 
 **Why**
 
@@ -145,11 +145,15 @@ KForge already has model policy, advisory/test-mode warnings, Free App Brief pla
 
 - Phase 11.6 — Model Presets, Quality Tiers & Warnings
 
-The product direction is:
+The agreed product direction is:
 
 - Free App Brief should remain available by default and not require API keys.
 - AI-Assisted App Brief is optional and uses the current configured model, with clear quality caveats.
-- KForge should be honest when weak/free models are risky for coding, planning, or tool-heavy work.
+- KForge should recommend from KForge's curated presets only.
+- KForge should stay out of the sea of constantly changing models and keep the curated list small, intentional, and builder-focused.
+- Custom, local, and manual model IDs are bring-your-own choices. KForge cannot grade their quality, safety, tool-call reliability, or suitability.
+- Users are responsible for researching and choosing custom/local/manual models.
+- KForge should still protect users as much as possible with guardrails, warnings, write approval, path safety, blind-write protection, destructive rewrite protection, and no false completion claims.
 - Weak/free/cheap models should not be marketed as reliable builders.
 
 **Where**
@@ -162,25 +166,32 @@ The product direction is:
 
 **Plan**
 
-1. Rename Phase 11.6 to **Model Presets, Quality Tiers & Warnings**.
-2. Clean up curated presets so normal builder presets focus on reputable builder-capable models.
-3. Move any retained weak/free/cheap models into an Experimental / test-only tier, with one or two maximum unless testing proves otherwise.
-4. Keep custom providers supported, but treat unknown/custom/weak models as unverified and guarded.
-5. Make model quality warnings visible without blocking safe workflows unnecessarily.
+1. Inventory current presets and policy language without changing code behavior.
+2. Define clear product-facing quality tiers while keeping compatibility with the current preset format.
+3. Map old internal tiers such as `sandbox`, `main`, `heavy`, `free`, and `unknown` to clearer user-facing labels.
+4. Clean up curated presets so normal builder presets focus on reputable builder-capable models.
+5. Move any retained weak/free/cheap presets into an Experimental / test-only lane, with one or two maximum unless testing proves otherwise.
+6. Keep custom/local/manual models supported, but label them as user-managed and unverified rather than KForge-graded.
+7. Make model quality warnings visible without blocking safe planning or manual guidance unnecessarily.
+8. Add task-based suggestions from curated presets only, if the earlier tier/warning work stays small and stable.
 
 **Risks / gotchas**
 
 - Cost is a major concern.
 - Too much model-routing UI could confuse beginners.
 - Weak models should not be marketed as reliable builders.
+- KForge should not pretend it can grade every custom endpoint or local model.
 - Users can still add weak models through custom providers, so guardrails remain necessary.
+- Curated preset updates must replace deprecated/upgraded models with models in the same intended quality lane, not random new options.
 
 **Done when**
 
 - Main presets focus on reputable builder-capable models.
 - Weak/free/cheap presets are removed or clearly marked Experimental / test only.
+- Custom/local/manual models are clearly labelled as user-managed and unverified.
 - KForge explains model quality/cost tradeoffs before relying on AI-assisted planning or code edits.
-- Weak/advisory/custom models remain safe but honestly labelled.
+- Weak/advisory/custom/local models remain safe but honestly labelled.
+- Task-based suggestions, if added in this phase, recommend from curated presets only.
 
 ---
 
