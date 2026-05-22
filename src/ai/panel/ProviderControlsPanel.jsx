@@ -114,11 +114,11 @@ function normalizeTier(tier) {
 
 function tierLabel(tier) {
   const t = normalizeTier(tier);
-  if (t === "sandbox") return "Sandbox";
-  if (t === "main") return "Main";
-  if (t === "heavy") return "Heavy";
-  if (t === "free") return "Free";
-  return "Unknown";
+  if (t === "sandbox") return "Experimental / guarded";
+  if (t === "main") return "Recommended builder";
+  if (t === "heavy") return "High capability";
+  if (t === "free") return "Experimental / test only";
+  return "Custom / unverified";
 }
 
 function tierDotClass(tier) {
@@ -138,7 +138,7 @@ function TierPill({ tier }) {
       <span
         className={`inline-block w-2 h-2 rounded-full ${tierDotClass(t)}`}
       />
-      <span className="uppercase tracking-wide">{tierLabel(t)}</span>
+      <span className="tracking-wide">{tierLabel(t)}</span>
     </span>
   );
 }
@@ -682,8 +682,8 @@ export default function ProviderControlsPanel({
       {/* OpenRouter note (free models can rotate) */}
       {aiProvider === "openrouter" && (
         <div className="mt-2 text-[11px] opacity-60">
-          ℹ️ OpenRouter free models may rotate or be deprecated. You can always
-          add model IDs manually.
+          ℹ️ OpenRouter free models may rotate, be deprecated, or be unreliable
+          for project edits. Treat them as experimental/test-only.
         </div>
       )}
 
@@ -691,7 +691,8 @@ export default function ProviderControlsPanel({
       {/* Custom provider note */}
       {aiProvider === "custom" && (
         <div className="mt-2 text-[11px] opacity-60">
-          ℹ️ Custom endpoints require manual model IDs.
+          ℹ️ Custom endpoints require manual model IDs. KForge cannot verify
+          their quality, tool-call reliability, or suitability.
         </div>
       )}
 
