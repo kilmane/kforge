@@ -230,7 +230,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Weak / test only: useful for chat, planning, and manual guidance. Not reliable for project edits; switch to a stronger coding-capable model for implementation.",
+        "Weak / test only: useful for chat, planning, and manual guidance. Not reliable for project edits; switch to a curated Recommended builder or High capability preset for implementation.",
     });
   }
 
@@ -291,7 +291,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Caution: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a stronger coding-capable model.",
+        "Caution: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a curated Recommended builder or High capability preset.",
     });
   }
 

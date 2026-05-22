@@ -2834,7 +2834,7 @@ export default function App() {
       return (
         "This looks like a project edit.\n\n" +
         "The selected provider/model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-        "Recommended: switch to a stronger coding-capable model.\n\n" +
+        "Recommended: switch to a curated Recommended builder or High capability preset.\n\n" +
         "If you continue with this model, you are testing it at your own risk. KForge will still keep file-write approval and path safety active."
       );
     }
@@ -2848,7 +2848,7 @@ export default function App() {
 
     return (
       "This current model is being used in a safer chat mode to keep KForge reliable.\n\n" +
-      "For direct project edits, switch to a stronger provider/model first.\n\n" +
+      "For direct project edits, switch to a curated Recommended builder or High capability preset first.\n\n" +
       "I can still explain the plan or give manual steps in chat instead."
     );
   }, []);
@@ -2888,7 +2888,7 @@ export default function App() {
         buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy) +
         "\n\n" +
         "Your previous project-edit request is still blocked by the selected model safety mode. " +
-        "You can switch to a stronger coding-capable model, or ask for a plan/manual steps instead."
+        "You can switch to a curated Recommended builder or High capability preset, or ask for a plan/manual steps instead."
       );
     },
     [buildSmartProviderSwitchMessage],
@@ -5446,7 +5446,7 @@ export default function App() {
         appendMessage(
           "assistant",
           "This model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-            "Recommended: switch to a stronger coding-capable model.\n\n" +
+            "Recommended: switch to a curated Recommended builder or High capability preset.\n\n" +
             "If you continue, you are testing this model at your own risk. KForge will keep file-write approval and path safety active, and Cancel will stop the tool flow.",
           {
             actions: [
@@ -5694,7 +5694,7 @@ export default function App() {
           appendMessage(
             "assistant",
             "The Weak / test only model did not produce an actionable tool request or file edit.\n\n" +
-              "Recommended: switch to a stronger coding-capable model for project edits.\n\n" +
+              "Recommended: switch to a curated Recommended builder or High capability preset for project edits.\n\n" +
               "You can still continue testing this model at your own risk. KForge will keep file-write approval and path safety active.",
             {
               actions: [
@@ -5723,7 +5723,7 @@ export default function App() {
                         "3. Create the new component inside src, using the project’s existing React style.\n" +
                         "4. Import and render or route that component from the existing app entry point.\n" +
                         "5. Preview the app and confirm the new page or section is visible.\n\n" +
-                        "For reliable automatic edits, switch to a stronger coding-capable model. This Weak / test only model did not produce an actionable edit.",
+                        "For reliable automatic edits, switch to a curated Recommended builder or High capability preset. This Weak / test only model did not produce an actionable edit.",
                     );
                   },
                 },
