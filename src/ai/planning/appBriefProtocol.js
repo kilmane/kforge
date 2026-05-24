@@ -139,7 +139,7 @@ function buildModelAdviceForBrief() {
     "- Static HTML/CSS/JS for simple websites and landing pages.\n" +
     "- Vite + React for interactive web apps, dashboards, forms, and tools.\n" +
     "- Next.js for full-stack web apps, SEO-friendly sites, and apps with backend features.\n" +
-    "- Vite + React first, then Supabase later for apps with login, accounts, saved data, or databases.\n" +
+    "- Vite + React first, then Supabase later when the app specifically uses Supabase.\n" +
     "- Expo React Native for mobile apps.\n\n" +
     "To begin:\n" +
     "1. Open an empty project folder.\n" +
@@ -225,7 +225,7 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
     };
   }
 
-  if (nextjsSignals && !supabaseSignals) {
+  if ((nextjsSignals || backendSignals) && !supabaseSignals) {
     return {
       mode: APP_BRIEF_MODE.FREE,
       intent: APP_INTENT.NEW_APP,
@@ -234,7 +234,7 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
       recommendedStarter: STARTER_RECOMMENDATION.NEXTJS,
       confidence: APP_BRIEF_CONFIDENCE.HIGH,
       reason:
-        "This sounds like a full-stack, SEO-friendly, server-rendered, or Next.js-style app. Next.js is the better starter when backend features, routing, or SEO are central to the app.",
+        "This sounds like a full-stack, backend, login, saved-data, SEO-friendly, server-rendered, or Next.js-style app. Next.js is the better starter when backend features, routing, accounts, saved data, or SEO are central to the app.",
       needsBackend: backendSignals ? "maybe" : "unknown",
       needsDatabase: backendSignals ? "maybe" : "unknown",
       needsAuth: /\b(login|auth|account|accounts|user accounts)\b/.test(text)
@@ -256,7 +256,7 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
       recommendedStarter: STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER,
       confidence: APP_BRIEF_CONFIDENCE.HIGH,
       reason:
-        "The frontend can start as a Vite + React app, but saved data, accounts, auth, or persistence need a real backend/database later.",
+        "The frontend can start as a Vite + React app, then KForge should connect Supabase through Services later rather than pretending saved data, accounts, auth, or persistence already work.",
       needsBackend: "yes",
       needsDatabase: "yes",
       needsAuth: /\b(login|auth|account|accounts|user accounts)\b/.test(text)
