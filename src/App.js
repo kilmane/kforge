@@ -5315,7 +5315,7 @@ export default function App() {
                 onClick: () => {
                   appendMessage(
                     "assistant",
-                    "Preparing AI-assisted app brief with the current configured model...",
+                    "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
                   );
                   sendWithPrompt(
                     buildAiAssistedAppBriefPrompt(
@@ -5352,7 +5352,7 @@ export default function App() {
                   onClick: () => {
                     appendMessage(
                       "assistant",
-                      "Preparing AI-assisted app brief with the current configured model...",
+                      "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
                     );
                     sendWithPrompt(
                       buildAiAssistedAppBriefPrompt(

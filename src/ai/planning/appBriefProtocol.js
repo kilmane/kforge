@@ -20,6 +20,7 @@ export const APP_CATEGORY = Object.freeze({
 export const STARTER_RECOMMENDATION = Object.freeze({
   VITE_REACT: "vite_react",
   STATIC_HTML: "static_html",
+  NEXTJS: "nextjs",
   VITE_REACT_SUPABASE_LATER: "vite_react_supabase_later",
   EXPO: "expo",
   ASK_CLARIFYING_QUESTION: "ask_clarifying_question",
@@ -106,6 +107,10 @@ function recommendationLabel(recommendedStarter) {
     return "simple static HTML/CSS starter";
   }
 
+  if (recommendedStarter === STARTER_RECOMMENDATION.NEXTJS) {
+    return "Next.js";
+  }
+
   if (recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER) {
     return "Vite + React first, then Supabase through Services later";
   }
@@ -121,52 +126,33 @@ function recommendationLabel(recommendedStarter) {
   return "ask one focused question first";
 }
 
-function buildModelAdviceForBrief(brief = EMPTY_APP_BRIEF) {
-  const base =
-    "Model advice:\n" +
-    "- KForge treats curated presets as reviewed suggestions. Manual, custom, local, and unverified models are user-managed.\n";
-
-  if (brief.recommendedStarter === STARTER_RECOMMENDATION.STATIC_HTML) {
-    return (
-      base +
-      "- Light tasks is enough for planning or manual guidance.\n" +
-      "- Use a curated Recommended builder preset for automatic project edits.\n" +
-      "- High capability is optional and usually unnecessary for a simple static starter.\n" +
-      "- Weak / test only and Custom / unverified are not KForge recommendations for automatic edits.\n\n"
-    );
-  }
-
-  if (
-    brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER ||
-    brief.recommendedStarter === STARTER_RECOMMENDATION.EXPO
-  ) {
-    return (
-      base +
-      "- Recommended: curated High capability preset for backend, auth, persistence, mobile, or more complex builds.\n" +
-      "- Acceptable: curated Recommended builder preset if you build in smaller steps.\n" +
-      "- Light tasks is fine for planning or manual guidance only.\n" +
-      "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
-    );
-  }
-
-  if (brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT) {
-    return (
-      base +
-      "- Recommended: curated Recommended builder preset for normal small app builds.\n" +
-      "- Optional: curated High capability preset for complex UI, multi-file work, or a more polished first attempt.\n" +
-      "- Light tasks is fine for planning or manual guidance only.\n" +
-      "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
-    );
-  }
-
+function buildModelAdviceForBrief() {
   return (
-    base +
-    "- Light tasks is enough for planning or manual guidance.\n" +
-    "- Use a curated Recommended builder or High capability preset before automatic project edits.\n" +
-    "- Weak / test only and Custom / unverified are user-managed risk, not KForge recommendations for automatic edits.\n\n"
+    "Model advice:\n\n" +
+    "For this app, KForge recommends using a stronger model from the Provider/Model preset list.\n\n" +
+    "Some models are better at harder coding tasks than others.\n\n" +
+    "Use a stronger model for login, accounts, databases, mobile apps, full-stack apps, or complex builds.\n" +
+    "Use a smaller model only for planning, simple questions, or light help.\n\n" +
+    "Models marked as Weak / test only, or models you added yourself, are not recommended for automatic building because they may produce poor code.\n\n" +
+    "KForge can help you get started for free by creating the right project template. No AI credits will be used.\n\n" +
+    "KForge may recommend:\n" +
+    "- Static HTML/CSS/JS for simple websites and landing pages.\n" +
+    "- Vite + React for interactive web apps, dashboards, forms, and tools.\n" +
+    "- Next.js for full-stack web apps, SEO-friendly sites, and apps with backend features.\n" +
+    "- Vite + React first, then Supabase later for apps with login, accounts, saved data, or databases.\n" +
+    "- Expo React Native for mobile apps.\n\n" +
+    "To begin:\n" +
+    "1. Open an empty project folder.\n" +
+    "2. Click Preview → Generate.\n" +
+    "3. Click Preview → Install.\n" +
+    "4. Return to this chat to continue.\n\n" +
+    "Notes:\n" +
+    "- **Generate** creates the starter template for your project.\n" +
+    "- **Install** adds the packages needed by that template.\n" +
+    "- After Generate and Install are finished, return to this chat, so KForge can help you continue building your app.\n" +
+    "- Or click the button below for the AI-assisted brief.\n\n"
   );
 }
-
 export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
   const text = normalizeText(userText);
   const appGoal = cleanAppGoal(userText);
@@ -189,6 +175,12 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
 
   const backendSignals = hasAnyPattern(text, [
     /\b(save|saved|store|stored|persist|persistence|database|backend|server|login|auth|account|accounts|user accounts|submissions|supabase)\b/,
+  ]);
+
+  const supabaseSignals = /\bsupabase\b/.test(text);
+
+  const nextjsSignals = hasAnyPattern(text, [
+    /\b(next\.?js|next js|full[-\s]?stack|server[-\s]?rendered|server[-\s]?side|seo|api routes?|backend features?)\b/,
   ]);
 
   const externalApiSignals = hasAnyPattern(text, [
@@ -228,6 +220,28 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
         : "unknown",
       needsExternalApi: externalApiSignals ? "maybe" : "unknown",
       nextAction: "recommend_mobile_or_clarify",
+      question: null,
+      folderState: normalizedFolderState,
+    };
+  }
+
+  if (nextjsSignals && !supabaseSignals) {
+    return {
+      mode: APP_BRIEF_MODE.FREE,
+      intent: APP_INTENT.NEW_APP,
+      appGoal,
+      appCategory: APP_CATEGORY.FULL_STACK_WEB_APP,
+      recommendedStarter: STARTER_RECOMMENDATION.NEXTJS,
+      confidence: APP_BRIEF_CONFIDENCE.HIGH,
+      reason:
+        "This sounds like a full-stack, SEO-friendly, server-rendered, or Next.js-style app. Next.js is the better starter when backend features, routing, or SEO are central to the app.",
+      needsBackend: backendSignals ? "maybe" : "unknown",
+      needsDatabase: backendSignals ? "maybe" : "unknown",
+      needsAuth: /\b(login|auth|account|accounts|user accounts)\b/.test(text)
+        ? "maybe"
+        : "unknown",
+      needsExternalApi: externalApiSignals ? "maybe" : "unknown",
+      nextAction: "generate_nextjs_starter",
       question: null,
       folderState: normalizedFolderState,
     };
@@ -334,38 +348,19 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
     ? `You want to build:\n${brief.appGoal}\n\n`
     : "";
 
-  const modelAdvice = buildModelAdviceForBrief(brief);
+  const modelAdvice = buildModelAdviceForBrief();
 
   const recommendation =
     `Recommended project template:\n${recommendationLabel(brief.recommendedStarter)}.\n\n` +
     `Why:\n${brief.reason}\n\n` +
-    modelAdvice +
-    "Planning options:\n" +
-    "- Free App Brief — used now. KForge used built-in starter guidance. No AI model call or AI tokens were used.\n" +
-    "- AI-Assisted App Brief — optional. More detailed planning can use the current configured AI model when you choose that path, but quality depends on the model.\n  To choose or change the model first, use Change Provider/Model in the AI header.\n\n";
+    modelAdvice;
 
-  const backendNote =
-    brief.recommendedStarter === STARTER_RECOMMENDATION.VITE_REACT_SUPABASE_LATER
-      ? "Important:\nSaved data, accounts, auth, or persistence need a real backend/database. KForge should connect Supabase through Services later rather than pretending persistence works.\n\n"
-      : "";
-
-  const externalApiNote =
-    brief.needsExternalApi === "maybe"
-      ? "Note:\nLive external data, smarter recommendations, or AI-generated suggestions may need an API/AI connection later. KForge can start with safe frontend structure or simple built-in rules first.\n\n"
-      : "";
 
   if (finalFolderState.noProjectFolderOpen) {
     return (
       "No project folder is open yet.\n\n" +
       goalLine +
-      recommendation +
-      backendNote +
-      externalApiNote +
-      "To start:\n" +
-      "1. Open or create an empty project folder in KForge.\n" +
-      "2. Use Preview → Generate and choose the recommended starter.\n" +
-      "3. Use Preview → Install.\n" +
-      "4. Come back to chat and continue the build."
+      recommendation
     );
   }
 
@@ -373,15 +368,9 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
     return (
       "Your project folder is empty, so there is no app to modify yet.\n\n" +
       goalLine +
-      recommendation +
-      backendNote +
-      externalApiNote +
-      "To start:\n" +
-      "1. Use Preview → Generate and choose the recommended starter.\n" +
-      "2. Use Preview → Install.\n" +
-      "3. Come back to chat and continue the build."
+      recommendation
     );
   }
 
-  return goalLine + recommendation + backendNote + externalApiNote;
+  return goalLine + recommendation;
 }
