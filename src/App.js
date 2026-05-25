@@ -4758,84 +4758,104 @@ export default function App() {
         if (completedWorkflowRoute.action === "clarify_issue_report") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
 
-          appendMessage(
-            "assistant",
-            "I do not yet know what kind of problem this is, so I will not edit files yet.\n\n" +
-              "What is broken?\n" +
-              "- Preview/runtime error\n" +
-              "- Something looks wrong\n" +
-              "- Content/functionality is wrong\n" +
-              "- Something else\n\n" +
-              "Choose the closest option or describe the issue in one short sentence. If it is a Preview/runtime error, paste the Preview panel logs, browser console error, page error text, or screenshot text.",
+          let brokenIssueChoiceActions = [];
+
+          const showBrokenIssueOptions = () => {
+            appendMessage(
+              "assistant",
+              "I do not yet know what kind of problem this is, so I will not edit files yet.\n\n" +
+                "What is broken?\n" +
+                "- Preview/runtime error\n" +
+                "- Something looks wrong\n" +
+                "- Content/functionality is wrong\n" +
+                "- Something else\n\n" +
+                "Choose the closest option or describe the issue in one short sentence. If it is a Preview/runtime error, paste the Preview panel logs, browser console error, page error text, or screenshot text.",
+              { actions: brokenIssueChoiceActions },
+            );
+          };
+
+          const brokenIssueReplayActions = [
             {
-              actions: [
-                {
-                  label: "Preview/runtime error",
-                  onClick: () => {
-
-                    appendMessage("user", "Choice: Preview/runtime error");
-
-                    appendMessage(
-                      "assistant",
-                      "Please paste the exact Preview/runtime evidence before I try to fix it:\n" +
-                        "- Preview panel logs\n" +
-                        "- Browser console error\n" +
-                        "- Error shown on the page\n" +
-                        "- Screenshot text\n\n" +
-                        "I will not edit files until there is concrete failure evidence.",
-                    );
-                  },
-                },
-                {
-                  label: "Something looks wrong",
-                  onClick: () => {
-
-                    appendMessage("user", "Choice: Something looks wrong");
-
-                    appendMessage(
-                      "assistant",
-                      "Tell me what looks wrong and what you expected to see instead. I will not edit files until the visual issue is specific enough to inspect safely.",
-                    );
-                  },
-                },
-                {
-                  label: "Content/functionality is wrong",
-                  onClick: () => {
-
-                    appendMessage("user", "Choice: Content/functionality is wrong");
-
-                    appendMessage(
-                      "assistant",
-                      "Tell me what should be different and which page, feature, or file is affected if you know. I will inspect before editing and make the smallest safe change.",
-                    );
-                  },
-                },
-                {
-                  label: "Something else",
-                  onClick: () => {
-
-                    appendMessage("user", "Choice: Something else");
-appendMessage(
-                      "assistant",
-                      "Briefly describe what happened. I will ask for evidence or inspect first before any file edit.",
-                    );
-                  },
-                },
-                {
-                  label: SUGGESTED_ACTION_LABEL.STOP,
-                  onClick: () => {
-
-                    appendMessage("user", "Choice: Stop");
-
-                    appendMessage(
-                      "assistant",
-                      "Stopped - no files changed.",
-                    );
-                  },
-                },
-              ],
+              label: "Show problem options again",
+              onClick: () => {
+                appendMessage("user", "Choice: Show problem options again");
+                showBrokenIssueOptions();
+              },
             },
-          );
+            {
+              label: "Back to chat",
+              onClick: () => {
+                appendMessage("user", "Choice: Back to chat");
+                appendMessage("assistant", "No problem — continue in chat when ready.");
+              },
+            },
+          ];
+
+          brokenIssueChoiceActions = [
+            {
+              label: "Preview/runtime error",
+              onClick: () => {
+                appendMessage("user", "Choice: Preview/runtime error");
+
+                appendMessage(
+                  "assistant",
+                  "Please paste the exact Preview/runtime evidence before I try to fix it:\n" +
+                    "- Preview panel logs\n" +
+                    "- Browser console error\n" +
+                    "- Error shown on the page\n" +
+                    "- Screenshot text\n\n" +
+                    "I will not edit files until there is concrete failure evidence.",
+                );
+              },
+            },
+            {
+              label: "Something looks wrong",
+              onClick: () => {
+                appendMessage("user", "Choice: Something looks wrong");
+
+                appendMessage(
+                  "assistant",
+                  "Tell me what looks wrong and what you expected to see instead. I will not edit files until the visual issue is specific enough to inspect safely.",
+                );
+              },
+            },
+            {
+              label: "Content/functionality is wrong",
+              onClick: () => {
+                appendMessage("user", "Choice: Content/functionality is wrong");
+
+                appendMessage(
+                  "assistant",
+                  "Tell me what should be different and which page, feature, or file is affected if you know. I will inspect before editing and make the smallest safe change.",
+                );
+              },
+            },
+            {
+              label: "Something else",
+              onClick: () => {
+                appendMessage("user", "Choice: Something else");
+
+                appendMessage(
+                  "assistant",
+                  "Briefly describe what happened. I will ask for evidence or inspect first before any file edit.",
+                  { actions: brokenIssueReplayActions },
+                );
+              },
+            },
+            {
+              label: SUGGESTED_ACTION_LABEL.STOP,
+              onClick: () => {
+                appendMessage("user", "Choice: Stop");
+
+                appendMessage(
+                  "assistant",
+                  "Stopped - no files changed.",
+                );
+              },
+            },
+          ];
+
+          showBrokenIssueOptions();
           return;
         }
 
