@@ -1,4 +1,3 @@
-// src/App.js
 import React, {
   useCallback,
   useEffect,
@@ -2893,6 +2892,56 @@ export default function App() {
     },
     [appendMessage],
   );
+  const isStarterChoiceReplayCandidate = (text = "") => {
+    const s = String(text || "").toLowerCase().trim();
+
+    return (
+      /^[1-5]$/.test(s) ||
+      s === "build a simple landing page or static website." ||
+      s === "build an interactive web app, dashboard, form, or tool." ||
+      s === "build a backend app with login, accounts, saved data, or a database." ||
+      s === "build a supabase app." ||
+      s === "build a mobile app for phone or expo."
+    );
+  };
+
+  const buildStarterChoiceReplayActions = useCallback(
+    (folderState = {}) => {
+      const replayPrompt = "Build me an app for my business";
+
+      const backToChatAction = {
+        label: "Back to chat",
+        onClick: () => {
+          appendMessage("user", "Choice: Back to chat");
+          appendMessage("assistant", "No problem — continue in chat when ready.");
+        },
+      };
+
+      return [
+        {
+          label: "Show starter options again",
+          onClick: () => {
+            appendMessage("user", "Choice: Show starter options again");
+            appendMessage(
+              "assistant",
+              renderStarterRecommendation(
+                buildFreeAppBrief({ userText: replayPrompt, folderState }),
+                folderState,
+              ),
+              {
+                actions: [
+                  ...buildStarterChoiceClarifierActions(replayPrompt, folderState),
+                  backToChatAction,
+                ],
+              },
+            );
+          },
+        },
+        backToChatAction,
+      ];
+    },
+    [appendMessage, buildStarterChoiceClarifierActions],
+  );
   function isTypedStarterChoiceIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -4391,13 +4440,36 @@ export default function App() {
               ? "It sounds like something succeeded."
               : "I heard a workflow result.";
 
-        appendMessage(
-          "assistant",
-          `${resultTone}\n\n` +
-            "I do not have an active waiting workflow state to attach this result to.\n\n" +
-            "Choose which workflow this result belongs to:",
+        let workflowResultChoiceActions = [];
+
+        const showWorkflowResultOptions = () => {
+          appendMessage(
+            "assistant",
+            `${resultTone}\n\n` +
+              "I do not have an active waiting workflow state to attach this result to.\n\n" +
+              "Choose which workflow this result belongs to:",
+            { actions: workflowResultChoiceActions },
+          );
+        };
+
+        const workflowResultReplayActions = [
           {
-            actions: [
+            label: "Show workflow options again",
+            onClick: () => {
+              appendMessage("user", "Choice: Show workflow options again");
+              showWorkflowResultOptions();
+            },
+          },
+          {
+            label: "Back to chat",
+            onClick: () => {
+              appendMessage("user", "Choice: Back to chat");
+              appendMessage("assistant", "No problem — continue in chat when ready.");
+            },
+          },
+        ];
+
+        workflowResultChoiceActions = [
               {
                 label: "App check / Preview result",
                 onClick: () => {
@@ -4575,15 +4647,16 @@ export default function App() {
                 onClick: () => {
 
                   appendMessage("user", "Choice: Something else");
-appendMessage(
+                  appendMessage(
                     "assistant",
                     "Got it. Tell me what workflow this result belongs to and paste any relevant log, error, URL, or status text.",
+                    { actions: workflowResultReplayActions },
                   );
                 },
               },
-            ],
-          },
-        );
+        ];
+
+        showWorkflowResultOptions();
         return;
       }
       const directHandoffFollowupRoute = opts.skipCompletedWorkflowRoute
@@ -5458,15 +5531,30 @@ appendMessage(
         }
 
         if (directWorkflowHandoffRoute.action === "no_project_implementation") {
+          const starterFolderState = {
+            projectOpen: false,
+            noProjectFolderOpen: true,
+          };
+          const starterChoiceActions = buildStarterChoiceClarifierActions(
+            draft,
+            starterFolderState,
+          );
+          const starterReplayActions =
+            starterChoiceActions.length === 0 && isStarterChoiceReplayCandidate(draft)
+              ? buildStarterChoiceReplayActions(starterFolderState)
+              : [];
+
           appendMessage("assistant", buildNoProjectImplementationMessage(draft), {
             actions: [
-              ...buildStarterChoiceClarifierActions(draft, {
-                projectOpen: false,
-                noProjectFolderOpen: true,
-              }),
+              ...starterChoiceActions,
+              ...starterReplayActions,
               {
                 label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
                 onClick: () => {
+                  appendMessage(
+                    "user",
+                    `Choice: ${SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF}`,
+                  );
                   appendMessage(
                     "assistant",
                     "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
@@ -5496,18 +5584,33 @@ appendMessage(
         }
 
         if (directWorkflowHandoffRoute.action === "empty_folder_implementation") {
+          const starterFolderState = {
+            projectOpen: true,
+            emptyProjectFolder: true,
+          };
+          const starterChoiceActions = buildStarterChoiceClarifierActions(
+            draft,
+            starterFolderState,
+          );
+          const starterReplayActions =
+            starterChoiceActions.length === 0 && isStarterChoiceReplayCandidate(draft)
+              ? buildStarterChoiceReplayActions(starterFolderState)
+              : [];
+
           appendMessage(
             "assistant",
             buildEmptyFolderImplementationRoutingMessage(draft),
             {
               actions: [
-                ...buildStarterChoiceClarifierActions(draft, {
-                  projectOpen: true,
-                  emptyProjectFolder: true,
-                }),
+                ...starterChoiceActions,
+                ...starterReplayActions,
                 {
                   label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
                   onClick: () => {
+                    appendMessage(
+                      "user",
+                      `Choice: ${SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF}`,
+                    );
                     appendMessage(
                       "assistant",
                       "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
@@ -6070,6 +6173,7 @@ appendMessage(
       aiRunning,
       appendMessage,
       buildStarterChoiceClarifierActions,
+      buildStarterChoiceReplayActions,
       runAi,
       providerSwitchNote,
       aiProvider,

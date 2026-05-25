@@ -3139,6 +3139,10 @@ export default function AiPanel({
 
                         if (r === "assistant" || r === "ai") return true;
 
+                        if (r === "user" && content.trim().startsWith("Choice:")) {
+                          return true;
+                        }
+
                         // Hide resolved consent request rows from normal chat,
                         // but keep them in Transcript for history.
                         const isResolvedConsentRequest =
