@@ -135,7 +135,7 @@ function buildModelAdviceForBrief() {
     "Use a smaller model only for planning, simple questions, or light help.\n\n" +
     "Models marked as Weak / test only, or models you added yourself, are not recommended for automatic building because they may produce poor code.\n\n" +
     "KForge can help you get started for free by creating the right project template. No AI credits will be used.\n\n" +
-    "KForge may recommend:\n" +
+    "For other app types, KForge may recommend:\n" +
     "- Static HTML/CSS/JS for simple websites and landing pages.\n" +
     "- Vite + React for interactive web apps, dashboards, forms, and tools.\n" +
     "- Next.js for full-stack web apps, SEO-friendly sites, and apps with backend features.\n" +
@@ -195,10 +195,41 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
     /\b(build|create|make|generate|start|set up|i need|i want|would like|looking to|trying to)\b/,
   ]);
 
+  const specificStarterSignals =
+    mobileSignals ||
+    staticSiteSignals ||
+    backendSignals ||
+    nextjsSignals ||
+    externalApiSignals ||
+    hasAnyPattern(text, [
+      /\b(todo|to do|task|tasks|dashboard|form|calculator|converter|estimate|tracker|tracking|planner|manager|admin|portal|cards|list|table|chart|booking|shop|store|ecommerce|blog)\b/,
+    ]);
+
+  const vagueStarterChoiceSignals =
+    likelyAppIntent &&
+    hasAnyPattern(text, [
+      /\b(app|website|site|project|business|company|platform|system|tool)\b/,
+    ]) &&
+    !specificStarterSignals;
+
   if (!likelyAppIntent && !interactiveSignals && !staticSiteSignals && !mobileSignals) {
     return {
       ...EMPTY_APP_BRIEF,
       appGoal,
+      folderState: normalizedFolderState,
+    };
+  }
+
+  if (vagueStarterChoiceSignals) {
+    return {
+      ...EMPTY_APP_BRIEF,
+      intent: APP_INTENT.NEW_APP,
+      appGoal,
+      confidence: APP_BRIEF_CONFIDENCE.LOW,
+      reason:
+        "The app request is broad, so KForge needs one more detail before recommending a starter template.",
+      nextAction: "choose_starter_type",
+      question: "What kind of app are you building?",
       folderState: normalizedFolderState,
     };
   }
@@ -321,6 +352,18 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
       STARTER_RECOMMENDATION.ASK_CLARIFYING_QUESTION ||
     brief.intent === APP_INTENT.UNKNOWN
   ) {
+    if (brief.nextAction === "choose_starter_type") {
+      const prefix = finalFolderState.noProjectFolderOpen
+        ? "No project folder is open yet.\n\n"
+        : "Your project folder is empty, so there is no app to modify yet.\n\n";
+
+      return (
+        prefix +
+        "I need one more detail before recommending the starter template.\n\n" +
+        "Choose the closest app type below, and KForge will recommend the matching starter."
+      );
+    }
+
     if (finalFolderState.noProjectFolderOpen) {
       return (
         "No project folder is open yet.\n\n" +

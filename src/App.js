@@ -15,6 +15,7 @@ import { buildInspectionCandidateRoutingContextBlock } from "./ai/workspace/insp
 import { buildWorkspaceSnapshotContextBlock } from "./ai/workspace/workspaceSnapshot";
 import {
   APP_INTENT,
+  STARTER_RECOMMENDATION,
   buildFreeAppBrief,
   renderStarterRecommendation,
 } from "./ai/planning/appBriefProtocol";
@@ -445,6 +446,19 @@ function formatTranscriptTime(ts) {
   }
 }
 
+function normalizeTypedStarterChoiceText(text = "") {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+
+  if (s === "1") return "simple website landing page";
+  if (s === "2") return "interactive web app dashboard form tool";
+  if (s === "3") return "backend app with login accounts saved data database";
+  if (s === "4") return "supabase app";
+  if (s === "5") return "mobile app phone expo";
+
+  return text;
+}
 // Build a compact context prefix (UI-only; no backend changes).
 function buildChatContextPrefix(messages, limit) {
   const relevant = messages
@@ -1203,6 +1217,7 @@ export default function App() {
   // Transcript (in-memory only)
   const [messages, setMessages] = useState([]); // {id, role, content, ts, action?, actions?}
   const transcriptBottomRef = useRef(null);
+  const sendWithPromptRef = useRef(null);
 
   // For retry: remember last “send” details
   const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit, includeActiveFile, fileSnapshot }
@@ -1337,7 +1352,7 @@ export default function App() {
     [aiProvider, isProviderEnabled],
   );
 
-  
+
   const displayModelWorkflowPolicy = useMemo(
     () =>
       getModelWorkflowPolicy({
@@ -2765,7 +2780,7 @@ export default function App() {
       projectOpen: false,
       noProjectFolderOpen: true,
     };
-    const brief = buildFreeAppBrief({ userText, folderState });
+    const brief = buildFreeAppBrief({ userText: normalizeTypedStarterChoiceText(userText), folderState });
 
     return renderStarterRecommendation(brief, folderState);
   }
@@ -2775,7 +2790,7 @@ export default function App() {
       projectOpen: true,
       emptyProjectFolder: true,
     };
-    const brief = buildFreeAppBrief({ userText, folderState });
+    const brief = buildFreeAppBrief({ userText: normalizeTypedStarterChoiceText(userText), folderState });
 
     return renderStarterRecommendation(brief, folderState);
   }
@@ -2792,6 +2807,107 @@ export default function App() {
       "Include exactly these sections: App goal, Recommended starter, Why this starter, Key screens/features, Data/API/back-end needs, Risks/unknowns, Next step.\n" +
       "Be honest that this uses the current configured AI model and quality depends on that model.\n" +
       "Keep planning separate from implementation. End by asking the user to choose Preview → Generate for the starter or ask to refine the brief."
+    );
+  }
+  const buildStarterChoiceClarifierActions = useCallback(
+    (userText = "", folderState = {}) => {
+      const brief = buildFreeAppBrief({ userText: normalizeTypedStarterChoiceText(userText), folderState });
+      const shouldOffer =
+        brief?.nextAction === "choose_starter_type" &&
+        brief?.recommendedStarter ===
+          STARTER_RECOMMENDATION.ASK_CLARIFYING_QUESTION;
+
+      if (!shouldOffer) {
+        return [];
+      }
+
+      const chooseStarter = (choiceLabel, starterDescription) => {
+        appendMessage("user", `Choice: ${choiceLabel}`);
+
+        const runPrompt = sendWithPromptRef.current;
+
+        if (typeof runPrompt !== "function") {
+          appendMessage(
+            "assistant",
+            "I could not start that choice automatically. Please type the app type in chat and I will recommend the starter.",
+          );
+          return;
+        }
+
+        runPrompt(`Build ${starterDescription}.`, {
+          silentUserAppend: true,
+          skipCompletedWorkflowRoute: true,
+        });
+      };
+
+      return [
+        {
+          label: "Simple website / landing page",
+          onClick: () =>
+            chooseStarter(
+              "Simple website / landing page",
+              "a simple landing page or static website",
+            ),
+        },
+        {
+          label: "Interactive web app",
+          onClick: () =>
+            chooseStarter(
+              "Interactive web app",
+              "an interactive web app, dashboard, form, or tool",
+            ),
+        },
+        {
+          label: "Backend / accounts / database app",
+          onClick: () =>
+            chooseStarter(
+              "Backend / accounts / database app",
+              "a backend app with login, accounts, saved data, or a database",
+            ),
+        },
+        {
+          label: "Supabase app",
+          onClick: () => chooseStarter("Supabase app", "a Supabase app"),
+        },
+        {
+          label: "Mobile app",
+          onClick: () =>
+            chooseStarter("Mobile app", "a mobile app for phone or Expo"),
+        },
+        {
+          label: "Not sure",
+          onClick: () => {
+            appendMessage("user", "Choice: Not sure");
+            appendMessage(
+              "assistant",
+              "No problem. Type the number that best matches your app:\n\n" +
+                "1. Simple website / landing page — mostly text, images, and sections.\n" +
+                "2. Interactive web app — forms, dashboards, tools, or local app screens.\n" +
+                "3. Backend / accounts / database app — login, users, saved data, admin areas, or server features.\n" +
+                "4. Supabase app — choose this only if you specifically want Supabase.\n" +
+                "5. Mobile app — phone app, Expo, iOS, Android, or React Native.",
+            );
+          },
+        },
+      ];
+    },
+    [appendMessage],
+  );
+  function isTypedStarterChoiceIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    if (/^[1-5]$/.test(s)) return true;
+
+    return (
+      /\bsimple\s+website\b|\blanding\s+page\b|\bstatic\s+(html|website|site)\b|\bhtml\s*(\/|\+|and)?\s*css\b/.test(s) ||
+      /\binteractive\s+web\s+app\b|\bdashboard\b|\bform\b|\btool\b/.test(s) ||
+      /\bbackend\b|\baccounts?\b|\blogin\b|\bauth\b|\bdatabase\b|\bsaved\s+data\b|\badmin\b/.test(s) ||
+      /\bsupabase\b/.test(s) ||
+      /\bmobile\s+app\b|\bphone\s+app\b|\bexpo\b|\breact\s+native\b|\bios\b|\bandroid\b/.test(s)
     );
   }
   function isEmptyFolderPlanIntent(text = "") {
@@ -3927,7 +4043,7 @@ export default function App() {
         };
       }
 
-      if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text))) {
+      if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text) || isTypedStarterChoiceIntent(text))) {
         return {
           kind: "no_project_implementation",
           confidence: "high",
@@ -3935,7 +4051,7 @@ export default function App() {
         };
       }
 
-      if (emptyProjectFolder && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text))) {
+      if (emptyProjectFolder && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text) || isTypedStarterChoiceIntent(text))) {
         return {
           kind: "empty_folder_implementation",
           confidence: "high",
@@ -4285,6 +4401,9 @@ export default function App() {
               {
                 label: "App check / Preview result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: App check / Preview result");
+
                   if (resultPolarity === "failure") {
                     setWorkflowContext(
                       createDirectHandoffWorkflowContext({
@@ -4339,6 +4458,9 @@ export default function App() {
               {
                 label: "Install / dependency result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: Install / dependency result");
+
                   setWorkflowContext(
                     createDirectHandoffWorkflowContext({
                       handoffType: "install",
@@ -4359,6 +4481,9 @@ export default function App() {
               {
                 label: "Deploy / publish result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: Deploy / publish result");
+
                   setWorkflowContext(
                     createDirectHandoffWorkflowContext({
                       handoffType: "deploy",
@@ -4379,6 +4504,9 @@ export default function App() {
               {
                 label: "Service connection result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: Service connection result");
+
                   setWorkflowContext(
                     createDirectHandoffWorkflowContext({
                       handoffType: "service",
@@ -4399,6 +4527,9 @@ export default function App() {
               {
                 label: "Git / repository result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: Git / repository result");
+
                   setWorkflowContext(
                     createDirectHandoffWorkflowContext({
                       handoffType: "git",
@@ -4419,6 +4550,9 @@ export default function App() {
               {
                 label: "Build / test result",
                 onClick: () => {
+
+                  appendMessage("user", "Choice: Build / test result");
+
                   setWorkflowContext(
                     createDirectHandoffWorkflowContext({
                       handoffType: "build_test",
@@ -4439,7 +4573,9 @@ export default function App() {
               {
                 label: "Something else",
                 onClick: () => {
-                  appendMessage(
+
+                  appendMessage("user", "Choice: Something else");
+appendMessage(
                     "assistant",
                     "Got it. Tell me what workflow this result belongs to and paste any relevant log, error, URL, or status text.",
                   );
@@ -4563,6 +4699,9 @@ export default function App() {
                 {
                   label: "Preview/runtime error",
                   onClick: () => {
+
+                    appendMessage("user", "Choice: Preview/runtime error");
+
                     appendMessage(
                       "assistant",
                       "Please paste the exact Preview/runtime evidence before I try to fix it:\n" +
@@ -4577,6 +4716,9 @@ export default function App() {
                 {
                   label: "Something looks wrong",
                   onClick: () => {
+
+                    appendMessage("user", "Choice: Something looks wrong");
+
                     appendMessage(
                       "assistant",
                       "Tell me what looks wrong and what you expected to see instead. I will not edit files until the visual issue is specific enough to inspect safely.",
@@ -4586,6 +4728,9 @@ export default function App() {
                 {
                   label: "Content/functionality is wrong",
                   onClick: () => {
+
+                    appendMessage("user", "Choice: Content/functionality is wrong");
+
                     appendMessage(
                       "assistant",
                       "Tell me what should be different and which page, feature, or file is affected if you know. I will inspect before editing and make the smallest safe change.",
@@ -4595,7 +4740,9 @@ export default function App() {
                 {
                   label: "Something else",
                   onClick: () => {
-                    appendMessage(
+
+                    appendMessage("user", "Choice: Something else");
+appendMessage(
                       "assistant",
                       "Briefly describe what happened. I will ask for evidence or inspect first before any file edit.",
                     );
@@ -4604,6 +4751,9 @@ export default function App() {
                 {
                   label: SUGGESTED_ACTION_LABEL.STOP,
                   onClick: () => {
+
+                    appendMessage("user", "Choice: Stop");
+
                     appendMessage(
                       "assistant",
                       "Stopped - no files changed.",
@@ -5310,6 +5460,10 @@ export default function App() {
         if (directWorkflowHandoffRoute.action === "no_project_implementation") {
           appendMessage("assistant", buildNoProjectImplementationMessage(draft), {
             actions: [
+              ...buildStarterChoiceClarifierActions(draft, {
+                projectOpen: false,
+                noProjectFolderOpen: true,
+              }),
               {
                 label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
                 onClick: () => {
@@ -5347,6 +5501,10 @@ export default function App() {
             buildEmptyFolderImplementationRoutingMessage(draft),
             {
               actions: [
+                ...buildStarterChoiceClarifierActions(draft, {
+                  projectOpen: true,
+                  emptyProjectFolder: true,
+                }),
                 {
                   label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
                   onClick: () => {
@@ -5911,6 +6069,7 @@ export default function App() {
     [
       aiRunning,
       appendMessage,
+      buildStarterChoiceClarifierActions,
       runAi,
       providerSwitchNote,
       aiProvider,
@@ -5942,6 +6101,9 @@ export default function App() {
     ],
   );
 
+  useEffect(() => {
+    sendWithPromptRef.current = sendWithPrompt;
+  }, [sendWithPrompt]);
   const handleSendChat = useCallback(async () => {
     const text = String(aiPrompt || "").trim();
     if (!text) return;
