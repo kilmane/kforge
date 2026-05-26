@@ -1166,11 +1166,13 @@ Completed Phase 11 focus so far:
 
 Recent completed roadmap items:
 
-* Phase 11.5 — Optional AI-Assisted App Brief Planning: Free App Brief remains the default, and empty-folder / no-project starter guidance can now offer a planning-only **Use AI-assisted brief** action that uses the current configured model without allowing file tools.
+* Phase 11.5 — Optional AI-Assisted App Planning: Free starter plan remains the default, and empty-folder / no-project starter guidance can now offer a planning-only **Use AI-assisted plan** action that uses the current configured model without allowing file tools.
+* Phase 11.6 — Model Presets, Quality Tiers & Warnings: KForge now uses friendlier model quality labels, recommends from curated presets rather than invented model IDs, warns that weak/test-only and custom/unverified models are risky for automatic building, adds task-tier app brief model advice, and preserves the Free starter plan vs AI-assisted app plan cost distinction.
+* Phase 11.6.5c / 11.6.5d — Starter Choice Clarifier and Choice Menu UX Audit: vague app requests can show starter choices, selected buttons appear as visible `Choice:` chat anchors, and supported menus can offer deterministic replay actions such as **Show starter options again**, **Show workflow options again**, **Show problem options again**, and **Back to chat**.
 
 Next planned roadmap item:
 
-* Phase 11.6 — Model Presets, Quality Tiers & Warnings
+* Finish Phase 11.6 docs, focused smoke tests, and final stable tag creation.
 
 Possible future integrations:
 

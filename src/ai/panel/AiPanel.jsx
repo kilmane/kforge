@@ -1972,6 +1972,41 @@ export default function AiPanel({
           ).trim();
           const isFixToolExecution =
             triggerToolTaskKind === "broken_preview_debug";
+          const isControlledReadOnlyToolExecution =
+            triggerToolMessage?.meta?.controlledReadOnlyToolExecution === true;
+
+          if (isControlledReadOnlyToolExecution) {
+            const readCalls = batchCalls.filter(
+              (call) => String(call?.toolName || "").trim() === "read_file",
+            );
+
+            if (batchCalls.length !== 1 || readCalls.length !== 1) {
+              appendMessage(
+                "assistant",
+                "KForge blocked this controlled inspection because the model requested more than one tool or a non-read tool.\n\nNo files were changed.",
+                {
+                  actions: [
+                    {
+                      label: "Back to chat",
+                      onClick: () => {
+                        appendMessage("user", "Choice: Back to chat");
+                        appendMessage("assistant", "No problem — continue in chat when ready.");
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", "Choice: Stop");
+                        appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                      },
+                    },
+                  ],
+                },
+              );
+              return;
+            }
+          }
+
 
           if (
             shouldBlockBlindWrite({
@@ -2096,6 +2131,60 @@ export default function AiPanel({
             appendMessage(
               "assistant",
               `Cancelled — stopped ${cancelledList}. I did not continue after the denied tool request.`,
+            );
+            return;
+          }
+
+          if (isControlledReadOnlyToolExecution) {
+            appendMessage(
+              "assistant",
+              "Read-only inspection completed.\n\nNo files were changed.\n\nChoose the next safe step:",
+              {
+                actions: [
+                  {
+                    label: "Paste Preview/runtime evidence",
+                    onClick: () => {
+                      appendMessage("user", "Choice: Paste Preview/runtime evidence");
+                      appendMessage(
+                        "assistant",
+                        "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                        {
+                          actions: [
+                            {
+                              label: "Back to chat",
+                              onClick: () => {
+                                appendMessage("user", "Choice: Back to chat");
+                                appendMessage("assistant", "No problem — continue in chat when ready.");
+                              },
+                            },
+                            {
+                              label: SUGGESTED_ACTION_LABEL.STOP,
+                              onClick: () => {
+                                appendMessage("user", "Choice: Stop");
+                                appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                              },
+                            },
+                          ],
+                        },
+                      );
+                    },
+                  },
+                  {
+                    label: "Back to chat",
+                    onClick: () => {
+                      appendMessage("user", "Choice: Back to chat");
+                      appendMessage("assistant", "No problem — continue in chat when ready.");
+                    },
+                  },
+                  {
+                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    onClick: () => {
+                      appendMessage("user", "Choice: Stop");
+                      appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                    },
+                  },
+                ],
+              },
             );
             return;
           }

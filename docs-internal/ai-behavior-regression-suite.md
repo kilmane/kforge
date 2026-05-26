@@ -479,21 +479,86 @@ Prompt:
 
 Expected behavior:
 
-* show the Free App Brief starter recommendation first
-* state that no AI model call or AI tokens were used for the Free App Brief
-* offer **Use AI-assisted brief** as an optional action
+* show the Free starter plan recommendation first
+* state that no AI model call or AI tokens were used for the Free starter plan
+* offer **Use AI-assisted plan** as an optional action
 * explain that AI-assisted planning uses the current configured model and quality depends on that model
 * point first-time users to **Change Provider/Model** in the AI header
 * when the action is clicked, show a brief working acknowledgement before the model response
-* the AI-assisted brief must remain planning-only
+* the AI-assisted plan must remain planning-only
 
 Must NOT:
 
 * edit files
 * request tools
 * preview, deploy, or claim anything was created
-* route the AI-assisted button back into the Free Brief handoff
+* route the AI-assisted plan button back into the free starter plan handoff
 * hide that quality depends on the configured model
+
+---
+
+# 2.12.2 Starter Choice Clarifier
+
+Workspace state:
+
+* no project open or empty project folder
+* user asks a vague new-app request
+
+Prompt:
+
+```text
+Build me an app for my business
+```
+
+Expected behavior:
+
+* show starter choices instead of pretending KForge already knows the right app shape
+* include choices such as **Simple website / landing page**, **Interactive web app**, **Backend / accounts / database app**, **Supabase app**, **Mobile app**, **Not sure**, and **Use AI-assisted plan**
+* clear app requests should still route directly to the appropriate starter recommendation
+* choosing a button should add a visible chat anchor beginning with `Choice:`
+* **Use AI-assisted plan** should log `Choice: Use AI-assisted plan`
+* **Not sure** should explain numbered starter options that can be selected by typing 1-5
+
+Must NOT:
+
+* edit files
+* request filesystem tools
+* pretend the starter has already been generated
+* route vague requests straight into a random implementation path
+* hide that AI-assisted planning uses the configured model/provider and may cost API credits
+
+---
+
+# 2.12.3 Choice Menu Replay Actions
+
+Starter chooser expected replay behavior:
+
+* after a starter choice is selected, supported flows may offer **Show starter options again** and **Back to chat**
+* choosing **Show starter options again** should replay the starter options directly, not route to a generic AI/project-edit response
+* choosing **Back to chat** should show a calm chat continuation message
+
+Workflow-result orphan menu expected replay behavior:
+
+* an orphan result such as `preview failed` may ask which workflow the result belongs to
+* choosing **Something else** should show **Show workflow options again** and **Back to chat**
+* choosing **Show workflow options again** should replay the workflow options deterministically
+
+Broken-issue menu expected replay behavior:
+
+* in completed implementation workflow state, `the app is broken` may ask **What is broken?**
+* choosing **Something else** should show **Show problem options again** and **Back to chat**
+* choosing **Show problem options again** should replay the problem options directly
+
+Important caveat:
+
+* the **What is broken?** replay code is present and build-passed, but visual smoke confirmation remains state-dependent because the route only triggers inside completed implementation workflow state
+* a cold/open-project prompt such as `the app is broken` may route into broken-preview debugging instead, which is expected from current routing
+
+Calm chat expectation:
+
+* normal chat should not bring back old noisy tool/request details
+* transcript remains the full history surface
+* only `Choice: ...` user selections should appear as normal chat anchors
 
 ---
 

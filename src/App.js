@@ -1027,7 +1027,10 @@ function isVagueCompletedWorkflowIssueReport(text = "", promptTask = null) {
 
   if (hasConcreteEvidence) return false;
 
-  return /\b(app|it|this|page|site|screen|ui|preview)\b/.test(s);
+  // If the classifier already routed this as a broken/failed workflow report
+  // and the user has not pasted concrete evidence, keep control in KForge
+  // instead of letting the model guess and inspect files automatically.
+  return true;
 }
 
 function isDirectHandoffWorkflow(context = null) {
@@ -1074,6 +1077,10 @@ function getDirectHandoffFollowupRouteDecision({
     if (kind === "preview_followup") {
       return { action: "direct_preview_repeat" };
     }
+  }
+
+  if (workflowContext?.expectedResult === "problem_detail") {
+    return { action: "controlled_problem_detail" };
   }
 
   return null;
@@ -2276,40 +2283,40 @@ export default function App() {
       const workflowStateBlock = workflowContext?.taskKind
         ? [
             "KForge workflow state:",
-            `- taskKind: ${String(workflowContext.taskKind || "")}`,
-            `- status: ${String(workflowContext.status || "")}`,
-            `- nextStep: ${String(workflowContext.nextStep || "")}`,
+            "- taskKind: " + String(workflowContext.taskKind || ""),
+            "- status: " + String(workflowContext.status || ""),
+            "- nextStep: " + String(workflowContext.nextStep || ""),
             workflowContext.lastUserGoal
-              ? `- lastUserGoal: ${String(workflowContext.lastUserGoal || "")}`
+              ? "- lastUserGoal: " + String(workflowContext.lastUserGoal || "")
               : "",
             workflowContext.partialSummary
-              ? `- partialSummary: ${String(workflowContext.partialSummary || "")}`
+              ? "- partialSummary: " + String(workflowContext.partialSummary || "")
               : "",
             assistantResult?.actionResult
-              ? `- assistantResult.actionResult: ${String(assistantResult.actionResult || "")}`
+              ? "- assistantResult.actionResult: " + String(assistantResult.actionResult || "")
               : "",
             assistantResult?.actionType
-              ? `- assistantResult.actionType: ${String(assistantResult.actionType || "")}`
+              ? "- assistantResult.actionType: " + String(assistantResult.actionType || "")
               : "",
             Array.isArray(assistantResult?.suggestedActions) &&
             assistantResult.suggestedActions.length > 0
-              ? `- assistantResult.suggestedActions: ${assistantResult.suggestedActions.join(" / ")}`
+              ? "- assistantResult.suggestedActions: " + assistantResult.suggestedActions.join(" / ")
               : "",
             assistantResult?.summary
-              ? `- assistantResult.summary: ${String(assistantResult.summary || "")}`
+              ? "- assistantResult.summary: " + String(assistantResult.summary || "")
               : "",
             workflowContext.verificationStatus || assistantResult?.verificationStatus
-              ? `- verificationStatus: ${String(workflowContext.verificationStatus || assistantResult?.verificationStatus || "")}`
+              ? "- verificationStatus: " + String(workflowContext.verificationStatus || assistantResult?.verificationStatus || "")
               : "",
             workflowContext.verificationSummary || assistantResult?.verificationSummary
-              ? `- verificationSummary: ${String(workflowContext.verificationSummary || assistantResult?.verificationSummary || "")}`
+              ? "- verificationSummary: " + String(workflowContext.verificationSummary || assistantResult?.verificationSummary || "")
               : "",
             workflowContext.lastEditedPath
-              ? `- lastEditedPath: ${String(workflowContext.lastEditedPath || "")}`
+              ? "- lastEditedPath: " + String(workflowContext.lastEditedPath || "")
               : "",
             Array.isArray(workflowContext.editedPaths) &&
             workflowContext.editedPaths.length > 0
-              ? `- editedPaths: ${workflowContext.editedPaths.join(", ")}`
+              ? "- editedPaths: " + workflowContext.editedPaths.join(", ")
               : "",
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
@@ -2322,7 +2329,6 @@ export default function App() {
             .filter(Boolean)
             .join("\n") + "\n\n"
         : "";
-
       const memoryBlock = buildProjectMemoryBlock();
       const prefix = buildChatContextPrefix(messages, CHAT_CONTEXT_TURNS);
       const fileBlock = fileSnapshot
@@ -2802,7 +2808,7 @@ export default function App() {
       "Create an AI-assisted app brief only. Do not edit files, request tools, preview, deploy, or claim anything was created.\n\n" +
       (safeFolderContext ? `Project state:\n${safeFolderContext}\n\n` : "") +
       `Original app request:\n${safeUserText || "The user wants help choosing an app starter."}\n\n` +
-      "Use the heading: AI-Assisted App Brief.\n" +
+      "Use the heading: AI-Assisted App Plan.\n" +
       "Include exactly these sections: App goal, Recommended starter, Why this starter, Key screens/features, Data/API/back-end needs, Risks/unknowns, Next step.\n" +
       "Be honest that this uses the current configured AI model and quality depends on that model.\n" +
       "Keep planning separate from implementation. End by asking the user to choose Preview → Generate for the starter or ask to refine the brief."
@@ -4442,13 +4448,21 @@ export default function App() {
 
         let workflowResultChoiceActions = [];
 
-        const showWorkflowResultOptions = () => {
+        const backToChatAction = {
+          label: "Back to chat",
+          onClick: () => {
+            appendMessage("user", "Choice: Back to chat");
+            appendMessage("assistant", "No problem — continue in chat when ready.");
+          },
+        };
+
+        const showWorkflowResultOptions = (extraActions = []) => {
           appendMessage(
             "assistant",
             `${resultTone}\n\n` +
               "I do not have an active waiting workflow state to attach this result to.\n\n" +
               "Choose which workflow this result belongs to:",
-            { actions: workflowResultChoiceActions },
+            { actions: [...workflowResultChoiceActions, ...extraActions] },
           );
         };
 
@@ -4457,16 +4471,10 @@ export default function App() {
             label: "Show workflow options again",
             onClick: () => {
               appendMessage("user", "Choice: Show workflow options again");
-              showWorkflowResultOptions();
+              showWorkflowResultOptions([backToChatAction]);
             },
           },
-          {
-            label: "Back to chat",
-            onClick: () => {
-              appendMessage("user", "Choice: Back to chat");
-              appendMessage("assistant", "No problem — continue in chat when ready.");
-            },
-          },
+          backToChatAction,
         ];
 
         workflowResultChoiceActions = [
@@ -4744,7 +4752,311 @@ export default function App() {
           );
           return;
         }
+
+        if (directHandoffFollowupRoute.action === "controlled_problem_detail") {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+
+          const issueDetail = String(draft || "").trim();
+          const editedPaths = Array.isArray(workflowContext?.editedPaths)
+            ? workflowContext.editedPaths
+            : [];
+          const lastChangedPath =
+            workflowContext?.lastEditedPath ||
+            (editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "");
+
+          setWorkflowContext({
+            ...workflowContext,
+            expectedResult: "problem_next_action",
+            issueDetail,
+            updatedAt: Date.now(),
+            source: "controlled_problem_detail_received",
+          });
+
+          const templateHint = String(
+            detectedTemplateName || detectedKind || "",
+          ).toLowerCase();
+          const likelyInspectPath =
+            lastChangedPath ||
+            (templateHint.includes("next") ? "app/page.jsx" : "src/App.jsx");
+          const inspectActionLabel = lastChangedPath
+            ? "Inspect last changed file"
+            : "Inspect likely app file";
+
+          const detailActions = [
+            {
+              label: inspectActionLabel,
+              onClick: () => {
+                appendMessage("user", `Choice: ${inspectActionLabel}`);
+                sendWithPrompt(
+                  "Controlled problem detail received.\n\n" +
+                    "User detail: " +
+                    issueDetail +
+                    "\n\n" +
+                    "Read this file and summarize the relevant current content without editing it:\n" +
+                    likelyInspectPath +
+                    "\n\n" +
+                    "Do not write files. Request exactly one read_file tool call for that path.",
+                  {
+                    silentUserAppend: true,
+                    skipCompletedWorkflowRoute: true,
+                    controlledReadOnlyToolExecution: true,
+                  },
+                );
+              },
+            },
+            {
+              label: "Paste Preview/runtime evidence",
+              onClick: () => {
+                appendMessage("user", "Choice: Paste Preview/runtime evidence");
+                appendMessage(
+                  "assistant",
+                  "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                  {
+                    actions: [
+                      {
+                        label: "Back to chat",
+                        onClick: () => {
+                          appendMessage("user", "Choice: Back to chat");
+                          appendMessage("assistant", "No problem — continue in chat when ready.");
+                        },
+                      },
+                      {
+                        label: "Stop",
+                        onClick: () => {
+                          appendMessage("user", "Choice: Stop");
+                          appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                        },
+                      },
+                    ],
+                  },
+                );
+              },
+            },
+            {
+              label: "Back to chat",
+              onClick: () => {
+                appendMessage("user", "Choice: Back to chat");
+                appendMessage("assistant", "No problem — continue in chat when ready.");
+              },
+            },
+            {
+              label: "Stop",
+              onClick: () => {
+                appendMessage("user", "Choice: Stop");
+                appendMessage("assistant", "Okay — stopping here. No files were changed.");
+              },
+            },
+          ];
+
+          appendMessage(
+            "assistant",
+            "Thanks. I have the problem detail, but I will not inspect or edit files automatically.\n\n" +
+              "Choose the next safe step:",
+            { actions: detailActions },
+          );
+          return;
+        }
       }
+      // Controlled uncertainty route for low-confidence project messages.
+      if (
+        projectOpen &&
+        !opts.skipCompletedWorkflowRoute &&
+        promptTask.kind === "simple_qa" &&
+        promptTask.confidence === "low"
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        const askForProblemDetail = (choiceLabel, problemKind, promptText) => {
+          appendMessage("user", `Choice: ${choiceLabel}`);
+          setWorkflowContext({
+            ...(workflowContext || {}),
+            taskKind: WORKFLOW_TASK_KIND.DIRECT_HANDOFF,
+            status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+            nextStep: WORKFLOW_NEXT_STEP.FIX,
+            handoffType: problemKind,
+            expectedResult: "problem_detail",
+            lastUserGoal: draft,
+            updatedAt: Date.now(),
+            source: "controlled_uncertainty_problem_choice",
+          });
+          appendMessage("assistant", promptText);
+        };
+
+        appendMessage(
+          "assistant",
+          "I am not sure which KForge workflow this belongs to, so I will not inspect files or edit anything yet.\n\n" +
+            "Choose the closest option:",
+          {
+            actions: [
+              {
+                label: "I want to edit/change the app",
+                onClick: () => {
+                  appendMessage("user", "Choice: I want to edit/change the app");
+                  appendMessage(
+                    "assistant",
+                    "Tell me the exact change you want. Include the file or visible part of the app if you know it. I will inspect before editing.",
+                  );
+                },
+              },
+              {
+                label: "Preview/runtime error",
+                onClick: () => {
+                  appendMessage("user", "Choice: Preview/runtime error");
+                  appendMessage(
+                    "assistant",
+                    "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                  );
+                },
+              },
+              {
+                label: "Something looks wrong",
+                onClick: () => {
+                  askForProblemDetail(
+                    "Something looks wrong",
+                    "problem_visual",
+                    "Briefly describe what looks wrong. If possible, include the visible text, screenshot text, or what you expected to see. I will not inspect or edit files until you give that detail.",
+                  );
+                },
+              },
+              {
+                label: "Content/functionality is wrong",
+                onClick: () => {
+                  askForProblemDetail(
+                    "Content/functionality is wrong",
+                    "problem_content",
+                    "Briefly describe what should happen and what actually happens. I will not inspect or edit files until you give that detail.",
+                  );
+                },
+              },
+              {
+                label: "Install/build/dependency problem",
+                onClick: () => {
+                  appendMessage("user", "Choice: Install/build/dependency problem");
+                  appendMessage(
+                    "assistant",
+                    "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                  );
+                },
+              },
+              {
+                label: "Back to chat",
+                onClick: () => {
+                  appendMessage("user", "Choice: Back to chat");
+                  appendMessage("assistant", "No problem — continue in chat when ready.");
+                },
+              },
+              {
+                label: "Stop",
+                onClick: () => {
+                  appendMessage("user", "Choice: Stop");
+                  appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                },
+              },
+            ],
+          },
+        );
+        return;
+      }
+      // State-independent vague broken-report choice route.
+      if (
+        !opts.skipCompletedWorkflowRoute &&
+        promptTask.kind === "broken_preview_debug" &&
+        isVagueCompletedWorkflowIssueReport(draft, promptTask)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        const askForVagueBrokenProblemDetail = (choiceLabel, problemKind, promptText) => {
+          appendMessage("user", `Choice: ${choiceLabel}`);
+          setWorkflowContext({
+            ...(workflowContext || {}),
+            taskKind: WORKFLOW_TASK_KIND.DIRECT_HANDOFF,
+            status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+            nextStep: WORKFLOW_NEXT_STEP.FIX,
+            handoffType: problemKind,
+            expectedResult: "problem_detail",
+            lastUserGoal: draft,
+            updatedAt: Date.now(),
+            source: "vague_broken_problem_choice",
+          });
+          appendMessage("assistant", promptText);
+        };
+
+        appendMessage(
+          "assistant",
+          "I am not sure which KForge workflow this belongs to, so I will not inspect files or edit anything yet.\n\n" +
+            "Choose the closest option:",
+          {
+            actions: [
+              {
+                label: "I want to edit/change the app",
+                onClick: () => {
+                  appendMessage("user", "Choice: I want to edit/change the app");
+                  appendMessage(
+                    "assistant",
+                    "Tell me the exact change you want. Include the file or visible part of the app if you know it. I will inspect before editing.",
+                  );
+                },
+              },
+              {
+                label: "Preview/runtime error",
+                onClick: () => {
+                  appendMessage("user", "Choice: Preview/runtime error");
+                  appendMessage(
+                    "assistant",
+                    "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                  );
+                },
+              },
+              {
+                label: "Something looks wrong",
+                onClick: () => {
+                  askForVagueBrokenProblemDetail(
+                    "Something looks wrong",
+                    "problem_visual",
+                    "Briefly describe what looks wrong. If possible, include the visible text, screenshot text, or what you expected to see. I will not inspect or edit files until you give that detail.",
+                  );
+                },
+              },
+              {
+                label: "Content/functionality is wrong",
+                onClick: () => {
+                  askForVagueBrokenProblemDetail(
+                    "Content/functionality is wrong",
+                    "problem_content",
+                    "Briefly describe what should happen and what actually happens. I will not inspect or edit files until you give that detail.",
+                  );
+                },
+              },
+              {
+                label: "Install/build/dependency problem",
+                onClick: () => {
+                  appendMessage("user", "Choice: Install/build/dependency problem");
+                  appendMessage(
+                    "assistant",
+                    "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                  );
+                },
+              },
+              {
+                label: "Back to chat",
+                onClick: () => {
+                  appendMessage("user", "Choice: Back to chat");
+                  appendMessage("assistant", "No problem — continue in chat when ready.");
+                },
+              },
+              {
+                label: "Stop",
+                onClick: () => {
+                  appendMessage("user", "Choice: Stop");
+                  appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                },
+              },
+            ],
+          },
+        );
+        return;
+      }
+
       const completedWorkflowRoute = opts.skipCompletedWorkflowRoute
         ? null
         : getCompletedWorkflowRouteDecision({
@@ -4758,104 +5070,95 @@ export default function App() {
         if (completedWorkflowRoute.action === "clarify_issue_report") {
           if (!opts.silentUserAppend) appendMessage("user", draft);
 
-          let brokenIssueChoiceActions = [];
-
-          const showBrokenIssueOptions = () => {
-            appendMessage(
-              "assistant",
-              "I do not yet know what kind of problem this is, so I will not edit files yet.\n\n" +
-                "What is broken?\n" +
-                "- Preview/runtime error\n" +
-                "- Something looks wrong\n" +
-                "- Content/functionality is wrong\n" +
-                "- Something else\n\n" +
-                "Choose the closest option or describe the issue in one short sentence. If it is a Preview/runtime error, paste the Preview panel logs, browser console error, page error text, or screenshot text.",
-              { actions: brokenIssueChoiceActions },
-            );
+          const askForCompletedBrokenProblemDetail = (choiceLabel, problemKind, promptText) => {
+            appendMessage("user", `Choice: ${choiceLabel}`);
+            setWorkflowContext({
+              ...(workflowContext || {}),
+              taskKind: WORKFLOW_TASK_KIND.DIRECT_HANDOFF,
+              status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+              nextStep: WORKFLOW_NEXT_STEP.FIX,
+              handoffType: problemKind,
+              expectedResult: "problem_detail",
+              lastUserGoal: draft,
+              updatedAt: Date.now(),
+              source: "completed_broken_problem_choice",
+            });
+            appendMessage("assistant", promptText);
           };
 
-          const brokenIssueReplayActions = [
+          appendMessage(
+            "assistant",
+            "I am not sure which KForge workflow this belongs to, so I will not inspect files or edit anything yet.\n\n" +
+              "Choose the closest option:",
             {
-              label: "Show problem options again",
-              onClick: () => {
-                appendMessage("user", "Choice: Show problem options again");
-                showBrokenIssueOptions();
-              },
+              actions: [
+                {
+                  label: "I want to edit/change the app",
+                  onClick: () => {
+                    appendMessage("user", "Choice: I want to edit/change the app");
+                    appendMessage(
+                      "assistant",
+                      "Tell me the exact change you want. Include the file or visible part of the app if you know it. I will inspect before editing.",
+                    );
+                  },
+                },
+                {
+                  label: "Preview/runtime error",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Preview/runtime error");
+                    appendMessage(
+                      "assistant",
+                      "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                    );
+                  },
+                },
+                {
+                  label: "Something looks wrong",
+                  onClick: () => {
+                    askForCompletedBrokenProblemDetail(
+                      "Something looks wrong",
+                      "problem_visual",
+                      "Briefly describe what looks wrong. If possible, include the visible text, screenshot text, or what you expected to see. I will not inspect or edit files until you give that detail.",
+                    );
+                  },
+                },
+                {
+                  label: "Content/functionality is wrong",
+                  onClick: () => {
+                    askForCompletedBrokenProblemDetail(
+                      "Content/functionality is wrong",
+                      "problem_content",
+                      "Briefly describe what should happen and what actually happens. I will not inspect or edit files until you give that detail.",
+                    );
+                  },
+                },
+                {
+                  label: "Install/build/dependency problem",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Install/build/dependency problem");
+                    appendMessage(
+                      "assistant",
+                      "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                    );
+                  },
+                },
+                {
+                  label: "Back to chat",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Back to chat");
+                    appendMessage("assistant", "No problem — continue in chat when ready.");
+                  },
+                },
+                {
+                  label: "Stop",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Stop");
+                    appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                  },
+                },
+              ],
             },
-            {
-              label: "Back to chat",
-              onClick: () => {
-                appendMessage("user", "Choice: Back to chat");
-                appendMessage("assistant", "No problem — continue in chat when ready.");
-              },
-            },
-          ];
-
-          brokenIssueChoiceActions = [
-            {
-              label: "Preview/runtime error",
-              onClick: () => {
-                appendMessage("user", "Choice: Preview/runtime error");
-
-                appendMessage(
-                  "assistant",
-                  "Please paste the exact Preview/runtime evidence before I try to fix it:\n" +
-                    "- Preview panel logs\n" +
-                    "- Browser console error\n" +
-                    "- Error shown on the page\n" +
-                    "- Screenshot text\n\n" +
-                    "I will not edit files until there is concrete failure evidence.",
-                );
-              },
-            },
-            {
-              label: "Something looks wrong",
-              onClick: () => {
-                appendMessage("user", "Choice: Something looks wrong");
-
-                appendMessage(
-                  "assistant",
-                  "Tell me what looks wrong and what you expected to see instead. I will not edit files until the visual issue is specific enough to inspect safely.",
-                );
-              },
-            },
-            {
-              label: "Content/functionality is wrong",
-              onClick: () => {
-                appendMessage("user", "Choice: Content/functionality is wrong");
-
-                appendMessage(
-                  "assistant",
-                  "Tell me what should be different and which page, feature, or file is affected if you know. I will inspect before editing and make the smallest safe change.",
-                );
-              },
-            },
-            {
-              label: "Something else",
-              onClick: () => {
-                appendMessage("user", "Choice: Something else");
-
-                appendMessage(
-                  "assistant",
-                  "Briefly describe what happened. I will ask for evidence or inspect first before any file edit.",
-                  { actions: brokenIssueReplayActions },
-                );
-              },
-            },
-            {
-              label: SUGGESTED_ACTION_LABEL.STOP,
-              onClick: () => {
-                appendMessage("user", "Choice: Stop");
-
-                appendMessage(
-                  "assistant",
-                  "Stopped - no files changed.",
-                );
-              },
-            },
-          ];
-
-          showBrokenIssueOptions();
+          );
           return;
         }
 
@@ -5577,7 +5880,7 @@ export default function App() {
                   );
                   appendMessage(
                     "assistant",
-                    "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
+                    "This will use your selected AI model to create a more detailed plan. Provider/API costs may apply.",
                   );
                   sendWithPrompt(
                     buildAiAssistedAppBriefPrompt(
@@ -5633,7 +5936,7 @@ export default function App() {
                     );
                     appendMessage(
                       "assistant",
-                      "This will use your selected AI model to create a more detailed brief. Provider/API costs may apply.",
+                      "This will use your selected AI model to create a more detailed plan. Provider/API costs may apply.",
                     );
                     sendWithPrompt(
                       buildAiAssistedAppBriefPrompt(
@@ -6175,6 +6478,8 @@ export default function App() {
                 allowModelToolExecution: true,
                 modelToolExecutionKind: String(promptTask.kind || "unknown"),
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
+                controlledReadOnlyToolExecution:
+                  opts.controlledReadOnlyToolExecution === true,
               },
             });
           }

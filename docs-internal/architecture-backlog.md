@@ -141,14 +141,14 @@ Updated: 2026-05-22
 
 **Why**
 
-KForge already has model policy, advisory/test-mode warnings, Free App Brief planning, and a planning-only AI-Assisted App Brief option. The remaining roadmap is now focused on:
+KForge already has model policy, advisory/test-mode warnings, Free starter plan guidance, and a planning-only AI-assisted app plan option. The remaining roadmap is now focused on:
 
 - Phase 11.6 — Model Presets, Quality Tiers & Warnings
 
 The agreed product direction is:
 
-- Free App Brief should remain available by default and not require API keys.
-- AI-Assisted App Brief is optional and uses the current configured model, with clear quality caveats.
+- Free starter plan should remain available by default and not require API keys.
+- AI-assisted app plan is optional and uses the current configured model, with clear quality caveats.
 - KForge should recommend from KForge's curated presets only.
 - KForge should stay out of the sea of constantly changing models and keep the curated list small, intentional, and builder-focused.
 - Custom, local, and manual model IDs are bring-your-own choices. KForge cannot grade their quality, safety, tool-call reliability, or suitability.

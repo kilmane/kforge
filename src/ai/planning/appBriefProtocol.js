@@ -150,7 +150,7 @@ function buildModelAdviceForBrief() {
     "- **Generate** creates the starter template for your project.\n" +
     "- **Install** adds the packages needed by that template.\n" +
     "- After Generate and Install are finished, return to this chat, so KForge can help you continue building your app.\n" +
-    "- Or click the button below for the AI-assisted brief.\n\n"
+    "- Or click the button below for the AI-assisted plan.\n\n"
   );
 }
 export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {

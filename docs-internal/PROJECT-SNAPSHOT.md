@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **May 21st, 2026**
+Last Updated: **May 25th, 2026**
 
-Phase: **Phase 11.5 — Optional AI-Assisted App Brief Planning**
-Status: **Phase 11 Builder Reliability is stable through Preview/recovery UX polish, and KForge now supports an optional planning-only AI-Assisted App Brief beside the default Free App Brief path.**
+Phase: **Phase 11.6 — Model Presets, Quality Warnings, and Choice Menu Polish**
+Status: **Phase 11 Builder Reliability is stable through Preview/recovery UX polish, optional planning-only AI-assisted app plans, curated model preset guidance, Free starter plan recommendations, starter-choice clarification for vague app requests, and visible `Choice:` anchors / replay actions for supported choice menus. Final Phase 11.6 docs and smoke checks are in progress before the reserved stable tag is created.**
 
 Stable restore tags now available:
 
@@ -1798,7 +1798,7 @@ Local Project
 → Phase 8 Builder Loops: multi-file editing loops, change summaries, show-changes flow, and preview handoff intelligence
 → Phase 9 Developer Assistants: Error Fixer, Supabase Assistant, Deploy Assistant, Performance Assistant, and Assistant Result Protocol / Logical Workflow Outcomes
 → Phase 10 Advanced Vibecoding baseline: Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling
-→ Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, exact-text-not-found stop behavior, and optional planning-only AI-Assisted App Briefs beside the default Free App Brief path
+→ Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, exact-text-not-found stop behavior, and optional planning-only AI-assisted app plans beside the default Free starter plan path
 
 Important warning for future work:
 

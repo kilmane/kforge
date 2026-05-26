@@ -67,7 +67,7 @@ export const SUGGESTED_ACTION_LABEL = Object.freeze({
   CONTINUE_DIAGNOSING: "Continue diagnosing",
   START_IMPLEMENTATION: "Start implementation",
   REFINE_BLUEPRINT: "Refine blueprint",
-  AI_ASSISTED_APP_BRIEF: "Use AI-assisted brief",
+  AI_ASSISTED_APP_BRIEF: "Use AI-assisted plan",
   FIX_ERROR: "Fix the error",
   SHOW_LOGS: "Show logs",
   TRY_AGAIN: "Try again",

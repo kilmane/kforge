@@ -13,6 +13,16 @@ This guide is written for early beta testers. It is designed to help you get sta
 > **Beta note**
 >
 > This guide matches the current beta as closely as possible, but some labels, providers, and settings may still evolve.
+>
+> **Important: KForge is not itself an AI brain**
+>
+> KForge includes built-in routes, safeguards, and guided workflows that try to send common requests down logical paths without adding extra cost for users. This helps with app starters, Preview, Services, model choice, recovery, and safe editing flows.
+>
+> Even so, KForge can still route a request or workflow incorrectly. If the response does not match what you expected, try rephrasing your request more clearly. If the workspace seems confused, reset the workspace, reopen your project, and start the flow again.
+>
+> For more flexible planning or coding help, connect one of your chosen AI models and use the AI-assisted route. Model quality varies, and weak/test-only or unverified models may produce poor code or unreliable tool requests, so choose a model that matches the task.
+>
+> Future versions such as KForge V2 / KForge Pro are expected to improve this with more robust routing and workflow intelligence.
 
 ---
 
@@ -545,10 +555,34 @@ A blueprint should not claim files were changed. From there, you can choose to s
 
 When a project folder is empty, KForge can recommend a starter before any files are generated.
 
+For clear app requests, KForge may recommend the starter directly. For vague new-app requests, KForge may first show starter choices such as:
+
+* **Simple website / landing page**
+* **Interactive web app**
+* **Backend / accounts / database app**
+* **Supabase app**
+* **Mobile app**
+* **Not sure**
+* **Use AI-assisted plan**
+
+When you choose one of these options, KForge may show a visible chat anchor such as `Choice: Backend / accounts / database app`. These `Choice:` anchors make menu decisions visible in the normal chat while the transcript still keeps the deeper workflow history.
+
+Some menus also include **Show starter options again** and **Back to chat** so you can recover from a wrong choice without restarting the whole workspace.
+
+Typical starter guidance is:
+
+* normal interactive apps, todo apps, dashboards, and forms → **Vite + React**
+* backend, login, accounts, saved data, admin dashboard, full-stack, SEO, or server-style apps → **Next.js**
+* explicit Supabase requests → **Vite + React** first, then **Services → Backend → Supabase** later
+* mobile, phone, Expo, or React Native apps → **Expo/mobile starter**
+* static sites, landing pages, brochures, and portfolios → **Static HTML/CSS/JS**
+
 KForge may show two planning paths:
 
-* **Free App Brief** — uses built-in starter guidance. No AI model call or AI tokens are used. This is the default beginner path.
-* **AI-Assisted App Brief** — optional. Uses the current configured AI model for a more detailed brief. Quality depends on the model.
+* **Free starter plan** — uses built-in starter guidance. No AI model call or AI credits are used. This is the default beginner path.
+* **AI-assisted app plan** — optional. Uses the current configured AI model and provider for a more detailed plan. Provider/API costs may apply, and quality depends on the selected model.
+
+For real project work, prefer **Recommended builder** or **High capability** presets from the Provider/Model list. **Weak / test only** and **Custom / unverified** models are risky for automatic building and may produce malformed tools, poor code, loops, or incomplete edits.
 
 The AI-assisted path is still planning-only. It should not edit files, request tools, preview, deploy, or claim anything was created.
 
