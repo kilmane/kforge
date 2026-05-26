@@ -4905,6 +4905,24 @@ export default function App() {
                   appendMessage(
                     "assistant",
                     "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                    {
+                      actions: [
+                        {
+                          label: "Back to chat",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Back to chat");
+                            appendMessage("assistant", "No problem — continue in chat when ready.");
+                          },
+                        },
+                        {
+                          label: "Stop",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Stop");
+                            appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                          },
+                        },
+                      ],
+                    },
                   );
                 },
               },
@@ -4935,6 +4953,24 @@ export default function App() {
                   appendMessage(
                     "assistant",
                     "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                    {
+                      actions: [
+                        {
+                          label: "Back to chat",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Back to chat");
+                            appendMessage("assistant", "No problem — continue in chat when ready.");
+                          },
+                        },
+                        {
+                          label: "Stop",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Stop");
+                            appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                          },
+                        },
+                      ],
+                    },
                   );
                 },
               },
@@ -5004,6 +5040,24 @@ export default function App() {
                   appendMessage(
                     "assistant",
                     "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                    {
+                      actions: [
+                        {
+                          label: "Back to chat",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Back to chat");
+                            appendMessage("assistant", "No problem — continue in chat when ready.");
+                          },
+                        },
+                        {
+                          label: "Stop",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Stop");
+                            appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                          },
+                        },
+                      ],
+                    },
                   );
                 },
               },
@@ -5034,6 +5088,24 @@ export default function App() {
                   appendMessage(
                     "assistant",
                     "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                    {
+                      actions: [
+                        {
+                          label: "Back to chat",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Back to chat");
+                            appendMessage("assistant", "No problem — continue in chat when ready.");
+                          },
+                        },
+                        {
+                          label: "Stop",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Stop");
+                            appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                          },
+                        },
+                      ],
+                    },
                   );
                 },
               },
@@ -5109,6 +5181,24 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
+                      {
+                        actions: [
+                          {
+                            label: "Back to chat",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Back to chat");
+                              appendMessage("assistant", "No problem — continue in chat when ready.");
+                            },
+                          },
+                          {
+                            label: "Stop",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Stop");
+                              appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                            },
+                          },
+                        ],
+                      },
                     );
                   },
                 },
@@ -5139,6 +5229,24 @@ export default function App() {
                     appendMessage(
                       "assistant",
                       "Paste the exact install, build, or dependency error. I will use that evidence before suggesting the next step.",
+                      {
+                        actions: [
+                          {
+                            label: "Back to chat",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Back to chat");
+                              appendMessage("assistant", "No problem — continue in chat when ready.");
+                            },
+                          },
+                          {
+                            label: "Stop",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Stop");
+                              appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                            },
+                          },
+                        ],
+                      },
                     );
                   },
                 },
