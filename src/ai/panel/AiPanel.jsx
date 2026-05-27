@@ -3217,7 +3217,7 @@ export default function AiPanel({
                   />
                 ) : (
                   <>
-                    {/* GPT-clean chat view: assistant + relevant tool system messages */}
+                    {/* GPT-clean chat view: user anchors, assistant replies, and relevant action system messages */}
                     {messages
                       .filter((m) => {
                         const r = String(m?.role || "").toLowerCase();
@@ -3228,7 +3228,7 @@ export default function AiPanel({
 
                         if (r === "assistant" || r === "ai") return true;
 
-                        if (r === "user" && content.trim().startsWith("Choice:")) {
+                        if (r === "user" && content.trim()) {
                           return true;
                         }
 
