@@ -1521,6 +1521,32 @@ export default function AiPanel({
     });
   }, [servicesOpen]);
 
+  const revealChatForPromptActivity = useCallback(() => {
+    setPreviewOpen(false);
+    setTerminalOpen(false);
+    setServicesOpen(false);
+
+    if (isFocusLayout && typeof setFocusMode === "function") {
+      setFocusMode(true);
+    }
+  }, [isFocusLayout, setFocusMode]);
+
+  const handleSendChatFromPrompt = useCallback(() => {
+    revealChatForPromptActivity();
+    handleSendChat();
+  }, [handleSendChat, revealChatForPromptActivity]);
+
+  const handlePromptKeyDownFromPrompt = useCallback(
+    (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        revealChatForPromptActivity();
+      }
+
+      handlePromptKeyDown(event);
+    },
+    [handlePromptKeyDown, revealChatForPromptActivity],
+  );
+
   useEffect(() => {
     if (!isDevBuild) return;
 
@@ -3312,7 +3338,7 @@ export default function AiPanel({
               discardPatchPreview={discardPatchPreview}
               aiPrompt={aiPrompt}
               setAiPrompt={setAiPrompt}
-              handlePromptKeyDown={handlePromptKeyDown}
+              handlePromptKeyDown={handlePromptKeyDownFromPrompt}
               providerReady={providerReady}
               appendMessage={appendMessage}
               buttonClass={buttonClass}
@@ -3322,7 +3348,7 @@ export default function AiPanel({
             <ActionsPanel
               providerReady={providerReady}
               aiRunning={aiRunning}
-              handleSendChat={handleSendChat}
+              handleSendChat={handleSendChatFromPrompt}
               handleAiTest={handleAiTest}
               aiTestStatus={aiTestStatus}
               guardrailText={guardrailText}
@@ -3391,7 +3417,7 @@ export default function AiPanel({
             discardPatchPreview={discardPatchPreview}
             aiPrompt={aiPrompt}
             setAiPrompt={setAiPrompt}
-            handlePromptKeyDown={handlePromptKeyDown}
+            handlePromptKeyDown={handlePromptKeyDownFromPrompt}
             providerReady={providerReady}
             appendMessage={appendMessage}
             buttonClass={buttonClass}
@@ -3401,7 +3427,7 @@ export default function AiPanel({
           <ActionsPanel
             providerReady={providerReady}
             aiRunning={aiRunning}
-            handleSendChat={handleSendChat}
+            handleSendChat={handleSendChatFromPrompt}
             handleAiTest={handleAiTest}
             aiTestStatus={aiTestStatus}
             guardrailText={guardrailText}
