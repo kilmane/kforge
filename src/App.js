@@ -4748,7 +4748,151 @@ export default function App() {
         if (directHandoffFollowupRoute.action === "direct_preview_repeat") {
           appendMessage(
             "assistant",
-            buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+            "I'm not fully sure what happened in Preview.\n\nPlease confirm:",
+            {
+              actions: [
+                {
+                  label: "Preview the app",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Preview the app");
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowPreviewRoutingMessage(projectOpen, workflowContext),
+                    );
+                  },
+                },
+                {
+                  label: "Preview worked",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Preview worked");
+
+                    const verifiedWorkflowContext = {
+                      ...(workflowContext || {}),
+                      status: WORKFLOW_STATUS.COMPLETED,
+                      nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+                      verificationStatus: VERIFICATION_STATUS.PASSED,
+                      verificationSummary:
+                        "Preview was checked by you and passed. Build and automated tests have not been run.",
+                      updatedAt: Date.now(),
+                      source: "direct_preview_repeat_confirmation_success",
+                    };
+
+                    setWorkflowContext(verifiedWorkflowContext);
+
+                    appendMessage(
+                      "assistant",
+                      "Great — Preview was checked and passed.\n\n" +
+                        "Verification:\n" +
+                        "- Preview was checked by you and passed.\n" +
+                        "- Build and automated tests have not been run.\n\n" +
+                        "Next:\nChoose what you'd like to do next.",
+                      {
+                        actions: [
+                          {
+                            label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+                            onClick: () => {
+                              const showChangesContext =
+                                createShowChangesReviewWorkflowContext(
+                                  verifiedWorkflowContext,
+                                  "direct_preview_repeat_confirmation_show_changes",
+                                );
+
+                              setWorkflowContext(showChangesContext);
+                              appendMessage("user", "Choice: Show changes");
+                              appendMessage(
+                                "assistant",
+                                buildWorkflowShowChangesMessage(showChangesContext),
+                              );
+                            },
+                          },
+                          {
+                            label: "Make another edit",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Make another edit");
+                              appendMessage(
+                                "assistant",
+                                "Tell me the next edit, and I will route it from the current project state.",
+                              );
+                            },
+                          },
+                          {
+                            label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                            onClick: () => {
+                              appendMessage("user", "Choice: No action needed");
+                              appendMessage("assistant", "No problem — I'll leave it there.");
+                            },
+                          },
+                        ],
+                      },
+                    );
+                  },
+                },
+                {
+                  label: "Preview failed",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Preview failed");
+
+                    const failedWorkflowContext = {
+                      ...(workflowContext || {}),
+                      nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+                      expectedResult: "logs_or_error",
+                      verificationStatus: VERIFICATION_STATUS.FAILED,
+                      verificationSummary:
+                        "Preview was reported as failed by you. Concrete error evidence is needed before fixing.",
+                      updatedAt: Date.now(),
+                      source: "direct_preview_repeat_confirmation_failed",
+                    };
+
+                    setWorkflowContext(failedWorkflowContext);
+
+                    appendMessage(
+                      "assistant",
+                      "Preview reported as failed.\n\n" +
+                        "Please paste the exact evidence before I try to fix it:\n" +
+                        "- Preview panel logs\n" +
+                        "- Browser console error\n" +
+                        "- Error shown on the page\n" +
+                        "- Screenshot text\n\n" +
+                        "I will not edit files until there is concrete failure evidence.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
+                  onClick: () => {
+                    const showChangesContext =
+                      createShowChangesReviewWorkflowContext(
+                        workflowContext,
+                        "direct_preview_repeat_show_changes",
+                      );
+
+                    setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowShowChangesMessage(showChangesContext),
+                    );
+                  },
+                },
+                {
+                  label: "Make another edit",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Make another edit");
+                    appendMessage(
+                      "assistant",
+                      "Tell me the next edit, and I will route it from the current project state.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage("user", "Choice: Stop");
+                    appendMessage("assistant", "Stopped — no action taken.");
+                  },
+                },
+              ],
+            },
           );
           return;
         }
@@ -6105,6 +6249,16 @@ export default function App() {
             "I'm not fully sure what happened in Preview.\n\nPlease confirm:",
             {
               actions: [
+                {
+                  label: "Preview the app",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Preview the app");
+                    appendMessage(
+                      "assistant",
+                      buildWorkflowPreviewRoutingMessage(projectOpen, directHandoffContext),
+                    );
+                  },
+                },
                 {
                   label: "Preview worked",
                   onClick: () => {
