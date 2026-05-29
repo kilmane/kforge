@@ -733,12 +733,12 @@ function buildPostEditVerificationMessage(context = null) {
   ).trim();
 
   if (verificationStatus === VERIFICATION_STATUS.PASSED) {
-    return `Verification:\n- ${verificationSummary || "A verification step was completed."}`;
+    return `Status:\n- ${verificationSummary || "A verification step was completed."}`;
   }
 
   if (verificationStatus === VERIFICATION_STATUS.FAILED) {
     return (
-      "Verification:\n" +
+      "Status:\n" +
       `- ${verificationSummary || "A verification step failed or reported an issue."}\n` +
       "- Suggested next action: Fix the error."
     );
@@ -746,14 +746,14 @@ function buildPostEditVerificationMessage(context = null) {
 
   if (verificationStatus === VERIFICATION_STATUS.SUGGESTED) {
     return (
-      "Verification:\n" +
+      "Status:\n" +
       `- ${verificationSummary || "A verification step is suggested next."}\n` +
       "- Suggested next check: Preview the app."
     );
   }
 
   return (
-    "Verification:\n" +
+    "Status:\n" +
     "- I have not run Preview, build, or tests from this completion.\n" +
     "- Suggested next check: Preview the app.\n" +
     "- If Preview fails, choose Fix the error."
@@ -794,9 +794,7 @@ function buildPostEditCompletionActions({
         appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.VERIFY_CHANGES}`);
         appendMessage(
           "assistant",
-          `${buildPostEditVerificationMessage(
-            context,
-          )}\n\nUse Preview Panel → Preview for the next check. If dependencies are missing, use Preview Panel → Install first.`,
+          buildPostEditVerificationMessage(context),
         );
       },
     },

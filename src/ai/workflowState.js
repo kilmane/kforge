@@ -60,7 +60,7 @@ export const ASSISTANT_ACTION_TYPE = Object.freeze({
 export const SUGGESTED_ACTION_LABEL = Object.freeze({
   PREVIEW_APP: "Preview the app",
   SHOW_CHANGES: "Show changes",
-  VERIFY_CHANGES: "Verify changes",
+  VERIFY_CHANGES: "Status",
   CONTINUE_EDITING: "Continue editing",
   CONTINUE_IMPLEMENTATION: "Continue implementation",
   CONTINUE_FIXING: "Continue fixing",
