@@ -784,12 +784,14 @@ function buildPostEditCompletionActions({
     {
       label: SUGGESTED_ACTION_LABEL.PREVIEW_APP,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.PREVIEW_APP}`);
         appendMessage("assistant", buildPreviewHandoffMessage());
       },
     },
     {
       label: SUGGESTED_ACTION_LABEL.VERIFY_CHANGES,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.VERIFY_CHANGES}`);
         appendMessage(
           "assistant",
           `${buildPostEditVerificationMessage(
@@ -801,6 +803,7 @@ function buildPostEditCompletionActions({
     {
       label: SUGGESTED_ACTION_LABEL.FIX_ERROR,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.FIX_ERROR}`);
         appendMessage(
           "assistant",
           "Starting preview-error triage. I will inspect the last changed file only first. If there is no concrete error evidence, I will ask for Preview logs instead of changing files.",
@@ -831,6 +834,7 @@ function buildPostEditCompletionActions({
     {
       label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.SHOW_CHANGES}`);
         appendMessage(
           "assistant",
           `Last implementation completed.\n\n${buildPostEditChangeSummary(
@@ -842,6 +846,7 @@ function buildPostEditCompletionActions({
     {
       label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.CONTINUE_EDITING}`);
         appendMessage(
           "assistant",
           "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
@@ -851,6 +856,7 @@ function buildPostEditCompletionActions({
     {
       label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
       onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED}`);
         appendMessage("assistant", "No problem — I will leave it there.");
       },
     },
