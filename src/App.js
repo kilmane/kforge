@@ -1061,6 +1061,10 @@ function getDirectHandoffFollowupRouteDecision({
   const s = String(text || "").toLowerCase().trim();
 
   if (isDirectPreviewHandoffWorkflow(workflowContext)) {
+    if (workflowContext?.expectedResult === "logs_or_error" && s) {
+      return { action: "direct_preview_evidence_detail" };
+    }
+
     if (workflowContext?.expectedResult === "success_or_failure") {
       if (s === "1") return { action: "direct_preview_success" };
       if (s === "2") return { action: "direct_preview_failed" };
@@ -1099,6 +1103,22 @@ function getCompletedWorkflowRouteDecision({
   }
 
   const kind = promptTask?.kind || "unknown";
+
+  const verificationStatus = String(
+    workflowContext?.verificationStatus ||
+      workflowContext?.assistantResult?.verificationStatus ||
+      "",
+  ).trim();
+
+  const isWaitingForPreviewEvidence =
+    workflowContext?.nextStep === WORKFLOW_NEXT_STEP.PREVIEW &&
+    workflowContext?.expectedResult === "logs_or_error" &&
+    verificationStatus === VERIFICATION_STATUS.FAILED &&
+    String(promptText || "").trim();
+
+  if (isWaitingForPreviewEvidence) {
+    return { action: "preview_evidence_detail" };
+  }
 
   if (isVagueCompletedWorkflowIssueReport(promptText, promptTask)) {
     return { action: "clarify_issue_report" };
@@ -4678,6 +4698,33 @@ export default function App() {
       if (directHandoffFollowupRoute) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
 
+        if (directHandoffFollowupRoute.action === "direct_preview_evidence_detail") {
+          const evidenceDetail = String(draft || "").trim();
+
+          setWorkflowContext({
+            ...workflowContext,
+            expectedResult: "logs_or_error",
+            verificationStatus: VERIFICATION_STATUS.FAILED,
+            verificationSummary:
+              "Preview was reported as failed by you. Concrete error evidence is still needed before fixing.",
+            previewFailureDetail: evidenceDetail,
+            updatedAt: Date.now(),
+            source: "direct_preview_evidence_detail",
+          });
+
+          appendMessage(
+            "assistant",
+            "Thanks — that tells me the symptom, but I still need concrete Preview/runtime evidence before trying to fix it.\n\n" +
+              "Please paste one of:\n" +
+              "- Preview panel logs\n" +
+              "- Browser console error\n" +
+              "- Error shown on the page\n" +
+              "- Screenshot text\n\n" +
+              "I will not inspect or edit files until there is concrete evidence.",
+          );
+          return;
+        }
+
         if (directHandoffFollowupRoute.action === "direct_preview_success") {
           const verifiedWorkflowContext = {
             ...workflowContext,
@@ -5414,6 +5461,47 @@ export default function App() {
           return;
         }
 
+        if (completedWorkflowRoute.action === "preview_evidence_detail") {
+          const evidenceDetail = String(draft || "").trim();
+          const verificationSummary =
+            "Preview was reported as failed by you. Concrete error evidence is still needed before fixing.";
+
+          const evidenceWorkflowContext = {
+            ...workflowContext,
+            nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+            expectedResult: "logs_or_error",
+            verificationStatus: VERIFICATION_STATUS.FAILED,
+            verificationSummary,
+            previewFailureDetail: evidenceDetail,
+            assistantResult: workflowContext?.assistantResult
+              ? {
+                  ...workflowContext.assistantResult,
+                  verificationStatus: VERIFICATION_STATUS.FAILED,
+                  verificationSummary,
+                  updatedAt: Date.now(),
+                  source: "completed_preview_evidence_detail",
+                }
+              : workflowContext?.assistantResult,
+            updatedAt: Date.now(),
+            source: "completed_preview_evidence_detail",
+          };
+
+          setWorkflowContext(evidenceWorkflowContext);
+
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          appendMessage(
+            "assistant",
+            "Thanks — that tells me the symptom, but I still need concrete Preview/runtime evidence before trying to fix it.\n\n" +
+              "Please paste one of:\n" +
+              "- Preview panel logs\n" +
+              "- Browser console error\n" +
+              "- Error shown on the page\n" +
+              "- Screenshot text\n\n" +
+              "I will not inspect or edit files until there is concrete evidence.",
+          );
+          return;
+        }
+
         if (completedWorkflowRoute.action === "verification_already_success") {
           const verifiedWorkflowContext = {
             ...workflowContext,
@@ -5554,6 +5642,8 @@ export default function App() {
 
           const failedWorkflowContext = {
             ...workflowContext,
+            nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+            expectedResult: "logs_or_error",
             verificationStatus: VERIFICATION_STATUS.FAILED,
             verificationSummary,
             assistantResult: workflowContext?.assistantResult
