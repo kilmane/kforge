@@ -18,7 +18,17 @@ This guide is written for early beta testers. It is designed to help you get sta
 >
 > KForge includes built-in routes, safeguards, and guided workflows that try to send common requests down logical paths without adding extra cost for users. This helps with app starters, Preview, Services, model choice, recovery, and safe editing flows.
 >
-> Even so, KForge can still route a request or workflow incorrectly. If the response does not match what you expected, try rephrasing your request more clearly. If the workspace seems confused, reset the workspace, reopen your project, and start the flow again.
+> Even so, KForge can still route a request or workflow incorrectly. If the response does not match what you expected, try rephrasing your request more clearly.
+>
+> **Follow the visible workflow choices**
+>
+> KForge works best when you follow the choices shown in the chat, such as **Preview worked**, **Preview failed**, **Back to chat**, **Stop**, **Status**, or **Continue editing**.
+>
+> When KForge is inside an active workflow, it keeps that workflow context so it can route the next reply safely. For example, if KForge has just asked whether Preview succeeded or failed, it will treat the next reply as a Preview result. If you change topic inside that active workflow, KForge may misunderstand the new request or give an inconsistent response.
+>
+> If you want to change direction, use **Back to chat** or **Stop** first. If the conversation still feels confused, reset or reopen the workspace and start again from a fresh state.
+>
+> KForge is not an AI brain. It routes common workflows through guarded, logical paths, but it can still misunderstand requests when the current workflow context and the next message do not match.
 >
 > For more flexible planning or coding help, connect one of your chosen AI models and use the AI-assisted route. Model quality varies, and weak/test-only or unverified models may produce poor code or unreliable tool requests, so choose a model that matches the task.
 >
@@ -601,7 +611,7 @@ After KForge completes an implementation edit, it may show:
 Common suggested actions include:
 
 * **Preview the app** — use **Preview Panel → Preview** to run or view the project
-* **Verify changes** — check the result before treating it as finished
+* **Status** — check what KForge changed and what has or has not been verified
 * **Show changes** — ask KForge to review the changed files it recorded
 * **Continue editing** — describe the next change you want
 * **No action needed** — leave the completed workflow alone

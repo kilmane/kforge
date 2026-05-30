@@ -4,13 +4,14 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **May 25th, 2026**
+Last Updated: **May 30th, 2026**
 
 Phase: **Phase 11.6 — Model Presets, Quality Warnings, and Choice Menu Polish**
-Status: **Phase 11 Builder Reliability is stable through Preview/recovery UX polish, optional planning-only AI-assisted app plans, curated model preset guidance, Free starter plan recommendations, starter-choice clarification for vague app requests, and visible `Choice:` anchors / replay actions for supported choice menus. Final Phase 11.6 docs and smoke checks are in progress before the reserved stable tag is created.**
+Status: **Phase 11 Builder Reliability is a controlled beta candidate through Preview/recovery UX polish, optional planning-only AI-assisted app plans, curated model preset guidance, Free starter plan recommendations, starter-choice clarification for vague app requests, visible `Choice:` anchors / replay actions for supported choice menus, and final workflow/context documentation. Final Phase 11.6 beta-candidate restore point: `phase-11.6-model-presets-quality-warnings-stable`.**
 
 Stable restore tags now available:
 
+* `phase-11.6-model-presets-quality-warnings-stable`
 * `phase-4.10-agent-loop-stable`
 * `phase-4.10.1-agent-hardening-stable`
 * `phase-5.2-awareness-stable`

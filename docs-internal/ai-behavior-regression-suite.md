@@ -827,8 +827,8 @@ Expected behavior:
 * include a changed-file summary when available
 * include a **Verification** section
 * state when Preview, build, and tests have not been run
-* suggest a truthful next check such as **Preview the app** or **Verify changes**
-* offer controlled actions such as **Preview the app**, **Verify changes**, **Show changes**, **Continue editing**, or **No action needed**
+* suggest a truthful next check such as **Preview the app** or **Status**
+* offer controlled actions such as **Preview the app**, **Status**, **Show changes**, **Continue editing**, or **No action needed**
 
 Must NOT:
 
