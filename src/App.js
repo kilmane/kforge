@@ -1050,6 +1050,23 @@ function isDirectPreviewHandoffWorkflow(context = null) {
   );
 }
 
+function isWorkflowStopOrBackIntent(text = "") {
+  const s = String(text || "")
+    .toLowerCase()
+    .trim();
+
+  return (
+    s === "stop" ||
+    s === "cancel" ||
+    s === "back" ||
+    s === "back to chat" ||
+    s === "no action" ||
+    s === "no action needed" ||
+    s === "never mind" ||
+    s === "nevermind"
+  );
+}
+
 function getDirectHandoffFollowupRouteDecision({
   workflowContext = null,
   promptTask = null,
@@ -1061,6 +1078,10 @@ function getDirectHandoffFollowupRouteDecision({
   const s = String(text || "").toLowerCase().trim();
 
   if (isDirectPreviewHandoffWorkflow(workflowContext)) {
+    if (isWorkflowStopOrBackIntent(text)) {
+      return { action: "stop_waiting" };
+    }
+
     if (workflowContext?.expectedResult === "logs_or_error" && s) {
       return { action: "direct_preview_evidence_detail" };
     }
@@ -1117,6 +1138,10 @@ function getCompletedWorkflowRouteDecision({
     String(promptText || "").trim();
 
   if (isWaitingForPreviewEvidence) {
+    if (isWorkflowStopOrBackIntent(promptText)) {
+      return { action: "stop_waiting" };
+    }
+
     return { action: "preview_evidence_detail" };
   }
 
@@ -2584,12 +2609,42 @@ export default function App() {
 
     if (isApprovedImplementationStart) return false;
 
+    const hasSeriousAppAsk =
+      /\b(i\s+want|i\s+need|build\s+me|create|make)\b/.test(s) &&
+      /\b(app|web app|dashboard|saas|platform|portal|system)\b/.test(s);
+
+    const seriousScopeSignalCount = [
+      /\bserious\b/.test(s),
+      /\bfull[-\s]?stack\b/.test(s),
+      /\bsaas\b/.test(s),
+      /\b(login|sign\s*in|sign\s*up|signup|accounts?|auth|authentication)\b/.test(s),
+      /\b(database|db|supabase|backend|saved\s+(progress|data|bookings|items?)|persist|persistence)\b/.test(s),
+      /\b(admin\s+dashboard|admin\s+panel)\b/.test(s),
+      /\b(github|vercel|netlify)\b/.test(s),
+      /\b(deploy(?:ment)?\s+later|later\s+deploy(?:ment)?|deployment\s+preparation\s+later|eventual\s+deploy(?:ment)?)\b/.test(s),
+    ].filter(Boolean).length;
+
+    const hasSeriousAppPlanningScope =
+      hasSeriousAppAsk &&
+      seriousScopeSignalCount >= 2 &&
+      /\b(later|eventually|first|serious|full[-\s]?stack|saas|database|supabase|login|accounts?|auth|admin|saved|github|vercel|netlify)\b/.test(
+        s,
+      );
+
     const hasBlueprintSignal =
+      hasSeriousAppPlanningScope ||
       /\b(feature\s+blueprint|implementation\s+blueprint|build\s+blueprint|planning\s+blueprint)\b/.test(
         s,
       ) ||
       /\bblueprint\b/.test(s) ||
       /\b(plan|planning)\s+(this\s+)?(feature|implementation|build|change)\b/.test(
+        s,
+      ) ||
+      /\b(give|make|create|write)\s+me\s+(a\s+)?(feature\s+)?(blueprint|plan)\b/.test(
+        s,
+      ) ||
+      /\b(blueprint|plan)\s+(first|only)\b/.test(s) ||
+      /\b(do\s+not|don't|dont)\s+(build|implement|edit|change|write\s+code)\s*(yet|now)?\b/.test(
         s,
       ) ||
       /\b(before\s+(you\s+)?(implement|build|edit|change)|before\s+writing\s+code)\b/.test(
@@ -2698,6 +2753,8 @@ export default function App() {
     const s = raw.toLowerCase().trim();
 
     if (!s) return false;
+
+    if (isFeatureBlueprintIntent(text)) return false;
 
     if (
       /^(how|why|what|when|where)\b/.test(s) ||
@@ -3138,20 +3195,38 @@ export default function App() {
 
     if (!s || !s.includes("supabase")) return false;
 
-    if (/\b(service[-\s]?role|service role|secret key|private key)\b/.test(s)) {
-      return true;
-    }
+    const asksServiceOpen =
+      /\b(open|show|launch|go to)\s+(the\s+)?(supabase\s+)?service\b/.test(s) ||
+      /\bservices\s*(→|>|->|-)\s*(backend\s*(→|>|->|-)\s*)?supabase\b/.test(s);
+
+    const asksConnectionAction =
+      /\b(connect|set up|setup|configure|wire up)\s+(supabase|this project|the project|the app|it)\b/.test(s) ||
+      /\bsupabase\b.*\b(connect|set up|setup|configure|wire up)\b/.test(s);
+
+    const asksSetupCheck =
+      /\b(check|debug|fix|troubleshoot)\s+(the\s+)?supabase\b/.test(s) ||
+      /\bsupabase\b.*\b(not working|broken|cannot connect|can't connect|doesn't connect|does not connect|connection issue|connection problem|error|failed|failing|not connecting)\b/.test(s);
+
+    const asksEnvOrClientAction =
+      /\b(create|generate|add|install)\b.*\b(supabase|@supabase\/supabase-js|env file|\.env|client|query helper|read example|insert example)\b/.test(s) ||
+      (/\b(supabase client|supabase example|query helper|read example|insert example)\b/.test(s) &&
+        /\b(create|generate|add|install)\b/.test(s));
+
+    const asksEnvPlacement =
+      /\bwhere\s+(do|should)\s+i\s+put\b/.test(s) &&
+      /\b(supabase|env|environment|key|keys|anon key|public key)\b/.test(s);
+
+    const asksSensitiveKeyHelp =
+      /\b(service[-\s]?role|service role|secret key|private key)\b/.test(s) &&
+      /\b(supabase|env|key|keys|where|put|use)\b/.test(s);
 
     return (
-      /\b(connect|set up|setup|configure|add|install|create|generate|wire up|use|query|read|insert|debug|fix|troubleshoot|not working|broken)\b/.test(s) ||
-      s.includes("supabase client") ||
-      s.includes("supabase example") ||
-      s.includes("query helper") ||
-      s.includes("connection values") ||
-      s.includes("where do i put") ||
-      s.includes("env") ||
-      s.includes("anon key") ||
-      s.includes("public key")
+      asksServiceOpen ||
+      asksConnectionAction ||
+      asksSetupCheck ||
+      asksEnvOrClientAction ||
+      asksEnvPlacement ||
+      asksSensitiveKeyHelp
     );
   }
 
@@ -3244,26 +3319,49 @@ export default function App() {
       /\b(app|project|website|site|page|frontend|web app)\b/.test(s) ||
       mentionsDeployProvider;
 
-    const asksDeployAction =
-      /\b(deploy|deployment|host|hosting)\b/.test(s) ||
+    const asksServiceOpen =
+      /\b(open|show|launch|go to)\s+(the\s+)?(deploy|deployment)\s+service\b/.test(s) ||
+      /\bservices\s*(→|>|->|-)\s*deploy\b/.test(s);
+
+    const asksDirectDeploy =
+      /\b(deploy|publish|host)\s+(this\s+)?(app|project|website|site|page|frontend|web app|it)\b/.test(s) ||
+      /\b(deploy|publish|host)\s+(to|on)\s+(vercel|netlify)\b/.test(s);
+
+    const asksPublishHelp =
+      /\bhelp\s+me\s+(deploy|publish|host)\b/.test(s) &&
+      (mentionsWebTarget || /\b(this|the)\s+project\b/.test(s));
+
+    const asksReadyToDeploy =
+      /\b(app|project|website|site|frontend|web app|it)\b.*\b(ready|done)\b.*\b(deploy|publish|go live)\b/.test(s) ||
+      /\b(ready|done)\b.*\b(deploy|publish|go live)\s+(it|this app|this project|the app|the project)\b/.test(s) ||
+      /\bi\s+want\s+to\s+(deploy|publish|host)\s+(it|this app|this project|the app|the project)\b/.test(s);
+
+    const asksGoLive =
       s.includes("put this app online") ||
       s.includes("put this website online") ||
       s.includes("put this site online") ||
       s.includes("put it online") ||
       s.includes("make this live") ||
       s.includes("make it live") ||
-      s.includes("go live") ||
-      s.includes("where do i deploy") ||
-      s.includes("where should i deploy") ||
-      (/\bpublish\b/.test(s) && mentionsWebTarget && !s.includes("github"));
+      s.includes("go live");
 
-    const asksProviderHelp =
+    const asksDeployAdvice =
+      /\bwhere\s+(do|should)\s+i\s+(deploy|host|publish)\b/.test(s) &&
+      mentionsWebTarget;
+
+    const asksProviderCurrentAction =
       mentionsDeployProvider &&
-      /\b(connect|set up|setup|configure|add|use|open|import|deploy|publish|host|hosting|help|fix|debug|troubleshoot|fail|failed|failing|error|broken|not working|issue|problem)\b/.test(
-        s,
-      );
+      /\b(deploy|publish|host|open|connect|set up|setup|configure|import|fix|debug|troubleshoot|fail|failed|failing|error|broken|not working|issue|problem)\b/.test(s);
 
-    return asksDeployAction || asksProviderHelp;
+    return (
+      asksServiceOpen ||
+      asksDirectDeploy ||
+      asksPublishHelp ||
+      asksReadyToDeploy ||
+      asksGoLive ||
+      asksDeployAdvice ||
+      asksProviderCurrentAction
+    );
   }
 
   function buildDeployRoutingMessage(projectOpen, text = "") {
@@ -3967,6 +4065,13 @@ export default function App() {
           source: "explicit_project_edit_operation",
         };
       }
+      if (projectOpen && isFeatureBlueprintIntent(text)) {
+        return {
+          kind: WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT,
+          confidence: "high",
+          source: "feature_blueprint_intent",
+        };
+      }
       if (
         isSupabaseServiceWorkflowIntent(text) &&
         !hasManualOrAdvisoryIntent(text)
@@ -4110,15 +4215,7 @@ export default function App() {
       }
 
 
-      if (projectOpen && isFeatureBlueprintIntent(text)) {
-        return {
-          kind: WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT,
-          confidence: "high",
-          source: "feature_blueprint_intent",
-        };
-      }
-
-      if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text) || isTypedStarterChoiceIntent(text))) {
+if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefStarterRoutingIntent(text) || isTypedStarterChoiceIntent(text))) {
         return {
           kind: "no_project_implementation",
           confidence: "high",
@@ -4697,6 +4794,12 @@ export default function App() {
 
       if (directHandoffFollowupRoute) {
         if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        if (directHandoffFollowupRoute.action === "stop_waiting") {
+          setWorkflowContext(null);
+          appendMessage("assistant", "Stopped — no action taken.");
+          return;
+        }
 
         if (directHandoffFollowupRoute.action === "direct_preview_evidence_detail") {
           const evidenceDetail = String(draft || "").trim();
@@ -5458,6 +5561,13 @@ export default function App() {
               ],
             },
           );
+          return;
+        }
+
+        if (completedWorkflowRoute.action === "stop_waiting") {
+          if (!opts.silentUserAppend) appendMessage("user", draft);
+          setWorkflowContext(null);
+          appendMessage("assistant", "Stopped — no action taken.");
           return;
         }
 
