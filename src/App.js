@@ -931,6 +931,13 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
     return { action: "deploy_service" };
   }
 
+  if (kind === "ambiguous_service_trigger") {
+    return {
+      action: "ambiguous_service_trigger",
+      serviceTrigger: promptTask?.serviceTrigger || null,
+    };
+  }
+
   if (kind === "preview_followup") {
     return { action: "preview_followup" };
   }
@@ -3364,6 +3371,63 @@ export default function App() {
     );
   }
 
+  function getAmbiguousServiceTrigger(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return null;
+
+    const hasContextOnlyLanguage =
+      /\b(will\s+need|need|needs|needed|should\s+use|should\s+have|will\s+use|would\s+use|going\s+to\s+use|later|eventually|for\s+this\s+app|for\s+the\s+app|support)\b/.test(
+        s,
+      );
+
+    if (!hasContextOnlyLanguage) return null;
+
+    const mentionsSupabase = /\bsupabase\b/.test(s);
+    const mentionsBackendOrData =
+      /\b(backend|database|db|saved\s+data|saved\s+progress|persist|persistence|auth|login|accounts?)\b/.test(
+        s,
+      );
+    const mentionsDeploy =
+      /\b(deployment|deploy|deployed|publish|published|hosting|hosted|go\s+live|vercel|netlify|github)\b/.test(
+        s,
+      );
+
+    if (mentionsSupabase || mentionsBackendOrData) {
+      return {
+        service: "supabase",
+        serviceLabel: "Supabase",
+        serviceRouteLabel: "Services → Backend → Supabase",
+        openLabel: "Open Supabase service now",
+        wordingLabel: mentionsSupabase ? "Supabase" : "backend/database",
+      };
+    }
+
+    if (mentionsDeploy) {
+      return {
+        service: "deploy",
+        serviceLabel: "Deploy",
+        serviceRouteLabel: "Services → Deploy",
+        openLabel: "Open Deploy service now",
+        wordingLabel: "deployment",
+      };
+    }
+
+    return null;
+  }
+
+  function buildServiceTriggerConfirmationMessage(serviceTrigger = null) {
+    const label = serviceTrigger?.wordingLabel || "service";
+    const route = serviceTrigger?.serviceRouteLabel || "Services";
+
+    return (
+      `I noticed ${label} wording, but I’m not sure you want to open ${route} now.\n\n` +
+      "Choose the closest option:"
+    );
+  }
+
   function buildDeployRoutingMessage(projectOpen, text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -4091,6 +4155,16 @@ export default function App() {
           kind: "deploy_service",
           confidence: "high",
           source: "existing_intent_helpers",
+        };
+      }
+
+      const ambiguousServiceTrigger = getAmbiguousServiceTrigger(text);
+      if (ambiguousServiceTrigger && !hasManualOrAdvisoryIntent(text)) {
+        return {
+          kind: "ambiguous_service_trigger",
+          confidence: "medium",
+          source: "service_trigger_confirmation",
+          serviceTrigger: ambiguousServiceTrigger,
         };
       }
 
@@ -6253,6 +6327,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           provider_setup: "provider_setup",
           supabase_service: "supabase",
           deploy_service: "deploy",
+          ambiguous_service_trigger: "service_confirmation",
           dependency_install: isPreviewHandoff ? "preview" : "install",
           preview_followup: "preview",
           expo_phone_preview: "expo_phone_preview",
@@ -6264,6 +6339,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           deploy: WORKFLOW_NEXT_STEP.DEPLOY,
           supabase: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           provider_setup: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          service_confirmation: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
           empty_folder: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
           expo_phone_preview: WORKFLOW_NEXT_STEP.PREVIEW,
@@ -6277,6 +6353,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           deploy: "deploy_result_or_logs",
           supabase: "connection_result_or_logs",
           provider_setup: "connection_result_or_logs",
+          service_confirmation: "service_route_choice",
           open_project: "project_opened_or_needs_help",
           empty_folder: "starter_generated_or_needs_help",
           expo_phone_preview: "preview_result_or_logs",
@@ -6440,6 +6517,87 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
 
         if (directWorkflowHandoffRoute.action === "deploy_service") {
           appendMessage("assistant", buildDeployRoutingMessage(projectOpen, draft));
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "ambiguous_service_trigger") {
+          const serviceTrigger =
+            directWorkflowHandoffRoute.serviceTrigger ||
+            getAmbiguousServiceTrigger(draft);
+
+          if (!serviceTrigger) {
+            appendMessage(
+              "assistant",
+              "I noticed possible service wording, but I’m not sure what service action you want.\n\nPlease say whether you want to open Services now, keep planning/editing, or stop.",
+            );
+            return;
+          }
+
+          appendMessage(
+            "assistant",
+            buildServiceTriggerConfirmationMessage(serviceTrigger),
+            {
+              actions: [
+                {
+                  label: serviceTrigger.openLabel,
+                  onClick: () => {
+                    appendMessage("user", `Choice: ${serviceTrigger.openLabel}`);
+
+                    const confirmedHandoffContext =
+                      createDirectHandoffWorkflowContext({
+                        handoffType: serviceTrigger.service,
+                        nextStep: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+                        expectedResult:
+                          serviceTrigger.service === "deploy"
+                            ? "deploy_result_or_logs"
+                            : "connection_result_or_logs",
+                        lastUserGoal: draft,
+                        source: `confirmed_service_trigger_${serviceTrigger.service}`,
+                      });
+
+                    setWorkflowContext(confirmedHandoffContext);
+
+                    appendMessage(
+                      "assistant",
+                      serviceTrigger.service === "deploy"
+                        ? buildDeployRoutingMessage(projectOpen, draft)
+                        : buildSupabaseRoutingMessage(projectOpen, draft),
+                    );
+                  },
+                },
+                {
+                  label: "Keep planning / editing the app",
+                  onClick: () => {
+                    appendMessage(
+                      "user",
+                      "Choice: Keep planning / editing the app",
+                    );
+                    setWorkflowContext(null);
+                    appendMessage(
+                      "assistant",
+                      "Okay — I’ll treat the service wording as context, not a request to open Services now.\n\nTell me the next planning or editing step you want.",
+                    );
+                  },
+                },
+                {
+                  label: "Back to chat",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Back to chat");
+                    setWorkflowContext(null);
+                    appendMessage("assistant", "Okay — back to normal chat.");
+                  },
+                },
+                {
+                  label: "Stop",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Stop");
+                    setWorkflowContext(null);
+                    appendMessage("assistant", "Stopped.");
+                  },
+                },
+              ],
+            },
+          );
           return;
         }
 
