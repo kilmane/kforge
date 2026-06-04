@@ -3202,6 +3202,12 @@ export default function App() {
 
     if (!s || !s.includes("supabase")) return false;
 
+    const hasDeferredSupabaseContext =
+      /\b(later|eventually|in\s+the\s+future|future|not\s+now|after\s+the\s+frontend|after\s+frontend)\b/.test(s) ||
+      /\b(will\s+need|will\s+use|should\s+use|should\s+have|prepare|ready\s+for)\b/.test(s);
+
+    if (hasDeferredSupabaseContext) return false;
+
     const asksServiceOpen =
       /\b(open|show|launch|go to)\s+(the\s+)?(supabase\s+)?service\b/.test(s) ||
       /\bservices\s*(→|>|->|-)\s*(backend\s*(→|>|->|-)\s*)?supabase\b/.test(s);
