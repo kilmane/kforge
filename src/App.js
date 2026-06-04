@@ -3319,6 +3319,12 @@ export default function App() {
 
     if (!s) return false;
 
+    const hasDeferredDeployContext =
+      /\b(later|eventually|in\s+the\s+future|future|not\s+now)\b/.test(s) ||
+      /\b(will\s+need|will\s+use|prepare|ready\s+for)\b/.test(s);
+
+    if (hasDeferredDeployContext) return false;
+
     const mentionsVercel = /\bvercel\b/.test(s);
     const mentionsNetlify = /\bnetlify\b/.test(s);
     const mentionsDeployProvider = mentionsVercel || mentionsNetlify;
