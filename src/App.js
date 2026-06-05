@@ -5884,6 +5884,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       );
 
                     setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
 
                     appendMessage(
                       "assistant",
@@ -5958,6 +5959,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       );
 
                     setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
 
                     appendMessage(
                       "assistant",
@@ -6181,6 +6183,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       );
 
                     setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
 
                     appendMessage(
                       "assistant",
@@ -6233,6 +6236,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       );
 
                     setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
 
                     appendMessage(
                       "assistant",
@@ -6408,6 +6412,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       );
 
                     setWorkflowContext(showChangesContext);
+                    appendMessage("user", "Choice: Show changes");
 
                     appendMessage(
                       "assistant",
