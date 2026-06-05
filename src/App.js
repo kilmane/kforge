@@ -919,6 +919,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
     return { action: "empty_folder_plan" };
   }
 
+  if (kind === "open_project_build_app_clarifier") {
+    return { action: "open_project_build_app_clarifier" };
+  }
+
   if (kind === "provider_setup") {
     return { action: "provider_setup" };
   }
@@ -2759,6 +2763,85 @@ export default function App() {
   }
 
 
+  function isOpenProjectBuildAppClarifierIntent(text = "") {
+    const raw = String(text || "");
+    const s = raw.toLowerCase().trim();
+
+    if (!s) return false;
+    if (isFeatureBlueprintIntent(text)) return false;
+
+    if (
+      /^(how|why|what|when|where)\b/.test(s) ||
+      /\b(explain|manual steps|guide me|show me how)\b/.test(s)
+    ) {
+      return false;
+    }
+
+    const hasBroadBuildAppAsk =
+      /\b(i\s+need|need|i\s+want|want|would\s+like|looking\s+to|trying\s+to|build|create|make)\b/.test(
+        s,
+      ) &&
+      /\b(build|create|make|start|set\s+up|generate)\b.*\b(app|website|site|dashboard|platform|portal|system|tool)\b/.test(
+        s,
+      );
+
+    if (!hasBroadBuildAppAsk) return false;
+
+    const hasExplicitFileOrUiTarget =
+      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|component|page|screen|layout|heading|title|button|footer|navbar|text|copy|label|style|ui|ux|file)\b/.test(
+        s,
+      );
+
+    const hasQuotedConcreteEdit =
+      /["'“”‘’`][^"'“”‘’`]+["'“”‘’`]/.test(raw) &&
+      /\b(to|with|say|says|called|named)\b/.test(s);
+
+    return !hasExplicitFileOrUiTarget && !hasQuotedConcreteEdit;
+  }
+
+  function buildOpenProjectBuildAppClarifierMessage(text = "") {
+    return (
+      "You already have a project open, and this sounds like a broad app-building request rather than a small file edit.\n\n" +
+      "Choose how you want to continue:"
+    );
+  }
+
+  function buildOpenProjectBuildAppPlanMessage(userText = "", folderState = {}) {
+    const safeFolderState = {
+      projectOpen: true,
+      emptyProjectFolder: false,
+      ...(folderState || {}),
+    };
+
+    const brief = buildFreeAppBrief({
+      userText: normalizeTypedStarterChoiceText(userText),
+      folderState: safeFolderState,
+    });
+
+    if (
+      brief?.nextAction === "choose_starter_type" ||
+      brief?.intent === APP_INTENT.UNKNOWN
+    ) {
+      return (
+        "You already have a project open, so I will not treat this as an empty-folder starter setup.\n\n" +
+        "I need one more detail before recommending the best plan for this app.\n\n" +
+        "Which is closest?\n" +
+        "1. Simple website / landing page\n" +
+        "2. Interactive web app / dashboard / calculator / data display\n" +
+        "3. Backend / accounts / database app\n" +
+        "4. Mobile app\n" +
+        "5. Not sure yet\n\n" +
+        "This is planning only. No files have been changed."
+      );
+    }
+
+    return (
+      "You already have a project open.\n\n" +
+      renderStarterRecommendation(brief, safeFolderState) +
+      "\n\nThis is planning only. No files have been changed."
+    );
+  }
+
   function isExplicitProjectEditOperationIntent(text = "") {
     const raw = String(text || "");
     const s = raw.toLowerCase().trim();
@@ -4285,6 +4368,18 @@ export default function App() {
           kind: "stripe_service",
           confidence: "high",
           source: "existing_intent_helpers",
+        };
+      }
+
+      if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isOpenProjectBuildAppClarifierIntent(text)
+      ) {
+        return {
+          kind: "open_project_build_app_clarifier",
+          confidence: "medium",
+          source: "open_project_build_app_clarifier",
         };
       }
 
@@ -6498,6 +6593,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           empty_folder_performance: "empty_folder",
           manual_performance: "manual",
           empty_folder_plan: "empty_folder",
+          open_project_build_app_clarifier: "open_project_build_app_clarifier",
           provider_setup: "provider_setup",
           stripe_service: "stripe",
           supabase_service: "supabase",
@@ -6518,6 +6614,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           service_confirmation: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
           empty_folder: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
+          open_project_build_app_clarifier: "",
           expo_phone_preview: WORKFLOW_NEXT_STEP.PREVIEW,
           expo_terminal_choice: WORKFLOW_NEXT_STEP.PREVIEW,
           manual: "",
@@ -6533,6 +6630,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           service_confirmation: "service_route_choice",
           open_project: "project_opened_or_needs_help",
           empty_folder: "starter_generated_or_needs_help",
+          open_project_build_app_clarifier: "build_app_choice",
           expo_phone_preview: "preview_result_or_logs",
           expo_terminal_choice: "choice_or_manual_result",
           manual: "manual_result_or_question",
@@ -6555,6 +6653,87 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           appendMessage(
             "assistant",
             buildExpoTerminalChoiceRoutingMessage(projectOpen),
+          );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "open_project_build_app_clarifier") {
+          const folderState = {
+            projectOpen: true,
+            emptyProjectFolder: false,
+          };
+
+          appendMessage(
+            "assistant",
+            buildOpenProjectBuildAppClarifierMessage(draft),
+            {
+              actions: [
+                {
+                  label: "Plan this app first",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Plan this app first");
+                    setWorkflowContext(null);
+                    appendMessage(
+                      "assistant",
+                      buildOpenProjectBuildAppPlanMessage(draft, folderState),
+                    );
+                  },
+                },
+                {
+                  label: "Start implementation in this project",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Start implementation in this project");
+                    sendWithPrompt(
+                      `Start implementation in the current project.\n\nOriginal request:\n${draft}\n\nInspect the relevant files first. Then request the smallest safe file change. Do not replace the whole app unless inspection shows it is only a starter placeholder.`,
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF,
+                  onClick: () => {
+                    appendMessage(
+                      "user",
+                      `Choice: ${SUGGESTED_ACTION_LABEL.AI_ASSISTED_APP_BRIEF}`,
+                    );
+                    appendMessage(
+                      "assistant",
+                      "This will use your selected AI model to create a more detailed plan. Provider/API costs may apply.",
+                    );
+                    sendWithPrompt(
+                      buildAiAssistedAppBriefPrompt(
+                        draft,
+                        "A project is already open. The user has not yet confirmed whether to implement directly or plan first.",
+                      ),
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                        suppressToolsForPrompt: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: "Back to chat",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Back to chat");
+                    appendMessage("assistant", "No problem — continue in chat when ready.");
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                    appendMessage("assistant", "Stopped — no project changes started.");
+                  },
+                },
+              ],
+            },
           );
           return;
         }
