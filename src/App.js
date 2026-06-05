@@ -3168,6 +3168,13 @@ export default function App() {
 
     const mentionsOpenAI = s.includes("openai");
     const mentionsSupabase = s.includes("supabase");
+
+    const hasDeferredProviderContext =
+      /\b(later|eventually|in\s+the\s+future|future|not\s+now|after\s+the\s+frontend|after\s+frontend)\b/.test(s) ||
+      /\b(will\s+need|will\s+use|should\s+use|should\s+have|prepare|ready\s+for)\b/.test(s);
+
+    if (hasDeferredProviderContext) return false;
+
     const asksToAddBoth =
       s.includes("add") ||
       s.includes("set up") ||
@@ -3397,6 +3404,7 @@ export default function App() {
 
     if (!hasContextOnlyLanguage) return null;
 
+    const mentionsOpenAI = /\bopenai\b/.test(s);
     const mentionsSupabase = /\bsupabase\b/.test(s);
     const mentionsBackendOrData =
       /\b(backend|database|db|saved\s+data|saved\s+progress|persist|persistence|auth|login|accounts?)\b/.test(
@@ -3406,6 +3414,16 @@ export default function App() {
       /\b(deployment|deploy|deployed|publish|published|hosting|hosted|go\s+live|vercel|netlify|github)\b/.test(
         s,
       );
+
+    if (mentionsOpenAI && mentionsSupabase) {
+      return {
+        service: "provider_setup",
+        serviceLabel: "OpenAI and Supabase",
+        serviceRouteLabel: "Services → AI → OpenAI and Services → Backend → Supabase",
+        openLabel: "Open OpenAI and Supabase services now",
+        wordingLabel: "OpenAI/Supabase",
+      };
+    }
 
     if (mentionsSupabase || mentionsBackendOrData) {
       return {
@@ -4148,6 +4166,13 @@ export default function App() {
           source: "feature_blueprint_intent",
         };
       }
+      if (isCombinedOpenAiSupabaseServiceIntent(text)) {
+        return {
+          kind: "provider_setup",
+          confidence: "medium",
+          source: "existing_intent_helpers",
+        };
+      }
       if (
         isSupabaseServiceWorkflowIntent(text) &&
         !hasManualOrAdvisoryIntent(text)
@@ -4268,14 +4293,6 @@ export default function App() {
         return {
           kind: "manual_steps",
           confidence: "high",
-          source: "existing_intent_helpers",
-        };
-      }
-
-      if (isCombinedOpenAiSupabaseServiceIntent(text)) {
-        return {
-          kind: "provider_setup",
-          confidence: "medium",
           source: "existing_intent_helpers",
         };
       }
@@ -6573,7 +6590,9 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       "assistant",
                       serviceTrigger.service === "deploy"
                         ? buildDeployRoutingMessage(projectOpen, draft)
-                        : buildSupabaseRoutingMessage(projectOpen, draft),
+                        : serviceTrigger.service === "provider_setup"
+                          ? buildCombinedOpenAiSupabaseRoutingMessage(projectOpen)
+                          : buildSupabaseRoutingMessage(projectOpen, draft),
                     );
                   },
                 },
