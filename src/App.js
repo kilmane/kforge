@@ -923,6 +923,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
     return { action: "provider_setup" };
   }
 
+  if (kind === "stripe_service") {
+    return { action: "stripe_service" };
+  }
+
   if (kind === "supabase_service") {
     return { action: "supabase_service" };
   }
@@ -3161,6 +3165,92 @@ export default function App() {
       "KForge Terminal is still useful for normal project commands in the current workspace."
     );
   }
+  function isStripeServiceWorkflowIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+    if (isFeatureBlueprintIntent(text)) return false;
+
+    const mentionsStripe = /\bstripe\b/.test(s);
+    const mentionsPaymentProcessing =
+      /\b(payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b/.test(
+        s,
+      ) ||
+      /\b(accept|take|process|collect|receive)\s+(online\s+|card\s+|customer\s+)?payments?\b/.test(
+        s,
+      ) ||
+      /\bpayments?\s+(with|via|through)\s+(stripe|card|cards|checkout)\b/.test(
+        s,
+      );
+
+    const hasPayrollOrWageContext =
+      /\b(employees?|payroll|salary|salaries|wages?|tax|taxes|deductions?|payslips?)\b/.test(
+        s,
+      );
+
+    if (hasPayrollOrWageContext && !mentionsStripe) return false;
+    if (!mentionsStripe && !mentionsPaymentProcessing) return false;
+
+    const hasDeferredStripeContext =
+      /\b(later|eventually|in\s+the\s+future|future|not\s+now)\b/.test(s) ||
+      /\b(will\s+need|will\s+use|should\s+use|should\s+have|prepare|ready\s+for)\b/.test(s);
+
+    if (hasDeferredStripeContext) return false;
+
+    const asksServiceOpen =
+      /\b(open|show|launch|go to)\s+(the\s+)?(stripe|payments?)\s+service\b/.test(s) ||
+      /\bservices\s*(→|>|->|-)\s*payments?\s*(→|>|->|-)\s*stripe\b/.test(s);
+
+    const asksStripeAction =
+      /\b(add|connect|set up|setup|configure|integrate|enable)\b.*\b(stripe|payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b/.test(s) ||
+      /\b(stripe|payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b.*\b(add|connect|set up|setup|configure|integrate|enable)\b/.test(s) ||
+      /\b(add|connect|set up|setup|configure|integrate|enable)\b.*\b(accept|take|process|collect|receive)\s+(online\s+|card\s+|customer\s+)?payments?\b/.test(s);
+
+    const asksSetupCheck =
+      /\b(check|debug|fix|troubleshoot)\b.*\b(stripe|payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b/.test(s) ||
+      /\b(stripe|payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b.*\b(not working|broken|failed|failing|error|issue|problem|missing)\b/.test(s);
+
+    return asksServiceOpen || asksStripeAction || asksSetupCheck;
+  }
+
+  function buildStripeRoutingMessage(projectOpen, text = "") {
+    const route = "Services → Payments → Stripe";
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    const mentionsFailure =
+      /\b(fail|failed|failing|error|broken|not working|doesn't work|does not work|issue|problem|missing)\b/.test(
+        s,
+      );
+
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        `Then you can leave the chat and open: ${route}.\n\n` +
+        'Start with "Check Stripe setup".'
+      );
+    }
+
+    if (mentionsFailure) {
+      return (
+        "KForge can help troubleshoot Stripe/payment setup through the Stripe service flow.\n\n" +
+        `You can now leave the chat and open: ${route}.\n\n` +
+        'Start with "Check Stripe setup". It checks Stripe readiness, env values, and webhook-related setup signals when present.\n\n' +
+        "If a Stripe action failed, paste the Services log or Stripe error back into chat and I can help interpret it."
+      );
+    }
+
+    return (
+      "KForge can help with payments through the Stripe service flow.\n\n" +
+      `You can now leave the chat and open: ${route}.\n\n` +
+      'Start with "Check Stripe setup". The Stripe service can help check readiness, prepare env files, and guide you to the Stripe dashboard, docs, or webhook docs.\n\n' +
+      "The chat has not added Stripe, created a checkout flow, changed files, or configured payment keys."
+    );
+  }
+
   function isCombinedOpenAiSupabaseServiceIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3406,6 +3496,17 @@ export default function App() {
 
     const mentionsOpenAI = /\bopenai\b/.test(s);
     const mentionsSupabase = /\bsupabase\b/.test(s);
+    const mentionsStripeOrPayments =
+      /\bstripe\b/.test(s) ||
+      /\b(payment\s+method|checkout\s+flow|checkout|billing|subscription|subscriptions?)\b/.test(
+        s,
+      ) ||
+      /\b(app|site|website|project)\b.*\b(accept|take|process|collect|receive)\s+(online\s+|card\s+|customer\s+)?payments?\b/.test(
+        s,
+      ) ||
+      /\b(users?|customers?|clients?)\b.*\b(able\s+to|can|could|should)\b.*\b(make|pay|submit)\s+(a\s+)?payments?\b/.test(
+        s,
+      );
     const mentionsBackendOrData =
       /\b(backend|database|db|saved\s+data|saved\s+progress|persist|persistence|auth|login|accounts?)\b/.test(
         s,
@@ -3422,6 +3523,21 @@ export default function App() {
         serviceRouteLabel: "Services → AI → OpenAI and Services → Backend → Supabase",
         openLabel: "Open OpenAI and Supabase services now",
         wordingLabel: "OpenAI/Supabase",
+      };
+    }
+
+    const hasPayrollOrWageContext =
+      /\b(employees?|payroll|salary|salaries|wages?|tax|taxes|deductions?|payslips?)\b/.test(
+        s,
+      );
+
+    if (mentionsStripeOrPayments && !(hasPayrollOrWageContext && !/\bstripe\b/.test(s))) {
+      return {
+        service: "stripe",
+        serviceLabel: "Stripe",
+        serviceRouteLabel: "Services → Payments → Stripe",
+        openLabel: "Open Stripe service now",
+        wordingLabel: "Stripe/payments",
       };
     }
 
@@ -4143,6 +4259,30 @@ export default function App() {
       ) {
         return {
           kind: "show_changes",
+          confidence: "high",
+          source: "existing_intent_helpers",
+        };
+      }
+
+      const ambiguousPreEditStripeTrigger = getAmbiguousServiceTrigger(text);
+      if (
+        ambiguousPreEditStripeTrigger?.service === "stripe" &&
+        !hasManualOrAdvisoryIntent(text)
+      ) {
+        return {
+          kind: "ambiguous_service_trigger",
+          confidence: "medium",
+          source: "stripe_payment_capability_confirmation",
+          serviceTrigger: ambiguousPreEditStripeTrigger,
+        };
+      }
+
+      if (
+        isStripeServiceWorkflowIntent(text) &&
+        !hasManualOrAdvisoryIntent(text)
+      ) {
+        return {
+          kind: "stripe_service",
           confidence: "high",
           source: "existing_intent_helpers",
         };
@@ -6354,6 +6494,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           manual_performance: "manual",
           empty_folder_plan: "empty_folder",
           provider_setup: "provider_setup",
+          stripe_service: "stripe",
           supabase_service: "supabase",
           deploy_service: "deploy",
           ambiguous_service_trigger: "service_confirmation",
@@ -6368,6 +6509,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           deploy: WORKFLOW_NEXT_STEP.DEPLOY,
           supabase: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           provider_setup: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          stripe: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           service_confirmation: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
           empty_folder: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
@@ -6382,6 +6524,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           deploy: "deploy_result_or_logs",
           supabase: "connection_result_or_logs",
           provider_setup: "connection_result_or_logs",
+          stripe: "payment_result_or_logs",
           service_confirmation: "service_route_choice",
           open_project: "project_opened_or_needs_help",
           empty_folder: "starter_generated_or_needs_help",
@@ -6539,6 +6682,11 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           return;
         }
 
+        if (directWorkflowHandoffRoute.action === "stripe_service") {
+          appendMessage("assistant", buildStripeRoutingMessage(projectOpen, draft));
+          return;
+        }
+
         if (directWorkflowHandoffRoute.action === "supabase_service") {
           appendMessage("assistant", buildSupabaseRoutingMessage(projectOpen, draft));
           return;
@@ -6579,7 +6727,9 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                         expectedResult:
                           serviceTrigger.service === "deploy"
                             ? "deploy_result_or_logs"
-                            : "connection_result_or_logs",
+                            : serviceTrigger.service === "stripe"
+                              ? "payment_result_or_logs"
+                              : "connection_result_or_logs",
                         lastUserGoal: draft,
                         source: `confirmed_service_trigger_${serviceTrigger.service}`,
                       });
@@ -6592,7 +6742,9 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                         ? buildDeployRoutingMessage(projectOpen, draft)
                         : serviceTrigger.service === "provider_setup"
                           ? buildCombinedOpenAiSupabaseRoutingMessage(projectOpen)
-                          : buildSupabaseRoutingMessage(projectOpen, draft),
+                          : serviceTrigger.service === "stripe"
+                            ? buildStripeRoutingMessage(projectOpen, draft)
+                            : buildSupabaseRoutingMessage(projectOpen, draft),
                     );
                   },
                 },
