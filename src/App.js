@@ -7563,6 +7563,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
                   onClick: () => {
+                    appendMessage("user", "Choice: No action needed");
                     appendMessage(
                       "assistant",
                       "No action taken. The blueprint is available above when you want to continue.",
