@@ -126,7 +126,32 @@ function recommendationLabel(recommendedStarter) {
   return "ask one focused question first";
 }
 
-function buildModelAdviceForBrief() {
+function buildModelAdviceForBrief(folderState = {}) {
+  const finalFolderState = normalizeFolderState(folderState);
+  const alreadyOpenNonEmptyProject =
+    finalFolderState.projectOpen &&
+    !finalFolderState.emptyProjectFolder &&
+    !finalFolderState.noProjectFolderOpen;
+
+  const nextSteps = alreadyOpenNonEmptyProject
+    ? "To continue in this open project:\n" +
+      "1. Ask KForge to start implementation in this project when you are ready.\n" +
+      "2. KForge should inspect the existing files before editing.\n" +
+      "3. Keep the first implementation step small, project-aware, and previewable.\n\n" +
+      "Notes:\n" +
+      "- This plan has not generated a starter, changed files, installed packages, or configured services.\n" +
+      "- Use Services later only when you actually want Supabase, payments, deployment, or AI provider setup.\n\n"
+    : "To begin:\n" +
+      "1. Open an empty project folder.\n" +
+      "2. Click Preview → Generate.\n" +
+      "3. Click Preview → Install.\n" +
+      "4. Return to this chat to continue.\n\n" +
+      "Notes:\n" +
+      "- **Generate** creates the starter template for your project.\n" +
+      "- **Install** adds the packages needed by that template.\n" +
+      "- After Generate and Install are finished, return to this chat, so KForge can help you continue building your app.\n" +
+      "- Or click the button below for the AI-assisted plan.\n\n";
+
   return (
     "Model advice:\n\n" +
     "For this app, KForge recommends using a stronger model from the Provider/Model preset list.\n\n" +
@@ -141,16 +166,7 @@ function buildModelAdviceForBrief() {
     "- Next.js for full-stack web apps, SEO-friendly sites, and apps with backend features.\n" +
     "- Vite + React first, then Supabase later when the app specifically uses Supabase.\n" +
     "- Expo React Native for mobile apps.\n\n" +
-    "To begin:\n" +
-    "1. Open an empty project folder.\n" +
-    "2. Click Preview → Generate.\n" +
-    "3. Click Preview → Install.\n" +
-    "4. Return to this chat to continue.\n\n" +
-    "Notes:\n" +
-    "- **Generate** creates the starter template for your project.\n" +
-    "- **Install** adds the packages needed by that template.\n" +
-    "- After Generate and Install are finished, return to this chat, so KForge can help you continue building your app.\n" +
-    "- Or click the button below for the AI-assisted plan.\n\n"
+    nextSteps
   );
 }
 export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
@@ -391,7 +407,7 @@ export function renderStarterRecommendation(brief = EMPTY_APP_BRIEF, folderState
     ? `You want to build:\n${brief.appGoal}\n\n`
     : "";
 
-  const modelAdvice = buildModelAdviceForBrief();
+  const modelAdvice = buildModelAdviceForBrief(finalFolderState);
 
   const recommendation =
     `Recommended project template:\n${recommendationLabel(brief.recommendedStarter)}.\n\n` +

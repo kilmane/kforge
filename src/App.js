@@ -1119,6 +1119,19 @@ function getDirectHandoffFollowupRouteDecision({
     }
   }
 
+  if (
+    workflowContext?.handoffType === "open_project_starter_plan" &&
+    workflowContext?.expectedResult === "starter_choice"
+  ) {
+    if (isWorkflowStopOrBackIntent(text)) {
+      return { action: "stop_waiting" };
+    }
+
+    if (/^[1-5]$/.test(s)) {
+      return { action: "open_project_starter_choice" };
+    }
+  }
+
   if (workflowContext?.expectedResult === "problem_detail") {
     return { action: "controlled_problem_detail" };
   }
@@ -2829,8 +2842,8 @@ export default function App() {
         "1. Simple website / landing page\n" +
         "2. Interactive web app / dashboard / calculator / data display\n" +
         "3. Backend / accounts / database app\n" +
-        "4. Mobile app\n" +
-        "5. Not sure yet\n\n" +
+        "4. Supabase app\n" +
+        "5. Mobile app\n\n" +
         "This is planning only. No files have been changed."
       );
     }
@@ -5139,6 +5152,37 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           return;
         }
 
+        if (directHandoffFollowupRoute.action === "open_project_starter_choice") {
+          const choiceLabels = {
+            "1": "Simple website / landing page",
+            "2": "Interactive web app",
+            "3": "Backend / accounts / database app",
+            "4": "Supabase app",
+            "5": "Mobile app",
+          };
+          const choiceLabel =
+            choiceLabels[String(draft || "").trim()] || "Starter choice";
+          const originalGoal = String(workflowContext?.lastUserGoal || "").trim();
+          const folderState = {
+            projectOpen: true,
+            emptyProjectFolder: false,
+          };
+          const starterChoiceText = normalizeTypedStarterChoiceText(draft);
+
+          setWorkflowContext(null);
+          appendMessage(
+            "assistant",
+            "Choice understood: " +
+              choiceLabel +
+              (originalGoal
+                ? "\n\nOriginal app request:\n" + originalGoal
+                : "") +
+              "\n\n" +
+              buildOpenProjectBuildAppPlanMessage(starterChoiceText, folderState),
+          );
+          return;
+        }
+
         if (directHandoffFollowupRoute.action === "direct_preview_evidence_detail") {
           const evidenceDetail = String(draft || "").trim();
 
@@ -6672,7 +6716,15 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                   label: "Plan this app first",
                   onClick: () => {
                     appendMessage("user", "Choice: Plan this app first");
-                    setWorkflowContext(null);
+                    setWorkflowContext(
+                      createDirectHandoffWorkflowContext({
+                        handoffType: "open_project_starter_plan",
+                        nextStep: "",
+                        expectedResult: "starter_choice",
+                        lastUserGoal: draft,
+                        source: "open_project_build_app_plan_choice",
+                      }),
+                    );
                     appendMessage(
                       "assistant",
                       buildOpenProjectBuildAppPlanMessage(draft, folderState),
