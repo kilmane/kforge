@@ -4,10 +4,10 @@
 Location:
 D:\kforge\docs-internal\PROJECT-SNAPSHOT.md
 
-Last Updated: **May 30th, 2026**
+Last Updated: **June 7th, 2026**
 
-Phase: **Phase 11.6 — Model Presets, Quality Warnings, and Choice Menu Polish**
-Status: **Phase 11 Builder Reliability is a controlled beta candidate through Preview/recovery UX polish, optional planning-only AI-assisted app plans, curated model preset guidance, Free starter plan recommendations, starter-choice clarification for vague app requests, visible `Choice:` anchors / replay actions for supported choice menus, and final workflow/context documentation. Final Phase 11.6 beta-candidate restore point: `phase-11.6-model-presets-quality-warnings-stable`.**
+Phase: **Phase 12.3 — Routing Keyword Audit / Service Trigger Regression and Docs**
+Status: **Phase 12 routing/service-trigger regression and docs are stable after the serious-app blocker fix, contextual service-trigger confirmation, service-by-service keyword migration, choice-anchor polish, open-project build-app clarifier polish, and regression/docs pass. This supports controlled beta confidence for the Phase 12 routing layer, but does not by itself mean KForge is fully production-ready. Latest planned stable restore point: `phase-12.3-regression-docs-stable`.**
 
 Stable restore tags now available:
 
@@ -1800,6 +1800,7 @@ Local Project
 → Phase 9 Developer Assistants: Error Fixer, Supabase Assistant, Deploy Assistant, Performance Assistant, and Assistant Result Protocol / Logical Workflow Outcomes
 → Phase 10 Advanced Vibecoding baseline: Feature Blueprints, Iterative Build Loops, Self-verification, and verification follow-up handling
 → Phase 11 Builder Reliability / Meaningful App Building: better small-app building, recovery/revert, destructive rewrite protection, evidence-gated Preview repair, direct Preview result handling, vague broken-app clarification, exact-text-not-found stop behavior, and optional planning-only AI-assisted app plans beside the default Free starter plan path
+→ Phase 12 Routing Keyword Audit / Service Trigger Confirmation: serious app prompts with contextual service words stay in planning, contextual Deploy/Supabase/OpenAI+Supabase/Stripe wording uses controlled confirmation, direct service requests route to Services guidance, open-project broad build-app requests ask a clarifier, visible Choice anchors were polished, and regression docs now require testing controlled-menu branches.
 
 Important warning for future work:
 
