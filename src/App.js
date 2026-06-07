@@ -7521,6 +7521,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
+                    appendMessage("user", "Choice: Start implementation");
                     sendWithPrompt(
                       "Start implementation from the approved plan.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -7535,6 +7536,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
                   onClick: () => {
+                    appendMessage("user", "Choice: Refine blueprint");
                     sendWithPrompt(
                       "Refine the previous feature blueprint.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -7549,6 +7551,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
                   onClick: () => {
+                    appendMessage("user", "Choice: Inspect first");
                     sendWithPrompt(
                       "Inspect first for this feature before implementation.\n\n" +
                         `Original feature request: ${draft}\n\n` +
