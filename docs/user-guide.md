@@ -28,6 +28,10 @@ This guide is written for early beta testers. It is designed to help you get sta
 >
 > If you want to change direction, use **Back to chat** or **Stop** first. If the conversation still feels confused, reset or reopen the workspace and start again from a fresh state.
 >
+> **Service words can be context**
+>
+> Words such as deployment, Supabase, Stripe/payments, OpenAI, GitHub, repo, or repository do not always mean “open Services now”. KForge may ask a controlled confirmation, tell you which Services path to use, or treat the wording as planning context. It should not claim a service was connected, deployed, pushed, published, or configured unless a real action reports success.
+>
 > KForge is not an AI brain. It routes common workflows through guarded, logical paths, but it can still misunderstand requests when the current workflow context and the next message do not match.
 >
 > For more flexible planning or coding help, connect one of your chosen AI models and use the AI-assisted route. Model quality varies, and weak/test-only or unverified models may produce poor code or unreliable tool requests, so choose a model that matches the task.
@@ -545,6 +549,8 @@ Examples:
 
 * “Set up Supabase” → KForge may guide you to **Services → Backend → Supabase**
 * “Add OpenAI to this app” → KForge may guide you to **Services → AI → OpenAI**
+* “This app will need deployment later” → KForge may ask whether this is context or whether you want **Services → Deploy** now
+* “Connect GitHub” → use **Services → Code → GitHub** for the current project, or **New Project → Import from GitHub** when importing an existing repository
 * “Create a starter app” → KForge may guide you to **Preview → Generate**
 * “Run git status” → KForge may guide you to **Terminal**
 
@@ -578,6 +584,16 @@ For clear app requests, KForge may recommend the starter directly. For vague new
 When you choose one of these options, KForge may show a visible chat anchor such as `Choice: Backend / accounts / database app`. These `Choice:` anchors make menu decisions visible in the normal chat while the transcript still keeps the deeper workflow history.
 
 Some menus also include **Show starter options again** and **Back to chat** so you can recover from a wrong choice without restarting the whole workspace.
+
+If a non-empty project is already open and you ask a broad “build an app” request, KForge may first ask whether you want to:
+
+* plan the app first
+* start implementation in the current project
+* use an AI-assisted plan
+* go **Back to chat**
+* **Stop**
+
+The planning path should stay project-aware. It should not pretend the folder is empty, and it should not claim files were changed. If it asks for a numbered starter choice, the answer should stay inside that workflow instead of falling into a generic unclear-workflow menu.
 
 Typical starter guidance is:
 
@@ -1035,6 +1051,8 @@ Current provider examples include:
 * **Chat** helps you think and ask
 * **Services** helps you perform guided project integrations
 
+Mentioning a service during planning is not always the same as asking KForge to open or run that service now. For contextual wording, KForge may show choices such as **Open service now**, **Keep planning / editing the app**, **Back to chat**, or **Stop**. The chat should remain truthful: it has not connected, deployed, pushed, published, installed, or configured anything unless the matching KForge action actually reports success.
+
 ## GitHub
 
 Use **Services → Code → GitHub** for actions on the current local project.
@@ -1316,4 +1334,3 @@ As KForge evolves, the exact labels and supported providers may change, but the 
 ---
 
 [← Docs home](index.md)
-
