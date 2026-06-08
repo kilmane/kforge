@@ -4281,12 +4281,57 @@ export default function App() {
       const s = text.toLowerCase().trim();
       const emptyProjectFolder =
         projectOpen && Array.isArray(tree) && tree.length === 0;
-
       if (!s) {
         return {
           kind: "unknown",
           confidence: "low",
           source: "empty_prompt",
+        };
+      }
+
+      const isAwaitingNextEditRequest =
+        workflowContext?.status === WORKFLOW_STATUS.WAITING_FOR_USER_RESULT &&
+        workflowContext?.nextStep === WORKFLOW_NEXT_STEP.ANOTHER_EDIT;
+
+      if (
+        isAwaitingNextEditRequest &&
+        projectOpen &&
+        !emptyProjectFolder &&
+        !isWorkflowStopOrBackIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "workflow_awaiting_next_edit",
+        };
+      }
+
+      const hasStarterPriorityIntent =
+        isNoProjectImplementationIntent(text) ||
+        hasFreeAppBriefStarterRoutingIntent(text) ||
+        isTypedStarterChoiceIntent(text);
+
+      if (!projectOpen && hasStarterPriorityIntent) {
+        return {
+          kind: "no_project_implementation",
+          confidence: "high",
+          source: "routing_priority_firewall_no_project_starter",
+        };
+      }
+
+      if (emptyProjectFolder && hasStarterPriorityIntent) {
+        return {
+          kind: "empty_folder_implementation",
+          confidence: "high",
+          source: "routing_priority_firewall_empty_folder_starter",
+        };
+      }
+
+      if (emptyProjectFolder && isEmptyFolderPlanIntent(text)) {
+        return {
+          kind: "empty_folder_plan",
+          confidence: "high",
+          source: "routing_priority_firewall_empty_folder_plan",
         };
       }
 
@@ -4327,6 +4372,19 @@ export default function App() {
           source: "workflow_verification_result",
         };
       }
+
+      if (
+        projectOpen &&
+        !emptyProjectFolder &&
+        isExplicitProjectEditOperationIntent(text)
+      ) {
+        return {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "routing_priority_firewall_fresh_edit_after_completion",
+        };
+      }
+
 
       if (
         projectOpen &&
@@ -4479,8 +4537,23 @@ export default function App() {
           source: "performance_intent",
         };
       }
-
       if (isWorkflowBugfixIntent(text)) {
+        if (!projectOpen) {
+          return {
+            kind: "no_project_implementation",
+            confidence: "high",
+            source: "routing_priority_firewall_no_project_bugfix",
+          };
+        }
+
+        if (emptyProjectFolder) {
+          return {
+            kind: "empty_folder_implementation",
+            confidence: "high",
+            source: "routing_priority_firewall_empty_folder_bugfix",
+          };
+        }
+
         return {
           kind: "broken_preview_debug",
           confidence: "high",
@@ -4841,13 +4914,25 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         providerId: aiProvider,
         modelId: aiModel,
       });
-      const promptTask = inferPromptTaskKind(draft, {
+      let promptTask = inferPromptTaskKind(draft, {
         projectOpen,
         tree,
         workflowContext,
         detectedTemplateName,
         detectedKind,
       });
+
+      if (
+        opts.forceProjectEdit &&
+        !!projectPath &&
+        !(Array.isArray(tree) && tree.length === 0)
+      ) {
+        promptTask = {
+          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          confidence: "high",
+          source: "forced_project_edit_continuation",
+        };
+      }
       const isAdvisoryTestOverride =
         !!opts.forceAdvisoryTestOverride &&
         modelWorkflowPolicy.mode === "advisory_only";
@@ -5234,6 +5319,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                   onClick: () => {
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, and I will route it from the current project state.",
@@ -5341,6 +5437,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                             label: "Make another edit",
                             onClick: () => {
                               appendMessage("user", "Choice: Make another edit");
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                               appendMessage(
                                 "assistant",
                                 "Tell me the next edit, and I will route it from the current project state.",
@@ -5410,6 +5517,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                   label: "Make another edit",
                   onClick: () => {
                     appendMessage("user", "Choice: Make another edit");
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, and I will route it from the current project state.",
@@ -6034,6 +6152,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: "Make another edit",
                   onClick: () => {
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
@@ -6109,6 +6238,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: "Make another edit",
                   onClick: () => {
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
@@ -6414,6 +6554,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: "Make another edit",
                   onClick: () => {
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
@@ -6590,6 +6741,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 {
                   label: "Make another edit",
                   onClick: () => {
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
@@ -7084,6 +7246,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                             label: "Make another edit",
                             onClick: () => {
                               appendMessage("user", "Choice: Make another edit");
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                               appendMessage(
                                 "assistant",
                                 "Tell me the next edit, and I will route it from the current project state.",
@@ -7153,6 +7326,17 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                   label: "Make another edit",
                   onClick: () => {
                     appendMessage("user", "Choice: Make another edit");
+setWorkflowContext({
+                        ...(workflowContext || {}),
+                        taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+                        status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                        nextStep: WORKFLOW_NEXT_STEP.ANOTHER_EDIT,
+                        expectedResult: "edit_request",
+                        lastUserGoal: workflowContext?.lastUserGoal || draft,
+                        updatedAt: Date.now(),
+                        source: "awaiting_next_edit_choice",
+                      });
+
                     appendMessage(
                       "assistant",
                       "Tell me the next edit, and I will route it from the current project state.",
@@ -7541,6 +7725,9 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
+                        forceProjectEdit:
+                          !isFixNoToolRecovery &&
+                          !isPartialImplementationNoToolRecovery,
                         forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
                       },
                     );

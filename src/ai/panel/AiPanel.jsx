@@ -2674,6 +2674,9 @@ export default function AiPanel({
                                     : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
                                 {
                                   silentUserAppend: true,
+                                  skipCompletedWorkflowRoute: true,
+                                  skipDirectWorkflowHandoffRoute: true,
+                                  forceProjectEdit: true,
                                   forceAdvisoryTestOverride: true,
                                 },
                               );
