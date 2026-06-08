@@ -447,15 +447,21 @@ export function createBugfixWorkflowContext(
   };
 }
 
-export function createBlockedProjectEditWorkflowContext(lastUserGoal = "") {
+export function createBlockedProjectEditWorkflowContext(
+  lastUserGoal = "",
+  modelWorkflowPolicy = null,
+) {
   return {
     taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
     status: WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY,
     nextStep: WORKFLOW_NEXT_STEP.SWITCH_MODEL_OR_PLAN,
-    blockedReason: "advisory_only",
+    blockedReason: modelWorkflowPolicy?.mode || "model_capability_gate",
+    modelPolicyMode: modelWorkflowPolicy?.mode || "unknown",
+    modelPolicyTier: modelWorkflowPolicy?.tier || "unknown",
+    modelPolicyReason: modelWorkflowPolicy?.reason || "unknown",
     lastUserGoal,
     updatedAt: Date.now(),
-    source: "model_policy_advisory_only",
+    source: "model_capability_gate",
   };
 }
 

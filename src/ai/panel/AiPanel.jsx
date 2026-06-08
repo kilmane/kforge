@@ -2101,7 +2101,7 @@ export default function AiPanel({
                               : "After the inspection result is available, continue with the smallest safe edit only if needed."),
                           {
                             silentUserAppend: true,
-                            forceAdvisoryTestOverride: true,
+                            forceModelCapabilityTestOverride: true,
                           },
                         );
                       }
@@ -2589,7 +2589,7 @@ export default function AiPanel({
                                         "Request exactly one read_file tool call for that path. Do not write files.",
                                       {
                                         silentUserAppend: true,
-                                        forceAdvisoryTestOverride: true,
+                                        forceModelCapabilityTestOverride: true,
                                       },
                                     );
                                   }
@@ -2606,7 +2606,7 @@ export default function AiPanel({
                                         "Request exactly one search_in_file tool call for that file. If the exact target text is not explicit in the original request, ask the user to paste the exact text and path. Do not write files.",
                                       {
                                         silentUserAppend: true,
-                                        forceAdvisoryTestOverride: true,
+                                        forceModelCapabilityTestOverride: true,
                                       },
                                     );
                                   }
@@ -2677,7 +2677,7 @@ export default function AiPanel({
                                   skipCompletedWorkflowRoute: true,
                                   skipDirectWorkflowHandoffRoute: true,
                                   forceProjectEdit: true,
-                                  forceAdvisoryTestOverride: true,
+                                  forceModelCapabilityTestOverride: true,
                                 },
                               );
                             }
@@ -2807,7 +2807,7 @@ export default function AiPanel({
                                   : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused implementation tool call next. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
                               {
                                 silentUserAppend: true,
-                                forceAdvisoryTestOverride: true,
+                                forceModelCapabilityTestOverride: true,
                               },
                             );
                           }
@@ -2912,7 +2912,7 @@ export default function AiPanel({
                                       : "Request exactly one concrete implementation tool call next. If a file edit is needed, request write_file for the smallest safe continuation. If more inspection is genuinely needed, request one read_file only.")),
                               {
                                 silentUserAppend: true,
-                                forceAdvisoryTestOverride: true,
+                                forceModelCapabilityTestOverride: true,
                               },
                             );
                           }

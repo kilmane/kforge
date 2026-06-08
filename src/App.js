@@ -847,6 +847,45 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+function isModelCapabilityGatePolicy(modelWorkflowPolicy = null) {
+  const mode = modelWorkflowPolicy?.mode || "unknown";
+  return mode === "advisory_only" || mode === "guarded_edit";
+}
+
+function getModelCapabilityGateLabel(modelWorkflowPolicy = null) {
+  const mode = modelWorkflowPolicy?.mode || "unknown";
+  const tier = modelWorkflowPolicy?.tier || "unknown";
+
+  if (mode === "advisory_only" || tier === "free") {
+    return "Weak / test only";
+  }
+
+  if (tier === "sandbox") {
+    return "Light tasks";
+  }
+
+  if (tier === "unknown") {
+    return "Custom / unverified";
+  }
+
+  return "guarded or tool-unverified";
+}
+
+function buildModelCapabilityGateMessage(modelWorkflowPolicy = null) {
+  const label = getModelCapabilityGateLabel(modelWorkflowPolicy);
+
+  return (
+    "You are about to start automatic project editing.\n\n" +
+    `The selected model is treated as ${label} for KForge project editing. It may produce poor code, malformed tool calls, incomplete edits, loops, broken app logic, or weak UI/UX.\n\n` +
+    "Recommended: switch to a Recommended builder or High capability model from the Provider/Model preset list.\n\n" +
+    "Choose:\n" +
+    "- Switch model first\n" +
+    "- Continue in test mode\n" +
+    "- Back to chat\n" +
+    "- Stop"
+  );
+}
+
 function getProjectEditRouteDecision({
   promptTask = null,
   modelWorkflowPolicy = null,
@@ -858,9 +897,13 @@ function getProjectEditRouteDecision({
   const mode = modelWorkflowPolicy?.mode || "unknown";
   const shouldShowGuardedEditNote = isProjectEditLike && mode === "guarded_edit";
 
-  if (isProjectEditLike && mode === "advisory_only" && !isAdvisoryTestOverride) {
+  if (
+    isProjectEditLike &&
+    isModelCapabilityGatePolicy(modelWorkflowPolicy) &&
+    !isAdvisoryTestOverride
+  ) {
     return {
-      action: "block_advisory_project_edit",
+      action: "gate_model_capability_project_edit",
       shouldShowGuardedEditNote: false,
       shouldClearProviderSwitchNote: false,
     };
@@ -974,7 +1017,7 @@ function getBlockedModelPolicyRouteDecision({
     return null;
   }
 
-  if (modelWorkflowPolicy?.mode !== "advisory_only") {
+  if (!isModelCapabilityGatePolicy(modelWorkflowPolicy)) {
     return null;
   }
 
@@ -3183,22 +3226,12 @@ export default function App() {
   }
   const buildSmartProviderSwitchMessage = useCallback((promptTask, modelWorkflowPolicy) => {
     const taskKind = promptTask?.kind || "unknown";
-    const mode = modelWorkflowPolicy?.mode || "unknown";
 
-    if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "advisory_only") {
-      return (
-        "This looks like a project edit.\n\n" +
-        "The selected provider/model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-        "Recommended: switch to a curated Recommended builder or High capability preset.\n\n" +
-        "If you continue with this model, you are testing it at your own risk. KForge will still keep file-write approval and path safety active."
-      );
-    }
-
-    if (taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT && mode === "guarded_edit") {
-      return (
-        "This looks like a project edit.\n\n" +
-        "This model is in a cautious editing mode, so KForge will prefer Patch Preview before applying project changes."
-      );
+    if (
+      taskKind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+      isModelCapabilityGatePolicy(modelWorkflowPolicy)
+    ) {
+      return buildModelCapabilityGateMessage(modelWorkflowPolicy);
     }
 
     return (
@@ -4936,12 +4969,16 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
       const isAdvisoryTestOverride =
         !!opts.forceAdvisoryTestOverride &&
         modelWorkflowPolicy.mode === "advisory_only";
+      const isModelCapabilityTestOverride =
+        isAdvisoryTestOverride ||
+        (!!opts.forceModelCapabilityTestOverride &&
+          isModelCapabilityGatePolicy(modelWorkflowPolicy));
 
       const blockedModelPolicyRoute = getBlockedModelPolicyRouteDecision({
         workflowContext,
         modelWorkflowPolicy,
         promptTask,
-        isAdvisoryTestOverride,
+        isAdvisoryTestOverride: isModelCapabilityTestOverride,
         isExplicitNewWorkflow: isExplicitNewWorkflowIntent(draft),
       });
 
@@ -4956,21 +4993,52 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           {
             actions: [
               {
+                label: "Switch model first",
+                onClick: () => {
+                  appendMessage("user", "Choice: Switch model first");
+                  setWorkflowContext(null);
+                  appendMessage(
+                    "assistant",
+                    "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                  );
+                },
+              },
+              {
                 label: "Continue in test mode",
                 onClick: () => {
                   const goal = String(
                     workflowContext?.lastUserGoal || draft,
                   ).trim();
 
+                  appendMessage("user", "Choice: Continue in test mode");
                   appendMessage(
                     "assistant",
-                    "Continuing in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
+                    "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
                   );
 
                   sendWithPrompt(goal || draft, {
                     silentUserAppend: true,
-                    forceAdvisoryTestOverride: true,
+                    forceModelCapabilityTestOverride: true,
                   });
+                },
+              },
+              {
+                label: "Back to chat",
+                onClick: () => {
+                  appendMessage("user", "Choice: Back to chat");
+                  setWorkflowContext(null);
+                  appendMessage(
+                    "assistant",
+                    "Back to chat — no project editing started. No files were changed.",
+                  );
+                },
+              },
+              {
+                label: "Stop",
+                onClick: () => {
+                  appendMessage("user", "Choice: Stop");
+                  setWorkflowContext(null);
+                  appendMessage("assistant", "Okay — stopping here. No files were changed.");
                 },
               },
             ],
@@ -4979,7 +5047,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         return;
       }
 
-      if (isAdvisoryTestOverride) {
+      if (isModelCapabilityTestOverride) {
         setWorkflowContext(
           createAdvisoryTestOverrideWorkflowContext(workflowContext),
         );
@@ -6439,16 +6507,16 @@ setWorkflowContext({
 
                     appendMessage(
                       "assistant",
-                      modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the recovery fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                      isModelCapabilityGatePolicy(modelWorkflowPolicy)
+                        ? "Continuing the recovery fix in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active."
                         : "Continuing the recovery fix. I will inspect the relevant files before editing and will not claim anything was restored unless it actually was.",
                     );
 
                     sendWithPrompt(followupGoal, {
                       silentUserAppend: true,
                       skipCompletedWorkflowRoute: true,
-                      forceAdvisoryTestOverride:
-                        modelWorkflowPolicy.mode === "advisory_only",
+                      forceModelCapabilityTestOverride:
+                        isModelCapabilityGatePolicy(modelWorkflowPolicy),
                     });
                   },
                 },
@@ -6538,16 +6606,16 @@ setWorkflowContext({
 
                     appendMessage(
                       "assistant",
-                      modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                      isModelCapabilityGatePolicy(modelWorkflowPolicy)
+                        ? "Continuing the fix in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active."
                         : "Continuing the fix. I will inspect the relevant files before editing.",
                     );
 
                     sendWithPrompt(followupGoal, {
                       silentUserAppend: true,
                       skipCompletedWorkflowRoute: true,
-                      forceAdvisoryTestOverride:
-                        modelWorkflowPolicy.mode === "advisory_only",
+                      forceModelCapabilityTestOverride:
+                        isModelCapabilityGatePolicy(modelWorkflowPolicy),
                     });
                   },
                 },
@@ -6725,16 +6793,16 @@ setWorkflowContext({
 
                     appendMessage(
                       "assistant",
-                      modelWorkflowPolicy.mode === "advisory_only"
-                        ? "Continuing the fix in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow."
+                      isModelCapabilityGatePolicy(modelWorkflowPolicy)
+                        ? "Continuing the fix in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active."
                         : "Continuing the fix. I will inspect the relevant files before editing.",
                     );
 
                     sendWithPrompt(followupGoal, {
                       silentUserAppend: true,
                       skipCompletedWorkflowRoute: true,
-                      forceAdvisoryTestOverride:
-                        modelWorkflowPolicy.mode === "advisory_only",
+                      forceModelCapabilityTestOverride:
+                        isModelCapabilityGatePolicy(modelWorkflowPolicy),
                     });
                   },
                 },
@@ -7377,37 +7445,62 @@ setWorkflowContext({
       const projectEditRoute = getProjectEditRouteDecision({
         promptTask,
         modelWorkflowPolicy,
-        isAdvisoryTestOverride,
+        isAdvisoryTestOverride: isModelCapabilityTestOverride,
       });
 
-      if (projectEditRoute.action === "block_advisory_project_edit") {
-        setWorkflowContext(createBlockedProjectEditWorkflowContext(draft));
+      if (projectEditRoute.action === "gate_model_capability_project_edit") {
+        setWorkflowContext(createBlockedProjectEditWorkflowContext(draft, modelWorkflowPolicy));
 
         if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage(
-          "assistant",
-          "This model is marked Weak / test only for project editing. It may produce bad code, malformed tool calls, loops, incomplete edits, or unreliable results.\n\n" +
-            "Recommended: switch to a curated Recommended builder or High capability preset.\n\n" +
-            "If you continue, you are testing this model at your own risk. KForge will keep file-write approval and path safety active, and Cancel will stop the tool flow.",
-          {
-            actions: [
-              {
-                label: "Continue in test mode",
-                onClick: () => {
-                  appendMessage(
-                    "assistant",
-                    "Continuing in test mode. You are testing this Weak / test only model at your own risk. File-write approval and path safety remain active, and Cancel will stop the tool flow.",
-                  );
-
-                  sendWithPrompt(draft, {
-                    silentUserAppend: true,
-                    forceAdvisoryTestOverride: true,
-                  });
-                },
+        appendMessage("assistant", buildModelCapabilityGateMessage(modelWorkflowPolicy), {
+          actions: [
+            {
+              label: "Switch model first",
+              onClick: () => {
+                appendMessage("user", "Choice: Switch model first");
+                setWorkflowContext(null);
+                appendMessage(
+                  "assistant",
+                  "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                );
               },
-            ],
-          },
-        );
+            },
+            {
+              label: "Continue in test mode",
+              onClick: () => {
+                appendMessage("user", "Choice: Continue in test mode");
+                appendMessage(
+                  "assistant",
+                  "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
+                );
+
+                sendWithPrompt(draft, {
+                  silentUserAppend: true,
+                  forceModelCapabilityTestOverride: true,
+                });
+              },
+            },
+            {
+              label: "Back to chat",
+              onClick: () => {
+                appendMessage("user", "Choice: Back to chat");
+                setWorkflowContext(null);
+                appendMessage(
+                  "assistant",
+                  "Back to chat — no project editing started. No files were changed.",
+                );
+              },
+            },
+            {
+              label: "Stop",
+              onClick: () => {
+                appendMessage("user", "Choice: Stop");
+                setWorkflowContext(null);
+                appendMessage("assistant", "Okay — stopping here. No files were changed.");
+              },
+            },
+          ],
+        });
         return;
       }
 
@@ -7447,7 +7540,8 @@ setWorkflowContext({
       const ep = (endpoints[aiProvider] || "").trim();
       const effectiveAskForPatch =
         !!askForPatch ||
-        (modelWorkflowPolicy.allowPatchPreview &&
+        (!isModelCapabilityTestOverride &&
+          modelWorkflowPolicy.allowPatchPreview &&
           modelWorkflowPolicy.forcePatchPreview);
       setLastSend({
         prompt: draft,
@@ -7477,11 +7571,11 @@ setWorkflowContext({
         opts.suppressToolsForPrompt === true ||
         isFeatureBlueprintTask ||
         hasManualOrAdvisoryIntent(draft) ||
-        (!modelWorkflowPolicy.allowToolCalls && !isAdvisoryTestOverride);
+        (!modelWorkflowPolicy.allowToolCalls && !isModelCapabilityTestOverride);
 
-      const advisoryOverrideInstruction = isAdvisoryTestOverride
-        ? "\n\nADVISORY MODEL TEST MODE:\n" +
-          "The user explicitly clicked Continue in test mode for this Weak / test only model.\n" +
+      const advisoryOverrideInstruction = isModelCapabilityTestOverride
+        ? "\n\nMODEL CAPABILITY TEST MODE:\n" +
+          "The user explicitly clicked Continue in test mode for this model capability warning.\n" +
           "The user accepts that result quality may be unreliable, incomplete, or incorrect.\n" +
           "You may request normal KForge tools for this test, but every file write still requires user approval.\n" +
           "Inspect before writing and keep changes small.\n"
@@ -7648,7 +7742,7 @@ setWorkflowContext({
                         "Your previous reply was not actionable. Request exactly one tool call next. If inspection is needed, request one read_file or list_dir call. If editing is possible, request one write_file call. Do not give only general prose.",
                       {
                         silentUserAppend: true,
-                        forceAdvisoryTestOverride: true,
+                        forceModelCapabilityTestOverride: true,
                       },
                     );
                   },
@@ -7728,7 +7822,7 @@ setWorkflowContext({
                         forceProjectEdit:
                           !isFixNoToolRecovery &&
                           !isPartialImplementationNoToolRecovery,
-                        forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
+                        forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
                       },
                     );
                   },

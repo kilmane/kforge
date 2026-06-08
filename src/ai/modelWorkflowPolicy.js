@@ -247,10 +247,33 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
           TASK.PLANNING,
         ],
         notRecommendedTaskKinds: [
+          TASK.PROJECT_EDIT,
+          TASK.BROKEN_PREVIEW_DEBUG,
           TASK.MULTI_FILE_REFACTOR,
         ],
         userHint:
-          "Light tasks: usable for small/routine tasks. For project edits, KForge should prefer Patch Preview or guidance over direct file writes.",
+          "Light tasks: usable for chat, planning, and small guarded checks. Not recommended for automatic project edits; switch to a Recommended builder or High capability preset for implementation.",
+      });
+    }
+
+    if (tier === "unknown") {
+      return buildPolicy({
+        mode: MODE.GUARDED_EDIT,
+        reason: "unverified_model_id",
+        tier,
+        providerId: provider,
+        recommendedTaskKinds: [
+          TASK.SIMPLE_QA,
+          TASK.MANUAL_STEPS,
+          TASK.PLANNING,
+        ],
+        notRecommendedTaskKinds: [
+          TASK.PROJECT_EDIT,
+          TASK.BROKEN_PREVIEW_DEBUG,
+          TASK.MULTI_FILE_REFACTOR,
+        ],
+        userHint:
+          "Custom / unverified: this model is not in the curated Provider/Model preset list. Not recommended for automatic project edits; switch to a Recommended builder or High capability preset for implementation.",
       });
     }
 
