@@ -669,6 +669,13 @@ function buildProjectMemoryBlock() {
  * - Detect ```diff fenced blocks OR unified diff markers.
  * - UI-only (no apply), no persistence.
  */
+function isObviousCasualChatIntent(text = "") {
+  const s = String(text || "").trim().toLowerCase();
+  if (!s) return false;
+
+  return /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)\s*[.!?]*$/.test(s);
+}
+
 function extractPatchFromText(text) {
   if (!text || typeof text !== "string") return null;
 
@@ -2035,7 +2042,10 @@ export default function App() {
     appendMessage("system", "Patch preview discarded.");
   }, [appendMessage]);
 
-  const maybeCapturePatchPreview = useCallback((assistantText) => {
+  const maybeCapturePatchPreview = useCallback((assistantText, options = {}) => {
+    const allowCapture = options?.allowCapture === true;
+    if (!allowCapture) return;
+
     const extracted = extractPatchFromText(assistantText);
     if (extracted) {
       setPatchPreview(extracted);
@@ -5723,6 +5733,7 @@ setWorkflowContext({
       if (
         projectOpen &&
         !opts.skipCompletedWorkflowRoute &&
+        !isObviousCasualChatIntent(draft) &&
         promptTask.kind === "simple_qa" &&
         promptTask.confidence === "low"
       ) {
@@ -7538,11 +7549,17 @@ setWorkflowContext({
 
       // Save last-send for retry (captures the exact “inputs” and provider settings)
       const ep = (endpoints[aiProvider] || "").trim();
+      const isPatchPreviewEligibleTask =
+        promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
+        promptTask.kind === "broken_preview_debug";
+
       const effectiveAskForPatch =
-        !!askForPatch ||
-        (!isModelCapabilityTestOverride &&
-          modelWorkflowPolicy.allowPatchPreview &&
-          modelWorkflowPolicy.forcePatchPreview);
+        !!projectOpen &&
+        isPatchPreviewEligibleTask &&
+        (!!askForPatch ||
+          (!isModelCapabilityTestOverride &&
+            modelWorkflowPolicy.allowPatchPreview &&
+            modelWorkflowPolicy.forcePatchPreview));
       setLastSend({
         prompt: draft,
         providerId: aiProvider,
@@ -7926,7 +7943,9 @@ setWorkflowContext({
         }
 
         // Keep patch preview detection working off the original model output
-        maybeCapturePatchPreview(out);
+        maybeCapturePatchPreview(out, {
+          allowCapture: !!projectOpen && !!effectiveAskForPatch,
+        });
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
         if (shouldAllowModelToolExecution) {
@@ -8061,7 +8080,9 @@ setWorkflowContext({
     if (r.ok) {
       const out = r.output ?? "";
       appendMessage("assistant", out);
-      maybeCapturePatchPreview(out);
+      maybeCapturePatchPreview(out, {
+        allowCapture: !!projectPath && !!lastSend?.askForPatch,
+      });
     } else {
       appendMessage("system", r.error || "Unknown error", {
         actionLabel: r.kind === "config" ? "→ Open Settings" : null,
@@ -8079,6 +8100,7 @@ setWorkflowContext({
     openSettings,
     messages,
     maybeCapturePatchPreview,
+    projectPath,
   ]);
 
   const handlePromptKeyDown = useCallback(
