@@ -7712,8 +7712,7 @@ setWorkflowContext({
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
             promptTask.kind === "broken_preview_debug"
           ) &&
-          toolBlocks.length === 0 &&
-          !hasXmlLikeToolCall;
+          toolBlocks.length === 0;
 
         const shouldAllowModelToolExecution =
           !shouldSuppressReturnedToolBlocks &&
@@ -7732,9 +7731,7 @@ setWorkflowContext({
             promptTask.kind === "broken_preview_debug"
           ) &&
           toolBlocks.length === 0 &&
-          !hasXmlLikeToolCall &&
-          !askForPatch &&
-          !!cleaned;
+          !askForPatch;
 
         const isFixNoToolRecovery =
           promptTask.kind === "broken_preview_debug";
@@ -7742,120 +7739,121 @@ setWorkflowContext({
           promptTask.source === "partial_implementation_continuation";
 
         // Append cleaned assistant output (keeps transcript readable)
-        if (shouldShowAdvisoryNoActionRecovery) {
-          appendMessage(
-            "assistant",
-            "The Weak / test only model did not produce an actionable tool request or file edit.\n\n" +
-              "Recommended: switch to a curated Recommended builder or High capability preset for project edits.\n\n" +
-              "You can still continue testing this model at your own risk. KForge will keep file-write approval and path safety active.",
-            {
-              actions: [
-                {
-                  label: "Try once more in test mode",
-                  onClick: () => {
-                    sendWithPrompt(
-                      "Continue the previous project edit.\n\n" +
-                        `Original request: ${draft}\n\n` +
-                        "Your previous reply was not actionable. Request exactly one tool call next. If inspection is needed, request one read_file or list_dir call. If editing is possible, request one write_file call. Do not give only general prose.",
-                      {
-                        silentUserAppend: true,
-                        forceModelCapabilityTestOverride: true,
-                      },
-                    );
-                  },
-                },
-                {
-                  label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
-                  onClick: () => {
-                    appendMessage(
-                      "assistant",
-                      "Manual path:\n\n" +
-                        "1. Inspect the existing React entry file, usually src/App.jsx.\n" +
-                        "2. Inspect the existing src folder structure.\n" +
-                        "3. Create the new component inside src, using the project’s existing React style.\n" +
-                        "4. Import and render or route that component from the existing app entry point.\n" +
-                        "5. Preview the app and confirm the new page or section is visible.\n\n" +
-                        "For reliable automatic edits, switch to a curated Recommended builder or High capability preset. This Weak / test only model did not produce an actionable edit.",
-                    );
-                  },
-                },
-                {
-                  label: SUGGESTED_ACTION_LABEL.STOP,
-                  onClick: () => {
-                    appendMessage(
-                      "assistant",
-                      "Stopped. No files were changed by that response.",
-                    );
-                  },
-                },
-              ],
-            },
-          );
-        } else if (shouldShowProjectEditNoToolRecovery) {
-          appendMessage(
-            "assistant",
-            isFixNoToolRecovery
-              ? "The model replied without requesting a KForge tool, so no fix was made.\n\n" +
-                "This was a fix/debug request. I can ask it to continue with one concrete fix tool request, or stop here."
+        if (shouldShowAdvisoryNoActionRecovery || shouldShowProjectEditNoToolRecovery) {
+          const isRiskyNoToolModel =
+            isAdvisoryTestOverride ||
+            isModelCapabilityTestOverride ||
+            isModelCapabilityGatePolicy(modelWorkflowPolicy) ||
+            modelWorkflowPolicy?.allowToolCalls === false;
+
+          const noToolTaskLabel = isFixNoToolRecovery
+            ? "fix/debug request"
+            : isPartialImplementationNoToolRecovery
+              ? "partial implementation continuation"
+              : "project edit request";
+
+          const malformedToolNote = hasXmlLikeToolCall
+            ? "\n\nIt may have returned malformed tool-like text instead of a valid KForge tool request."
+            : "";
+
+          const noToolRecoveryMessage = isRiskyNoToolModel
+            ? "The selected model did not produce a usable KForge tool request.\n\n" +
+              "No files were changed." +
+              malformedToolNote +
+              "\n\nThis often happens with weak, custom, unverified, or tool-unreliable models.\n\n" +
+              "Recommended: switch to a Recommended builder or High capability model from the Provider/Model preset list."
+            : "The model did not produce a usable KForge tool request.\n\n" +
+              "No files were changed." +
+              malformedToolNote +
+              `\n\nThis was a ${noToolTaskLabel}. Choose a safe next action.`;
+
+          const originalNoToolRequest = isPartialImplementationNoToolRecovery
+            ? String(workflowContext?.lastUserGoal || draft).trim()
+            : draft;
+
+          const focusedNoToolPrompt =
+            (isFixNoToolRecovery
+              ? "Continue the previous fix/debug task.\n\n"
               : isPartialImplementationNoToolRecovery
-                ? "The model replied without requesting a KForge tool, so the implementation was not continued.\n\n" +
-                  "This was a partial implementation continuation. I can ask it to continue with one concrete implementation tool request, or stop here."
-                : "The model replied without requesting a KForge tool, so no files were changed.\n\n" +
-                  "This was a project edit request. I can ask it to continue with one concrete tool request, or stop here.",
+                ? "Continue the previous implementation.\n\n"
+                : "Continue the previous project edit.\n\n") +
+            `Original request: ${originalNoToolRequest}\n\n` +
+            "Your previous reply did not produce a usable KForge tool request.\n" +
+            "Request exactly one valid fenced ```tool``` block next.\n" +
+            "If inspection is needed, request one read_file or list_dir tool first.\n" +
+            "If editing is possible, request one write_file tool for the smallest safe change.\n" +
+            "Do not give only prose. Do not request more than one tool.";
+
+          const noToolRecoveryActions = [];
+
+          if (isRiskyNoToolModel) {
+            noToolRecoveryActions.push({
+              label: "Switch model first",
+              onClick: () => {
+                appendMessage("user", "Choice: Switch model first");
+                setWorkflowContext(null);
+                appendMessage(
+                  "assistant",
+                  "Switch model first.\n\n" +
+                    "Use a Recommended builder or High capability model from the Provider/Model preset list, then resend the request.\n\n" +
+                    "No files were changed.",
+                );
+              },
+            });
+          }
+
+          noToolRecoveryActions.push(
             {
-              actions: [
-                {
-                  label: isFixNoToolRecovery
-                    ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                    : isPartialImplementationNoToolRecovery
-                      ? SUGGESTED_ACTION_LABEL.CONTINUE_IMPLEMENTATION
-                      : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
-                  onClick: () => {
-                    sendWithPrompt(
-                      (isFixNoToolRecovery
-                          ? "Continue the previous fix/debug task.\n\n"
-                          : isPartialImplementationNoToolRecovery
-                            ? "Continue the previous implementation.\n\n"
-                            : "Continue the previous project edit.\n\n") +
-                        `Original request: ${
-                          isPartialImplementationNoToolRecovery
-                            ? String(workflowContext?.lastUserGoal || draft).trim()
-                            : draft
-                        }\n\n` +
-                        (isFixNoToolRecovery
-                          ? "Your previous reply promised a fix/debug action but did not request a tool. Request exactly one fenced tool block now.\n"
-                          : isPartialImplementationNoToolRecovery
-                            ? "Your previous reply promised an implementation continuation but did not request a tool. Request exactly one fenced tool block now.\n"
-                            : "Your previous reply promised an edit but did not request a tool. Request exactly one fenced tool block now.\n") +
-                        "If inspection is needed, request one read_file or list_dir tool first. For a static project, index.html is often the first file to inspect.\n" +
-                        (isFixNoToolRecovery
-                          ? "If a file fix is possible, request one write_file tool for the smallest safe fix. Do not give only prose."
-                          : isPartialImplementationNoToolRecovery
-                            ? "If continuing implementation is possible, request one write_file tool for the smallest safe continuation. Do not give only prose."
-                            : "If editing is possible, request one write_file tool. Do not give only prose."),
-                      {
-                        silentUserAppend: true,
-                        skipCompletedWorkflowRoute: true,
-                        forceProjectEdit:
-                          !isFixNoToolRecovery &&
-                          !isPartialImplementationNoToolRecovery,
-                        forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
-                      },
-                    );
-                  },
-                },
-                {
-                  label: SUGGESTED_ACTION_LABEL.STOP,
-                  onClick: () => {
-                    appendMessage(
-                      "assistant",
-                      "Stopped. No files were changed by that response.",
-                    );
-                  },
-                },
-              ],
+              label: "Try one more focused step",
+              onClick: () => {
+                appendMessage("user", "Choice: Try one more focused step");
+                sendWithPrompt(focusedNoToolPrompt, {
+                  silentUserAppend: true,
+                  skipCompletedWorkflowRoute: true,
+                  forceProjectEdit:
+                    !isFixNoToolRecovery &&
+                    !isPartialImplementationNoToolRecovery,
+                  forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
+                  forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
+                });
+              },
+            },
+            {
+              label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+              onClick: () => {
+                appendMessage(
+                  "user",
+                  `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                );
+                setWorkflowContext(null);
+                appendMessage(
+                  "assistant",
+                  "Manual path:\n\n" +
+                    "1. Inspect the existing project structure and identify the real app entry files.\n" +
+                    "2. Choose the smallest file set needed for the requested change.\n" +
+                    "3. Edit one file at a time, preserving existing working code.\n" +
+                    "4. Preview the app after the edit.\n" +
+                    "5. If the app fails, use the Preview/runtime error as evidence before changing more files.\n\n" +
+                    "No files were changed by the failed model response.",
+                );
+              },
+            },
+            {
+              label: SUGGESTED_ACTION_LABEL.STOP,
+              onClick: () => {
+                appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                setWorkflowContext(null);
+                appendMessage(
+                  "assistant",
+                  "Stopped. No files were changed by that response.",
+                );
+              },
             },
           );
+
+          appendMessage("assistant", noToolRecoveryMessage, {
+            actions: noToolRecoveryActions,
+          });
         } else if (cleaned) {
           if (isFeatureBlueprintTask) {
             const blueprintContext = createCompletedFeatureBlueprintWorkflowContext({
