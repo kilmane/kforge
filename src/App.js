@@ -6231,6 +6231,8 @@ setWorkflowContext({
                 {
                   label: "Make another edit",
                   onClick: () => {
+                    appendMessage("user", "Choice: Make another edit");
+
 setWorkflowContext({
                         ...(workflowContext || {}),
                         taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
@@ -6251,6 +6253,7 @@ setWorkflowContext({
                 {
                   label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
                   onClick: () => {
+                    appendMessage("user", "Choice: No action needed");
                     appendMessage(
                       "assistant",
                       "No problem — I’ll leave it there.",
@@ -6317,6 +6320,8 @@ setWorkflowContext({
                 {
                   label: "Make another edit",
                   onClick: () => {
+                    appendMessage("user", "Choice: Make another edit");
+
 setWorkflowContext({
                         ...(workflowContext || {}),
                         taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
@@ -6337,6 +6342,7 @@ setWorkflowContext({
                 {
                   label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
                   onClick: () => {
+                    appendMessage("user", "Choice: No action needed");
                     appendMessage(
                       "assistant",
                       "No problem — I’ll leave it there.",
@@ -6433,6 +6439,7 @@ setWorkflowContext({
                       {
                         label: "Restore last saved version",
                         onClick: async () => {
+                          appendMessage("user", "Choice: Restore last saved version");
                           try {
                             await saveFile(
                               restoreSnapshot.path,
@@ -6485,6 +6492,7 @@ setWorkflowContext({
                       {
                         label: "Review last changed file",
                         onClick: () => {
+                          appendMessage("user", "Choice: Review last changed file");
                           appendMessage(
                             "assistant",
                             `Reviewing ${lastChangedPath}. I will read the file and summarize what is currently there. This is not an exact diff or restore.`,
@@ -6509,6 +6517,13 @@ setWorkflowContext({
                       ? "Fix this in test mode"
                       : "Fix this",
                   onClick: () => {
+                    appendMessage(
+                      "user",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Choice: Fix this in test mode"
+                        : "Choice: Fix this",
+                    );
+
                     setWorkflowContext(
                       createBugfixWorkflowContext(
                         workflowContext,
@@ -6552,6 +6567,7 @@ setWorkflowContext({
                 {
                   label: SUGGESTED_ACTION_LABEL.STOP,
                   onClick: () => {
+                    appendMessage("user", "Choice: Stop");
                     appendMessage(
                       "assistant",
                       "Stopped - no recovery action taken.",
@@ -6608,6 +6624,13 @@ setWorkflowContext({
                       ? "Fix this in test mode"
                       : "Fix this",
                   onClick: () => {
+                    appendMessage(
+                      "user",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Choice: Fix this in test mode"
+                        : "Choice: Fix this",
+                    );
+
                     setWorkflowContext(
                       createBugfixWorkflowContext(
                         workflowContext,
@@ -6633,6 +6656,8 @@ setWorkflowContext({
                 {
                   label: "Make another edit",
                   onClick: () => {
+                    appendMessage("user", "Choice: Make another edit");
+
 setWorkflowContext({
                         ...(workflowContext || {}),
                         taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
@@ -6653,6 +6678,7 @@ setWorkflowContext({
                 {
                   label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
                   onClick: () => {
+                    appendMessage("user", "Choice: No action needed");
                     appendMessage(
                       "assistant",
                       "No problem — I’ll leave it there.",
@@ -6704,6 +6730,7 @@ setWorkflowContext({
                     {
                       label: "Review last changed file",
                       onClick: () => {
+                        appendMessage("user", "Choice: Review last changed file");
                         appendMessage(
                           "assistant",
                           `Reviewing ${lastChangedPath}. I will read the file and summarize what is currently there. This is not an exact diff.`,
@@ -6795,6 +6822,13 @@ setWorkflowContext({
                       ? "Fix this in test mode"
                       : "Fix this",
                   onClick: () => {
+                    appendMessage(
+                      "user",
+                      modelWorkflowPolicy.mode === "advisory_only"
+                        ? "Choice: Fix this in test mode"
+                        : "Choice: Fix this",
+                    );
+
                     setWorkflowContext(
                       createBugfixWorkflowContext(
                         workflowContext,
@@ -6820,6 +6854,8 @@ setWorkflowContext({
                 {
                   label: "Make another edit",
                   onClick: () => {
+                    appendMessage("user", "Choice: Make another edit");
+
 setWorkflowContext({
                         ...(workflowContext || {}),
                         taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
@@ -6840,6 +6876,7 @@ setWorkflowContext({
                 {
                   label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
                   onClick: () => {
+                    appendMessage("user", "Choice: No action needed");
                     appendMessage(
                       "assistant",
                       "No problem — I’ll leave it there.",
