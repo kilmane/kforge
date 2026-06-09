@@ -7938,9 +7938,9 @@ setWorkflowContext({
                   onClick: () => {
                     appendMessage("user", "Choice: Inspect first");
                     sendWithPrompt(
-                      "Inspect first for this feature before implementation.\n\n" +
-                        `Original feature request: ${draft}\n\n` +
-                        "Read the most relevant existing project file first. Do not write yet.",
+                      "Read-only project inspection.\n\n" +
+                        `Original user request: ${draft}\n\n` +
+                        "Do not create or refine a feature blueprint. Do not plan implementation. Do not write files. Request read_file tool calls for the relevant existing project files, starting with src/App.jsx when it exists, then summarize what is actually implemented and what still needs Preview/build verification.",
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
