@@ -348,6 +348,18 @@ function modelPlaceholder(providerId) {
   return "Enter model ID…";
 }
 
+function defaultModelIdForProvider(providerId) {
+  const presets = MODEL_PRESETS?.[providerId] || [];
+  const selected =
+    presets.find((preset) => preset && typeof preset === "object" && preset.tier === "main") ||
+    presets.find((preset) => preset && typeof preset === "object" && preset.tier === "heavy") ||
+    presets[0];
+
+  if (!selected) return "";
+  if (typeof selected === "string") return selected;
+  return selected.id || "";
+}
+
 function modelHelperText(providerId) {
   if (!manualModelProviders(providerId)) return null;
 
@@ -1331,7 +1343,7 @@ export default function App() {
 
   // AI state
   const [aiProvider, setAiProvider] = useState("openai");
-  const [aiModel, setAiModel] = useState("gpt-4o-mini");
+  const [aiModel, setAiModel] = useState("");
 
   const [endpoints, setEndpoints] = useState({}); // providerId -> string
 
@@ -1529,7 +1541,7 @@ export default function App() {
     setAiModel((cur) => {
       const trimmed = String(cur || "").trim();
       if (trimmed) return cur;
-      return presets[0];
+      return defaultModelIdForProvider(aiProvider);
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2237,14 +2249,14 @@ export default function App() {
       }
 
       const presets = MODEL_PRESETS[nextProviderId] || [];
-      if (presets.length > 0) setAiModel(presets[0]);
+      if (presets.length > 0) setAiModel(defaultModelIdForProvider(nextProviderId));
 
       const nextLabel =
         ALL_PROVIDERS.find((p) => p.id === nextProviderId)?.label ||
         nextProviderId;
       if (presets.length > 0) {
         setProviderSwitchNote(
-          `Switched to ${nextLabel} — model reset to default (${presets[0]}).`,
+          `Switched to ${nextLabel} — model reset to default (${defaultModelIdForProvider(nextProviderId)}).`,
         );
       } else {
         setProviderSwitchNote(

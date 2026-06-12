@@ -226,6 +226,44 @@ function lastSelectedKey(providerId) {
   return `kforge.lastModel.${providerId}`;
 }
 
+function isManualModelRestoreProvider(providerId) {
+  const id = String(providerId || "").toLowerCase();
+  return (
+    id === "openrouter" ||
+    id === "custom" ||
+    id === "lmstudio" ||
+    id === "ollama_cloud"
+  );
+}
+
+function presetModelIdsForProvider(providerId) {
+  const presets = MODEL_PRESETS?.[providerId] || [];
+  return presets
+    .map((preset) =>
+      normalizeModelId(typeof preset === "string" ? preset : preset?.id),
+    )
+    .filter(Boolean);
+}
+
+function userModelIdsForProvider(providerId) {
+  return loadUserModelRecords(providerId)
+    .map((record) => normalizeModelId(record?.id))
+    .filter(Boolean);
+}
+
+function shouldRestoreLastSelectedModel(providerId, modelId) {
+  const id = normalizeModelId(modelId);
+  if (!id) return false;
+  if (isManualModelRestoreProvider(providerId)) return true;
+
+  const knownIds = new Set([
+    ...presetModelIdsForProvider(providerId),
+    ...userModelIdsForProvider(providerId),
+  ]);
+
+  return knownIds.has(id);
+}
+
 function trimTrailingSlash(url) {
   return String(url || "")
     .trim()
@@ -365,10 +403,16 @@ export default function ProviderControlsPanel({
     restoredForProviderRef.current = aiProvider;
 
     try {
-      const last = normalizeModelId(
-        localStorage.getItem(lastSelectedKey(aiProvider)),
-      );
-      if (last) setAiModel(last);
+      const key = lastSelectedKey(aiProvider);
+      const last = normalizeModelId(localStorage.getItem(key));
+      if (!last) return;
+
+      if (shouldRestoreLastSelectedModel(aiProvider, last)) {
+        setAiModel(last);
+        return;
+      }
+
+      localStorage.removeItem(key);
     } catch {
       // ignore
     }
@@ -1009,8 +1053,3 @@ export default function ProviderControlsPanel({
     </div>
   );
 }
-
-
-
-
-
