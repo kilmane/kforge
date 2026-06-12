@@ -157,7 +157,7 @@ export const KFORGE_SERVICE_WORKFLOWS = {
     id: "openai",
     category: "ai",
     name: "OpenAI",
-    status: "planned",
+    status: "available",
     route: "Services -> AI -> OpenAI",
     summary:
       "Add OpenAI-powered features to your project, including text generation, images, and embeddings.",

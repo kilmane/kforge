@@ -65,6 +65,7 @@ import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import DockShell from "./layout/DockShell";
 import { previewDetectTemplates } from "./runtime/previewRunner";
 import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
+import { getCapabilityRouteDecision } from "./ai/capabilities/capabilityRouter";
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -987,6 +988,10 @@ function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
 
   if (kind === "provider_setup") {
     return { action: "provider_setup" };
+  }
+
+  if (kind === "openai_service") {
+    return { action: "openai_service" };
   }
 
   if (kind === "stripe_service") {
@@ -3443,6 +3448,26 @@ export default function App() {
       "Use the OpenAI service to add OpenAI to the project, and the Supabase service to connect the project to Supabase."
     );
   }
+
+  function buildOpenAiRoutingMessage(projectOpen) {
+    const route = "Services → AI → OpenAI";
+
+    if (!projectOpen) {
+      return (
+        "Open a project folder first in Explorer.\n\n" +
+        `Then you can leave the chat and open: ${route}.\n\n` +
+        'Start with "Check OpenAI setup".'
+      );
+    }
+
+    return (
+      "KForge can help with AI through the AI service flow.\n\n" +
+      `You can now leave the chat and open: ${route}.\n\n` +
+      'Start with "Check OpenAI setup".\n\n' +
+      "OpenAI is the currently available AI provider in this service. This flow is for adding AI-powered features to your project, not for changing which model powers KForge chat.\n\n" +
+      "No project files have been inspected or changed from chat."
+    );
+  }
   function isSupabaseServiceWorkflowIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
@@ -3530,7 +3555,7 @@ export default function App() {
 
     if (mentionsFailure) {
       return (
-        "KForge can help troubleshoot Supabase through the Supabase service flow.\n\n" +
+        "KForge can help troubleshoot Supabase through the Backend service flow.\n\n" +
         `You can now leave the chat and open: ${route}.\n\n` +
         'Start with "Check Supabase setup". It checks env values, the Supabase client dependency, the client file, starter examples, query helpers, and local Supabase config when present.\n\n' +
         "Read the Services log/result for the exact failed or missing step. If you paste that log back into chat, I can help interpret it without pretending I can see it automatically.\n\n" +
@@ -3540,7 +3565,7 @@ export default function App() {
 
     if (asksEnvPlacement) {
       return (
-        "KForge can help prepare Supabase env files through the Supabase service flow.\n\n" +
+        "KForge can help prepare Supabase env files through the Backend service flow.\n\n" +
         `You can now leave the chat and open: ${route}.\n\n` +
         'Use "Check Supabase setup" first, then "Create .env file" if the project needs one.\n\n' +
         "For most frontend/Vite projects, use VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. KForge also tracks SUPABASE_URL and SUPABASE_ANON_KEY for non-Vite or shared setup checks.\n\n" +
@@ -3550,7 +3575,7 @@ export default function App() {
 
     if (asksQueryHelp) {
       return (
-        "KForge can help you start querying Supabase through the Supabase service flow.\n\n" +
+        "KForge can help you start querying Supabase through the Backend service flow.\n\n" +
         `You can now leave the chat and open: ${route}.\n\n` +
         'After setup is checked, use "Create Supabase read example" or "Create Supabase query helper".\n\n' +
         "Those generate starter files such as src/examples/supabaseExample.js and src/lib/supabaseQueries.js, which you can adapt to your real table names and app flow.\n\n" +
@@ -3559,10 +3584,10 @@ export default function App() {
     }
 
     return (
-      "KForge can help with this through the Supabase service flow.\n\n" +
+      "KForge can help with this through the Backend service flow.\n\n" +
       `You can now leave the chat and open: ${route}.\n\n` +
       'Start with "Quick Connect Supabase" for the beginner-friendly flow, or "Check Supabase setup" for step-by-step control.\n\n' +
-      "The service can help prepare env files, install @supabase/supabase-js, create src/lib/supabase.js, and generate starter read/query examples.\n\n" +
+      "Supabase is the currently available Backend provider in this service. This flow can help prepare env files, install @supabase/supabase-js, create src/lib/supabase.js, and generate starter read/query examples.\n\n" +
       "Use the anon/public Supabase key for frontend projects. Do not paste service-role keys into chat or frontend env files."
     );
   }
@@ -4390,6 +4415,16 @@ export default function App() {
         };
       }
 
+
+      const capabilityRouteDecision = getCapabilityRouteDecision(text, {
+        projectOpen,
+        emptyProjectFolder,
+        workflowContext,
+      });
+
+      if (capabilityRouteDecision) {
+        return capabilityRouteDecision;
+      }
       if (
         isCompletedImplementationWorkflow(workflowContext) &&
         isUserSuppliedVerificationSuccessWithFreshEditIntent(
@@ -6929,6 +6964,7 @@ setWorkflowContext({
           empty_folder_plan: "empty_folder",
           open_project_build_app_clarifier: "open_project_build_app_clarifier",
           provider_setup: "provider_setup",
+          openai_service: "openai",
           stripe_service: "stripe",
           supabase_service: "supabase",
           deploy_service: "deploy",
@@ -6944,6 +6980,7 @@ setWorkflowContext({
           deploy: WORKFLOW_NEXT_STEP.DEPLOY,
           supabase: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           provider_setup: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          openai: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           stripe: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           service_confirmation: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
@@ -6960,6 +6997,7 @@ setWorkflowContext({
           deploy: "deploy_result_or_logs",
           supabase: "connection_result_or_logs",
           provider_setup: "connection_result_or_logs",
+          openai: "connection_result_or_logs",
           stripe: "payment_result_or_logs",
           service_confirmation: "service_route_choice",
           open_project: "project_opened_or_needs_help",
@@ -7205,6 +7243,11 @@ setWorkflowContext({
             "assistant",
             buildCombinedOpenAiSupabaseRoutingMessage(projectOpen),
           );
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "openai_service") {
+          appendMessage("assistant", buildOpenAiRoutingMessage(projectOpen));
           return;
         }
 
