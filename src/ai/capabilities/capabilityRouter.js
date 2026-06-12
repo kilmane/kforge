@@ -124,6 +124,43 @@ function hasServiceActionShape(text) {
   );
 }
 
+function getCombinedAiBackendCapability(text) {
+  const mentionsAi =
+    hasAnyWord(text, ["ai", "openai", "llm", "chatbot", "assistant"]) ||
+    hasAny(text, ["artificial intelligence", "text generation", "image generation"]);
+  const mentionsSupabase = hasWord(text, "supabase");
+
+  if (!mentionsAi || !mentionsSupabase) return null;
+
+  if (hasDeferredOrPlanningIntent(text) && hasBroaderAppPlanningShape(text)) {
+    return {
+      kind: "feature_blueprint",
+      confidence: "medium",
+      source: "capability_router_combined_ai_backend_deferred_plan",
+    };
+  }
+
+  if (hasServiceActionShape(text)) {
+    return {
+      kind: "provider_setup",
+      confidence: "high",
+      source: "capability_router_combined_ai_backend_service",
+    };
+  }
+
+  return {
+    kind: "ambiguous_service_trigger",
+    confidence: "medium",
+    source: "capability_router_combined_ai_backend_confirmation",
+    serviceTrigger: {
+      service: "provider_setup",
+      serviceLabel: "AI and Backend",
+      serviceRouteLabel: "Services → AI → OpenAI and Services → Backend → Supabase",
+      openLabel: "Open AI and Backend services now",
+      wordingLabel: "AI/Backend",
+    },
+  };
+}
 function getAiServiceCapability(text) {
   const mentionsAi =
     hasAnyWord(text, [
@@ -282,6 +319,7 @@ export function getCapabilityRouteDecision(text = "", options = {}) {
   if (!projectOpen || emptyProjectFolder) return null;
 
   const checks = [
+    getCombinedAiBackendCapability,
     getAiServiceCapability,
     getSupabaseCapability,
     getPaymentsCapability,

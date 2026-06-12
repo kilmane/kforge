@@ -3445,7 +3445,8 @@ export default function App() {
       "You can now leave the chat and open:\n" +
       "Services → AI → OpenAI\n" +
       "Services → Backend → Supabase\n\n" +
-      "Use the OpenAI service to add OpenAI to the project, and the Supabase service to connect the project to Supabase."
+      "Use the AI service to add OpenAI-powered features to the project, and the Backend service to connect the project to Supabase.\n\n" +
+      "No project files have been inspected or changed from chat."
     );
   }
 
@@ -3695,10 +3696,10 @@ export default function App() {
     if (mentionsOpenAI && mentionsSupabase) {
       return {
         service: "provider_setup",
-        serviceLabel: "OpenAI and Supabase",
+        serviceLabel: "AI and Backend",
         serviceRouteLabel: "Services → AI → OpenAI and Services → Backend → Supabase",
-        openLabel: "Open OpenAI and Supabase services now",
-        wordingLabel: "OpenAI/Supabase",
+        openLabel: "Open AI and Backend services now",
+        wordingLabel: "AI/Backend",
       };
     }
 
@@ -3722,8 +3723,8 @@ export default function App() {
         service: "supabase",
         serviceLabel: "Supabase",
         serviceRouteLabel: "Services → Backend → Supabase",
-        openLabel: "Open Supabase service now",
-        wordingLabel: mentionsSupabase ? "Supabase" : "backend/database",
+        openLabel: "Open Backend service now",
+        wordingLabel: mentionsSupabase ? "Backend/Supabase" : "backend/database",
       };
     }
 
