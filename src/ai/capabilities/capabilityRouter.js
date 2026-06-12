@@ -224,6 +224,24 @@ function getMentionedServiceCapabilities(text) {
   return serviceOptions;
 }
 
+function getDeferredServiceCapability(text, sourcePrefix, serviceTrigger) {
+  if (!hasDeferredOrPlanningIntent(text)) return null;
+
+  if (hasBroaderAppPlanningShape(text)) {
+    return {
+      kind: "feature_blueprint",
+      confidence: "medium",
+      source: `${sourcePrefix}_deferred_plan`,
+    };
+  }
+
+  return {
+    kind: "ambiguous_service_trigger",
+    confidence: "medium",
+    source: `${sourcePrefix}_deferred_confirmation`,
+    serviceTrigger,
+  };
+}
 function getMultiServiceCapability(text) {
   const serviceOptions = getMentionedServiceCapabilities(text);
 
@@ -306,13 +324,16 @@ function getAiServiceCapability(text) {
 
   if (!mentionsAi) return null;
 
-  if (hasDeferredOrPlanningIntent(text)) {
-    return {
-      kind: "feature_blueprint",
-      confidence: "medium",
-      source: "capability_router_ai_deferred_plan",
-    };
-  }
+  const deferredDecision = getDeferredServiceCapability(
+    text,
+    "capability_router_ai",
+    buildServiceTrigger("openai", {
+      openLabel: "Open AI service now",
+      wordingLabel: hasWord(text, "openai") ? "OpenAI" : "AI",
+    }),
+  );
+
+  if (deferredDecision) return deferredDecision;
 
   if (hasServiceActionShape(text)) {
     return {
@@ -336,13 +357,16 @@ function getAiServiceCapability(text) {
 function getSupabaseCapability(text) {
   if (!hasWord(text, "supabase")) return null;
 
-  if (hasDeferredOrPlanningIntent(text) && hasBroaderAppPlanningShape(text)) {
-    return {
-      kind: "feature_blueprint",
-      confidence: "medium",
-      source: "capability_router_supabase_deferred_plan",
-    };
-  }
+  const deferredDecision = getDeferredServiceCapability(
+    text,
+    "capability_router_supabase",
+    buildServiceTrigger("supabase", {
+      openLabel: "Open Backend service now",
+      wordingLabel: "Backend/Supabase",
+    }),
+  );
+
+  if (deferredDecision) return deferredDecision;
 
   const serviceAction = hasServiceActionShape(text);
 
@@ -390,13 +414,16 @@ function getPaymentsCapability(text) {
 
   if (payrollContext && !hasWord(text, "stripe")) return null;
 
-  if (hasDeferredOrPlanningIntent(text)) {
-    return {
-      kind: "feature_blueprint",
-      confidence: "medium",
-      source: "capability_router_payments_deferred_plan",
-    };
-  }
+  const deferredDecision = getDeferredServiceCapability(
+    text,
+    "capability_router_payments",
+    buildServiceTrigger("stripe", {
+      openLabel: "Open Payments service now",
+      wordingLabel: hasWord(text, "stripe") ? "Payments/Stripe" : "Payments",
+    }),
+  );
+
+  if (deferredDecision) return deferredDecision;
 
   const serviceAction = hasServiceActionShape(text);
 
@@ -424,13 +451,18 @@ function getDeployCapability(text) {
 
   if (!mentionsDeploy) return null;
 
-  if (hasDeferredOrPlanningIntent(text)) {
-    return {
-      kind: "feature_blueprint",
-      confidence: "medium",
-      source: "capability_router_deploy_deferred_plan",
-    };
-  }
+  const deferredDecision = getDeferredServiceCapability(
+    text,
+    "capability_router_deploy",
+    buildServiceTrigger("deploy", {
+      serviceLabel: "Deploy",
+      serviceRouteLabel: "Services → Deploy",
+      openLabel: "Open Deploy service now",
+      wordingLabel: "Deploy",
+    }),
+  );
+
+  if (deferredDecision) return deferredDecision;
 
   return {
     kind: "deploy_service",
