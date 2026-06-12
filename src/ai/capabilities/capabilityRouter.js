@@ -124,6 +124,137 @@ function hasServiceActionShape(text) {
   );
 }
 
+function getMentionedServiceCapabilities(text) {
+  const serviceOptions = [];
+  const addService = (serviceOption) => {
+    if (!serviceOptions.some((existing) => existing.service === serviceOption.service)) {
+      serviceOptions.push(serviceOption);
+    }
+  };
+
+  const mentionsAi =
+    hasAnyWord(text, ["ai", "openai", "llm", "chatbot", "assistant", "embedding", "embeddings"]) ||
+    hasAny(text, ["artificial intelligence", "text generation", "image generation"]);
+
+  if (mentionsAi) {
+    addService({
+      service: "openai",
+      serviceLabel: "AI",
+      serviceRouteLabel: "Services → AI → OpenAI",
+      openLabel: "Open AI service now",
+      wordingLabel: "AI",
+    });
+  }
+
+  const mentionsBackend =
+    hasWord(text, "supabase") ||
+    hasAnyWord(text, ["backend", "database", "db", "auth", "login", "accounts"]) ||
+    hasAny(text, ["saved data", "saved progress", "persist", "persistence"]);
+
+  if (mentionsBackend) {
+    addService({
+      service: "supabase",
+      serviceLabel: "Backend",
+      serviceRouteLabel: "Services → Backend → Supabase",
+      openLabel: "Open Backend service now",
+      wordingLabel: hasWord(text, "supabase") ? "Backend/Supabase" : "Backend/database",
+    });
+  }
+
+  const payrollContext = hasAnyWord(text, [
+    "employee",
+    "employees",
+    "payroll",
+    "salary",
+    "salaries",
+    "wage",
+    "wages",
+    "tax",
+    "taxes",
+    "deductions",
+    "payslip",
+    "payslips",
+  ]);
+
+  const mentionsPayments =
+    hasWord(text, "stripe") ||
+    hasAnyWord(text, [
+      "payment",
+      "payments",
+      "checkout",
+      "billing",
+      "subscription",
+      "subscriptions",
+    ]);
+
+  if (mentionsPayments && !(payrollContext && !hasWord(text, "stripe"))) {
+    addService({
+      service: "stripe",
+      serviceLabel: "Payments",
+      serviceRouteLabel: "Services → Payments → Stripe",
+      openLabel: "Open Payments service now",
+      wordingLabel: hasWord(text, "stripe") ? "Payments/Stripe" : "Payments",
+    });
+  }
+
+  const mentionsDeploy =
+    hasAnyWord(text, ["deploy", "deployment", "publish", "host", "hosting", "vercel", "netlify"]) ||
+    hasAny(text, ["go live", "make it live", "make this live", "put it online"]);
+
+  if (mentionsDeploy) {
+    addService({
+      service: "deploy",
+      serviceLabel: "Deploy",
+      serviceRouteLabel: "Services → Deploy",
+      openLabel: "Open Deploy service now",
+      wordingLabel: "Deploy",
+    });
+  }
+
+  if (hasWord(text, "github")) {
+    addService({
+      service: "github",
+      serviceLabel: "Code",
+      serviceRouteLabel: "Services → Code → GitHub",
+      openLabel: "Open Code/GitHub service now",
+      wordingLabel: "Code/GitHub",
+    });
+  }
+
+  return serviceOptions;
+}
+
+function getMultiServiceCapability(text) {
+  const serviceOptions = getMentionedServiceCapabilities(text);
+
+  if (serviceOptions.length < 2) return null;
+
+  if (hasDeferredOrPlanningIntent(text) && hasBroaderAppPlanningShape(text)) {
+    return {
+      kind: "feature_blueprint",
+      confidence: "medium",
+      source: "capability_router_multi_service_deferred_plan",
+    };
+  }
+
+  if (hasServiceActionShape(text) || hasDeferredOrPlanningIntent(text)) {
+    return {
+      kind: "ambiguous_service_trigger",
+      confidence: "medium",
+      source: "capability_router_multi_service_confirmation",
+      serviceTrigger: {
+        service: "multi_service",
+        serviceLabel: "multiple services",
+        serviceRouteLabel: "Services",
+        openLabel: "Open a service now",
+        wordingLabel: "multiple services",
+        serviceOptions,
+      },
+    };
+  }
+
+  return null;
+}
 function getCombinedAiBackendCapability(text) {
   const mentionsAi =
     hasAnyWord(text, ["ai", "openai", "llm", "chatbot", "assistant"]) ||
@@ -319,6 +450,7 @@ export function getCapabilityRouteDecision(text = "", options = {}) {
   if (!projectOpen || emptyProjectFolder) return null;
 
   const checks = [
+    getMultiServiceCapability,
     getCombinedAiBackendCapability,
     getAiServiceCapability,
     getSupabaseCapability,

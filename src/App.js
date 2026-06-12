@@ -3745,6 +3745,16 @@ export default function App() {
     const label = serviceTrigger?.wordingLabel || "service";
     const route = serviceTrigger?.serviceRouteLabel || "Services";
 
+    if (
+      Array.isArray(serviceTrigger?.serviceOptions) &&
+      serviceTrigger.serviceOptions.length > 1
+    ) {
+      return (
+        "I noticed multiple service needs.\n\n" +
+        "Choose which service you want to open first:"
+      );
+    }
+
     return (
       `I noticed ${label} wording, but I’m not sure you want to open ${route} now.\n\n` +
       "Choose the closest option:"
@@ -7280,44 +7290,85 @@ setWorkflowContext({
             return;
           }
 
+          const serviceOptions =
+            Array.isArray(serviceTrigger.serviceOptions) &&
+            serviceTrigger.serviceOptions.length > 0
+              ? serviceTrigger.serviceOptions
+              : [serviceTrigger];
+
+          const getServiceTriggerExpectedResult = (selectedServiceTrigger) =>
+            selectedServiceTrigger.service === "deploy"
+              ? "deploy_result_or_logs"
+              : selectedServiceTrigger.service === "stripe"
+                ? "payment_result_or_logs"
+                : "connection_result_or_logs";
+
+          const buildSelectedServiceRoutingMessage = (selectedServiceTrigger) => {
+            if (selectedServiceTrigger.service === "deploy") {
+              return buildDeployRoutingMessage(projectOpen, draft);
+            }
+
+            if (selectedServiceTrigger.service === "provider_setup") {
+              return buildCombinedOpenAiSupabaseRoutingMessage(projectOpen);
+            }
+
+            if (selectedServiceTrigger.service === "openai") {
+              return buildOpenAiRoutingMessage(projectOpen);
+            }
+
+            if (selectedServiceTrigger.service === "stripe") {
+              return buildStripeRoutingMessage(projectOpen, draft);
+            }
+
+            if (selectedServiceTrigger.service === "github") {
+              const route = "Services → Code → GitHub";
+
+              if (!projectOpen) {
+                return (
+                  "Open a project folder first in Explorer.\n\n" +
+                  `Then you can leave the chat and open: ${route}.`
+                );
+              }
+
+              return (
+                "KForge can help with GitHub through the Code service flow.\n\n" +
+                `You can now leave the chat and open: ${route}.\n\n` +
+                "Use GitHub actions there for the current project. No project files have been inspected or changed from chat."
+              );
+            }
+
+            return buildSupabaseRoutingMessage(projectOpen, draft);
+          };
+
+          const openServiceActions = serviceOptions.map((selectedServiceTrigger) => ({
+            label: selectedServiceTrigger.openLabel,
+            onClick: () => {
+              appendMessage("user", `Choice: ${selectedServiceTrigger.openLabel}`);
+
+              const confirmedHandoffContext =
+                createDirectHandoffWorkflowContext({
+                  handoffType: selectedServiceTrigger.service,
+                  nextStep: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+                  expectedResult: getServiceTriggerExpectedResult(selectedServiceTrigger),
+                  lastUserGoal: draft,
+                  source: `confirmed_service_trigger_${selectedServiceTrigger.service}`,
+                });
+
+              setWorkflowContext(confirmedHandoffContext);
+
+              appendMessage(
+                "assistant",
+                buildSelectedServiceRoutingMessage(selectedServiceTrigger),
+              );
+            },
+          }));
+
           appendMessage(
             "assistant",
             buildServiceTriggerConfirmationMessage(serviceTrigger),
             {
               actions: [
-                {
-                  label: serviceTrigger.openLabel,
-                  onClick: () => {
-                    appendMessage("user", `Choice: ${serviceTrigger.openLabel}`);
-
-                    const confirmedHandoffContext =
-                      createDirectHandoffWorkflowContext({
-                        handoffType: serviceTrigger.service,
-                        nextStep: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
-                        expectedResult:
-                          serviceTrigger.service === "deploy"
-                            ? "deploy_result_or_logs"
-                            : serviceTrigger.service === "stripe"
-                              ? "payment_result_or_logs"
-                              : "connection_result_or_logs",
-                        lastUserGoal: draft,
-                        source: `confirmed_service_trigger_${serviceTrigger.service}`,
-                      });
-
-                    setWorkflowContext(confirmedHandoffContext);
-
-                    appendMessage(
-                      "assistant",
-                      serviceTrigger.service === "deploy"
-                        ? buildDeployRoutingMessage(projectOpen, draft)
-                        : serviceTrigger.service === "provider_setup"
-                          ? buildCombinedOpenAiSupabaseRoutingMessage(projectOpen)
-                          : serviceTrigger.service === "stripe"
-                            ? buildStripeRoutingMessage(projectOpen, draft)
-                            : buildSupabaseRoutingMessage(projectOpen, draft),
-                    );
-                  },
-                },
+                ...openServiceActions,
                 {
                   label: "Keep planning / editing the app",
                   onClick: () => {
