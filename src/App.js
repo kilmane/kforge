@@ -8014,6 +8014,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation");
+                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Start implementation from the approved plan.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -8029,6 +8030,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
                   onClick: () => {
                     appendMessage("user", "Choice: Refine blueprint");
+                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Refine the previous feature blueprint.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -8044,13 +8046,18 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
                   onClick: () => {
                     appendMessage("user", "Choice: Inspect first");
+                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
-                      "Read-only project inspection.\n\n" +
+                      "Controlled project inspection pass.\n\n" +
                         `Original user request: ${draft}\n\n` +
-                        "Do not create or refine a feature blueprint. Do not plan implementation. Do not write files. Request read_file tool calls for the relevant existing project files, starting with src/App.jsx when it exists, then summarize what is actually implemented and what still needs Preview/build verification.",
+                        `Blueprint to inspect against:\n${cleaned}\n\n` +
+                        "Do not refine the blueprint and do not implement yet. Do not ask the user to paste file contents. Request exactly one read_file tool call now, starting with src/App.jsx when it exists; otherwise inspect the smallest relevant project entry file.",
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                        forceProjectEdit: true,
+                        controlledReadOnlyToolExecution: true,
                       },
                     );
                   },

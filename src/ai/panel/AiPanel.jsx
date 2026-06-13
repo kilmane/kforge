@@ -2166,54 +2166,148 @@ export default function AiPanel({
           }
 
           if (isControlledReadOnlyToolExecution) {
+            const successfulReadItems = executedBatchResults
+              .filter(
+                (item) =>
+                  item?.ok &&
+                  String(item?.toolName || "").trim() === "read_file",
+              )
+              .map((item) => ({
+                path: String(item?.args?.path || "").trim(),
+                ok: true,
+              }))
+              .filter((item) => item.path);
+
+            const formatControlledReadOnlyPaths = (items = []) => {
+              const paths = Array.from(
+                new Set(
+                  items
+                    .filter((item) => item?.ok)
+                    .map((item) => String(item?.path || "").trim())
+                    .filter(Boolean),
+                ),
+              );
+
+              return paths.length > 0
+                ? paths.map((path) => `- ${path}`).join("\n")
+                : "- None yet";
+            };
+
+            const buildControlledReadOnlyProgressMessage = (items = [], lead = "This is only a partial inspection") =>
+              "Read-only inspection step completed.\n\n" +
+              "No files were changed.\n\n" +
+              `${lead}.\n\n` +
+              "Files inspected so far:\n" +
+              formatControlledReadOnlyPaths(items) +
+              "\n\nChoose the next safe step:";
+
+            const buildControlledReadOnlyEvidenceSummary = (items = []) =>
+              "Read-only inspection evidence summary.\n\n" +
+              "Files actually inspected in this controlled flow:\n" +
+              formatControlledReadOnlyPaths(items) +
+              "\n\nNo files were changed.\n\n" +
+              "Preview/build/tests were not run from this inspection.\n\n" +
+              "Accuracy note: this summary is deterministic. It only lists files KForge actually read in this controlled inspection and does not pretend the whole project has been reviewed.";
+
+            const buildControlledReadOnlyInspectionActions = (knownReadItems = []) => {
+              const known = new Set(
+                knownReadItems
+                  .filter((item) => item?.ok)
+                  .map((item) => String(item?.path || "").trim().toLowerCase())
+                  .filter(Boolean),
+              );
+              const preferredNextReadPaths = [
+                "package.json",
+                "src/main.jsx",
+                "src/App.css",
+                "src/index.css",
+                "src/App.jsx",
+              ];
+              const nextReadPath =
+                preferredNextReadPaths.find(
+                  (candidate) => !known.has(candidate.toLowerCase()),
+                ) || "";
+              const actions = [];
+
+              if (nextReadPath) {
+                actions.push({
+                  label: "Continue inspection",
+                  onClick: async () => {
+                    appendMessage("user", "Choice: Continue inspection");
+                    appendMessage(
+                      "assistant",
+                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.`,
+                    );
+
+                    const result = await runTool({
+                      toolName: "read_file",
+                      args: { path: nextReadPath },
+                    });
+
+                    const nextKnownReadItems = result?.ok
+                      ? [...knownReadItems, { path: nextReadPath, ok: true }]
+                      : knownReadItems;
+
+                    appendMessage(
+                      "assistant",
+                      result?.ok
+                        ? `Read ${nextReadPath}.`
+                        : `Could not read ${nextReadPath}: ${String(result?.error || "Unknown error")}`
+                    );
+
+                    appendMessage(
+                      "assistant",
+                      buildControlledReadOnlyProgressMessage(
+                        nextKnownReadItems,
+                        "This is still a partial inspection",
+                      ),
+                      {
+                        actions:
+                          buildControlledReadOnlyInspectionActions(
+                            nextKnownReadItems,
+                          ),
+                      },
+                    );
+                  },
+                });
+              }
+
+              actions.push(
+                {
+                  label: "Summarize inspected evidence",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Summarize inspected evidence");
+                    appendMessage(
+                      "assistant",
+                      buildControlledReadOnlyEvidenceSummary(knownReadItems),
+                    );
+                  },
+                },
+                {
+                  label: "Back to chat",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Back to chat");
+                    appendMessage("assistant", "No problem — continue in chat when ready.");
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage("user", "Choice: Stop");
+                    appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                  },
+                },
+              );
+
+              return actions;
+            };
+
             appendMessage(
               "assistant",
-              "Read-only inspection completed.\n\nNo files were changed.\n\nChoose the next safe step:",
+              buildControlledReadOnlyProgressMessage(successfulReadItems),
               {
-                actions: [
-                  {
-                    label: "Paste Preview/runtime evidence",
-                    onClick: () => {
-                      appendMessage("user", "Choice: Paste Preview/runtime evidence");
-                      appendMessage(
-                        "assistant",
-                        "Paste the exact Preview panel logs, browser console error, page error text, or screenshot text. I will not edit files until there is concrete evidence.",
-                        {
-                          actions: [
-                            {
-                              label: "Back to chat",
-                              onClick: () => {
-                                appendMessage("user", "Choice: Back to chat");
-                                appendMessage("assistant", "No problem — continue in chat when ready.");
-                              },
-                            },
-                            {
-                              label: SUGGESTED_ACTION_LABEL.STOP,
-                              onClick: () => {
-                                appendMessage("user", "Choice: Stop");
-                                appendMessage("assistant", "Okay — stopping here. No files were changed.");
-                              },
-                            },
-                          ],
-                        },
-                      );
-                    },
-                  },
-                  {
-                    label: "Back to chat",
-                    onClick: () => {
-                      appendMessage("user", "Choice: Back to chat");
-                      appendMessage("assistant", "No problem — continue in chat when ready.");
-                    },
-                  },
-                  {
-                    label: SUGGESTED_ACTION_LABEL.STOP,
-                    onClick: () => {
-                      appendMessage("user", "Choice: Stop");
-                      appendMessage("assistant", "Okay — stopping here. No files were changed.");
-                    },
-                  },
-                ],
+                actions:
+                  buildControlledReadOnlyInspectionActions(successfulReadItems),
               },
             );
             return;
