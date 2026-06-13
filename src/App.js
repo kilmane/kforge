@@ -8032,12 +8032,18 @@ setWorkflowContext({
                     appendMessage("user", "Choice: Refine blueprint");
                     appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
-                      "Refine the previous feature blueprint.\n\n" +
+                      "Refine the previous feature blueprint for better app-building reliability.\n\n" +
                         `Original feature request: ${draft}\n\n` +
-                        "Do not edit files yet. Make the blueprint clearer, smaller, and safer.",
+                        `Current blueprint:\n${cleaned}\n\n` +
+                        "Do not edit files.\n\n" +
+                        "Improve the blueprint for real app building: first useful vertical slice, modern polished responsive UI/UX by default, likely files to inspect/change, staged implementation steps, service readiness where relevant, risks/unknowns, and Preview/check plan.\n\n" +
+                        "Service readiness includes Supabase/backend/auth/database, AI/provider/OpenAI, GitHub/repo, deployment/Vercel/Netlify, and payments/Stripe only where relevant to the user request.\n\n" +
+                        "Rules: do not focus only on payments unless the user requested payments; do not claim any service setup, deployment, GitHub push, Preview, build, or tests were checked; keep the refined blueprint practical for producing a working app, not just rewording the same plan.",
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                        suppressToolsForPrompt: true,
                       },
                     );
                   },

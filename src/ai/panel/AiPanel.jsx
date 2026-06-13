@@ -2201,14 +2201,6 @@ export default function AiPanel({
               formatControlledReadOnlyPaths(items) +
               "\n\nChoose the next safe step:";
 
-            const buildControlledReadOnlyEvidenceSummary = (items = []) =>
-              "Read-only inspection evidence summary.\n\n" +
-              "Files actually inspected in this controlled flow:\n" +
-              formatControlledReadOnlyPaths(items) +
-              "\n\nNo files were changed.\n\n" +
-              "Preview/build/tests were not run from this inspection.\n\n" +
-              "Accuracy note: this summary is deterministic. It only lists files KForge actually read in this controlled inspection and does not pretend the whole project has been reviewed.";
-
             const buildControlledReadOnlyInspectionActions = (knownReadItems = []) => {
               const known = new Set(
                 knownReadItems
@@ -2273,16 +2265,6 @@ export default function AiPanel({
               }
 
               actions.push(
-                {
-                  label: "Summarize inspected evidence",
-                  onClick: () => {
-                    appendMessage("user", "Choice: Summarize inspected evidence");
-                    appendMessage(
-                      "assistant",
-                      buildControlledReadOnlyEvidenceSummary(knownReadItems),
-                    );
-                  },
-                },
                 {
                   label: "Back to chat",
                   onClick: () => {
