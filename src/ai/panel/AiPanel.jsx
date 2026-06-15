@@ -187,10 +187,6 @@ function getMsgText(msg) {
   return String(v || "");
 }
 
-/**
- * Small stable hash so we don't store huge payload strings in the key.
- * (Not crypto, just a compact fingerprint.)
- */
 function hashString(s) {
   const str = String(s || "");
   let h = 2166136261;
@@ -377,6 +373,112 @@ function collectToolBatchPaths(calls, toolName) {
     .filter(Boolean);
 }
 
+function normalizeToolPathKey(path = "") {
+  return String(path || "").replaceAll("\\", "/").toLowerCase();
+}
+
+function pathListIncludesPath(paths = [], expectedPath = "") {
+  const expected = normalizeToolPathKey(expectedPath);
+  if (!expected) return false;
+
+  return (Array.isArray(paths) ? paths : []).some((item) => {
+    const current = normalizeToolPathKey(item);
+    return current === expected || current.endsWith(`/${expected}`);
+  });
+}
+
+function isReactAppComponentPath(path = "") {
+  const p = normalizeToolPathKey(path);
+  return (
+    p.endsWith("/src/app.jsx") ||
+    p === "src/app.jsx" ||
+    p.endsWith("/src/app.tsx") ||
+    p === "src/app.tsx"
+  );
+}
+
+function isLikelyClassHeavyReactUiContent(content = "") {
+  const source = String(content || "");
+  const lower = source.toLowerCase();
+  const classNameCount = (source.match(/\bclassName\s*=/g) || []).length;
+  const visualStructureCount = [
+    "hero",
+    "card",
+    "grid",
+    "shell",
+    "panel",
+    "sidebar",
+    "badge",
+    "button",
+    "form",
+    "summary",
+  ].filter((word) => lower.includes(word)).length;
+
+  return classNameCount >= 3 || (classNameCount >= 1 && visualStructureCount >= 3);
+}
+
+function hasMatchingReactStyleEvidence(readPaths = []) {
+  return (
+    pathListIncludesPath(readPaths, "src/App.css") ||
+    pathListIncludesPath(readPaths, "src/index.css")
+  );
+}
+
+function shouldBlockReactUiWriteBeforeStyleEvidence({
+  path = "",
+  content = "",
+  readPaths = [],
+} = {}) {
+  if (!isReactAppComponentPath(path)) return "";
+  if (!isLikelyClassHeavyReactUiContent(content)) return "";
+  if (hasMatchingReactStyleEvidence(readPaths)) return "";
+
+  return (
+    "KForge blocked this JSX-heavy React UI write because the matching style file has not been inspected yet. " +
+    "For modern/polished React/Vite UI work, inspect src/App.css or src/index.css before writing className-heavy App.jsx/App.tsx changes, then coordinate the component and CSS in the same implementation stage."
+  );
+}
+function isReactStylePath(path = "") {
+  const p = normalizeToolPathKey(path);
+  return (
+    p.endsWith("/src/app.css") ||
+    p === "src/app.css" ||
+    p.endsWith("/src/index.css") ||
+    p === "src/index.css"
+  );
+}
+
+function pathListHasReactStylePath(paths = []) {
+  return (Array.isArray(paths) ? paths : []).some((item) =>
+    isReactStylePath(item),
+  );
+}
+
+function isModernReactUiImplementationRequest(text = "") {
+  const s = String(text || "").toLowerCase();
+  return (
+    /\b(modern|polished|responsive|ui|ux|layout|style|styled|styling|visual|design|card|cards|form|forms|hero|dashboard|app-like|app like)\b/.test(
+      s,
+    ) ||
+    s.includes("matching css") ||
+    s.includes("coordinated css")
+  );
+}
+
+function shouldTreatReactUiWriteAsPartialImplementation({
+  userText = "",
+  finalText = "",
+  editedPaths = [],
+} = {}) {
+  const paths = Array.isArray(editedPaths)
+    ? editedPaths.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (!paths.some((item) => isReactAppComponentPath(item))) return false;
+  if (pathListHasReactStylePath(paths)) return false;
+
+  return isModernReactUiImplementationRequest(`${userText}\n${finalText}`);
+}
 const INSPECT_BEFORE_WRITE_TOOL_KINDS = new Set([
   "project_edit",
   "broken_preview_debug",
@@ -446,9 +548,11 @@ function shouldBlockBlindWrite({
   taskKind,
   userMessageIndex,
   userText,
+  hasPreservedInspectionEvidence = false,
 }) {
   if (!isInspectBeforeWriteGuardedTaskKind(taskKind)) return false;
   if (!hasWriteFileToolCall(calls)) return false;
+  if (hasPreservedInspectionEvidence) return false;
 
   const evidenceKey = buildBlindWriteInspectionEvidenceKey({
     taskKind,
@@ -582,6 +686,10 @@ function getLatestUserMessageText(messages) {
   }
   return "";
 }
+function isWorkflowChoiceMessageText(text = "") {
+  return /^choice\s*:/i.test(String(text || "").trim());
+}
+
 function getNearestUserMessageTextBeforeIndex(messages, index) {
   const items = Array.isArray(messages) ? messages : [];
   const max = Math.min(
@@ -589,13 +697,21 @@ function getNearestUserMessageTextBeforeIndex(messages, index) {
     items.length - 1,
   );
 
+  let fallbackChoiceText = "";
+
   for (let i = max; i >= 0; i -= 1) {
-    if (String(items[i]?.role || "") === "user") {
-      return String(items[i]?.content || "").trim();
-    }
+    if (String(items[i]?.role || "") !== "user") continue;
+
+    const value = String(items[i]?.content || "").trim();
+    if (!value) continue;
+
+    if (!fallbackChoiceText) fallbackChoiceText = value;
+    if (isWorkflowChoiceMessageText(value)) continue;
+
+    return value;
   }
 
-  return "";
+  return fallbackChoiceText;
 }
 function isShowChangesIntent(text) {
   const s = String(text || "").toLowerCase();
@@ -767,6 +883,68 @@ function buildPostEditNextStepMessage() {
   );
 }
 
+function buildReactUiPartialAfterWriteMessage(context = null) {
+  return (
+    "Partial — updated 1 file.\n\n" +
+    `${buildPostEditChangeSummary(context)}\n\n` +
+    "Status:\n" +
+    "- The React component was updated, but matching CSS was not updated yet.\n" +
+    "- This is not complete for a modern/polished responsive UI request.\n" +
+    "- Preview/build/tests have not been run from this completion.\n\n" +
+    "Next:\nChoose Continue implementation to write the matching CSS/style step, or Stop."
+  );
+}
+
+function buildReactUiPartialAfterWriteActions({
+  context = null,
+  appendMessage = null,
+  sendWithPrompt = null,
+  originalGoal = "",
+} = {}) {
+  if (typeof appendMessage !== "function") return [];
+
+  return [
+    {
+      label: "Continue implementation",
+      onClick: () => {
+        appendMessage("user", "Choice: Continue implementation");
+        appendMessage(
+          "assistant",
+          "Continuing the implementation. I will request the matching CSS/style update next instead of treating the app as complete.",
+        );
+
+        if (typeof sendWithPrompt === "function") {
+          sendWithPrompt(
+            "Continue the previous implementation.\n\n" +
+              `Original request: ${String(originalGoal || context?.lastUserGoal || "").trim()}\n\n` +
+              "The previous step updated the React app component, but the matching CSS/style file was not updated yet.\n" +
+              "Do not rewrite src/App.jsx again unless absolutely required for alignment.\n" +
+              "Request exactly one write_file tool call for the matching style file, usually src/App.css, to complete the modern/polished responsive UI styling for the already-written component.\n" +
+              "Do not claim Preview, build, or tests passed.",
+            {
+              silentUserAppend: true,
+              skipCompletedWorkflowRoute: true,
+              skipDirectWorkflowHandoffRoute: true,
+              retryAfterRunningGuard: true,
+              forceProjectEdit: true,
+              forceModelCapabilityTestOverride: true,
+            },
+          );
+        }
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.STOP,
+      onClick: () => {
+        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+        appendMessage(
+          "assistant",
+          "Stopped. The implementation remains partial; matching CSS/style work has not been completed.",
+        );
+      },
+    },
+  ];
+}
 function buildPostEditCompletionActions({
   context = null,
   appendMessage = null,
@@ -2044,6 +2222,8 @@ export default function AiPanel({
               taskKind: triggerToolTaskKind,
               userMessageIndex: latestUserMessageIndex,
               userText: latestUserText,
+              hasPreservedInspectionEvidence:
+                triggerToolMessage?.meta?.hasPreservedInspectionEvidence === true,
             })
           ) {
             const assistantResult = buildAssistantResultProtocol({
@@ -2228,7 +2408,7 @@ export default function AiPanel({
                     appendMessage("user", "Choice: Continue inspection");
                     appendMessage(
                       "assistant",
-                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.`,
+                      `Working… reading ${nextReadPath}.`,
                     );
 
                     const result = await runTool({
@@ -2258,6 +2438,98 @@ export default function AiPanel({
                           buildControlledReadOnlyInspectionActions(
                             nextKnownReadItems,
                           ),
+                      },
+                    );
+                  },
+                });
+              }
+              if (!nextReadPath) {
+                actions.push({
+                  label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
+                  onClick: () => {
+                    appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION}`);
+
+                    const inspectedPaths = formatControlledReadOnlyPaths(knownReadItems);
+                    const originalImplementationGoal = String(latestUserText || "").trim();
+
+                    appendMessage(
+                      "assistant",
+                      "Before implementation starts, confirm the model choice.\n\n" +
+                        "For this serious app-building step, switch to a Recommended builder or High capability model first.\n\n" +
+                        "Choose the next safe step:",
+                      {
+                        actions: [
+                          {
+                            label: "I switched model — start implementation",
+                            onClick: () => {
+                              appendMessage("user", "Choice: I switched model — start implementation");
+                              appendMessage(
+                                "assistant",
+                                "Starting implementation from the inspected project evidence with the currently selected model. I will not repeat broad inspection; I will request the next concrete implementation tool step.",
+                              );
+
+                              if (typeof setWorkflowContext === "function") {
+                                setWorkflowContext(
+                                  createPartialImplementationWorkflowContext({
+                                    lastUserGoal: originalImplementationGoal,
+                                    partialSummary:
+                                      "Read-only inspection completed before implementation.\n\n" +
+                                      `Files inspected:\n${inspectedPaths}`,
+                                    inspectedPathsText: inspectedPaths,
+                                    source: "controlled_read_only_ready_to_implement",
+                                  }),
+                                );
+                              }
+
+                              if (typeof sendWithPrompt === "function") {
+                                sendWithPrompt(
+                                  "Start implementation from the completed read-only inspection.\n\n" +
+                                    `Original request: ${originalImplementationGoal}\n\n` +
+                                    "Files already inspected:\n" +
+                                    inspectedPaths +
+                                    "\n\n" +
+                                    "Use the inspected evidence. Do not repeat broad inspection.\n" +
+                                    "Build one coherent first vertical slice from the approved request, not a generic placeholder shell.\n" +
+                                    "For React/Vite UI work, coordinate the component and matching CSS. If you add or change className/layout/visual structure, update the matching CSS in the same implementation stage.\n" +
+                                    "Request exactly one focused tool call next. If enough evidence is available, request one write_file for the smallest safe implementation step. Do not claim Preview, build, or tests passed.",
+                                  {
+                                    silentUserAppend: true,
+                                    skipCompletedWorkflowRoute: true,
+                                    skipDirectWorkflowHandoffRoute: true,
+                                    retryAfterRunningGuard: true,
+                                    forceProjectEdit: true,
+                                    preservedImplementationGoal: originalImplementationGoal,
+                                    preservedInspectedPaths: inspectedPaths,
+                                  },
+                                );
+                              }
+                            },
+                          },
+                          {
+                            label: "Switch model first",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Switch model first");
+                              appendMessage(
+                                "assistant",
+                                "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then choose “I switched model — start implementation” from the confirmation above.\n\nNo files were changed.",
+                              );
+                            },
+                          },
+                          {
+                            label: "Back to chat",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Back to chat");
+                              appendMessage("assistant", "No problem — continue in chat when ready.");
+                            },
+                          },
+                          {
+                            label: SUGGESTED_ACTION_LABEL.STOP,
+                            onClick: () => {
+                              appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                              appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                            },
+                          },
+                        ],
                       },
                     );
                   },
@@ -2330,9 +2602,99 @@ export default function AiPanel({
             successfulDirPaths.length === 0;
 
           if (allWritesFailed) {
+            const failedPaths = [...failedDirPaths, ...failedWritePaths]
+              .map((item) => String(item || "").trim())
+              .filter(Boolean);
+            const failedPathSummary =
+              failedPaths.length > 0
+                ? "\n\nFailed paths:\n" +
+                  failedPaths.slice(0, 6).map((p) => `- ${p}`).join("\n") +
+                  (failedPaths.length > 6
+                    ? `\n- ...and ${failedPaths.length - 6} more`
+                    : "")
+                : "";
+            const originalGoal = String(
+              latestUserText ||
+                (isFixToolExecution
+                  ? "Continue the previous fix/debug task."
+                  : "Continue the previous implementation."),
+            ).trim();
+
             appendMessage(
               "assistant",
-              "Those file changes did not complete. Check the tool errors above. If no project folder is open, open one first in Explorer. I did not create any files.",
+              "Those file changes did not complete. No files were written." +
+                failedPathSummary +
+                "\n\nKForge stopped before claiming success. Choose a safe next action:",
+              {
+                actions: [
+                  {
+                    label: "Try one more focused step",
+                    onClick: () => {
+                      appendMessage("user", "Choice: Try one more focused step");
+                      appendMessage(
+                        "assistant",
+                        "Continuing from the failed write. I will ask for one focused recovery tool step and will not repeat the same failed write blindly.",
+                      );
+
+                      if (typeof sendWithPrompt === "function") {
+                        sendWithPrompt(
+                          (isFixToolExecution
+                            ? "Continue the previous fix/debug task after a failed file write.\n\n"
+                            : "Continue the previous implementation after a failed file write.\n\n") +
+                            `Original request: ${originalGoal}\n\n` +
+                            (failedPaths.length > 0
+                              ? "The previous write attempt failed for these paths:\n" +
+                                failedPaths.map((p) => `- ${p}`).join("\n") +
+                                "\n\n"
+                              : "") +
+                            "No files were written by the failed attempt.\n" +
+                            "Do not repeat the same failed write blindly.\n" +
+                            "Use the inspected evidence already available in the conversation.\n" +
+                            "Request exactly one focused tool call next.\n" +
+                            "If editing is still safe, request one write_file tool call for one existing inspected target path with the full intended file content.\n" +
+                            "If the path or current content is unclear, request one read_file tool call for the target path.\n" +
+                            "If no safe edit is possible, explain briefly and stop.",
+                          {
+                            silentUserAppend: true,
+                            skipCompletedWorkflowRoute: true,
+                            skipDirectWorkflowHandoffRoute: true,
+                            forceProjectEdit: !isFixToolExecution,
+                            forceModelCapabilityTestOverride: true,
+                          },
+                        );
+                      }
+                    },
+                  },
+                  {
+                    label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+                    onClick: () => {
+                      appendMessage(
+                        "user",
+                        `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                      );
+                      appendMessage(
+                        "assistant",
+                        "Manual recovery path:\n\n" +
+                          "1. Review the failed path shown above.\n" +
+                          "2. Inspect that file again if needed.\n" +
+                          "3. Retry with one complete file write only after the target path and full content are clear.\n" +
+                          "4. Preview after a successful write.\n\n" +
+                          "No files were written by the failed attempt.",
+                      );
+                    },
+                  },
+                  {
+                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    onClick: () => {
+                      appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                      appendMessage(
+                        "assistant",
+                        "Stopped. No files were written by the failed attempt.",
+                      );
+                    },
+                  },
+                ],
+              },
             );
           } else if (
             isDependencyInstallIntent(latestUserText) &&
@@ -2369,16 +2731,48 @@ export default function AiPanel({
                 "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
             );
           } else if (successfulWritePaths.length > 0) {
-            const completedWorkflowContext =
-              createCompletedImplementationWorkflowContext({
-                lastEditedPath: latestWrittenPath || "",
+            const recentUserIntentText = (Array.isArray(messages) ? messages : [])
+              .slice(-40)
+              .reverse()
+              .find(
+                (msg) =>
+                  String(msg?.role || "") === "user" &&
+                  !isWorkflowChoiceMessageText(getMsgText(msg)),
+              );
+            const batchPartialDetectionText = [
+              getMsgText(recentUserIntentText),
+              latestUserText,
+              getMsgText(triggerToolMessage),
+            ]
+              .filter(Boolean)
+              .join("\n");
+
+            const shouldMarkBatchReactUiPartial =
+              shouldTreatReactUiWriteAsPartialImplementation({
+                userText: batchPartialDetectionText,
+                finalText: getMsgText(triggerToolMessage),
                 editedPaths: successfulWritePaths,
-                preWriteSnapshots: getSnapshotsForPaths(
-                  preWriteSnapshotsRef.current,
-                  successfulWritePaths,
-                ),
-                source: "tool_batch",
               });
+
+            const completedWorkflowContext = shouldMarkBatchReactUiPartial
+              ? createPartialImplementationWorkflowContext({
+                  lastUserGoal:
+                    getMsgText(recentUserIntentText) || latestUserText || "",
+                  lastEditedPath: latestWrittenPath || "",
+                  editedPaths: successfulWritePaths,
+                  partialSummary:
+                    "React/Vite UI implementation is partial because the component was updated without the matching CSS/style update.",
+                  source: "tool_batch_react_ui_partial",
+                })
+              : createCompletedImplementationWorkflowContext({
+                  lastEditedPath: latestWrittenPath || "",
+                  editedPaths: successfulWritePaths,
+                  preWriteSnapshots: getSnapshotsForPaths(
+                    preWriteSnapshotsRef.current,
+                    successfulWritePaths,
+                  ),
+                  source: "tool_batch",
+                });
 
             if (typeof setWorkflowContext === "function") {
               setWorkflowContext(completedWorkflowContext);
@@ -2388,18 +2782,29 @@ export default function AiPanel({
               successfulWritePaths.length === 1
                 ? "1 file"
                 : `${successfulWritePaths.length} files`;
-            const writeCompletionMessage =
-              `Done — updated ${fileCountLabel}.\n\n` +
-              `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
-              `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
-              buildPostEditNextStepMessage(completedWorkflowContext);
+            const writeCompletionMessage = shouldMarkBatchReactUiPartial
+              ? buildReactUiPartialAfterWriteMessage(completedWorkflowContext)
+              : `Done — updated ${fileCountLabel}.\n\n` +
+                `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
+                `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
+                buildPostEditNextStepMessage(completedWorkflowContext);
+
+            const writeCompletionActions = shouldMarkBatchReactUiPartial
+              ? buildReactUiPartialAfterWriteActions({
+                  context: completedWorkflowContext,
+                  appendMessage,
+                  sendWithPrompt,
+                  originalGoal:
+                    getMsgText(recentUserIntentText) || latestUserText || "",
+                })
+              : buildPostEditCompletionActions({
+                  context: completedWorkflowContext,
+                  appendMessage,
+                  sendWithPrompt,
+                });
 
             appendMessage("assistant", writeCompletionMessage, {
-              actions: buildPostEditCompletionActions({
-                context: completedWorkflowContext,
-                appendMessage,
-                sendWithPrompt,
-              }),
+              actions: writeCompletionActions,
             });
           } else if (typeof runAi === "function") {
             try {
@@ -2544,6 +2949,21 @@ export default function AiPanel({
                     };
                   }
 
+                  if (toolName === "write_file") {
+                    const reactUiStyleGuardReason =
+                      shouldBlockReactUiWriteBeforeStyleEvidence({
+                        path: requestedPath,
+                        content: args?.content,
+                        readPaths: agentSuccessfulReadPaths,
+                      });
+
+                    if (reactUiStyleGuardReason) {
+                      return {
+                        ok: false,
+                        error: reactUiStyleGuardReason,
+                      };
+                    }
+                  }
                   const result = await runTool({ toolName, args });
 
                   if (result?.ok && toolName === "read_file") {
@@ -2587,16 +3007,32 @@ export default function AiPanel({
 
               const agentMadeProjectChanges =
                 agentSuccessfulWritePaths.length > 0;
+              const shouldMarkAgentReactUiPartial =
+                agentMadeProjectChanges &&
+                shouldTreatReactUiWriteAsPartialImplementation({
+                  userText: latestUserText,
+                  finalText: agentResult?.text,
+                  editedPaths: agentSuccessfulWritePaths,
+                });
               const completedWorkflowContext = agentMadeProjectChanges
-                ? createCompletedImplementationWorkflowContext({
-                    lastEditedPath: latestAgentWrittenPath || "",
-                    editedPaths: agentSuccessfulWritePaths,
-                    preWriteSnapshots: getSnapshotsForPaths(
-                      preWriteSnapshotsRef.current,
-                      agentSuccessfulWritePaths,
-                    ),
-                    source: "agent_continuation",
-                  })
+                ? shouldMarkAgentReactUiPartial
+                  ? createPartialImplementationWorkflowContext({
+                      lastUserGoal: latestUserText,
+                      lastEditedPath: latestAgentWrittenPath || "",
+                      editedPaths: agentSuccessfulWritePaths,
+                      partialSummary:
+                        "React/Vite UI implementation is partial because the component was updated without the matching CSS/style update.",
+                      source: "agent_continuation_react_ui_partial",
+                    })
+                  : createCompletedImplementationWorkflowContext({
+                      lastEditedPath: latestAgentWrittenPath || "",
+                      editedPaths: agentSuccessfulWritePaths,
+                      preWriteSnapshots: getSnapshotsForPaths(
+                        preWriteSnapshotsRef.current,
+                        agentSuccessfulWritePaths,
+                      ),
+                      source: "agent_continuation",
+                    })
                 : null;
 
               if (
@@ -2735,7 +3171,7 @@ export default function AiPanel({
                               "assistant",
                               isFixToolExecution
                                 ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
-                                : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
+                                : "Continuing the edit attempt. I will ask the model to request the next missing evidence file or one coordinated implementation change.",
                             );
 
                             if (typeof sendWithPrompt === "function") {
@@ -2747,7 +3183,11 @@ export default function AiPanel({
                                   "The project has already been inspected. Do not repeat broad inspection.\n" +
                                   (isFixToolExecution
                                     ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
+                                    : "Request exactly one focused tool call next.\n" +
+                                      "If this is React/Vite UI work and only the component file has been inspected, inspect the matching style file next, usually src/App.css, before writing JSX that adds or changes className/layout/visual structure.\n" +
+                                      "If the conversation already shows src/App.css or src/index.css was inspected for this implementation, do not reread the same style file. Use the inspected evidence and request the next coordinated write_file step.\n" +
+                                      "If you add or change className/layout/visual structure, coordinate the component and matching CSS in the same implementation stage; do not stop with JSX-only UI that depends on missing styles.\n" +
+                                      "If enough relevant component and style evidence is already available, request one smallest safe write_file change. If a file edit is impossible, explain briefly why."),
                                 {
                                   silentUserAppend: true,
                                   skipCompletedWorkflowRoute: true,
@@ -2768,22 +3208,29 @@ export default function AiPanel({
                   agentSuccessfulWritePaths.length === 1
                     ? "1 file"
                     : `${agentSuccessfulWritePaths.length} files`;
-
-                appendMessage(
-                  "assistant",
-                  `Done — updated ${fileCountLabel}.\n\n${buildPostEditChangeSummary(
-                    completedWorkflowContext,
-                  )}\n\n${buildPostEditVerificationMessage(
-                    completedWorkflowContext,
-                  )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`,
-                  {
-                    actions: buildPostEditCompletionActions({
+                const agentCompletionMessage = shouldMarkAgentReactUiPartial
+                  ? buildReactUiPartialAfterWriteMessage(completedWorkflowContext)
+                  : `Done — updated ${fileCountLabel}.\n\n${buildPostEditChangeSummary(
+                      completedWorkflowContext,
+                    )}\n\n${buildPostEditVerificationMessage(
+                      completedWorkflowContext,
+                    )}\n\n${buildPostEditNextStepMessage(completedWorkflowContext)}`;
+                const agentCompletionActions = shouldMarkAgentReactUiPartial
+                  ? buildReactUiPartialAfterWriteActions({
                       context: completedWorkflowContext,
                       appendMessage,
                       sendWithPrompt,
-                    }),
-                  },
-                );
+                      originalGoal: latestUserText,
+                    })
+                  : buildPostEditCompletionActions({
+                      context: completedWorkflowContext,
+                      appendMessage,
+                      sendWithPrompt,
+                    });
+
+                appendMessage("assistant", agentCompletionMessage, {
+                  actions: agentCompletionActions,
+                });
               } else if (finalText) {
                 appendMessage("assistant", finalText);
               } else if (

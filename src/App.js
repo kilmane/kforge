@@ -872,6 +872,7 @@ function isModelCapabilityGatePolicy(modelWorkflowPolicy = null) {
   return mode === "advisory_only" || mode === "guarded_edit";
 }
 
+
 function getModelCapabilityGateLabel(modelWorkflowPolicy = null) {
   const mode = modelWorkflowPolicy?.mode || "unknown";
   const tier = modelWorkflowPolicy?.tier || "unknown";
@@ -891,21 +892,120 @@ function getModelCapabilityGateLabel(modelWorkflowPolicy = null) {
   return "guarded or tool-unverified";
 }
 
+function buildProminentModelReminderMessage(extra = "") {
+  const detail = String(extra || "").trim();
+
+  return (
+    "🟨 Model Reminder\n\n" +
+    "🟥 !! Switch to a more capable model now !!\n\n" +
+    "For serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list." +
+    (detail ? `\n\n${detail}` : "")
+  );
+}
 function buildModelCapabilityGateMessage(modelWorkflowPolicy = null) {
   const label = getModelCapabilityGateLabel(modelWorkflowPolicy);
 
-  return (
-    "You are about to start automatic project editing.\n\n" +
-    `The selected model is treated as ${label} for KForge project editing. It may produce poor code, malformed tool calls, incomplete edits, loops, broken app logic, or weak UI/UX.\n\n` +
-    "Recommended: switch to a Recommended builder or High capability model from the Provider/Model preset list.\n\n" +
-    "Choose:\n" +
-    "- Switch model first\n" +
-    "- Continue in test mode\n" +
-    "- Back to chat\n" +
-    "- Stop"
+  return buildProminentModelReminderMessage(
+    `The selected model is treated as ${label} for KForge project editing. It may produce poor code, malformed tool calls, incomplete edits, loops, broken app logic, or weak UI/UX.\n\nChoose:\n- Switch model first\n- Continue in test mode\n- Back to chat\n- Stop`,
   );
 }
+function buildStartImplementationPrompt({
+  originalRequest = "",
+  fromBlueprint = false,
+} = {}) {
+  const heading = fromBlueprint
+    ? "Start implementation from the approved plan."
+    : "Start implementation in the current project.";
+  const originalLabel = fromBlueprint
+    ? "Original feature request:"
+    : "Original request:";
 
+  return (
+    `${heading}\n\n` +
+    `${originalLabel}\n${String(originalRequest || "").trim()}\n\n` +
+    "Implementation rules:\n" +
+    "- Do not ask the user to paste file contents.\n" +
+    "- Inspect the relevant existing files before any write_file request.\n" +
+    "- Preserve the existing app unless inspection shows it is only starter/demo/placeholder content.\n" +
+    "- Build one coherent first vertical slice from the approved plan/request, not a generic placeholder shell.\n" +
+    "- Make the first slice modern, polished, responsive, and previewable by default: strong layout, spacing, typography, cards/forms/navigation where relevant, interactive states, useful empty/loading/error states, accessible contrast, and mobile/desktop behavior.\n" +
+    "- For React/Vite UI work, inspect the existing component file and the matching style files before writing. If you add or change className/layout/visual structure, update the matching CSS in the same implementation stage; do not stop with JSX-only UI that depends on missing styles.\n" +
+    "- For starter/demo React apps, a polished first app slice normally targets both src/App.jsx and src/App.css, plus src/index.css only when global reset/theme/body styles need adjustment.\n" +
+    "- Keep service work staged and truthful. If backend/auth/database/Supabase, OpenAI/AI, GitHub, deployment, or Stripe/payments are needed, prepare safe frontend/data boundaries only unless the relevant KForge service setup has already been completed or the user explicitly requested that service step now.\n" +
+    "- Do not claim Preview, build, tests, GitHub push, deployment, payment setup, AI setup, or database setup were run unless a real tool/service result proves it.\n" +
+    "- Do not create or refine another blueprint. Begin implementation by requesting inspection tools.\n" +
+    "- Request the smallest safe file change after inspection, and route the user to Preview only after the implementation stage is complete."
+  );
+}
+function buildStartImplementationModelGateActions({
+  appendMessage = null,
+  setWorkflowContext = null,
+  sendWithPrompt = null,
+  implementationPrompt = "",
+  draft = "",
+} = {}) {
+  if (
+    typeof appendMessage !== "function" ||
+    typeof setWorkflowContext !== "function" ||
+    typeof sendWithPrompt !== "function"
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      label: "Switch model first",
+      onClick: () => {
+        appendMessage("user", "Choice: Switch model first");
+        setWorkflowContext(null);
+        appendMessage(
+          "assistant",
+          "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then click Start implementation again. No project editing has started and no files were changed.",
+        );
+      },
+    },
+    {
+      label: "Continue in test mode",
+      onClick: () => {
+        appendMessage("user", "Choice: Continue in test mode");
+        appendMessage(
+          "assistant",
+          "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
+        );
+
+        sendWithPrompt(String(implementationPrompt || draft || "").trim(), {
+          silentUserAppend: true,
+          skipCompletedWorkflowRoute: true,
+          skipDirectWorkflowHandoffRoute: true,
+          forceProjectEdit: true,
+          forceModelCapabilityTestOverride: true,
+        });
+      },
+    },
+    {
+      label: "Back to chat",
+      onClick: () => {
+        appendMessage("user", "Choice: Back to chat");
+        setWorkflowContext(null);
+        appendMessage(
+          "assistant",
+          "Back to chat — implementation has not started. No files were changed.",
+        );
+      },
+    },
+    {
+      label: "Stop",
+      onClick: () => {
+        appendMessage("user", "Choice: Stop");
+        setWorkflowContext(null);
+        appendMessage(
+          "assistant",
+          "Okay — stopping here. No files were changed.",
+        );
+      },
+    },
+  ];
+}
 function getProjectEditRouteDecision({
   promptTask = null,
   modelWorkflowPolicy = null,
@@ -5000,7 +5100,26 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
   }
   const sendWithPrompt = useCallback(
     async (rawPrompt, opts = {}) => {
-      if (aiRunning) return;
+      if (aiRunning) {
+        if (opts.retryAfterRunningGuard === true) {
+          window.setTimeout(() => {
+            const retrySend = sendWithPromptRef.current;
+            if (typeof retrySend === "function") {
+              retrySend(rawPrompt, {
+                ...opts,
+                retryAfterRunningGuard: false,
+              });
+            }
+          }, 350);
+          return;
+        }
+
+        appendMessage(
+          "assistant",
+          "KForge is still finishing the previous model step. Try the action again in a moment.",
+        );
+        return;
+      }
 
       const draft = String(rawPrompt || "");
       if (!draft.trim()) {
@@ -7074,14 +7193,42 @@ setWorkflowContext({
                   label: "Start implementation in this project",
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation in this project");
-                    sendWithPrompt(
-                      `Start implementation in the current project.\n\nOriginal request:\n${draft}\n\nInspect the relevant files first. Then request the smallest safe file change. Do not replace the whole app unless inspection shows it is only a starter placeholder.`,
-                      {
-                        silentUserAppend: true,
-                        skipCompletedWorkflowRoute: true,
-                        skipDirectWorkflowHandoffRoute: true,
-                      },
-                    );
+                    const implementationPrompt = buildStartImplementationPrompt({
+                      originalRequest: draft,
+                      fromBlueprint: false,
+                    });
+
+                    if (isModelCapabilityGatePolicy(modelWorkflowPolicy)) {
+                      setWorkflowContext(
+                        createBlockedProjectEditWorkflowContext(
+                          draft,
+                          modelWorkflowPolicy,
+                        ),
+                      );
+
+                      appendMessage(
+                        "assistant",
+                        buildModelCapabilityGateMessage(modelWorkflowPolicy),
+                        {
+                          actions: buildStartImplementationModelGateActions({
+                            appendMessage,
+                            setWorkflowContext,
+                            sendWithPrompt,
+                            implementationPrompt,
+                            draft,
+                          }),
+                        },
+                      );
+                      return;
+                    }
+
+                    appendMessage("assistant", buildProminentModelReminderMessage("You can use the current model for planning and low-risk inspection. Switch to a stronger model before clicking Start implementation."));
+                    sendWithPrompt(implementationPrompt, {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      skipDirectWorkflowHandoffRoute: true,
+                      forceProjectEdit: true,
+                    });
                   },
                 },
                 {
@@ -7951,9 +8098,24 @@ setWorkflowContext({
               label: "Try one more focused step",
               onClick: () => {
                 appendMessage("user", "Choice: Try one more focused step");
-                sendWithPrompt(focusedNoToolPrompt, {
+                const runFocusedNoToolPrompt =
+                  typeof sendWithPromptRef.current === "function"
+                    ? sendWithPromptRef.current
+                    : sendWithPrompt;
+
+                if (typeof runFocusedNoToolPrompt !== "function") {
+                  appendMessage(
+                    "assistant",
+                    "I could not start the focused retry automatically. Please resend the implementation request.",
+                  );
+                  return;
+                }
+
+                runFocusedNoToolPrompt(focusedNoToolPrompt, {
                   silentUserAppend: true,
                   skipCompletedWorkflowRoute: true,
+                  skipDirectWorkflowHandoffRoute: true,
+                  retryAfterRunningGuard: true,
                   forceProjectEdit:
                     !isFixNoToolRecovery &&
                     !isPartialImplementationNoToolRecovery,
@@ -8014,23 +8176,49 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
-                    sendWithPrompt(
-                      "Start implementation from the approved plan.\n\n" +
-                        `Original feature request: ${draft}\n\n` +
-                        "Modify the project files for this app. Inspect the relevant existing files before writing and keep the first edit small and safe.",
-                      {
-                        silentUserAppend: true,
-                        skipCompletedWorkflowRoute: true,
-                      },
-                    );
+                    const implementationPrompt = buildStartImplementationPrompt({
+                      originalRequest: draft,
+                      fromBlueprint: true,
+                    });
+
+                    if (isModelCapabilityGatePolicy(modelWorkflowPolicy)) {
+                      setWorkflowContext(
+                        createBlockedProjectEditWorkflowContext(
+                          draft,
+                          modelWorkflowPolicy,
+                        ),
+                      );
+
+                      appendMessage(
+                        "assistant",
+                        buildModelCapabilityGateMessage(modelWorkflowPolicy),
+                        {
+                          actions: buildStartImplementationModelGateActions({
+                            appendMessage,
+                            setWorkflowContext,
+                            sendWithPrompt,
+                            implementationPrompt,
+                            draft,
+                          }),
+                        },
+                      );
+                      return;
+                    }
+
+                    appendMessage("assistant", buildProminentModelReminderMessage("You can use the current model for planning and low-risk inspection. Switch to a stronger model before clicking Start implementation."));
+                    sendWithPrompt(implementationPrompt, {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      skipDirectWorkflowHandoffRoute: true,
+                      forceProjectEdit: true,
+                    });
                   },
                 },
                 {
                   label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
                   onClick: () => {
                     appendMessage("user", "Choice: Refine blueprint");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", buildProminentModelReminderMessage("You can use the current model for planning and low-risk inspection. Switch to a stronger model before clicking Start implementation."));
                     sendWithPrompt(
                       "Refine the previous feature blueprint for better app-building reliability.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -8052,7 +8240,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
                   onClick: () => {
                     appendMessage("user", "Choice: Inspect first");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", buildProminentModelReminderMessage("You can use the current model for planning and low-risk inspection. Switch to a stronger model before clicking Start implementation."));
                     sendWithPrompt(
                       "Controlled project inspection pass.\n\n" +
                         `Original user request: ${draft}\n\n` +
@@ -8093,10 +8281,217 @@ setWorkflowContext({
               "[tool] Tool request blocked: this KForge route did not allow model-initiated tools.",
             );
           } else {
-            appendMessage("assistant", "");
+            const isEmptyProjectEditResponse =
+              promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
+              promptTask.kind === "broken_preview_debug" ||
+              !!opts.forceProjectEdit;
+
+            if (isEmptyProjectEditResponse) {
+              const preservedImplementationGoal = String(
+                opts.preservedImplementationGoal ||
+                  workflowContext?.lastUserGoal ||
+                  "",
+              ).trim();
+              const preservedInspectedPaths = String(
+                opts.preservedInspectedPaths ||
+                  workflowContext?.inspectedPathsText ||
+                  "",
+              ).trim();
+              const emptyResponseGoal =
+                preservedImplementationGoal || String(draft || "").trim();
+              const emptyResponseInspectedBlock = preservedInspectedPaths
+                ? `Files already inspected:\n${preservedInspectedPaths}\n\n`
+                : "";
+              const isEmptyResponseRecoveryRetry =
+                opts.emptyResponseRecoveryAttempt === true;
+              const isModelSwitchContinuationAttempt =
+                opts.modelSwitchContinuationAttempt === true;
+
+              const emptyResponseActions = isModelSwitchContinuationAttempt
+                ? [
+                    {
+                      label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                        );
+                        appendMessage(
+                          "assistant",
+                          "Manual recovery path:\n\n" +
+                            "1. Treat the switched-model implementation restart as failed.\n" +
+                            "2. No files were changed.\n" +
+                            "3. Do not keep retrying the same failed model path.\n" +
+                            "4. Use a different capable model or make the implementation manually from the inspected files.",
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                        appendMessage(
+                          "assistant",
+                          "Stopped. No files were changed by the switched-model implementation restart.",
+                        );
+                      },
+                    },
+                  ]
+                : isEmptyResponseRecoveryRetry
+                ? [
+                    {
+                      label: "I switched model — continue",
+                      onClick: () => {
+                        appendMessage("user", "Choice: I switched model — continue");
+                        appendMessage(
+                          "assistant",
+                          "Continuing with the currently selected model. I will ask for one concrete implementation tool step and will not claim anything changed unless a tool succeeds.",
+                        );
+
+                        sendWithPrompt(
+                          "Start implementation now using the currently selected stronger model.\n\n" +
+                            `Original app request:\n${emptyResponseGoal}\n\n` +
+                            emptyResponseInspectedBlock +
+                            "Use the inspected evidence. Do not repeat broad inspection or the failed empty-response prompt.\n" +
+                            "Build one coherent first local-state UI slice for the requested app.\n" +
+                            "For React/Vite, coordinate src/App.jsx and src/App.css across the implementation; do not leave a JSX-only polished UI.\n" +
+                            "Request exactly one valid fenced ```tool``` block next.\n" +
+                            "Prefer one write_file tool call for src/App.jsx or src/App.css when enough evidence is available.\n" +
+                            "Do not give only prose. Do not claim Preview, build, tests, or file changes passed.",
+                          {
+                            silentUserAppend: true,
+                            skipCompletedWorkflowRoute: true,
+                            skipDirectWorkflowHandoffRoute: true,
+                            retryAfterRunningGuard: true,
+                            forceProjectEdit: true,
+                            emptyResponseRecoveryAttempt: true,
+                            modelSwitchContinuationAttempt: true,
+                            preservedImplementationGoal: emptyResponseGoal,
+                            preservedInspectedPaths: preservedInspectedPaths,
+                          },
+                        );
+                      },
+                    },
+                    {
+                      label: "Switch model first",
+                      onClick: () => {
+                        appendMessage("user", "Choice: Switch model first");
+                        appendMessage(
+                          "assistant",
+                          "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then choose “I switched model — continue” from this recovery step. No files were changed by the repeated empty model response.",
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                        );
+                        appendMessage(
+                          "assistant",
+                          "Manual recovery path:\n\n" +
+                            "1. Treat the last model step as failed.\n" +
+                            "2. No files were changed.\n" +
+                            "3. Switch to a stronger model before retrying implementation.\n" +
+                            "4. Use one focused implementation request after inspection evidence is available.",
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                        appendMessage(
+                          "assistant",
+                          "Stopped. No files were changed by the repeated empty model response.",
+                        );
+                      },
+                    },
+                  ]
+                : [
+                    {
+                      label: "Try one more focused step",
+                      onClick: () => {
+                        appendMessage("user", "Choice: Try one more focused step");
+                        appendMessage(
+                          "assistant",
+                          "Continuing from the empty model response. I will ask for one focused tool step and will not claim anything was changed unless a tool succeeds.",
+                        );
+
+                        sendWithPrompt(
+                          "Continue the previous project edit after an empty model response.\n\n" +
+                            `Original request: ${emptyResponseGoal}\n\n` +
+                            emptyResponseInspectedBlock +
+                            "The previous model response was empty or unusable.\n" +
+                            "No files were changed.\n" +
+                            "Request exactly one valid fenced ```tool``` block next.\n" +
+                            "If enough inspection evidence is available, request one write_file tool call for one existing inspected target path with the full intended file content.\n" +
+                            "If more evidence is needed, request one read_file tool call.\n" +
+                            "Do not give only prose. Do not claim Preview, build, tests, or file changes passed.",
+                          {
+                            silentUserAppend: true,
+                            skipCompletedWorkflowRoute: true,
+                            skipDirectWorkflowHandoffRoute: true,
+                            retryAfterRunningGuard: true,
+                            emptyResponseRecoveryAttempt: true,
+                            forceProjectEdit: true,
+                            preservedImplementationGoal: emptyResponseGoal,
+                            preservedInspectedPaths: preservedInspectedPaths,
+                            forceModelCapabilityTestOverride: true,
+                          },
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                        );
+                        appendMessage(
+                          "assistant",
+                          "Manual recovery path:\n\n" +
+                            "1. Treat the last model step as failed.\n" +
+                            "2. No files were changed.\n" +
+                            "3. Switch to a stronger model if this repeats.\n" +
+                            "4. Retry with one focused implementation step after inspection evidence is available.",
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                        appendMessage(
+                          "assistant",
+                          "Stopped. No files were changed by the empty model response.",
+                        );
+                      },
+                    },
+                  ];
+
+              appendMessage(
+                "assistant",
+                isModelSwitchContinuationAttempt
+                  ? "The model still returned no usable response after the switched-model implementation restart.\n\nNo files were changed.\n\nKForge will not keep looping on the same failed model path."
+                  : isEmptyResponseRecoveryRetry
+                    ? "The model returned no usable response again.\n\nNo files were changed.\n\nKForge will not keep retrying the same failed model step.\n\nIf you already switched to a stronger model, choose “I switched model — continue”. Otherwise choose “Switch model first”."
+                    : "The model returned no usable response for this project-edit step.\n\nNo files were changed.\n\nKForge stopped before claiming success. Choose a safe next action:",
+                {
+                  actions: emptyResponseActions,
+                },
+              );
+            } else {
+              appendMessage(
+                "assistant",
+                "The model returned no visible response. No files were changed.",
+              );
+            }
           }
         }
-
         // Keep patch preview detection working off the original model output
         maybeCapturePatchPreview(out, {
           allowCapture: !!projectOpen && !!effectiveAskForPatch,
@@ -8112,6 +8507,9 @@ setWorkflowContext({
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
                 controlledReadOnlyToolExecution:
                   opts.controlledReadOnlyToolExecution === true,
+                hasPreservedInspectionEvidence:
+                  !!opts.preservedInspectedPaths ||
+                  !!workflowContext?.inspectedPathsText,
               },
             });
           }
