@@ -25,6 +25,11 @@ import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
+  BUILT_IN_MODERN_REACT_STARTER_LABEL,
+  buildBuiltInModernReactStarterImplementation,
+  canUseBuiltInModernReactStarterImplementation,
+} from "../planning/builtInModernReactStarter.js";
+import {
   ASSISTANT_ACTION_RESULT,
   ASSISTANT_ACTION_TYPE,
   buildAssistantResultProtocol,
@@ -771,6 +776,8 @@ function buildPostEditCompletionActions({
   context = null,
   appendMessage = null,
   sendWithPrompt = null,
+  runBuiltInModernReactStarter = null,
+  originalGoal = "",
 } = {}) {
   if (typeof appendMessage !== "function") return [];
 
@@ -779,6 +786,16 @@ function buildPostEditCompletionActions({
     : [];
   const lastChangedPath =
     editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
+  const starterGoal = String(
+    originalGoal || context?.lastUserGoal || "",
+  ).trim();
+  const canOfferBuiltInStarterQualityRecovery =
+    context?.source !== "built_in_modern_react_starter" &&
+    typeof runBuiltInModernReactStarter === "function" &&
+    canUseBuiltInModernReactStarterImplementation({
+      goal: starterGoal,
+      inspectedPaths: editedPaths,
+    }).ok;
 
   return [
     {
@@ -841,6 +858,23 @@ function buildPostEditCompletionActions({
         );
       },
     },
+    ...(canOfferBuiltInStarterQualityRecovery
+      ? [
+          {
+            label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
+            onClick: () => {
+              appendMessage(
+                "user",
+                `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
+              );
+              runBuiltInModernReactStarter({
+                originalGoal: starterGoal,
+                inspectedPaths: editedPaths,
+              });
+            },
+          },
+        ]
+      : []),
     {
       label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
       onClick: () => {
@@ -1451,6 +1485,7 @@ export default function AiPanel({
   updateMessage,
   onWorkspaceTreeRefresh,
   setWorkflowContext,
+  workflowContext,
 
   aiPrompt,
   setAiPrompt,
@@ -1629,7 +1664,11 @@ export default function AiPanel({
             ? `List directory (Path: ${String(args?.path || "").trim()})`
             : tool === "search_in_file"
               ? `Search in file (Path: ${String(args?.path || "").trim()} | Query: ${String(args?.query || "").trim()})`
-              : "Awaiting approval…";
+              : tool === "write_file"
+                ? `Write file (Path: ${String(args?.path || "").trim()})`
+                : tool === "mkdir"
+                  ? `Create directory (Path: ${String(args?.path || "").trim()})`
+                  : "Awaiting approval…";
 
       const requestMsg = appendMessage(
         "system",
@@ -1841,6 +1880,137 @@ export default function AiPanel({
     ],
   );
 
+  const runBuiltInModernReactStarter = useCallback(
+    async ({ originalGoal = "", inspectedPaths = [], projectTemplateInfo = null } = {}) => {
+      const suitability = canUseBuiltInModernReactStarterImplementation({
+        goal: originalGoal,
+        inspectedPaths,
+        projectTemplateInfo,
+      });
+
+      if (!suitability.ok) {
+        appendMessage(
+          "assistant",
+          "Built-in Modern React Starter is not safe for this step.\n\n" +
+            suitability.reason +
+            "\n\nNo files were changed.",
+        );
+        return;
+      }
+
+      const starter = buildBuiltInModernReactStarterImplementation(originalGoal);
+      const files = Array.isArray(starter.files) ? starter.files : [];
+
+      if (files.length === 0) {
+        appendMessage(
+          "assistant",
+          "Built-in Modern React Starter did not produce any files.\n\nNo files were changed.",
+        );
+        return;
+      }
+
+      appendMessage(
+        "assistant",
+        `Working… applying built-in Modern React Starter (${starter.title || "Modern app"}).`,
+      );
+
+      const successfulWritePaths = [];
+      const cancelledWritePaths = [];
+      const failedWritePaths = [];
+
+      for (const file of files) {
+        const filePath = String(file?.path || "").trim();
+        const content = String(file?.content || "");
+
+        if (!filePath || !content) {
+          failedWritePaths.push(filePath || "(unknown path)");
+          continue;
+        }
+
+        const result = await runTool({
+          toolName: "write_file",
+          args: {
+            path: filePath,
+            content,
+          },
+        });
+
+        if (result?.ok) {
+          successfulWritePaths.push(filePath);
+          continue;
+        }
+
+        if (result?.cancelled) {
+          cancelledWritePaths.push(filePath);
+          break;
+        }
+
+        failedWritePaths.push(filePath);
+      }
+
+      if (successfulWritePaths.length === 0) {
+        appendMessage(
+          "assistant",
+          "Built-in Modern React Starter did not complete any file writes.\n\n" +
+            (cancelledWritePaths.length > 0
+              ? "The write request was cancelled.\n\n"
+              : "") +
+            (failedWritePaths.length > 0
+              ? "Failed paths:\n- " + failedWritePaths.join("\n- ") + "\n\n"
+              : "") +
+            "No starter implementation was completed.",
+        );
+        return;
+      }
+
+      const latestWrittenPath =
+        successfulWritePaths[successfulWritePaths.length - 1] || "";
+
+      const completedWorkflowContext =
+        createCompletedImplementationWorkflowContext({
+          lastEditedPath: latestWrittenPath,
+          editedPaths: successfulWritePaths,
+          preWriteSnapshots: getSnapshotsForPaths(
+            preWriteSnapshotsRef.current,
+            successfulWritePaths,
+          ),
+          completedSummary:
+            "Built-in Modern React Starter implementation was applied.",
+          source: "built_in_modern_react_starter",
+        });
+
+      if (typeof setWorkflowContext === "function") {
+        setWorkflowContext(completedWorkflowContext);
+      }
+
+      const fileCountLabel =
+        successfulWritePaths.length === 1
+          ? "1 file"
+          : `${successfulWritePaths.length} files`;
+
+      appendMessage(
+        "assistant",
+        `Done — updated ${fileCountLabel}.\n\n` +
+          `Implementation: built-in Modern React Starter (${starter.title || "Modern app"}).\n\n` +
+          `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
+          `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
+          buildPostEditNextStepMessage(completedWorkflowContext),
+        {
+          actions: buildPostEditCompletionActions({
+            context: completedWorkflowContext,
+            appendMessage,
+            sendWithPrompt,
+          }),
+        },
+      );
+    },
+    [
+      appendMessage,
+      runTool,
+      sendWithPrompt,
+      setWorkflowContext,
+    ],
+  );
   // Model-initiated tool detection: scan assistant messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
@@ -1880,6 +2050,36 @@ export default function AiPanel({
           if (!content) continue;
 
           const msgKey = String(msg?.id ?? msg?.ts ?? i);
+
+          if (msg?.meta?.builtInModernReactStarterRequest === true) {
+            const key = `built_in_modern_react_starter:${msgKey}`;
+            if (
+              GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+              processedKeysRef.current.has(key)
+            ) {
+              continue;
+            }
+
+            GLOBAL_SEEN_TOOL_KEYS.add(key);
+            processedKeysRef.current.add(key);
+
+            await runBuiltInModernReactStarter({
+              originalGoal: msg.meta.builtInModernReactStarterGoal || "",
+              inspectedPaths: Array.isArray(
+                msg.meta.builtInModernReactStarterInspectedPaths,
+              )
+                ? msg.meta.builtInModernReactStarterInspectedPaths
+                : [],
+              projectTemplateInfo:
+                msg.meta.builtInModernReactStarterProjectTemplateInfo &&
+                typeof msg.meta.builtInModernReactStarterProjectTemplateInfo ===
+                  "object"
+                  ? msg.meta.builtInModernReactStarterProjectTemplateInfo
+                  : null,
+            });
+            return;
+          }
+
           const pendingCalls = [];
           if (msg?.meta?.allowModelToolExecution !== true) {
             continue;
@@ -2399,6 +2599,8 @@ export default function AiPanel({
                 context: completedWorkflowContext,
                 appendMessage,
                 sendWithPrompt,
+                runBuiltInModernReactStarter,
+                originalGoal: workflowContext?.lastUserGoal || latestUserText,
               }),
             });
           } else if (typeof runAi === "function") {
@@ -2781,6 +2983,8 @@ export default function AiPanel({
                       context: completedWorkflowContext,
                       appendMessage,
                       sendWithPrompt,
+                      runBuiltInModernReactStarter,
+                      originalGoal: workflowContext?.lastUserGoal || latestUserText,
                     }),
                   },
                 );
@@ -2806,6 +3010,9 @@ export default function AiPanel({
                   actions: buildPostEditCompletionActions({
                     context: completedWorkflowContext,
                     appendMessage,
+                    sendWithPrompt,
+                    runBuiltInModernReactStarter,
+                    originalGoal: workflowContext?.lastUserGoal || latestUserText,
                   }),
                 });
               } else if (agentResult?.stopReason === "max_steps_reached") {
@@ -2889,6 +3096,28 @@ export default function AiPanel({
                           }
                         },
                       },
+                      ...(!isPerformanceToolExecution &&
+                        !isFixToolExecution &&
+                        canUseBuiltInModernReactStarterImplementation({
+                          goal: originalGoal,
+                          inspectedPaths: agentSuccessfulReadPaths,
+                        }).ok
+                        ? [
+                            {
+                              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
+                              onClick: () => {
+                                appendMessage(
+                                  "user",
+                                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
+                                );
+                                runBuiltInModernReactStarter({
+                                  originalGoal,
+                                  inspectedPaths: agentSuccessfulReadPaths,
+                                });
+                              },
+                            },
+                          ]
+                        : []),
                       {
                         label: stopActionLabel,
                         onClick: () => {
@@ -2994,6 +3223,28 @@ export default function AiPanel({
                           }
                         },
                       },
+                      ...(!isPerformanceToolExecution &&
+                        !isFixToolExecution &&
+                        canUseBuiltInModernReactStarterImplementation({
+                          goal: originalGoal,
+                          inspectedPaths: agentSuccessfulReadPaths,
+                        }).ok
+                        ? [
+                            {
+                              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
+                              onClick: () => {
+                                appendMessage(
+                                  "user",
+                                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
+                                );
+                                runBuiltInModernReactStarter({
+                                  originalGoal,
+                                  inspectedPaths: agentSuccessfulReadPaths,
+                                });
+                              },
+                            },
+                          ]
+                        : []),
                     ],
                   },
                 );
@@ -3038,6 +3289,8 @@ export default function AiPanel({
     sendWithPrompt,
     CHAT_CONTEXT_TURNS,
     setWorkflowContext,
+    workflowContext?.lastUserGoal,
+    runBuiltInModernReactStarter,
   ]);
 
   const handleRequestToolOk = useCallback(() => {

@@ -18,6 +18,10 @@ import {
   buildFreeAppBrief,
   renderStarterRecommendation,
 } from "./ai/planning/appBriefProtocol";
+import {
+  BUILT_IN_MODERN_REACT_STARTER_LABEL,
+} from "./ai/planning/builtInModernReactStarter";
+
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
@@ -2864,7 +2868,7 @@ export default function App() {
       /\b(i\s+need|need|i\s+want|want|would\s+like|looking\s+to|trying\s+to|build|create|make)\b/.test(
         s,
       ) &&
-      /\b(build|create|make|start|set\s+up|generate)\b.*\b(app|website|site|dashboard|platform|portal|system|tool)\b/.test(
+      /\b(build|create|make|start|set\s+up|generate)\b.*\b(app|website|site|dashboard|platform|portal|system|tool|planner|tracker|calculator|estimator|manager|workspace)\b/.test(
         s,
       );
 
@@ -2948,7 +2952,7 @@ export default function App() {
     if (!hasEditOperation) return false;
 
     const hasProjectTarget =
-      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|component|page|screen|layout|heading|title|button|footer|navbar|text|copy|label|style|ui|ux|app|file)\b/.test(
+      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|component|page|screen|layout|heading|title|button|footer|navbar|text|copy|label|style|ui|ux|app|file|planner|tracker|calculator|estimator|manager|workspace)\b/.test(
         s,
       );
 
@@ -4477,6 +4481,7 @@ export default function App() {
       if (
         projectOpen &&
         !emptyProjectFolder &&
+        !isOpenProjectBuildAppClarifierIntent(text) &&
         isExplicitProjectEditOperationIntent(text)
       ) {
         return {
@@ -4558,6 +4563,7 @@ export default function App() {
       if (
         projectOpen &&
         !emptyProjectFolder &&
+        !isOpenProjectBuildAppClarifierIntent(text) &&
         isExplicitProjectEditOperationIntent(text)
       ) {
         return {
@@ -7074,12 +7080,66 @@ setWorkflowContext({
                   label: "Start implementation in this project",
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation in this project");
-                    sendWithPrompt(
-                      `Start implementation in the current project.\n\nOriginal request:\n${draft}\n\nInspect the relevant files first. Then request the smallest safe file change. Do not replace the whole app unless inspection shows it is only a starter placeholder.`,
+                    appendMessage(
+                      "assistant",
+                      "Model Reminder\n\n" +
+                        "!! Check your model before continuing !!\n\n" +
+                        "You are about to start serious app implementation in the current project.\n\n" +
+                        "If you are already using a Recommended builder or High capability model from the Provider/Model preset list, you can continue.\n\n" +
+                        "For serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, avoid Light tasks, Weak/test only, or Custom/unverified models unless you deliberately want a test run.",
                       {
-                        silentUserAppend: true,
-                        skipCompletedWorkflowRoute: true,
-                        skipDirectWorkflowHandoffRoute: true,
+                        actions: [
+                          {
+                            label: "Switch model first",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Switch model first");
+                              appendMessage(
+                                "assistant",
+                                "Choose a Recommended builder or High capability model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
+                              );
+                            },
+                          },
+                          {
+                            label: "Continue implementation",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Continue implementation");
+                              const runPrompt = sendWithPromptRef.current || sendWithPrompt;
+
+                              if (typeof runPrompt !== "function") {
+                                appendMessage(
+                                  "assistant",
+                                  "I could not continue automatically. Please resend the app request after choosing the model.",
+                                );
+                                return;
+                              }
+
+                              runPrompt(
+                                `Start implementation in the current project.\n\nOriginal request:\n${draft}\n\nInspect the relevant files first. Then request the smallest safe file change. Do not replace the whole app unless inspection shows it is only a starter placeholder.`,
+                                {
+                                  silentUserAppend: true,
+                                  skipCompletedWorkflowRoute: true,
+                                  skipDirectWorkflowHandoffRoute: true,
+                                  forceProjectEdit: true,
+                                  lastUserGoal: draft,
+                                },
+                              );
+                            },
+                          },
+                          {
+                            label: "Back to chat",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Back to chat");
+                              appendMessage("assistant", "Back to chat — no implementation started and no files were changed.");
+                            },
+                          },
+                          {
+                            label: SUGGESTED_ACTION_LABEL.STOP,
+                            onClick: () => {
+                              appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                              appendMessage("assistant", "Stopped — no implementation started and no files were changed.");
+                            },
+                          },
+                        ],
                       },
                     );
                   },
@@ -7660,7 +7720,7 @@ setWorkflowContext({
       }
 
       if (projectEditRoute.action === "project_edit") {
-        setWorkflowContext(createImplementationInProgressWorkflowContext());
+        setWorkflowContext(createImplementationInProgressWorkflowContext({ lastUserGoal: opts.lastUserGoal || draft }));
       } else if (projectEditRoute.action === "project_fix") {
         setWorkflowContext(createBugfixWorkflowContext(workflowContext, "project_fix_route"));
       }
@@ -7912,8 +7972,8 @@ setWorkflowContext({
               `\n\nThis was a ${noToolTaskLabel}. Choose a safe next action.`;
 
           const originalNoToolRequest = isPartialImplementationNoToolRecovery
-            ? String(workflowContext?.lastUserGoal || draft).trim()
-            : draft;
+            ? String(workflowContext?.lastUserGoal || opts.lastUserGoal || draft).trim()
+            : String(opts.lastUserGoal || workflowContext?.lastUserGoal || draft).trim();
 
           const focusedNoToolPrompt =
             (isFixNoToolRecovery
@@ -7928,7 +7988,55 @@ setWorkflowContext({
             "If editing is possible, request one write_file tool for the smallest safe change.\n" +
             "Do not give only prose. Do not request more than one tool.";
 
+          const builtInStarterGoal = String(
+            opts.lastUserGoal ||
+              workflowContext?.lastUserGoal ||
+              originalNoToolRequest ||
+              draft,
+          ).trim();
+
+          const shouldOfferBuiltInStarterRecovery =
+            !isFixNoToolRecovery &&
+            !isPartialImplementationNoToolRecovery &&
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT;
+
+          const builtInStarterDefaultPaths = [
+            "src/App.jsx",
+            "src/App.css",
+            "src/index.css",
+          ];
+
           const noToolRecoveryActions = [];
+
+          if (shouldOfferBuiltInStarterRecovery) {
+            noToolRecoveryActions.push({
+              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
+              onClick: () => {
+                appendMessage(
+                  "user",
+                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
+                );
+
+                appendMessage(
+                  "assistant",
+                  "Working… handing the built-in Modern React Starter to KForge's safe tool runner.\n\n" +
+                    "KForge will request approval before writing each starter file.",
+                  {
+                    meta: {
+                      builtInModernReactStarterRequest: true,
+                      builtInModernReactStarterGoal: builtInStarterGoal,
+                      builtInModernReactStarterInspectedPaths:
+                        builtInStarterDefaultPaths,
+                      builtInModernReactStarterProjectTemplateInfo: {
+                        detectedTemplate: { name: detectedTemplateName },
+                        kind: detectedKind,
+                      },
+                    },
+                  },
+                );
+              },
+            });
+          }
 
           if (isRiskyNoToolModel) {
             noToolRecoveryActions.push({
@@ -8355,6 +8463,7 @@ setWorkflowContext({
       updateMessage={updateMessage}
       onWorkspaceTreeRefresh={handleRefreshTree}
       setWorkflowContext={setWorkflowContext}
+      workflowContext={workflowContext}
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}

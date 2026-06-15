@@ -491,13 +491,17 @@ export function createCompletedFeatureBlueprintWorkflowContext({
   };
 }
 
-export function createImplementationInProgressWorkflowContext() {
+export function createImplementationInProgressWorkflowContext({
+  lastUserGoal = "",
+  source = "send_with_prompt",
+} = {}) {
   return {
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.IN_PROGRESS,
     nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+    lastUserGoal: String(lastUserGoal || "").trim(),
     updatedAt: Date.now(),
-    source: "send_with_prompt",
+    source,
   };
 }
 
