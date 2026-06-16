@@ -2697,12 +2697,34 @@ export default function App() {
 
     return hasBuildContinuation && (hasScaffoldStatus || /\bready\b/.test(s));
   }
+  function isFileTargetedProjectEditIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const hasEditAction =
+      /\b(change|update|edit|modify|replace|add|remove|delete|rename|create|build|implement|wire|connect|move|style|restyle|redesign|make|improve|adjust|tweak|preserve|inspect)\b/.test(
+        s,
+      );
+
+    const hasConcreteProjectTarget =
+      /\b(src\/|app\.css|index\.css|app\.jsx|main\.jsx|\.css\b|\.jsx\b|\.js\b|\.ts\b|\.tsx\b|component|layout|theme|colour|color|palette|spacing|alignment|header|button|form|card|visual|style)\b/.test(
+        s,
+      );
+
+    return hasEditAction && hasConcreteProjectTarget;
+  }
+
   function isFeatureBlueprintIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
       .trim();
 
     if (!s) return false;
+
+    if (isFileTargetedProjectEditIntent(text)) return false;
 
     const isApprovedImplementationStart =
       /\b(start\s+implementation|start\s+implementing|begin\s+implementation|implement\s+from|modify\s+the\s+project\s+files)\b/.test(
@@ -2935,7 +2957,9 @@ export default function App() {
 
     if (!s) return false;
 
-    if (isFeatureBlueprintIntent(text)) return false;
+    if (isFeatureBlueprintIntent(text) && !isFileTargetedProjectEditIntent(text)) {
+      return false;
+    }
 
     if (
       /^(how|why|what|when|where)\b/.test(s) ||
@@ -5048,6 +5072,11 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         (!!opts.forceModelCapabilityTestOverride &&
           isModelCapabilityGatePolicy(modelWorkflowPolicy));
 
+      const shouldRouteAwaitingNextEditDirectly =
+        promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+        workflowContext?.status === WORKFLOW_STATUS.WAITING_FOR_USER_RESULT &&
+        workflowContext?.nextStep === WORKFLOW_NEXT_STEP.ANOTHER_EDIT;
+
       const blockedModelPolicyRoute = getBlockedModelPolicyRouteDecision({
         workflowContext,
         modelWorkflowPolicy,
@@ -5362,9 +5391,10 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         showWorkflowResultOptions();
         return;
       }
-      const directHandoffFollowupRoute = opts.skipCompletedWorkflowRoute
-        ? null
-        : getDirectHandoffFollowupRouteDecision({
+      const directHandoffFollowupRoute =
+        opts.skipCompletedWorkflowRoute || shouldRouteAwaitingNextEditDirectly
+          ? null
+          : getDirectHandoffFollowupRouteDecision({
             workflowContext,
             promptTask,
             text: draft,
@@ -6066,9 +6096,10 @@ setWorkflowContext({
         return;
       }
 
-      const completedWorkflowRoute = opts.skipCompletedWorkflowRoute
-        ? null
-        : getCompletedWorkflowRouteDecision({
+      const completedWorkflowRoute =
+        opts.skipCompletedWorkflowRoute || shouldRouteAwaitingNextEditDirectly
+          ? null
+          : getCompletedWorkflowRouteDecision({
             workflowContext,
             promptTask,
             isExplicitPreviewRequest: isExplicitWorkflowPreviewRequest(draft),
@@ -7995,10 +8026,14 @@ setWorkflowContext({
               draft,
           ).trim();
 
+          const isSmallFileTargetedNoToolEdit =
+            isFileTargetedProjectEditIntent(builtInStarterGoal);
+
           const shouldOfferBuiltInStarterRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
-            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT;
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+            !isSmallFileTargetedNoToolEdit;
 
           const builtInStarterDefaultPaths = [
             "src/App.jsx",

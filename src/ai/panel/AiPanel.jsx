@@ -538,6 +538,36 @@ function collectFailedToolBatchPaths(results, toolName) {
     .filter(Boolean);
 }
 
+function collectFailedToolBatchDetails(results, toolName) {
+  const items = Array.isArray(results) ? results : [];
+  return items
+    .filter(
+      (item) =>
+        !item?.ok &&
+        !item?.cancelled &&
+        String(item?.toolName || "") === String(toolName),
+    )
+    .map((item) => {
+      const path = String(item?.args?.path || "").trim() || "(unknown path)";
+      const error = String(item?.error || "").trim();
+      return {
+        path,
+        error,
+      };
+    });
+}
+
+function formatFailedToolBatchLine(detail) {
+  const path = String(detail?.path || "(unknown path)").trim();
+  const error = String(detail?.error || "").trim();
+
+  if (!error) {
+    return `- ${path} — no error detail was reported`;
+  }
+
+  return `- ${path} — ${error}`;
+}
+
 function buildToolBatchDoneMessage(results) {
   const successfulWritePaths = collectSuccessfulToolBatchPaths(
     results,
@@ -563,17 +593,17 @@ function buildToolBatchDoneMessage(results) {
     return `${intro}\n${lines.join("\n")}`;
   }
 
-  const failedWritePaths = collectFailedToolBatchPaths(results, "write_file");
-  const failedDirPaths = collectFailedToolBatchPaths(results, "mkdir");
-  const failedPaths = [...failedDirPaths, ...failedWritePaths].filter(Boolean);
+  const failedWriteDetails = collectFailedToolBatchDetails(results, "write_file");
+  const failedDirDetails = collectFailedToolBatchDetails(results, "mkdir");
+  const failedDetails = [...failedDirDetails, ...failedWriteDetails];
 
-  if (failedPaths.length > 0) {
-    const lines = failedPaths.slice(0, 6).map((p) => `- ${p}`);
-    if (failedPaths.length > 6) {
-      lines.push(`- ...and ${failedPaths.length - 6} more`);
+  if (failedDetails.length > 0) {
+    const lines = failedDetails.slice(0, 6).map(formatFailedToolBatchLine);
+    if (failedDetails.length > 6) {
+      lines.push(`- ...and ${failedDetails.length - 6} more`);
     }
 
-    return `Done> no files were written.\nThe following requested paths failed:\n${lines.join("\n")}`;
+    return `No files were written.\nThe following requested paths failed:\n${lines.join("\n")}`;
   }
 
   return "";
@@ -2532,7 +2562,7 @@ export default function AiPanel({
           if (allWritesFailed) {
             appendMessage(
               "assistant",
-              "Those file changes did not complete. Check the tool errors above. If no project folder is open, open one first in Explorer. I did not create any files.",
+              "The requested file changes did not complete.\n\nNo files were written. The tool result above lists the failed path and reason when KForge received one. Choose a smaller focused edit or switch to a stronger model if the model keeps failing to produce valid tool calls.",
             );
           } else if (
             isDependencyInstallIntent(latestUserText) &&
