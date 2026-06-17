@@ -114,7 +114,7 @@ function normalizeTier(tier) {
 
 function tierLabel(tier) {
   const t = normalizeTier(tier);
-  if (t === "sandbox") return "Light tasks";
+  if (t === "sandbox") return "Light / Everyday";
   if (t === "main") return "Recommended builder";
   if (t === "heavy") return "High capability";
   if (t === "free") return "Weak / test only";
@@ -727,7 +727,7 @@ export default function ProviderControlsPanel({
       {aiProvider === "openrouter" && (
         <div className="mt-2 text-[11px] opacity-60">
           ℹ️ OpenRouter free models may rotate, be deprecated, weak, or unreliable
-          for project edits. Use them for testing or experimentation, not reliable builds.
+          for serious or important implementation. Use them for testing or experimentation, not reliable builds.
         </div>
       )}
 

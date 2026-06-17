@@ -346,7 +346,7 @@ KForge model labels are guidance, not enforcement.
 | Label             | Meaning                       | Typical use                 |
 | ----------------- | ----------------------------- | --------------------------- |
 | 🔵 Weak / test only | Free or no-billing route      | Testing and experimentation only |
-| 🟢 Light tasks | Low-cost or limited paid model | Light work and careful edits |
+| 🟢 Light / Everyday | Low-cost or limited paid model | Light work and careful edits |
 | 🟡 Recommended builder | Builder-capable paid model | Default project work |
 | 🔴 High capability | Higher-capability model       | Complex or critical tasks   |
 | ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully before use |

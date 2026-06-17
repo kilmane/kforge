@@ -371,11 +371,11 @@ function modelHelperText(providerId) {
   const legend =
     "\n\n" +
     "Model quality guide:\n" +
-    "Light tasks — lower-cost or limited model; use for light work\n" +
-    "Weak / test only — free or rotating route; not reliable for builds\n" +
-    "Recommended builder — default for real project work\n" +
-    "High capability — stronger option for complex tasks\n" +
-    "Custom / unverified — user-managed model; review carefully";
+    "Light / Everyday — chat, planning, quick checks, and very small low-risk edits\n" +
+    "Weak / test only — demos, safety testing, and non-critical experiments only\n" +
+    "Recommended builder — default for normal project work\n" +
+    "High capability — serious or important implementation, complex changes, and correctness-sensitive work\n" +
+    "Custom / unverified — user-managed model; KForge cannot verify reliability";
 
   if (providerId === "openrouter") {
     return (
@@ -885,7 +885,7 @@ function getModelCapabilityGateLabel(modelWorkflowPolicy = null) {
   }
 
   if (tier === "sandbox") {
-    return "Light tasks";
+    return "Light / Everyday";
   }
 
   if (tier === "unknown") {
@@ -899,9 +899,11 @@ function buildModelCapabilityGateMessage(modelWorkflowPolicy = null) {
   const label = getModelCapabilityGateLabel(modelWorkflowPolicy);
 
   return (
+    "Model Reminder\n\n" +
+    "!! Check/use a capable model now !!\n\n" +
     "You are about to start automatic project editing.\n\n" +
-    `The selected model is treated as ${label} for KForge project editing. It may produce poor code, malformed tool calls, incomplete edits, loops, broken app logic, or weak UI/UX.\n\n` +
-    "Recommended: switch to a Recommended builder or High capability model from the Provider/Model preset list.\n\n" +
+    `The selected model is treated as ${label} for KForge project editing. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.\n\n` +
+    "Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits. They may produce poor code, malformed tool calls, incomplete edits, loops, or broken app logic.\n\n" +
     "Choose:\n" +
     "- Switch model first\n" +
     "- Continue in test mode\n" +
@@ -7114,10 +7116,10 @@ setWorkflowContext({
                     appendMessage(
                       "assistant",
                       "Model Reminder\n\n" +
-                        "!! Check your model before continuing !!\n\n" +
+                        "!! Check/use a capable model now !!\n\n" +
                         "You are about to start serious app implementation in the current project.\n\n" +
-                        "If you are already using a Recommended builder or High capability model from the Provider/Model preset list, you can continue.\n\n" +
-                        "For serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, avoid Light tasks, Weak/test only, or Custom/unverified models unless you deliberately want a test run.",
+                        "For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.\n\n" +
+                        "If you are already using one, you can continue. Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits.",
                       {
                         actions: [
                           {
@@ -8157,7 +8159,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Start implementation from the approved plan.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -8173,7 +8175,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
                   onClick: () => {
                     appendMessage("user", "Choice: Refine blueprint");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Refine the previous feature blueprint for better app-building reliability.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -8195,7 +8197,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
                   onClick: () => {
                     appendMessage("user", "Choice: Inspect first");
-                    appendMessage("assistant", "Model reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Controlled project inspection pass.\n\n" +
                         `Original user request: ${draft}\n\n` +

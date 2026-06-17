@@ -95,7 +95,7 @@ Call this schema **v0**.
 Once remote fetching is implemented and stable, KForge can migrate to schema **v1**, which separates:
 
 - `cost` (drives color label)
-- `usage` (internal values: `sandbox`, `main`, `heavy`; UI labels: Light tasks, Recommended builder, High capability)
+- `usage` (internal values: `sandbox`, `main`, `heavy`; UI labels: Light / Everyday, Recommended builder, High capability)
 
 Recommended rollout:
 1. Publish `presets.json` in v0 format (matches current code)
@@ -136,7 +136,7 @@ Recommended rollout:
 
 | usage value | UI meaning |
 |---|---|
-| sandbox | Light tasks |
+| sandbox | Light / Everyday |
 | main | Recommended builder |
 | heavy | High capability |
 
@@ -154,7 +154,7 @@ Constraint:
       "providers": {
         "openai": [
           { "id": "gpt-5.4-mini", "cost": "paid_main", "usage": "main", "note": "Day-to-day" },
-          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Light tasks / careful testing" }
+          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Light / Everyday / careful testing" }
         ],
         "openrouter": [
           {

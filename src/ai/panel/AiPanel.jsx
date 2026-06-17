@@ -2458,7 +2458,7 @@ export default function AiPanel({
                     appendMessage("user", "Choice: Continue inspection");
                     appendMessage(
                       "assistant",
-                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious app-building, multi-file inspection, payments, backend, auth, deployment, or complex implementation, use a Recommended builder or High capability model from the Provider/Model preset list.`,
+                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.`,
                     );
 
                     const result = await runTool({

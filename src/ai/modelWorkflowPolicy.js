@@ -230,7 +230,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Weak / test only: useful for chat, planning, and manual guidance. Not reliable for project edits; switch to a curated Recommended builder or High capability preset for implementation.",
+        "Weak / test only: useful for chat, planning, manual guidance, demos, and safety testing. Not reliable for serious or important implementation, complex changes, multi-step logic, or work where correctness matters; switch to a Recommended builder or High capability preset.",
     });
   }
 
@@ -252,7 +252,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
           TASK.MULTI_FILE_REFACTOR,
         ],
         userHint:
-          "Light tasks: usable for chat, planning, and small guarded checks. Not recommended for automatic project edits; switch to a Recommended builder or High capability preset for implementation.",
+          "Light / Everyday: usable for chat, planning, explanations, quick checks, and very small low-risk edits. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability preset.",
       });
     }
 
@@ -273,7 +273,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
           TASK.MULTI_FILE_REFACTOR,
         ],
         userHint:
-          "Custom / unverified: this model is not in the curated Provider/Model preset list. Not recommended for automatic project edits; switch to a Recommended builder or High capability preset for implementation.",
+          "Custom / unverified: this model is not in the curated Provider/Model preset list, so KForge cannot verify its coding or tool-call reliability. Treat it cautiously; for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability preset.",
       });
     }
 
@@ -291,7 +291,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
       ],
       notRecommendedTaskKinds: [],
       userHint:
-        "Full-agent route: suitable for project edits, with KForge write approval and path safety still active.",
+        "Recommended builder / High capability route: suitable for normal project work, while KForge write approval, path safety, and recovery guards still apply.",
     });
   }
 
@@ -314,7 +314,7 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Caution: this provider/model should use Patch Preview or guidance before direct writes. Avoid large refactors unless you switch to a curated Recommended builder or High capability preset.",
+        "Caution: this provider/model should use Patch Preview or guidance before direct writes. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, switch to a Recommended builder or High capability preset.",
     });
   }
 

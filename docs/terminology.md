@@ -140,7 +140,7 @@ Usage labels describe how a model is intended to be used.
 
 Examples:
 
-* **Light tasks** — quick checks, low-risk prompts, and careful edits
+* **Light / Everyday** — quick checks, low-risk prompts, and careful edits
 * **Recommended builder** — normal day-to-day project work
 * **High capability** — harder, more complex, or critical tasks
 

@@ -260,12 +260,12 @@ KForge uses two separate ideas:
 
 ### Usage modes
 
-- **Light tasks**
-  - light tasks, quick checks, or low-risk experiments
+- **Light / Everyday**
+  - chat, planning, quick checks, or very small low-risk edits
 - **Recommended builder**
-  - recommended builder models
+  - recommended default models for normal project work
 - **High capability**
-  - high capability models for harder tasks
+  - higher-capability models for serious or important implementation, complex changes, multi-step logic, or work where correctness matters
 
 For Custom endpoints, **you are the source of truth**.
 KForge provides organisational hints, not guarantees.

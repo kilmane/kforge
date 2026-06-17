@@ -146,7 +146,7 @@ These labels are **guidance**, not enforcement.
 
 ### Usage modes
 
-- **Light tasks** — quick checks, low-risk prompts, and careful edits
+- **Light / Everyday** — quick checks, low-risk prompts, and careful edits
 - **Recommended builder** — default project work
 - **High capability** — harder, more complex, or critical work
 
