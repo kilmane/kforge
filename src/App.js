@@ -4893,7 +4893,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         `The last implementation changed ${fileCountLabel}.\n\n` +
         `${summary}\n\n` +
         "This is a changed-file review, not a Git-style diff. I will not claim exact line-level differences unless a real diff is available.\n\n" +
-        "Next:\nOpen the listed files in the editor, ask me to inspect a specific file, or review the last changed file."
+        "Next:\nOpen the listed files in the editor, ask me to inspect a specific file, or review the last changed file. For UI/CSS changes, review the changed CSS/component file so KForge can summarize the current theme, palette, and likely visual impact. For exact line-by-line changes, use a real Git diff."
       );
     },
     [getWorkflowEditedPaths],
@@ -7872,6 +7872,12 @@ setWorkflowContext({
             "Do NOT write Node.js/JavaScript scripts (no require('fs'), no console.log(tool)).\n" +
             "Do NOT simulate file creation.\n" +
             "Do NOT call write_file with placeholder, abbreviated, or comment-only content. write_file content must be the full intended file text.\n" +
+            "\n" +
+            "Visual/UI/CSS iteration safety:\n" +
+            "- If the request changes appearance, layout, styling, CSS, colours, or visual polish, preserve the current visual identity and palette unless the user explicitly asks to replace it.\n" +
+            "- Do not globally change page backgrounds, brand colours, theme tokens, or the overall palette just to improve readability; prefer targeted selector/property edits.\n" +
+            "- When editing CSS or UI code, inspect the relevant existing CSS and component structure unless that exact evidence was already read in this conversation.\n" +
+            "- Before a write_file request for UI/CSS changes, briefly summarize the intended visual changes and what existing theme/palette will be preserved.\n" +
             "\n" +
             "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
             "For read-only file review requests, show-changes review requests, or requests to inspect a named changed file, request exactly one read_file tool call for the named path.\n" +
