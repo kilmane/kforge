@@ -25,11 +25,13 @@ import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
-  createIterationControllerState,
-  evaluateIterationToolRequest,
-  ITERATION_CONTROLLER_DECISION,
-  rememberIterationToolResult,
-} from "../iteration/iterationController.js";
+  createImplementationJob,
+  evaluateImplementationToolRequest,
+  IMPLEMENTATION_JOB_TOOL_DECISION,
+  rememberImplementationInspection,
+  rememberImplementationToolFailure,
+  rememberImplementationWriteAttempt,
+} from "../implementation/implementationJobController.js";
 import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
   buildBuiltInModernReactStarterImplementation,
@@ -2765,9 +2767,9 @@ export default function AiPanel({
               );
               const isPerformanceContinuation =
                 isPerformanceProjectRequest(latestUserText);
-              const shouldUseIterationController =
+              const shouldUseImplementationJobController =
                 !isPerformanceContinuation && !isFixToolExecution;
-              let iterationControllerState = createIterationControllerState({
+              let implementationJob = createImplementationJob({
                 originalGoal: triggerToolOriginalGoal || latestUserText,
                 taskKind: triggerToolTaskKind,
                 inspectedPaths: agentSuccessfulReadPaths,
@@ -2880,44 +2882,56 @@ export default function AiPanel({
                     };
                   }
 
-                  if (shouldUseIterationController) {
-                    const iterationDecision = evaluateIterationToolRequest(
-                      iterationControllerState,
+                  if (shouldUseImplementationJobController) {
+                    const implementationDecision = evaluateImplementationToolRequest(
+                      implementationJob,
                       { name: toolName, args },
                       {
-                        originalGoal: triggerToolOriginalGoal || latestUserText,
                         blockRepeatedReads: true,
+                        requireInspectionBeforeWrite: true,
                       },
                     );
 
                     if (
-                      iterationDecision.decision ===
-                      ITERATION_CONTROLLER_DECISION.BLOCK_REPEATED_READ
+                      implementationDecision.decision ===
+                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_REPEATED_READ ||
+                      implementationDecision.decision ===
+                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION
                     ) {
-                      iterationControllerState = {
-                        ...iterationControllerState,
-                        blockedRepeatedReadCount:
-                          (iterationControllerState.blockedRepeatedReadCount || 0) + 1,
-                        lastToolName: toolName,
-                        lastToolPath: requestedPath,
-                        lastToolOk: false,
-                      };
+                      implementationJob = rememberImplementationToolFailure(
+                        implementationJob,
+                        { name: toolName, args },
+                        implementationDecision.error,
+                      );
 
                       return {
                         ok: false,
-                        error: iterationDecision.error,
+                        error: implementationDecision.error,
                       };
                     }
                   }
 
                   const result = await runTool({ toolName, args });
 
-                  if (shouldUseIterationController) {
-                    iterationControllerState = rememberIterationToolResult(
-                      iterationControllerState,
-                      { name: toolName, args },
-                      result,
-                    );
+                  if (shouldUseImplementationJobController) {
+                    if (result?.ok && toolName === "read_file") {
+                      implementationJob = rememberImplementationInspection(
+                        implementationJob,
+                        args?.path,
+                      );
+                    } else if (toolName === "write_file" || toolName === "mkdir") {
+                      implementationJob = rememberImplementationWriteAttempt(
+                        implementationJob,
+                        { name: toolName, args },
+                        result,
+                      );
+                    } else if (!result?.ok) {
+                      implementationJob = rememberImplementationToolFailure(
+                        implementationJob,
+                        { name: toolName, args },
+                        result?.error || "Tool failed during implementation job.",
+                      );
+                    }
                   }
 
                   if (result?.ok && toolName === "read_file") {
