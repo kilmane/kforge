@@ -23,6 +23,7 @@ import {
 } from "./ai/planning/builtInModernReactStarter";
 
 
+import { isVisualCssIterationGoal } from "./ai/iteration/iterationController";
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
@@ -1246,6 +1247,13 @@ function getCompletedWorkflowRouteDecision({
     return { action: "preview_evidence_detail" };
   }
 
+  if (isCompletedWorkflowRecoveryIntent(promptText, promptTask)) {
+    return {
+      action: "recovery",
+      prepareFixContext: false,
+    };
+  }
+
   if (isVagueCompletedWorkflowIssueReport(promptText, promptTask)) {
     return { action: "clarify_issue_report" };
   }
@@ -1254,12 +1262,6 @@ function getCompletedWorkflowRouteDecision({
     return { action: "verification_failed" };
   }
 
-  if (isCompletedWorkflowRecoveryIntent(promptText)) {
-    return {
-      action: "recovery",
-      prepareFixContext: false,
-    };
-  }
   if (kind === WORKFLOW_TASK_KIND.PROJECT_EDIT) {
     return {
       action: "continue_normal",
@@ -5825,6 +5827,87 @@ setWorkflowContext({
           return;
         }
       }
+      // State-independent restore/recovery route.
+      // This must run before the low-confidence ambiguity menu so reset sessions
+      // still treat "restore / recover / undo / previous state" as recovery intent.
+      if (
+        projectOpen &&
+        !opts.skipCompletedWorkflowRoute &&
+        isCompletedWorkflowRecoveryIntent(draft, promptTask)
+      ) {
+        if (!opts.silentUserAppend) appendMessage("user", draft);
+
+        const likelyRecoveryInspectPath =
+          String(activeTab?.path || "").trim() || "src/App.css";
+
+        appendMessage(
+          "assistant",
+          "I understand this as a restore/recovery request.\n\n" +
+            "I do not have a completed workflow snapshot in this current chat/session, so I cannot truthfully offer automatic in-memory restore yet.\n\n" +
+            "Safe recovery options:",
+          {
+            actions: [
+              {
+                label: "Inspect likely changed file",
+                onClick: () => {
+                  appendMessage("user", "Choice: Inspect likely changed file");
+                  appendMessage(
+                    "assistant",
+                    `Inspecting ${likelyRecoveryInspectPath}. This is read-only; no files will be changed unless you approve a later write.`,
+                  );
+                  appendMessage(
+                    "assistant",
+                    "```tool\n" +
+                      JSON.stringify({
+                        name: "read_file",
+                        args: { path: likelyRecoveryInspectPath },
+                      }) +
+                      "\n```",
+                    {
+                      meta: {
+                        allowModelToolExecution: true,
+                        modelToolExecutionKind: String(WORKFLOW_TASK_KIND.PROJECT_EDIT),
+                        previewErrorEvidenceGate: false,
+                        controlledReadOnlyToolExecution: true,
+                      },
+                    },
+                  );
+                },
+              },
+              {
+                label: "Show manual restore options",
+                onClick: () => {
+                  appendMessage("user", "Choice: Show manual restore options");
+                  appendMessage(
+                    "assistant",
+                    "Manual restore options:\n\n" +
+                      "1. If this project is under Git, use Git to inspect or restore the changed file.\n" +
+                      "2. If you know the affected file, open it and compare it with your backup or Git history.\n" +
+                      "3. If no backup exists, ask KForge to inspect the likely changed file and make the smallest safe repair.\n\n" +
+                      "I will not claim anything was restored unless a real restore action happens.",
+                  );
+                },
+              },
+              {
+                label: "Back to chat",
+                onClick: () => {
+                  appendMessage("user", "Choice: Back to chat");
+                  appendMessage("assistant", "No problem — continue in chat when ready.");
+                },
+              },
+              {
+                label: SUGGESTED_ACTION_LABEL.STOP,
+                onClick: () => {
+                  appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                  appendMessage("assistant", "Stopped. No recovery action taken.");
+                },
+              },
+            ],
+          },
+        );
+        return;
+      }
+
       // Controlled uncertainty route for low-confidence project messages.
       if (
         projectOpen &&
@@ -8037,11 +8120,28 @@ setWorkflowContext({
           const isSmallFileTargetedNoToolEdit =
             isFileTargetedProjectEditIntent(builtInStarterGoal);
 
+          const isDeterministicVisualCssNoToolInspection =
+            !isFixNoToolRecovery &&
+            !isPartialImplementationNoToolRecovery &&
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+            isVisualCssIterationGoal(originalNoToolRequest || builtInStarterGoal);
+          const deterministicVisualCssInspectPath = "src/App.css";
+          const noToolAlreadyInspectedPaths = Array.isArray(opts.inspectedPaths)
+            ? opts.inspectedPaths
+                .map((item) => String(item || "").trim().replace(/\\/g, "/").toLowerCase())
+                .filter(Boolean)
+            : [];
+          const hasAlreadyInspectedDeterministicVisualCssPath =
+            noToolAlreadyInspectedPaths.includes(
+              deterministicVisualCssInspectPath.toLowerCase(),
+            );
+
           const shouldOfferBuiltInStarterRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
-            !isSmallFileTargetedNoToolEdit;
+            !isSmallFileTargetedNoToolEdit &&
+            !isDeterministicVisualCssNoToolInspection;
 
           const builtInStarterDefaultPaths = [
             "src/App.jsx",
@@ -8050,6 +8150,36 @@ setWorkflowContext({
           ];
 
           const noToolRecoveryActions = [];
+
+          if (isDeterministicVisualCssNoToolInspection && !hasAlreadyInspectedDeterministicVisualCssPath) {
+            noToolRecoveryActions.push({
+              label: "Inspect likely CSS file",
+              onClick: () => {
+                appendMessage("user", "Choice: Inspect likely CSS file");
+                appendMessage(
+                  "assistant",
+                  `Inspecting ${deterministicVisualCssInspectPath} first. This is a deterministic KForge inspection step, not another model retry. KForge will request approval before any file write.`,
+                );
+                appendMessage(
+                  "assistant",
+                  "```tool\n" +
+                    JSON.stringify({
+                      name: "read_file",
+                      args: { path: deterministicVisualCssInspectPath },
+                    }) +
+                    "\n```",
+                  {
+                    meta: {
+                      allowModelToolExecution: true,
+                      modelToolExecutionKind: String(WORKFLOW_TASK_KIND.PROJECT_EDIT),
+                      previewErrorEvidenceGate: false,
+                      controlledReadOnlyToolExecution: false,
+                    },
+                  },
+                );
+              },
+            });
+          }
 
           if (shouldOfferBuiltInStarterRecovery) {
             noToolRecoveryActions.push({
@@ -8076,6 +8206,25 @@ setWorkflowContext({
                       },
                     },
                   },
+                );
+              },
+            });
+          }
+
+          if (
+            isDeterministicVisualCssNoToolInspection &&
+            hasAlreadyInspectedDeterministicVisualCssPath &&
+            !isRiskyNoToolModel
+          ) {
+            noToolRecoveryActions.push({
+              label: "Switch model first",
+              onClick: () => {
+                appendMessage("user", "Choice: Switch model first");
+                appendMessage(
+                  "assistant",
+                  "The likely CSS file was already inspected, but the model still did not produce a usable file-change request.\n\n" +
+                    "Switch to a Recommended builder or High capability model, then retry the edit. KForge will keep inspect-before-write, path safety, and write approval active.\n\n" +
+                    "No files were changed.",
                 );
               },
             });

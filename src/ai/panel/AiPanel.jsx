@@ -25,6 +25,12 @@ import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
+  createIterationControllerState,
+  evaluateIterationToolRequest,
+  ITERATION_CONTROLLER_DECISION,
+  rememberIterationToolResult,
+} from "../iteration/iterationController.js";
+import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
   buildBuiltInModernReactStarterImplementation,
   canUseBuiltInModernReactStarterImplementation,
@@ -2234,6 +2240,16 @@ export default function AiPanel({
             triggerToolTaskKind === "broken_preview_debug";
           const isControlledReadOnlyToolExecution =
             triggerToolMessage?.meta?.controlledReadOnlyToolExecution === true;
+          const triggerToolOriginalGoal = String(
+            triggerToolMessage?.meta?.modelToolOriginalGoal || latestUserText || "",
+          ).trim();
+          const triggerToolInspectedPaths = Array.isArray(
+            triggerToolMessage?.meta?.modelToolInspectedPaths,
+          )
+            ? triggerToolMessage.meta.modelToolInspectedPaths
+                .map((item) => String(item || "").trim())
+                .filter(Boolean)
+            : [];
 
           if (isControlledReadOnlyToolExecution) {
             const readCalls = batchCalls.filter(
@@ -2560,9 +2576,84 @@ export default function AiPanel({
             successfulDirPaths.length === 0;
 
           if (allWritesFailed) {
+            const failedWriteTargetPath = failedWritePaths[0] || "";
+            const blockedWriteReason =
+              doneMessage ||
+              "No files were written. KForge did not receive a detailed blocked-write reason.";
+            const failedWriteActions = [];
+            failedWriteActions.push({
+              label: "Switch model and continue",
+              onClick: () => {
+                appendMessage("user", "Choice: Switch model and continue");
+                appendMessage(
+                  "assistant",
+                  "Switch model first.\n\n" +
+                    "Use a Recommended builder or High capability model from the Provider/Model preset list. After switching, choose Retry with inspected evidence or resend the last request.\n\n" +
+                    "No files were written by the blocked edit.",
+                );
+              },
+            });
+            if (failedWriteTargetPath) {
+              failedWriteActions.push({
+                label: "Retry with inspected evidence",
+                onClick: () => {
+                  appendMessage("user", "Choice: Retry with inspected evidence");
+                  appendMessage(
+                    "assistant",
+                    `Re-inspecting ${failedWriteTargetPath} before retrying. KForge is using the blocked write path as evidence, not asking you to write an expert prompt. KForge will request approval before any file write.`,
+                  );
+                  appendMessage(
+                    "assistant",
+                    "```tool\n" +
+                      JSON.stringify({
+                        name: "read_file",
+                        args: { path: failedWriteTargetPath },
+                      }) +
+                      "\n```",
+                    {
+                      meta: {
+                        allowModelToolExecution: true,
+                        modelToolExecutionKind: String(
+                          triggerToolTaskKind || "project_edit",
+                        ),
+                        previewErrorEvidenceGate: false,
+                        controlledReadOnlyToolExecution: false,
+                        modelToolOriginalGoal: triggerToolOriginalGoal,
+                        modelToolInspectedPaths: triggerToolInspectedPaths,
+                      },
+                    },
+                  );
+                },
+              });
+            }
+            failedWriteActions.push(
+              {
+                label: "Show blocked write reason",
+                onClick: () => {
+                  appendMessage("user", "Choice: Show blocked write reason");
+                  appendMessage(
+                    "assistant",
+                    `Blocked write reason:\n\n${blockedWriteReason}\n\nNo files were written by that blocked edit.`,
+                  );
+                },
+              },
+              {
+                label: SUGGESTED_ACTION_LABEL.STOP,
+                onClick: () => {
+                  appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                  appendMessage(
+                    "assistant",
+                    "Stopped. No files were written by the blocked edit.",
+                  );
+                },
+              },
+            );
             appendMessage(
               "assistant",
-              "The requested file changes did not complete.\n\nNo files were written. The tool result above lists the failed path and reason when KForge received one. Choose a smaller focused edit or switch to a stronger model if the model keeps failing to produce valid tool calls.",
+              "The requested file changes did not complete.\n\n" +
+                "No files were written. KForge blocked the write or the requested write failed.\n\n" +
+                "Choose a safe next action:",
+              { actions: failedWriteActions },
             );
           } else if (
             isDependencyInstallIntent(latestUserText) &&
@@ -2660,14 +2751,27 @@ export default function AiPanel({
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
-              const agentSuccessfulReadPaths = Array.isArray(batchCalls)
+              const initialAgentSuccessfulReadPaths = Array.isArray(batchCalls)
                 ? batchCalls
                     .filter((call) => call?.toolName === "read_file")
                     .map((call) => String(call?.args?.path || "").trim())
                     .filter(Boolean)
                 : [];
+              const agentSuccessfulReadPaths = Array.from(
+                new Set([
+                  ...triggerToolInspectedPaths,
+                  ...initialAgentSuccessfulReadPaths,
+                ].filter(Boolean)),
+              );
               const isPerformanceContinuation =
                 isPerformanceProjectRequest(latestUserText);
+              const shouldUseIterationController =
+                !isPerformanceContinuation && !isFixToolExecution;
+              let iterationControllerState = createIterationControllerState({
+                originalGoal: triggerToolOriginalGoal || latestUserText,
+                taskKind: triggerToolTaskKind,
+                inspectedPaths: agentSuccessfulReadPaths,
+              });
               const performanceDiagnosticReadKeys = new Set();
 
               const rememberPerformanceDiagnosticPath = (path) => {
@@ -2776,7 +2880,45 @@ export default function AiPanel({
                     };
                   }
 
+                  if (shouldUseIterationController) {
+                    const iterationDecision = evaluateIterationToolRequest(
+                      iterationControllerState,
+                      { name: toolName, args },
+                      {
+                        originalGoal: triggerToolOriginalGoal || latestUserText,
+                        blockRepeatedReads: true,
+                      },
+                    );
+
+                    if (
+                      iterationDecision.decision ===
+                      ITERATION_CONTROLLER_DECISION.BLOCK_REPEATED_READ
+                    ) {
+                      iterationControllerState = {
+                        ...iterationControllerState,
+                        blockedRepeatedReadCount:
+                          (iterationControllerState.blockedRepeatedReadCount || 0) + 1,
+                        lastToolName: toolName,
+                        lastToolPath: requestedPath,
+                        lastToolOk: false,
+                      };
+
+                      return {
+                        ok: false,
+                        error: iterationDecision.error,
+                      };
+                    }
+                  }
+
                   const result = await runTool({ toolName, args });
+
+                  if (shouldUseIterationController) {
+                    iterationControllerState = rememberIterationToolResult(
+                      iterationControllerState,
+                      { name: toolName, args },
+                      result,
+                    );
+                  }
 
                   if (result?.ok && toolName === "read_file") {
                     const path = String(args?.path || "").trim();
@@ -2957,7 +3099,8 @@ export default function AiPanel({
                             : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                           onClick: () => {
                           const originalGoal = String(
-                              latestUserText ||
+                              triggerToolOriginalGoal ||
+                                latestUserText ||
                                 (isFixToolExecution
                                   ? "Continue the previous fix/debug task."
                                   : "Continue the previous project edit."),
@@ -2985,6 +3128,7 @@ export default function AiPanel({
                                   skipCompletedWorkflowRoute: true,
                                   skipDirectWorkflowHandoffRoute: true,
                                   forceProjectEdit: true,
+                                  inspectedPaths: agentSuccessfulReadPaths,
                                   forceModelCapabilityTestOverride: true,
                                 },
                               );
@@ -3047,7 +3191,8 @@ export default function AiPanel({
                 });
               } else if (agentResult?.stopReason === "max_steps_reached") {
                 const originalGoal = String(
-                  latestUserText ||
+                  triggerToolOriginalGoal ||
+                    latestUserText ||
                     (isPerformanceToolExecution
                       ? "Continue the previous performance diagnosis."
                       : isFixToolExecution
@@ -3120,6 +3265,13 @@ export default function AiPanel({
                                   : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused implementation tool call next. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
                               {
                                 silentUserAppend: true,
+                                skipCompletedWorkflowRoute: true,
+                                skipDirectWorkflowHandoffRoute: true,
+                                forceProjectEdit:
+                                  !isPerformanceToolExecution &&
+                                  !isFixToolExecution,
+                                inspectedPaths: agentSuccessfulReadPaths,
+                                lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
                             );
