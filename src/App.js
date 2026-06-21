@@ -8097,6 +8097,26 @@ setWorkflowContext({
             ? String(workflowContext?.lastUserGoal || opts.lastUserGoal || draft).trim()
             : String(opts.lastUserGoal || workflowContext?.lastUserGoal || draft).trim();
 
+          const noToolInspectedPaths = Array.isArray(opts.inspectedPaths)
+            ? Array.from(
+                new Set(
+                  opts.inspectedPaths
+                    .map((item) => String(item || "").trim().replace(/\\/g, "/"))
+                    .filter(Boolean),
+                ),
+              )
+            : [];
+          const noToolInspectedPathSummary =
+            noToolInspectedPaths.length > 0
+              ? `Already inspected paths: ${noToolInspectedPaths.join(", ")}\n`
+              : "Already inspected paths: none recorded for this retry.\n";
+          const noToolEvidenceInstruction =
+            noToolInspectedPaths.length > 0
+              ? noToolInspectedPathSummary +
+                "Do not repeat broad inspection. If editing is possible, request one write_file tool for the smallest safe change to an already inspected target path. If a different target is required, request one read_file for that exact target first.\n"
+              : noToolInspectedPathSummary +
+                "If inspection is needed, request one read_file or list_dir tool first. If editing is possible after inspection, request one write_file tool for the smallest safe change.\n";
+
           const focusedNoToolPrompt =
             (isFixNoToolRecovery
               ? "Continue the previous fix/debug task.\n\n"
@@ -8104,10 +8124,9 @@ setWorkflowContext({
                 ? "Continue the previous implementation.\n\n"
                 : "Continue the previous project edit.\n\n") +
             `Original request: ${originalNoToolRequest}\n\n` +
+            noToolEvidenceInstruction +
             "Your previous reply did not produce a usable KForge tool request.\n" +
             "Request exactly one valid fenced ```tool``` block next.\n" +
-            "If inspection is needed, request one read_file or list_dir tool first.\n" +
-            "If editing is possible, request one write_file tool for the smallest safe change.\n" +
             "Do not give only prose. Do not request more than one tool.";
 
           const builtInStarterGoal = String(
@@ -8259,6 +8278,8 @@ setWorkflowContext({
                     !isPartialImplementationNoToolRecovery,
                   forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
                   forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
+                  inspectedPaths: noToolInspectedPaths,
+                  lastUserGoal: originalNoToolRequest,
                 });
               },
             },
@@ -8404,6 +8425,19 @@ setWorkflowContext({
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
         if (shouldAllowModelToolExecution) {
+          const modelToolOriginalGoal = String(
+            opts.lastUserGoal || workflowContext?.lastUserGoal || draft || "",
+          ).trim();
+          const modelToolInspectedPaths = Array.isArray(opts.inspectedPaths)
+            ? Array.from(
+                new Set(
+                  opts.inspectedPaths
+                    .map((item) => String(item || "").trim().replace(/\\/g, "/"))
+                    .filter(Boolean),
+                ),
+              )
+            : [];
+
           for (const tb of toolBlocks) {
             appendMessage("assistant", tb, {
               meta: {
@@ -8412,6 +8446,8 @@ setWorkflowContext({
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
                 controlledReadOnlyToolExecution:
                   opts.controlledReadOnlyToolExecution === true,
+                modelToolOriginalGoal,
+                modelToolInspectedPaths,
               },
             });
           }

@@ -31,6 +31,7 @@ export const IMPLEMENTATION_JOB_TOOL_DECISION = Object.freeze({
   ALLOW: "allow",
   BLOCK_REPEATED_READ: "block_repeated_read",
   BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION: "block_unsafe_write_without_inspection",
+  BLOCK_UNINSPECTED_WRITE_TARGET: "block_uninspected_write_target",
 });
 
 export function normalizeImplementationPath(path = "") {
@@ -231,6 +232,8 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
   const blockRepeatedReads = options.blockRepeatedReads !== false;
   const requireInspectionBeforeWrite =
     options.requireInspectionBeforeWrite === true;
+  const requireTargetInspectionBeforeWrite =
+    options.requireTargetInspectionBeforeWrite === true;
 
   if (
     blockRepeatedReads &&
@@ -272,6 +275,27 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
       ],
       error:
         "KForge blocked a write request before any relevant file was inspected for this implementation job.",
+    };
+  }
+
+  if (
+    requireTargetInspectionBeforeWrite &&
+    toolName === "write_file" &&
+    path &&
+    !hasImplementationPath(current.inspectedPaths, path)
+  ) {
+    return {
+      decision: IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNINSPECTED_WRITE_TARGET,
+      ok: false,
+      path,
+      toolName,
+      allowedNextActions: [
+        IMPLEMENTATION_JOB_ACTION.INSPECT_SPECIFIC_FILE,
+        IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
+        IMPLEMENTATION_JOB_ACTION.STOP,
+      ],
+      error:
+        `KForge blocked write_file for ${path} because that exact target file has not been inspected in this implementation job. Inspect that file first, choose an already inspected target, or stop with a clear job-specific reason.`,
     };
   }
 

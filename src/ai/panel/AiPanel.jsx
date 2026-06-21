@@ -2370,6 +2370,117 @@ export default function AiPanel({
             return;
           }
 
+          const shouldUsePreApprovalImplementationJobController =
+            !isControlledReadOnlyToolExecution && !isFixToolExecution;
+
+          let preApprovalImplementationJob = createImplementationJob({
+            originalGoal: triggerToolOriginalGoal || latestUserText,
+            taskKind: triggerToolTaskKind,
+            inspectedPaths: triggerToolInspectedPaths,
+          });
+
+          let blockedPreApprovalImplementationCall = null;
+
+          if (shouldUsePreApprovalImplementationJobController) {
+            for (const call of batchCalls) {
+              const implementationDecision = evaluateImplementationToolRequest(
+                preApprovalImplementationJob,
+                { name: call.toolName, args: call.args },
+                {
+                  blockRepeatedReads: true,
+                  requireInspectionBeforeWrite: true,
+                  requireTargetInspectionBeforeWrite: true,
+                },
+              );
+
+              if (
+                implementationDecision.decision !==
+                IMPLEMENTATION_JOB_TOOL_DECISION.ALLOW
+              ) {
+                blockedPreApprovalImplementationCall = {
+                  call,
+                  decision: implementationDecision,
+                };
+                break;
+              }
+
+              if (call.toolName === "read_file") {
+                preApprovalImplementationJob = rememberImplementationInspection(
+                  preApprovalImplementationJob,
+                  call.args?.path,
+                );
+              }
+            }
+          }
+
+          if (blockedPreApprovalImplementationCall) {
+            const blockedCall = blockedPreApprovalImplementationCall.call || {};
+            const blockedDecision =
+              blockedPreApprovalImplementationCall.decision || {};
+            const blockedToolName = String(blockedCall.toolName || "tool").trim();
+            const blockedPath = String(blockedCall.args?.path || "").trim();
+
+            appendMessage(
+              "assistant",
+              "KForge blocked an unsafe implementation tool request before approval.\n\n" +
+                `Blocked tool: ${blockedToolName}${blockedPath ? `\nTarget path: ${blockedPath}` : ""}\n\n` +
+                `${blockedDecision.error || "The requested tool was not safe for the current implementation job."}\n\n` +
+                "No files were changed and no approval prompt was shown for this blocked write.",
+              {
+                actions: [
+                  ...(blockedToolName === "write_file" && blockedPath
+                    ? [
+                        {
+                          label: "Inspect target first",
+                          onClick: () => {
+                            appendMessage("user", "Choice: Inspect target first");
+                            appendMessage(
+                              "assistant",
+                              `Inspecting ${blockedPath} before any write. KForge blocked the uninspected write target and will request approval before any later file write.`,
+                            );
+                            appendMessage(
+                              "assistant",
+                              "```tool\n" +
+                                JSON.stringify({
+                                  name: "read_file",
+                                  args: { path: blockedPath },
+                                }) +
+                                "\n```",
+                              {
+                                meta: {
+                                  allowModelToolExecution: true,
+                                  modelToolExecutionKind: String(
+                                    triggerToolTaskKind || "project_edit",
+                                  ),
+                                  previewErrorEvidenceGate: false,
+                                  controlledReadOnlyToolExecution: false,
+                                  modelToolOriginalGoal:
+                                    triggerToolOriginalGoal || latestUserText,
+                                  modelToolInspectedPaths:
+                                    triggerToolInspectedPaths,
+                                },
+                              },
+                            );
+                          },
+                        },
+                      ]
+                    : []),
+                  {
+                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    onClick: () => {
+                      appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                      appendMessage(
+                        "assistant",
+                        "Stopped. No files were changed by the blocked tool request.",
+                      );
+                    },
+                  },
+                ],
+              },
+            );
+            return;
+          }
+
           appendMessage("assistant", buildToolBatchWorkingMessage(batchCalls));
 
           const executedBatchResults = [];
@@ -2889,6 +3000,7 @@ export default function AiPanel({
                       {
                         blockRepeatedReads: true,
                         requireInspectionBeforeWrite: true,
+                        requireTargetInspectionBeforeWrite: true,
                       },
                     );
 
@@ -2896,7 +3008,9 @@ export default function AiPanel({
                       implementationDecision.decision ===
                         IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_REPEATED_READ ||
                       implementationDecision.decision ===
-                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION
+                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION ||
+                      implementationDecision.decision ===
+                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNINSPECTED_WRITE_TARGET
                     ) {
                       implementationJob = rememberImplementationToolFailure(
                         implementationJob,
@@ -3111,14 +3225,24 @@ export default function AiPanel({
                           label: isFixToolExecution
                             ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
                             : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
-                          onClick: () => {
-                          const originalGoal = String(
+                          onClick: () => {                            const originalGoal = String(
                               triggerToolOriginalGoal ||
                                 latestUserText ||
                                 (isFixToolExecution
                                   ? "Continue the previous fix/debug task."
                                   : "Continue the previous project edit."),
                             ).trim();
+                            const inspectedPathList = Array.from(
+                              new Set(
+                                agentSuccessfulReadPaths
+                                  .map((item) => String(item || "").trim())
+                                  .filter(Boolean),
+                              ),
+                            );
+                            const inspectedPathPrompt =
+                              inspectedPathList.length > 0
+                                ? `Already inspected paths: ${inspectedPathList.join(", ")}\n`
+                                : "Already inspected paths: none recorded.\n";
 
                             appendMessage(
                               "assistant",
@@ -3133,10 +3257,11 @@ export default function AiPanel({
                                   ? "Continue the previous fix/debug task.\n\n"
                                   : "Continue the previous project edit.\n\n") +
                                   `Original request: ${originalGoal}\n\n` +
+                                  inspectedPathPrompt +
                                   "The project has already been inspected. Do not repeat broad inspection.\n" +
                                   (isFixToolExecution
-                                    ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
+                                    ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix to an already inspected target. If a different target is required, request one read_file for that exact target first. If no code change is needed, explain the inspected evidence clearly and stop."
+                                    : "Request exactly one write_file tool call next for the smallest safe change to an already inspected target path. If a different target is required, request one read_file for that exact target first. If no file edit is possible, explain the inspected evidence clearly and stop."),
                                 {
                                   silentUserAppend: true,
                                   skipCompletedWorkflowRoute: true,
