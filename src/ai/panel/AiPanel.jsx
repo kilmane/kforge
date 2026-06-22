@@ -23,6 +23,7 @@ import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
 import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
+import { isVisualCssIterationGoal } from "../iteration/iterationController.js";
 import { getToolSchemas } from "../tools/toolSchema.js";
 import {
   createImplementationJob,
@@ -446,6 +447,36 @@ function hasWriteFileToolCall(calls) {
   );
 }
 
+function normalizeBlindWriteGuardPath(path = "") {
+  return String(path || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "")
+    .toLowerCase();
+}
+
+function getWriteFileToolCallPaths(calls) {
+  return (Array.isArray(calls) ? calls : [])
+    .filter((call) => String(call?.toolName || "").trim() === "write_file")
+    .map((call) => normalizeBlindWriteGuardPath(call?.args?.path))
+    .filter(Boolean);
+}
+
+function inspectedPathsCoverWriteTargets(calls, inspectedPaths = []) {
+  const writePaths = getWriteFileToolCallPaths(calls);
+  if (writePaths.length === 0) return false;
+
+  const inspectedPathKeys = new Set(
+    (Array.isArray(inspectedPaths) ? inspectedPaths : [])
+      .map((path) => normalizeBlindWriteGuardPath(path))
+      .filter(Boolean),
+  );
+
+  if (inspectedPathKeys.size === 0) return false;
+
+  return writePaths.every((path) => inspectedPathKeys.has(path));
+}
 function hasSuccessfulInspectionToolResult(results) {
   return (Array.isArray(results) ? results : []).some(
     (item) =>
@@ -459,11 +490,12 @@ function shouldBlockBlindWrite({
   taskKind,
   userMessageIndex,
   userText,
+  inspectedPaths = [],
 }) {
   if (!isInspectBeforeWriteGuardedTaskKind(taskKind)) return false;
   if (!hasWriteFileToolCall(calls)) return false;
-
-  const evidenceKey = buildBlindWriteInspectionEvidenceKey({
+  if (inspectedPathsCoverWriteTargets(calls, inspectedPaths)) return false;
+const evidenceKey = buildBlindWriteInspectionEvidenceKey({
     taskKind,
     userMessageIndex,
     userText,
@@ -810,6 +842,144 @@ function buildPostEditNextStepMessage() {
   );
 }
 
+function normalizePostEditReviewPath(path = "") {
+  return String(path || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "")
+    .toLowerCase();
+}
+
+function getPostEditEditedPaths(context = null) {
+  const paths = Array.isArray(context?.editedPaths)
+    ? context.editedPaths.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const lastEditedPath = String(context?.lastEditedPath || "").trim();
+
+  if (lastEditedPath && !paths.includes(lastEditedPath)) {
+    paths.push(lastEditedPath);
+  }
+
+  return paths;
+}
+
+function getPostEditSnapshotForPath(context = null, path = "") {
+  const target = normalizePostEditReviewPath(path);
+  if (!target) return null;
+
+  const snapshots = Array.isArray(context?.preWriteSnapshots)
+    ? context.preWriteSnapshots
+    : [];
+
+  return (
+    snapshots.find(
+      (snapshot) => normalizePostEditReviewPath(snapshot?.path) === target,
+    ) || null
+  );
+}
+
+function buildPostEditChangedExcerpt(previousContent = "", currentContent = "") {
+  const before = String(previousContent || "");
+  const after = String(currentContent || "");
+
+  if (before === after) {
+    return (
+      "Snapshot comparison:\n" +
+      "- The pre-write snapshot and current file contents are identical.\n" +
+      "- KForge recorded a write, but this comparison does not show a content change."
+    );
+  }
+
+  let start = 0;
+  while (
+    start < before.length &&
+    start < after.length &&
+    before[start] === after[start]
+  ) {
+    start += 1;
+  }
+
+  let endBefore = before.length - 1;
+  let endAfter = after.length - 1;
+  while (
+    endBefore >= start &&
+    endAfter >= start &&
+    before[endBefore] === after[endAfter]
+  ) {
+    endBefore -= 1;
+    endAfter -= 1;
+  }
+
+  const contextChars = 220;
+  const beforeStart = Math.max(0, start - contextChars);
+  const beforeEnd = Math.min(before.length, endBefore + 1 + contextChars);
+  const afterStart = Math.max(0, start - contextChars);
+  const afterEnd = Math.min(after.length, endAfter + 1 + contextChars);
+
+  const excerpt = (value, from, to) => {
+    const prefix = from > 0 ? "…\n" : "";
+    const suffix = to < value.length ? "\n…" : "";
+    return prefix + value.slice(from, to) + suffix;
+  };
+
+  return (
+    "Before snapshot excerpt:\n```text\n" +
+    excerpt(before, beforeStart, beforeEnd) +
+    "\n```\n\nAfter current-file excerpt:\n```text\n" +
+    excerpt(after, afterStart, afterEnd) +
+    "\n```"
+  );
+}
+
+async function buildPostEditSnapshotReviewMessage(context = null) {
+  const editedPaths = getPostEditEditedPaths(context);
+  const summary = buildPostEditChangeSummary(context);
+  const lastChangedPath =
+    editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
+
+  if (!lastChangedPath) {
+    return (
+      `Last implementation completed.\n\n${summary}\n\n` +
+      "KForge does not have a changed file path recorded for a snapshot review."
+    );
+  }
+
+  const snapshot = getPostEditSnapshotForPath(context, lastChangedPath);
+
+  if (!snapshot || typeof snapshot.previousContent !== "string") {
+    return (
+      `Last implementation completed.\n\n${summary}\n\n` +
+      `Snapshot review for ${lastChangedPath}:\n` +
+      "- No pre-write snapshot is available for this path.\n" +
+      "- KForge can list the changed path, but cannot show a before/after excerpt for this write.\n\n" +
+      "This is a changed-file review, not a Git-style diff."
+    );
+  }
+
+  let currentContent = "";
+
+  try {
+    currentContent = String((await openFile(lastChangedPath)) ?? "");
+  } catch (err) {
+    return (
+      `Last implementation completed.\n\n${summary}\n\n` +
+      `Snapshot review for ${lastChangedPath}:\n` +
+      "- A pre-write snapshot exists, but KForge could not read the current file content.\n" +
+      `- Read error: ${String(err?.message || err || "Unknown error")}\n\n` +
+      "This is a changed-file review, not a Git-style diff."
+    );
+  }
+
+  return (
+    `Last implementation completed.\n\n${summary}\n\n` +
+    `Snapshot review for ${lastChangedPath}:\n` +
+    `- Before snapshot size: ${String(snapshot.previousContent || "").length} characters\n` +
+    `- Current file size: ${currentContent.length} characters\n\n` +
+    buildPostEditChangedExcerpt(snapshot.previousContent, currentContent) +
+    "\n\nThis is a pre-write snapshot comparison, not a Git-style diff."
+  );
+}
 function buildPostEditCompletionActions({
   context = null,
   appendMessage = null,
@@ -886,13 +1056,48 @@ function buildPostEditCompletionActions({
     },
     {
       label: SUGGESTED_ACTION_LABEL.SHOW_CHANGES,
-      onClick: () => {
+      onClick: async () => {
         appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.SHOW_CHANGES}`);
         appendMessage(
           "assistant",
-          `Last implementation completed.\n\n${buildPostEditChangeSummary(
-            context,
-          )}\n\nThis is a changed-file review, not a Git-style diff.`,
+          await buildPostEditSnapshotReviewMessage(context),
+          {
+            actions: [
+              {
+                label: SUGGESTED_ACTION_LABEL.PREVIEW_APP,
+                onClick: () => {
+                  appendMessage(
+                    "user",
+                    `Choice: ${SUGGESTED_ACTION_LABEL.PREVIEW_APP}`,
+                  );
+                  appendMessage("assistant", buildPreviewHandoffMessage());
+                },
+              },
+              {
+                label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                onClick: () => {
+                  appendMessage(
+                    "user",
+                    `Choice: ${SUGGESTED_ACTION_LABEL.CONTINUE_EDITING}`,
+                  );
+                  appendMessage(
+                    "assistant",
+                    "Tell me the next edit, or resend it more explicitly, and I will route it from the current project state.",
+                  );
+                },
+              },
+              {
+                label: SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED,
+                onClick: () => {
+                  appendMessage(
+                    "user",
+                    `Choice: ${SUGGESTED_ACTION_LABEL.NO_ACTION_NEEDED}`,
+                  );
+                  appendMessage("assistant", "No problem — I will leave it there.");
+                },
+              },
+            ],
+          },
         );
       },
     },
@@ -2292,6 +2497,7 @@ export default function AiPanel({
               taskKind: triggerToolTaskKind,
               userMessageIndex: latestUserMessageIndex,
               userText: latestUserText,
+              inspectedPaths: triggerToolInspectedPaths,
             })
           ) {
             const assistantResult = buildAssistantResultProtocol({
@@ -2726,6 +2932,289 @@ export default function AiPanel({
                 originalGoal: workflowContext?.lastUserGoal || latestUserText,
               }),
             });
+          } else if (
+            !isFixToolExecution &&
+            triggerToolTaskKind === "project_edit" &&
+            isVisualCssIterationGoal(triggerToolOriginalGoal || latestUserText) &&
+            !executedBatchResults.some((item) => {
+              const toolName = String(item?.toolName || "").trim();
+              const path = String(item?.args?.path || "")
+                .trim()
+                .replace(/\\/g, "/")
+                .toLowerCase();
+              return item?.ok && toolName === "read_file" && path === "src/app.css";
+            })
+          ) {
+            const visualCssTargetPath = "src/App.css";
+            const visualCssGoal = String(
+              triggerToolOriginalGoal || latestUserText || "",
+            ).trim();
+
+            appendMessage(
+              "assistant",
+              "KForge inspected a non-CSS file first, but this is a visual title/readability request.\n\n" +
+                `Before any write, KForge will inspect ${visualCssTargetPath} as the deterministic styling target.`,
+            );
+
+            appendMessage(
+              "assistant",
+              "```tool\n" +
+                JSON.stringify(
+                  {
+                    name: "read_file",
+                    args: { path: visualCssTargetPath },
+                  },
+                  null,
+                  2,
+                ) +
+                "\n```",
+              {
+                meta: {
+                  allowModelToolExecution: true,
+                  modelToolExecutionKind: String(
+                    triggerToolTaskKind || "project_edit",
+                  ),
+                  previewErrorEvidenceGate: false,
+                  controlledReadOnlyToolExecution: false,
+                  modelToolOriginalGoal: visualCssGoal,
+                  modelToolInspectedPaths: triggerToolInspectedPaths,
+                },
+              },
+            );
+          } else if (
+            !isFixToolExecution &&
+            triggerToolTaskKind === "project_edit" &&
+            isVisualCssIterationGoal(triggerToolOriginalGoal || latestUserText) &&
+            executedBatchResults.some((item) => {
+              const toolName = String(item?.toolName || "").trim();
+              const path = String(item?.args?.path || "")
+                .trim()
+                .replace(/\\/g, "/")
+                .toLowerCase();
+              return item?.ok && toolName === "read_file" && path === "src/app.css";
+            }) &&
+            typeof runAi === "function"
+          ) {
+            const visualCssTargetPath = "src/App.css";
+            const visualCssGoal = String(
+              triggerToolOriginalGoal || latestUserText || "",
+            ).trim();
+
+            appendMessage(
+              "assistant",
+              "KForge inspected the likely CSS file for this visual edit.\n\n" +
+                "No files were changed yet.\n\n" +
+                "Choose the controller-owned next step:",
+              {
+                actions: [
+                  {
+                    label: "Generate smallest CSS write proposal",
+                    onClick: async () => {
+                      appendMessage(
+                        "user",
+                        "Choice: Generate smallest CSS write proposal",
+                      );
+                      appendMessage(
+                        "assistant",
+                        `Generating one smallest safe write proposal for ${visualCssTargetPath}. This controller step will either produce one write approval for that inspected file or stop without looping.`,
+                      );
+
+                      try {
+                        const currentCssContent = String(
+                          (await openFile(visualCssTargetPath)) ?? "",
+                        );
+
+                        if (!currentCssContent.trim()) {
+                          appendMessage(
+                            "assistant",
+                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                              "KForge could not read the current full src/App.css content before preparing the write.\n\n" +
+                              "No files were changed.",
+                          );
+                          return;
+                        }
+
+                        const visualCssEvidenceForPrompt =
+                          currentCssContent.slice(0, 20000);
+
+                        const input =
+                          "KForge controller-owned CSS write proposal.\n\n" +
+                          `Original user request:\n${visualCssGoal}\n\n` +
+                          `Inspected target file: ${visualCssTargetPath}\n\n` +
+                          "Current inspected CSS content:\n```css\n" +
+                          visualCssEvidenceForPrompt +
+                          "\n```\n\n" +
+                                                    "Return exactly one fenced ```json``` block and nothing else.\n\n" +
+                          "Required JSON shape:\n" +
+                          JSON.stringify(
+                            {
+                              find: "<exact existing CSS snippet from src/App.css>",
+                              replace: "<replacement snippet with only the smallest visual/readability improvement>",
+                            },
+                            null,
+                            2,
+                          ) +
+                          "\n\n" +
+                          "Rules:\n" +
+                          "- Do not return write_file.\n" +
+                          "- Do not return the full CSS file.\n" +
+                          "- The find value must be an exact existing snippet copied from the inspected CSS.\n" +
+                          "- The replace value must preserve the same selector/block structure unless a tiny style-only adjustment needs one extra property.\n" +
+                          "- Preserve the current dark theme, layout, spacing, and app identity.\n" +
+                          "- Make only the relevant main visual text/title noticeably easier to read and a bit more polished.\n" +
+                          "- Do not redesign the app.\n";
+                        const r = await runAi({ input });
+
+                        if (!r?.ok) {
+                          appendMessage(
+                            "assistant",
+                            "Controller-owned CSS write proposal failed before producing a tool request.\n\n" +
+                              `${String(r?.error || "Unknown model error")}\n\n` +
+                              "No files were changed.",
+                          );
+                          return;
+                        }
+
+                        const output = String(r.output || "");
+
+                        const extractVisualCssReplacement = (value) => {
+                          const text = String(value || "").trim();
+                          const fencedMatch = text.match(
+                            /```(?:json)?\s*([\s\S]*?)```/i,
+                          );
+                          const jsonText = String(fencedMatch?.[1] || text).trim();
+
+                          try {
+                            const parsed = JSON.parse(jsonText);
+                            return parsed && typeof parsed === "object"
+                              ? parsed
+                              : null;
+                          } catch {
+                            return null;
+                          }
+                        };
+
+                        const replacement = extractVisualCssReplacement(output);
+                        const findText = String(replacement?.find || "");
+                        const replaceText = String(replacement?.replace || "");
+
+                        if (
+                          !findText ||
+                          !replaceText ||
+                          !currentCssContent.includes(findText)
+                        ) {
+                          appendMessage(
+                            "assistant",
+                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                              "The model did not return an exact find/replace snippet from the inspected src/App.css content.\n\n" +
+                              "No files were changed. This controller step will not loop.",
+                            {
+                              actions: [
+                                {
+                                  label: SUGGESTED_ACTION_LABEL.STOP,
+                                  onClick: () => {
+                                    appendMessage(
+                                      "user",
+                                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                    );
+                                    appendMessage(
+                                      "assistant",
+                                      "Stopped. No files were changed by the failed CSS replacement proposal.",
+                                    );
+                                  },
+                                },
+                              ],
+                            },
+                          );
+                          return;
+                        }
+
+                        const nextCssContent = currentCssContent.replace(
+                          findText,
+                          replaceText,
+                        );
+
+                        if (
+                          nextCssContent === currentCssContent ||
+                          nextCssContent.length < currentCssContent.length * 0.75
+                        ) {
+                          appendMessage(
+                            "assistant",
+                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                              "The proposed CSS replacement was empty, unchanged, or too destructive for a small visual edit.\n\n" +
+                              "No files were changed. This controller step will not loop.",
+                            {
+                              actions: [
+                                {
+                                  label: SUGGESTED_ACTION_LABEL.STOP,
+                                  onClick: () => {
+                                    appendMessage(
+                                      "user",
+                                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                    );
+                                    appendMessage(
+                                      "assistant",
+                                      "Stopped. No files were changed by the unsafe CSS replacement proposal.",
+                                    );
+                                  },
+                                },
+                              ],
+                            },
+                          );
+                          return;
+                        }
+
+                        appendMessage(
+                          "assistant",
+                          "```tool\n" +
+                            JSON.stringify(
+                              {
+                                name: "write_file",
+                                args: {
+                                  path: visualCssTargetPath,
+                                  content: nextCssContent,
+                                },
+                              },
+                              null,
+                              2,
+                            ) +
+                            "\n```",
+                          {
+                            meta: {
+                              allowModelToolExecution: true,
+                              modelToolExecutionKind: String(
+                                triggerToolTaskKind || "project_edit",
+                              ),
+                              previewErrorEvidenceGate: false,
+                              controlledReadOnlyToolExecution: false,
+                              modelToolOriginalGoal: visualCssGoal,
+                              modelToolInspectedPaths: [visualCssTargetPath],
+                            },
+                          },
+                        );
+                      } catch (err) {
+                        appendMessage(
+                          "assistant",
+                          "Controller-owned CSS write proposal failed with an internal error.\n\n" +
+                            `${String(err?.message || err || "Unknown error")}\n\n` +
+                            "No files were changed.",
+                        );
+                      }
+                    },
+                  },
+                  {
+                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    onClick: () => {
+                      appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                      appendMessage(
+                        "assistant",
+                        "Stopped. No files were changed after CSS inspection.",
+                      );
+                    },
+                  },
+                ],
+              },
+            );
           } else if (typeof runAi === "function") {
             try {
               const continuationTools = [
