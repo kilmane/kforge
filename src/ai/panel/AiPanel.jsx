@@ -2952,7 +2952,7 @@ export default function AiPanel({
 
             appendMessage(
               "assistant",
-              "KForge inspected a non-CSS file first, but this is a visual title/readability request.\n\n" +
+              "KForge inspected a non-CSS file first, but this is a visual/style request.\n\n" +
                 `Before any write, KForge will inspect ${visualCssTargetPath} as the deterministic styling target.`,
             );
 
@@ -3002,21 +3002,21 @@ export default function AiPanel({
 
             appendMessage(
               "assistant",
-              "KForge inspected the likely CSS file for this visual edit.\n\n" +
+              "KForge inspected the likely style file for this visual edit.\n\n" +
                 "No files were changed yet.\n\n" +
-                "Choose the controller-owned next step:",
+                "Ready to continue:",
               {
                 actions: [
                   {
-                    label: "Generate smallest CSS write proposal",
+                    label: "Proceed with this change",
                     onClick: async () => {
                       appendMessage(
                         "user",
-                        "Choice: Generate smallest CSS write proposal",
+                        "Choice: Proceed with this change",
                       );
                       appendMessage(
                         "assistant",
-                        `Generating one smallest safe write proposal for ${visualCssTargetPath}. This controller step will either produce one write approval for that inspected file or stop without looping.`,
+                        `Preparing the change for your approval. KForge will create one small reviewed file-change request or stop safely.`,
                       );
 
                       try {
@@ -3027,24 +3027,57 @@ export default function AiPanel({
                         if (!currentCssContent.trim()) {
                           appendMessage(
                             "assistant",
-                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                            "KForge could not prepare the safe style edit.\n\n" +
                               "KForge could not read the current full src/App.css content before preparing the write.\n\n" +
                               "No files were changed.",
                           );
                           return;
                         }
 
+                        const visualMarkupCandidates = [
+                          "src/App.jsx",
+                          "src/App.js",
+                          "src/main.jsx",
+                          "src/main.js",
+                        ];
+                        let visualMarkupPath = "";
+                        let visualMarkupContent = "";
+
+                        for (const candidatePath of visualMarkupCandidates) {
+                          try {
+                            const candidateContent = String(
+                              (await openFile(candidatePath)) ?? "",
+                            );
+
+                            if (candidateContent.trim()) {
+                              visualMarkupPath = candidatePath;
+                              visualMarkupContent = candidateContent;
+                              break;
+                            }
+                          } catch {
+                            // Optional markup evidence; CSS-only projects can continue.
+                          }
+                        }
+
                         const visualCssEvidenceForPrompt =
                           currentCssContent.slice(0, 20000);
+                        const visualMarkupEvidenceForPrompt =
+                          visualMarkupContent.slice(0, 12000);
 
                         const input =
-                          "KForge controller-owned CSS write proposal.\n\n" +
+                          "KForge controlled visual style edit.\n\n" +
                           `Original user request:\n${visualCssGoal}\n\n` +
-                          `Inspected target file: ${visualCssTargetPath}\n\n` +
+                          `Inspected target CSS file: ${visualCssTargetPath}\n\n` +
+                          `Markup evidence file: ${visualMarkupPath || "not available"}\n\n` +
+                          (visualMarkupEvidenceForPrompt
+                            ? "Current inspected app markup/component content:\n```jsx\n" +
+                              visualMarkupEvidenceForPrompt +
+                              "\n```\n\n"
+                            : "No app markup/component evidence was available. Use the CSS evidence only and make the smallest safe visual edit.\n\n") +
                           "Current inspected CSS content:\n```css\n" +
                           visualCssEvidenceForPrompt +
                           "\n```\n\n" +
-                                                    "Return exactly one fenced ```json``` block and nothing else.\n\n" +
+                          "Return exactly one fenced ```json``` block and nothing else.\n\n" +
                           "Required JSON shape:\n" +
                           JSON.stringify(
                             {
@@ -3059,16 +3092,22 @@ export default function AiPanel({
                           "- Do not return write_file.\n" +
                           "- Do not return the full CSS file.\n" +
                           "- The find value must be an exact existing snippet copied from the inspected CSS.\n" +
-                          "- The replace value must preserve the same selector/block structure unless a tiny style-only adjustment needs one extra property.\n" +
-                          "- Preserve the current dark theme, layout, spacing, and app identity.\n" +
-                          "- Make only the relevant main visual text/title noticeably easier to read and a bit more polished.\n" +
+                          "- The replace value must preserve the same selector/block structure unless a tiny style-only adjustment needs one extra CSS property.\n" +
+                          "- Use the markup evidence to identify the selector/class actually attached to the visible element the user described.\n" +
+                          "- The user may describe the target in plain language, such as main title, secondary title, heading, button, card, or background; do not require the user to know CSS selectors or file names.\n" +
+                          "- If the user says main title/title/heading, prefer the visible h1/heading element and its className from the markup evidence. If no class is available, use the smallest safe existing CSS selector that affects that heading.\n" +
+                          "- If the user requests multiple visual properties in one sentence, such as smaller + bold + colour + centred, the replacement should address each requested property when it is safe. Do not silently satisfy only one requested property.\n" +
+                          "- If a requested property is already satisfied, preserve it and do not make unnecessary changes for that property.\n" +
+                          "- If the user asks to centre a visible title/heading and the heading selector already has text-align: center, use the markup/CSS evidence to find the nearest small wrapper selector for that title and make the smallest safe centering adjustment there, such as text-align: center, justify-items: center, align-items: center, or margin-inline: auto, without redesigning the page.\n" +
+                          "- Make only the requested visual/style change, such as colour, font weight, centering, size, contrast, or readability.\n" +
+                          "- Preserve the current theme, layout, spacing, copy, cards, buttons, and app identity unless the user explicitly asks to change them.\n" +
                           "- Do not redesign the app.\n";
                         const r = await runAi({ input });
 
                         if (!r?.ok) {
                           appendMessage(
                             "assistant",
-                            "Controller-owned CSS write proposal failed before producing a tool request.\n\n" +
+                            "KForge could not prepare the safe style edit before producing a file-change request.\n\n" +
                               `${String(r?.error || "Unknown model error")}\n\n` +
                               "No files were changed.",
                           );
@@ -3105,7 +3144,7 @@ export default function AiPanel({
                         ) {
                           appendMessage(
                             "assistant",
-                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                            "KForge could not prepare the safe style edit.\n\n" +
                               "The model did not return an exact find/replace snippet from the inspected src/App.css content.\n\n" +
                               "No files were changed. This controller step will not loop.",
                             {
@@ -3140,7 +3179,7 @@ export default function AiPanel({
                         ) {
                           appendMessage(
                             "assistant",
-                            "Controller-owned CSS write proposal failed safely.\n\n" +
+                            "KForge could not prepare the safe style edit.\n\n" +
                               "The proposed CSS replacement was empty, unchanged, or too destructive for a small visual edit.\n\n" +
                               "No files were changed. This controller step will not loop.",
                             {
@@ -3195,7 +3234,7 @@ export default function AiPanel({
                       } catch (err) {
                         appendMessage(
                           "assistant",
-                          "Controller-owned CSS write proposal failed with an internal error.\n\n" +
+                          "KForge could not prepare the safe style edit because of an internal error.\n\n" +
                             `${String(err?.message || err || "Unknown error")}\n\n` +
                             "No files were changed.",
                         );
