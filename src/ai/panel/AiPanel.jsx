@@ -34,6 +34,13 @@ import {
   rememberImplementationWriteAttempt,
 } from "../implementation/implementationJobController.js";
 import {
+  VISUAL_CSS_TARGET_PATH,
+  VISUAL_MARKUP_CANDIDATE_PATHS,
+  applyVisualCssReplacementItems,
+  extractVisualCssReplacementPayload,
+  normalizeVisualCssReplacementItems,
+} from "../implementation/visualCssEditController.js";
+import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
   buildBuiltInModernReactStarterImplementation,
   canUseBuiltInModernReactStarterImplementation,
@@ -2945,7 +2952,7 @@ export default function AiPanel({
               return item?.ok && toolName === "read_file" && path === "src/app.css";
             })
           ) {
-            const visualCssTargetPath = "src/App.css";
+            const visualCssTargetPath = VISUAL_CSS_TARGET_PATH;
             const visualCssGoal = String(
               triggerToolOriginalGoal || latestUserText || "",
             ).trim();
@@ -2995,7 +3002,7 @@ export default function AiPanel({
             }) &&
             typeof runAi === "function"
           ) {
-            const visualCssTargetPath = "src/App.css";
+            const visualCssTargetPath = VISUAL_CSS_TARGET_PATH;
             const visualCssGoal = String(
               triggerToolOriginalGoal || latestUserText || "",
             ).trim();
@@ -3034,16 +3041,10 @@ export default function AiPanel({
                           return;
                         }
 
-                        const visualMarkupCandidates = [
-                          "src/App.jsx",
-                          "src/App.js",
-                          "src/main.jsx",
-                          "src/main.js",
-                        ];
                         let visualMarkupPath = "";
                         let visualMarkupContent = "";
 
-                        for (const candidatePath of visualMarkupCandidates) {
+                        for (const candidatePath of VISUAL_MARKUP_CANDIDATE_PATHS) {
                           try {
                             const candidateContent = String(
                               (await openFile(candidatePath)) ?? "",
@@ -3123,51 +3124,27 @@ export default function AiPanel({
 
                         const output = String(r.output || "");
 
-                        const extractVisualCssReplacement = (value) => {
-                          const text = String(value || "").trim();
-                          const fencedMatch = text.match(
-                            /```(?:json)?\s*([\s\S]*?)```/i,
-                          );
-                          const jsonText = String(fencedMatch?.[1] || text).trim();
-
-                          try {
-                            const parsed = JSON.parse(jsonText);
-                            return parsed && typeof parsed === "object"
-                              ? parsed
-                              : null;
-                          } catch {
-                            return null;
-                          }
-                        };
-
                         const replacementPayload =
-                          extractVisualCssReplacement(output);
-                        const rawReplacementItems = Array.isArray(
-                          replacementPayload?.replacements,
-                        )
-                          ? replacementPayload.replacements
-                          : replacementPayload && typeof replacementPayload === "object"
-                            ? [replacementPayload]
-                            : [];
-
-                        const replacementItems = rawReplacementItems.map((item) => ({
-                          findText: String(item?.find || ""),
-                          replaceText: String(item?.replace || ""),
-                        }));
-
-                        const hasInvalidReplacementItem =
-                          replacementItems.length === 0 ||
-                          replacementItems.length > 3 ||
-                          replacementItems.some(
-                            (item) => !item.findText || !item.replaceText,
+                          extractVisualCssReplacementPayload(output);
+                        const replacementItems =
+                          normalizeVisualCssReplacementItems(replacementPayload);
+                        const replacementResult =
+                          applyVisualCssReplacementItems(
+                            currentCssContent,
+                            replacementItems,
                           );
 
-                        if (hasInvalidReplacementItem) {
+                        if (!replacementResult.ok) {
+                          const replacementErrorDetail =
+                            replacementResult.reason === "missing_find"
+                              ? "At least one proposed CSS find snippet was not an exact match for the inspected src/App.css content."
+                              : "The model did not return 1 to 3 exact CSS find/replace snippets from the inspected src/App.css content.";
+
                           appendMessage(
                             "assistant",
                             "KForge could not prepare the safe style edit.\n\n" +
-                              "The model did not return 1 to 3 exact CSS find/replace snippets from the inspected src/App.css content.\n\n" +
-                              "No files were changed. This controller step will not loop.",
+                              replacementErrorDetail +
+                              "\n\nNo files were changed. This controller step will not loop.",
                             {
                               actions: [
                                 {
@@ -3189,47 +3166,7 @@ export default function AiPanel({
                           return;
                         }
 
-                        let nextCssContent = currentCssContent;
-                        let missingFindText = "";
-
-                        for (const item of replacementItems) {
-                          if (!nextCssContent.includes(item.findText)) {
-                            missingFindText = item.findText;
-                            break;
-                          }
-
-                          nextCssContent = nextCssContent.replace(
-                            item.findText,
-                            item.replaceText,
-                          );
-                        }
-
-                        if (missingFindText) {
-                          appendMessage(
-                            "assistant",
-                            "KForge could not prepare the safe style edit.\n\n" +
-                              "At least one proposed CSS find snippet was not an exact match for the inspected src/App.css content.\n\n" +
-                              "No files were changed. This controller step will not loop.",
-                            {
-                              actions: [
-                                {
-                                  label: SUGGESTED_ACTION_LABEL.STOP,
-                                  onClick: () => {
-                                    appendMessage(
-                                      "user",
-                                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
-                                    );
-                                    appendMessage(
-                                      "assistant",
-                                      "Stopped. No files were changed by the failed CSS replacement proposal.",
-                                    );
-                                  },
-                                },
-                              ],
-                            },
-                          );
-                          return;
-                        }
+                        const nextCssContent = replacementResult.nextCssContent;
 
                         if (
                           nextCssContent === currentCssContent ||
