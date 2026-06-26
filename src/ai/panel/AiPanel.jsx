@@ -3081,8 +3081,12 @@ export default function AiPanel({
                           "Required JSON shape:\n" +
                           JSON.stringify(
                             {
-                              find: "<exact existing CSS snippet from src/App.css>",
-                              replace: "<replacement snippet with only the smallest visual/readability improvement>",
+                              replacements: [
+                                {
+                                  find: "<exact existing CSS snippet from src/App.css>",
+                                  replace: "<replacement snippet with only the smallest visual/readability improvement>",
+                                },
+                              ],
                             },
                             null,
                             2,
@@ -3091,14 +3095,17 @@ export default function AiPanel({
                           "Rules:\n" +
                           "- Do not return write_file.\n" +
                           "- Do not return the full CSS file.\n" +
-                          "- The find value must be an exact existing snippet copied from the inspected CSS.\n" +
-                          "- The replace value must preserve the same selector/block structure unless a tiny style-only adjustment needs one extra CSS property.\n" +
+                          "- Return a replacements array with 1 to 3 items only.\n" +
+                          "- Each find value must be an exact existing snippet copied from the inspected CSS.\n" +
+                          "- Each replace value must preserve the same selector/block structure unless a tiny style-only adjustment needs one extra CSS property.\n" +
+                          "- Use one replacement item when one CSS block is enough.\n" +
+                          "- Use two or three replacement items only when the requested change needs separate CSS blocks, such as a title selector plus its nearest wrapper/container selector.\n" +
                           "- Use the markup evidence to identify the selector/class actually attached to the visible element the user described.\n" +
                           "- The user may describe the target in plain language, such as main title, secondary title, heading, button, card, or background; do not require the user to know CSS selectors or file names.\n" +
                           "- If the user says main title/title/heading, prefer the visible h1/heading element and its className from the markup evidence. If no class is available, use the smallest safe existing CSS selector that affects that heading.\n" +
-                          "- If the user requests multiple visual properties in one sentence, such as smaller + bold + colour + centred, the replacement should address each requested property when it is safe. Do not silently satisfy only one requested property.\n" +
+                          "- If the user requests multiple visual properties in one sentence, such as smaller + bold + colour + centred, the replacements should address each requested property when it is safe. Do not silently satisfy only one requested property.\n" +
                           "- If a requested property is already satisfied, preserve it and do not make unnecessary changes for that property.\n" +
-                          "- If the user asks to centre a visible title/heading and the heading selector already has text-align: center, use the markup/CSS evidence to find the nearest small wrapper selector for that title and make the smallest safe centering adjustment there, such as text-align: center, justify-items: center, align-items: center, or margin-inline: auto, without redesigning the page.\n" +
+                          "- If the user asks to centre a visible title/heading and the heading selector already has text-align: center, include the nearest small wrapper/container selector as one of the replacements when needed. Prefer a minimal centering adjustment such as text-align: center, justify-items: center, align-items: center, or margin-inline: auto without redesigning the page.\n" +
                           "- Make only the requested visual/style change, such as colour, font weight, centering, size, contrast, or readability.\n" +
                           "- Preserve the current theme, layout, spacing, copy, cards, buttons, and app identity unless the user explicitly asks to change them.\n" +
                           "- Do not redesign the app.\n";
@@ -3133,19 +3140,33 @@ export default function AiPanel({
                           }
                         };
 
-                        const replacement = extractVisualCssReplacement(output);
-                        const findText = String(replacement?.find || "");
-                        const replaceText = String(replacement?.replace || "");
+                        const replacementPayload =
+                          extractVisualCssReplacement(output);
+                        const rawReplacementItems = Array.isArray(
+                          replacementPayload?.replacements,
+                        )
+                          ? replacementPayload.replacements
+                          : replacementPayload && typeof replacementPayload === "object"
+                            ? [replacementPayload]
+                            : [];
 
-                        if (
-                          !findText ||
-                          !replaceText ||
-                          !currentCssContent.includes(findText)
-                        ) {
+                        const replacementItems = rawReplacementItems.map((item) => ({
+                          findText: String(item?.find || ""),
+                          replaceText: String(item?.replace || ""),
+                        }));
+
+                        const hasInvalidReplacementItem =
+                          replacementItems.length === 0 ||
+                          replacementItems.length > 3 ||
+                          replacementItems.some(
+                            (item) => !item.findText || !item.replaceText,
+                          );
+
+                        if (hasInvalidReplacementItem) {
                           appendMessage(
                             "assistant",
                             "KForge could not prepare the safe style edit.\n\n" +
-                              "The model did not return an exact find/replace snippet from the inspected src/App.css content.\n\n" +
+                              "The model did not return 1 to 3 exact CSS find/replace snippets from the inspected src/App.css content.\n\n" +
                               "No files were changed. This controller step will not loop.",
                             {
                               actions: [
@@ -3168,10 +3189,47 @@ export default function AiPanel({
                           return;
                         }
 
-                        const nextCssContent = currentCssContent.replace(
-                          findText,
-                          replaceText,
-                        );
+                        let nextCssContent = currentCssContent;
+                        let missingFindText = "";
+
+                        for (const item of replacementItems) {
+                          if (!nextCssContent.includes(item.findText)) {
+                            missingFindText = item.findText;
+                            break;
+                          }
+
+                          nextCssContent = nextCssContent.replace(
+                            item.findText,
+                            item.replaceText,
+                          );
+                        }
+
+                        if (missingFindText) {
+                          appendMessage(
+                            "assistant",
+                            "KForge could not prepare the safe style edit.\n\n" +
+                              "At least one proposed CSS find snippet was not an exact match for the inspected src/App.css content.\n\n" +
+                              "No files were changed. This controller step will not loop.",
+                            {
+                              actions: [
+                                {
+                                  label: SUGGESTED_ACTION_LABEL.STOP,
+                                  onClick: () => {
+                                    appendMessage(
+                                      "user",
+                                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                    );
+                                    appendMessage(
+                                      "assistant",
+                                      "Stopped. No files were changed by the failed CSS replacement proposal.",
+                                    );
+                                  },
+                                },
+                              ],
+                            },
+                          );
+                          return;
+                        }
 
                         if (
                           nextCssContent === currentCssContent ||
