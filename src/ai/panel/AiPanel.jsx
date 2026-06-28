@@ -392,6 +392,72 @@ function stripToolBlocksForChat(text) {
   return s.trim();
 }
 
+function isRecoveredProjectEditToolExecutionMessage(messages = [], index = -1, content = "") {
+  const text = String(content || "");
+  const hasToolLikeBlock =
+    /```(?:tool|tool_call)\b/i.test(text) ||
+    /<tool(?:_call)?\b/i.test(text) ||
+    !!tryParseBareToolJson(text);
+
+  if (!hasToolLikeBlock) return false;
+
+  const items = Array.isArray(messages) ? messages : [];
+  const numericIndex = Number(index);
+  if (!Number.isFinite(numericIndex) || numericIndex <= 0) return false;
+
+  const start = Math.max(0, numericIndex - 8);
+  for (let i = numericIndex - 1; i >= start; i--) {
+    const item = items[i];
+    const role = String(item?.role || "").toLowerCase();
+    const itemText = String(item?.content ?? item?.text ?? "");
+
+    if (
+      role === "assistant" &&
+      /Continuing the edit attempt\. I will ask the model to request one concrete file change next\.|Continuing the implementation\. I will ask the model to request one concrete implementation step next\.|Continuing with one focused implementation step\./i.test(itemText)
+    ) {
+      return true;
+    }
+
+    if (
+      role === "assistant" &&
+      /Stopped\.|Cancelled|No files were written|No files were changed by that run/i.test(itemText)
+    ) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function collectRecoveredProjectEditInspectedPaths(messages = [], index = -1) {
+  const items = Array.isArray(messages) ? messages : [];
+  const numericIndex = Number(index);
+  if (!Number.isFinite(numericIndex) || numericIndex <= 0) return [];
+
+  const paths = [];
+  const remember = (value) => {
+    const normalized = String(value || "").trim().replace(/\\/g, "/");
+    if (!normalized) return;
+
+    const srcMatch = normalized.match(/(?:^|\/)(src\/[^)\r\n]+)/i);
+    const appMatch = normalized.match(/(?:^|\/)(app\/[^)\r\n]+)/i);
+    paths.push(srcMatch ? srcMatch[1] : appMatch ? appMatch[1] : normalized);
+  };
+
+  const start = Math.max(0, numericIndex - 14);
+  for (let i = numericIndex - 1; i >= start; i--) {
+    const itemText = String(items[i]?.content ?? items[i]?.text ?? "");
+
+    const workingMatch = itemText.match(/Working… reading\s+(.+?)\.\s*(?:\n|$)/);
+    if (workingMatch) remember(workingMatch[1]);
+
+    const pathMatch = itemText.match(/Path:\s*([^)\r\n]+)/i);
+    if (pathMatch) remember(pathMatch[1]);
+  }
+
+  return Array.from(new Set(paths));
+}
+
 function collectToolBatchPaths(calls, toolName) {
   return (Array.isArray(calls) ? calls : [])
     .filter((c) => c?.toolName === toolName)
@@ -2332,7 +2398,16 @@ export default function AiPanel({
           }
 
           const pendingCalls = [];
-          if (msg?.meta?.allowModelToolExecution !== true) {
+          const isExplicitModelToolExecution =
+            msg?.meta?.allowModelToolExecution === true;
+          const isRecoveredProjectEditToolExecution =
+            !isExplicitModelToolExecution &&
+            isRecoveredProjectEditToolExecutionMessage(messages, i, content);
+
+          if (
+            !isExplicitModelToolExecution &&
+            !isRecoveredProjectEditToolExecution
+          ) {
             continue;
           }
 
@@ -2448,8 +2523,16 @@ export default function AiPanel({
           );
           const triggerToolMessage =
             triggerMessageIndex >= 0 ? messages[triggerMessageIndex] : null;
+          const triggerToolIsRecoveredProjectEditToolExecution =
+            triggerToolMessage?.meta?.allowModelToolExecution !== true &&
+            isRecoveredProjectEditToolExecutionMessage(
+              messages,
+              triggerMessageIndex,
+              getMsgText(triggerToolMessage),
+            );
           const triggerToolTaskKind = String(
-            triggerToolMessage?.meta?.modelToolExecutionKind || "",
+            triggerToolMessage?.meta?.modelToolExecutionKind ||
+              (triggerToolIsRecoveredProjectEditToolExecution ? "project_edit" : ""),
           ).trim();
           const isFixToolExecution =
             triggerToolTaskKind === "broken_preview_debug";
@@ -2458,13 +2541,33 @@ export default function AiPanel({
           const triggerToolOriginalGoal = String(
             triggerToolMessage?.meta?.modelToolOriginalGoal || latestUserText || "",
           ).trim();
-          const triggerToolInspectedPaths = Array.isArray(
+          const recoveredProjectEditInspectedPaths =
+            triggerToolIsRecoveredProjectEditToolExecution
+              ? collectRecoveredProjectEditInspectedPaths(
+                  messages,
+                  triggerMessageIndex,
+                )
+              : [];
+          const metaToolInspectedPaths = Array.isArray(
             triggerToolMessage?.meta?.modelToolInspectedPaths,
           )
             ? triggerToolMessage.meta.modelToolInspectedPaths
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : [];
+          const triggerToolInspectedPaths =
+            metaToolInspectedPaths.length > 0
+              ? metaToolInspectedPaths
+              : recoveredProjectEditInspectedPaths;
+          const isBlockedWriteRecoveryToolExecution =
+            triggerToolMessage?.meta?.modelToolBlockedWriteRecovery === true;
+          const triggerToolBlockedWriteTargetPath = String(
+            triggerToolMessage?.meta?.modelToolBlockedWriteTargetPath || "",
+          ).trim();
+          const triggerToolBlockedWriteReason = String(
+            triggerToolMessage?.meta?.modelToolBlockedWriteReason || "",
+          ).trim();
+
 
           if (isControlledReadOnlyToolExecution) {
             const readCalls = batchCalls.filter(
@@ -2804,27 +2907,53 @@ export default function AiPanel({
                 appendMessage(
                   "assistant",
                   "Switch model first.\n\n" +
-                    "Use a Recommended builder or High capability model from the Provider/Model preset list. After switching, choose Retry with inspected evidence or resend the last request.\n\n" +
+                    "Use a Recommended builder or High capability model from the Provider/Model preset list. After switching, resend the last request.\n\n" +
                     "No files were written by the blocked edit.",
                 );
               },
             });
-            if (failedWriteTargetPath) {
+            const isDestructiveShrinkBlockedWrite =
+              /shrink an existing source file by more than 80%|destructive rewrite|too destructive/i.test(
+                blockedWriteReason,
+              );
+            const shouldOfferBlockedWriteRetry =
+              !!failedWriteTargetPath && !isDestructiveShrinkBlockedWrite;
+
+            if (shouldOfferBlockedWriteRetry) {
               failedWriteActions.push({
                 label: "Retry with inspected evidence",
                 onClick: () => {
                   appendMessage("user", "Choice: Retry with inspected evidence");
+                  const retryGoal = String(
+                    triggerToolOriginalGoal || latestUserText || "",
+                  ).trim();
+                  const retryInspectedPaths = Array.from(
+                    new Set(
+                      [
+                        ...(Array.isArray(triggerToolInspectedPaths)
+                          ? triggerToolInspectedPaths
+                          : []),
+                        failedWriteTargetPath,
+                      ].filter(Boolean),
+                    ),
+                  );
+
                   appendMessage(
                     "assistant",
-                    `Re-inspecting ${failedWriteTargetPath} before retrying. KForge is using the blocked write path as evidence, not asking you to write an expert prompt. KForge will request approval before any file write.`,
+                    `Retrying ${failedWriteTargetPath} with blocked-write recovery guidance. KForge will not accept a fragment or destructive rewrite; any write must preserve the full inspected file and apply only the smallest requested change.`,
                   );
+
                   appendMessage(
                     "assistant",
                     "```tool\n" +
-                      JSON.stringify({
-                        name: "read_file",
-                        args: { path: failedWriteTargetPath },
-                      }) +
+                      JSON.stringify(
+                        {
+                          name: "read_file",
+                          args: { path: failedWriteTargetPath },
+                        },
+                        null,
+                        2,
+                      ) +
                       "\n```",
                     {
                       meta: {
@@ -2834,14 +2963,33 @@ export default function AiPanel({
                         ),
                         previewErrorEvidenceGate: false,
                         controlledReadOnlyToolExecution: false,
-                        modelToolOriginalGoal: triggerToolOriginalGoal,
-                        modelToolInspectedPaths: triggerToolInspectedPaths,
+                        modelToolOriginalGoal: retryGoal,
+                        modelToolInspectedPaths: retryInspectedPaths,
+                        modelToolBlockedWriteRecovery: true,
+                        modelToolBlockedWriteTargetPath: failedWriteTargetPath,
+                        modelToolBlockedWriteReason: blockedWriteReason,
                       },
                     },
+                  );
+
+                },
+              });
+            }
+            if (failedWriteTargetPath && isDestructiveShrinkBlockedWrite) {
+              failedWriteActions.push({
+                label: "Why retry is blocked",
+                onClick: () => {
+                  appendMessage("user", "Choice: Why retry is blocked");
+                  appendMessage(
+                    "assistant",
+                    `KForge already inspected ${failedWriteTargetPath}, but the model still attempted a destructive rewrite that would shrink the file by more than 80%.\n\n` +
+                      "Retrying with the same model would likely repeat the loop. Switch to a Recommended builder or High capability model, or stop here.\n\n" +
+                      "No files were changed.",
                   );
                 },
               });
             }
+
             failedWriteActions.push(
               {
                 label: "Show blocked write reason",
@@ -3581,56 +3729,171 @@ export default function AiPanel({
                     },
                   );
                 } else {
-                  appendMessage(
-                    "assistant",
-                    isFixToolExecution
-                      ? "I inspected the relevant files for the fix, but I did not change any files yet."
-                      : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
-                    {
-                      actions: [
-                        {
-                          label: isFixToolExecution
-                            ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                            : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
-                          onClick: () => {
-                          const originalGoal = String(
-                              triggerToolOriginalGoal ||
-                                latestUserText ||
-                                (isFixToolExecution
-                                  ? "Continue the previous fix/debug task."
-                                  : "Continue the previous project edit."),
-                            ).trim();
+                  const isBlockedWriteRecoveryContinuation =
+                    isBlockedWriteRecoveryToolExecution && !isFixToolExecution;
+                  const blockedWriteRecoveryTargetPath =
+                    triggerToolBlockedWriteTargetPath ||
+                    agentSuccessfulReadPaths[agentSuccessfulReadPaths.length - 1] ||
+                    "";
+                  const blockedWriteRecoveryReasonLine =
+                    triggerToolBlockedWriteReason
+                      ? `Blocked write reason:\n${triggerToolBlockedWriteReason}\n\n`
+                      : "";
 
-                            appendMessage(
-                              "assistant",
-                              isFixToolExecution
-                                ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
-                                : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
-                            );
+                  const inspectionOnlyOriginalGoal = String(
+                    triggerToolOriginalGoal ||
+                      latestUserText ||
+                      (isFixToolExecution
+                        ? "Continue the previous fix/debug task."
+                        : "Continue the previous project edit."),
+                  ).trim();
 
-                            if (typeof sendWithPrompt === "function") {
-                              sendWithPrompt(
-                                (isFixToolExecution
-                                  ? "Continue the previous fix/debug task.\n\n"
-                                  : "Continue the previous project edit.\n\n") +
+                  const inspectionOnlyGoalText =
+                    inspectionOnlyOriginalGoal.toLowerCase();
+
+                  const normalizedAgentSuccessfulReadPaths =
+                    agentSuccessfulReadPaths
+                      .map((item) =>
+                        String(item || "").trim().replace(/\\/g, "/").toLowerCase(),
+                      )
+                      .filter(Boolean);
+
+                  const hasInspectedLikelyAppFileForSimpleControlEdit =
+                    normalizedAgentSuccessfulReadPaths.some((item) =>
+                      [
+                        "src/app.jsx",
+                        "src/app.js",
+                        "app/page.jsx",
+                        "app/page.tsx",
+                      ].includes(item),
+                    );
+
+                  const isSimpleFormControlInspectionOnlyEdit =
+                    !isFixToolExecution &&
+                    !isBlockedWriteRecoveryContinuation &&
+                    hasInspectedLikelyAppFileForSimpleControlEdit &&
+                    (
+                      (
+                        /\b(reset|clear|clears|clearing)\b/.test(inspectionOnlyGoalText) &&
+                        /\b(form|input|field|button|control)\b/.test(inspectionOnlyGoalText)
+                      ) ||
+                      (
+                        /\b(add|create|show|include)\b.*\bbutton\b/.test(inspectionOnlyGoalText) &&
+                        /\b(form|input|field|control)\b/.test(inspectionOnlyGoalText)
+                      )
+                    );
+
+                  const inspectionOnlyActions =
+                    isSimpleFormControlInspectionOnlyEdit
+                      ? [
+                          {
+                            label: "Switch model first",
+                            onClick: () => {
+                              appendMessage("user", "Choice: Switch model first");
+                              setWorkflowContext(null);
+                              appendMessage(
+                                "assistant",
+                                "The likely app file was already inspected, but the model did not produce a concrete file-change request for this simple form/control edit.\n\n" +
+                                  "Switch to a Recommended builder or High capability model, then resend the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
+                                  "No files were changed.",
+                              );
+                            },
+                          },
+                          {
+                            label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
+                            onClick: () => {
+                              appendMessage(
+                                "user",
+                                `Choice: ${SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS}`,
+                              );
+                              setWorkflowContext(null);
+                              appendMessage(
+                                "assistant",
+                                "Manual path for this reset-button edit:\n\n" +
+                                  "1. In the inspected app file, find the existing form state and submit handler.\n" +
+                                  "2. Add one small reset handler that restores the form state to the existing empty/default form value.\n" +
+                                  "3. Add one secondary button inside the existing form with type=\"button\" so it does not submit the form.\n" +
+                                  "4. Wire that button to the reset handler.\n" +
+                                  "5. Preserve the current layout, styling hooks, state, handlers, copy, and all unrelated behavior.\n\n" +
+                                  "No files were changed by the failed model response.",
+                              );
+                            },
+                          },
+                          {
+                            label: SUGGESTED_ACTION_LABEL.STOP,
+                            onClick: () => {
+                              appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                              setWorkflowContext(null);
+                              appendMessage(
+                                "assistant",
+                                "Stopped. No files were changed after inspection.",
+                              );
+                            },
+                          },
+                        ]
+                      : [
+                          {
+                            label: isFixToolExecution
+                              ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                              : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                            onClick: () => {
+                              const originalGoal = inspectionOnlyOriginalGoal;
+
+                              const continuePrompt = isBlockedWriteRecoveryContinuation
+                                ? "Recover from the blocked file write.\n\n" +
+                                  `Original request: ${originalGoal}\n\n` +
+                                  `Blocked write target: ${blockedWriteRecoveryTargetPath}\n\n` +
+                                  blockedWriteRecoveryReasonLine +
+                                  "The target file has now been inspected. Do not repeat broad inspection.\n" +
+                                  "Request exactly one write_file tool call next for the blocked target.\n" +
+                                  "The write_file content must be the complete full current file text with only the smallest safe requested change applied.\n" +
+                                  "Do not return a fragment, placeholder, abbreviated content, comment-only content, or only the newly added JSX/button.\n" +
+                                  "Preserve the existing app structure, state, handlers, imports, styling hooks, copy, and all unrelated behavior.\n" +
+                                  "For a reset-button request, add only the minimal reset handler/button needed to clear the existing form."
+                                : (isFixToolExecution
+                                    ? "Continue the previous fix/debug task.\n\n"
+                                    : "Continue the previous project edit.\n\n") +
                                   `Original request: ${originalGoal}\n\n` +
                                   "The project has already been inspected. Do not repeat broad inspection.\n" +
                                   (isFixToolExecution
                                     ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible."),
-                                {
-                                  silentUserAppend: true,
-                                  skipCompletedWorkflowRoute: true,
-                                  skipDirectWorkflowHandoffRoute: true,
-                                  forceProjectEdit: true,
-                                  inspectedPaths: agentSuccessfulReadPaths,
-                                  forceModelCapabilityTestOverride: true,
-                                },
+                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.");
+
+                              appendMessage(
+                                "assistant",
+                                isFixToolExecution
+                                  ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
+                                  : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
                               );
-                            }
+
+                              if (typeof sendWithPrompt === "function") {
+                                sendWithPrompt(
+                                  continuePrompt,
+                                  {
+                                    silentUserAppend: true,
+                                    skipCompletedWorkflowRoute: true,
+                                    skipDirectWorkflowHandoffRoute: true,
+                                    forceProjectEdit: true,
+                                    inspectedPaths: agentSuccessfulReadPaths,
+                                    forceModelCapabilityTestOverride: true,
+                                  },
+                                );
+                              }
+                            },
                           },
-                        },
-                      ],
+                        ];
+
+                  appendMessage(
+                    "assistant",
+                    isBlockedWriteRecoveryContinuation
+                      ? `I inspected ${blockedWriteRecoveryTargetPath || "the blocked file"} for blocked-write recovery, but I did not change any files yet.`
+                      : isFixToolExecution
+                        ? "I inspected the relevant files for the fix, but I did not change any files yet."
+                        : isSimpleFormControlInspectionOnlyEdit
+                          ? "I inspected the likely app file for this simple form/control edit, but the model did not produce a concrete file-change request. No files were changed."
+                          : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
+                    {
+                      actions: inspectionOnlyActions,
                     },
                   );
                 }

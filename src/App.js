@@ -8155,16 +8155,24 @@ setWorkflowContext({
             "src/index.css",
           ];
 
+          const templateHintForNoToolAppInspect = String(
+            detectedTemplateName || detectedKind || "",
+          ).toLowerCase();
+          const likelyAppInspectPath = templateHintForNoToolAppInspect.includes("next")
+            ? "app/page.jsx"
+            : "src/App.jsx";
+          const hasAlreadyInspectedLikelyAppPath =
+            noToolAlreadyInspectedPaths.includes(
+              likelyAppInspectPath.toLowerCase(),
+            );
+
           const noToolRecoveryActions = [];
 
-          if (isPlainProjectEditNoToolRecovery && !isRiskyNoToolModel) {
-            const templateHint = String(
-              detectedTemplateName || detectedKind || "",
-            ).toLowerCase();
-            const likelyAppInspectPath = templateHint.includes("next")
-              ? "app/page.jsx"
-              : "src/App.jsx";
-
+          if (
+            isPlainProjectEditNoToolRecovery &&
+            !isRiskyNoToolModel &&
+            !hasAlreadyInspectedLikelyAppPath
+          ) {
             noToolRecoveryActions.push({
               label: "Inspect app file",
               onClick: () => {
@@ -8273,6 +8281,25 @@ setWorkflowContext({
             });
           }
 
+          if (
+            isPlainProjectEditNoToolRecovery &&
+            hasAlreadyInspectedLikelyAppPath &&
+            !isRiskyNoToolModel
+          ) {
+            noToolRecoveryActions.push({
+              label: "Switch model first",
+              onClick: () => {
+                appendMessage("user", "Choice: Switch model first");
+                appendMessage(
+                  "assistant",
+                  `The likely app file (${likelyAppInspectPath}) was already inspected, but the model still did not produce a usable file-change request.\n\n` +
+                    "Switch to a Recommended builder or High capability model, then retry the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
+                    "No files were changed.",
+                );
+              },
+            });
+          }
+
           if (isRiskyNoToolModel) {
             noToolRecoveryActions.push({
               label: "Switch model first",
@@ -8289,8 +8316,38 @@ setWorkflowContext({
             });
           }
 
-          noToolRecoveryActions.push(
-            {
+          const noToolSimpleControlGoal = [
+            originalNoToolRequest,
+            builtInStarterGoal,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          const isSimpleFormControlNoToolEdit =
+            (
+              /\b(reset|clear|clears|clearing)\b/.test(noToolSimpleControlGoal) &&
+              /\b(form|input|field|button|control)\b/.test(noToolSimpleControlGoal)
+            ) ||
+            (
+              /\b(add|create|show|include)\b.*\bbutton\b/.test(noToolSimpleControlGoal) &&
+              /\b(form|input|field|control)\b/.test(noToolSimpleControlGoal)
+            );
+
+          const shouldOfferFocusedNoToolRetry =
+            !(
+              (
+                isPlainProjectEditNoToolRecovery &&
+                hasAlreadyInspectedLikelyAppPath &&
+                isSimpleFormControlNoToolEdit
+              ) ||
+              (
+                isDeterministicVisualCssNoToolInspection &&
+                hasAlreadyInspectedDeterministicVisualCssPath
+              )
+            );
+
+          if (shouldOfferFocusedNoToolRetry) {
+            noToolRecoveryActions.push({
               label: "Try one more focused step",
               onClick: () => {
                 appendMessage("user", "Choice: Try one more focused step");
@@ -8304,7 +8361,10 @@ setWorkflowContext({
                   forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
                 });
               },
-            },
+            });
+          }
+
+          noToolRecoveryActions.push(
             {
               label: SUGGESTED_ACTION_LABEL.GIVE_MANUAL_STEPS,
               onClick: () => {
