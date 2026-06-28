@@ -8136,6 +8136,12 @@ setWorkflowContext({
               deterministicVisualCssInspectPath.toLowerCase(),
             );
 
+          const isPlainProjectEditNoToolRecovery =
+            !isFixNoToolRecovery &&
+            !isPartialImplementationNoToolRecovery &&
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
+            !isDeterministicVisualCssNoToolInspection;
+
           const shouldOfferBuiltInStarterRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
@@ -8151,11 +8157,48 @@ setWorkflowContext({
 
           const noToolRecoveryActions = [];
 
+          if (isPlainProjectEditNoToolRecovery && !isRiskyNoToolModel) {
+            const templateHint = String(
+              detectedTemplateName || detectedKind || "",
+            ).toLowerCase();
+            const likelyAppInspectPath = templateHint.includes("next")
+              ? "app/page.jsx"
+              : "src/App.jsx";
+
+            noToolRecoveryActions.push({
+              label: "Inspect app file",
+              onClick: () => {
+                appendMessage("user", "Choice: Inspect app file");
+                appendMessage(
+                  "assistant",
+                  `Inspecting ${likelyAppInspectPath} first. This is a deterministic KForge inspection step, not another model retry. KForge will request approval before any file write.`,
+                );
+                appendMessage(
+                  "assistant",
+                  "```tool\n" +
+                    JSON.stringify({
+                      name: "read_file",
+                      args: { path: likelyAppInspectPath },
+                    }) +
+                    "\n```",
+                  {
+                    meta: {
+                      allowModelToolExecution: true,
+                      modelToolExecutionKind: String(WORKFLOW_TASK_KIND.PROJECT_EDIT),
+                      previewErrorEvidenceGate: false,
+                      controlledReadOnlyToolExecution: false,
+                    },
+                  },
+                );
+              },
+            });
+          }
+
           if (isDeterministicVisualCssNoToolInspection && !hasAlreadyInspectedDeterministicVisualCssPath) {
             noToolRecoveryActions.push({
-              label: "Inspect likely CSS file",
+              label: "Inspect likely style file",
               onClick: () => {
-                appendMessage("user", "Choice: Inspect likely CSS file");
+                appendMessage("user", "Choice: Inspect likely style file");
                 appendMessage(
                   "assistant",
                   `Inspecting ${deterministicVisualCssInspectPath} first. This is a deterministic KForge inspection step, not another model retry. KForge will request approval before any file write.`,
@@ -8222,7 +8265,7 @@ setWorkflowContext({
                 appendMessage("user", "Choice: Switch model first");
                 appendMessage(
                   "assistant",
-                  "The likely CSS file was already inspected, but the model still did not produce a usable file-change request.\n\n" +
+                  "The likely style file was already inspected, but the model still did not produce a usable file-change request.\n\n" +
                     "Switch to a Recommended builder or High capability model, then retry the edit. KForge will keep inspect-before-write, path safety, and write approval active.\n\n" +
                     "No files were changed.",
                 );

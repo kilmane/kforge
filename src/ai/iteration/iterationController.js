@@ -58,9 +58,23 @@ export function isIterationWriteTool(toolName = "") {
 
 export function isVisualCssIterationGoal(text = "") {
   const s = String(text || "").toLowerCase();
-  return /\b(ui|ux|visual|style|styling|css|layout|readability|readable|theme|palette|colour|color|heading|title|button|card|background|contrast|polished|modern)\b/.test(
-    s,
-  );
+
+  if (!s) return false;
+
+  const hasDirectVisualIntent =
+    /\b(ui|ux|visual|style|styling|css|layout|readability|readable|theme|palette|colour|color|heading|title|background|contrast|polished|modern)\b/.test(
+      s,
+    );
+
+  if (hasDirectVisualIntent) return true;
+
+  const hasVisualTargetOnlyWord = /\b(button|card)\b/.test(s);
+  const hasVisualModifier =
+    /\b(bright|dark|lighter|darker|bold|smaller|larger|bigger|center|centered|centred|centre|align|aligned|rounded|shadow|spacing|margin|padding|font|readable|contrast|colour|color)\b/.test(
+      s,
+    );
+
+  return hasVisualTargetOnlyWord && hasVisualModifier;
 }
 
 export function hasIterationPath(paths = [], path = "") {
