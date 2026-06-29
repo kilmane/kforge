@@ -3644,6 +3644,7 @@ export default function AiPanel({
                 ? createCompletedImplementationWorkflowContext({
                     lastEditedPath: latestAgentWrittenPath || "",
                     editedPaths: agentSuccessfulWritePaths,
+                    inspectedPaths: agentSuccessfulReadPaths,
                     preWriteSnapshots: getSnapshotsForPaths(
                       preWriteSnapshotsRef.current,
                       agentSuccessfulWritePaths,
