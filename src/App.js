@@ -8507,6 +8507,23 @@ setWorkflowContext({
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
         if (shouldAllowModelToolExecution) {
+          const modelToolOriginalGoal = String(
+            opts.modelToolOriginalGoal ||
+              opts.lastUserGoal ||
+              workflowContext?.lastUserGoal ||
+              draft ||
+              "",
+          ).trim();
+          const modelToolInspectedPaths = (
+            Array.isArray(opts.modelToolInspectedPaths)
+              ? opts.modelToolInspectedPaths
+              : Array.isArray(opts.inspectedPaths)
+                ? opts.inspectedPaths
+                : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+
           for (const tb of toolBlocks) {
             appendMessage("assistant", tb, {
               meta: {
@@ -8515,6 +8532,8 @@ setWorkflowContext({
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
                 controlledReadOnlyToolExecution:
                   opts.controlledReadOnlyToolExecution === true,
+                modelToolOriginalGoal,
+                modelToolInspectedPaths,
               },
             });
           }
