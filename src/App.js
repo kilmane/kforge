@@ -2550,6 +2550,10 @@ export default function App() {
             workflowContext.editedPaths.length > 0
               ? "- editedPaths: " + workflowContext.editedPaths.join(", ")
               : "",
+            Array.isArray(workflowContext.inspectedPaths) &&
+            workflowContext.inspectedPaths.length > 0
+              ? "- inspectedPaths: " + workflowContext.inspectedPaths.join(", ")
+              : "",
             "",
             "Use this state for ambiguous follow-ups before guessing from wording.",
             "If assistantResult is present, prefer actionResult, actionType, suggestedActions, verificationStatus, and verificationSummary before guessing from user wording.",
@@ -8606,7 +8610,9 @@ setWorkflowContext({
               ? opts.modelToolInspectedPaths
               : Array.isArray(opts.inspectedPaths)
                 ? opts.inspectedPaths
-                : []
+                : Array.isArray(workflowContext?.inspectedPaths)
+                  ? workflowContext.inspectedPaths
+                  : []
           )
             .map((item) => String(item || "").trim())
             .filter(Boolean);

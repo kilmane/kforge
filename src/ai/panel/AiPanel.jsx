@@ -4082,6 +4082,7 @@ export default function AiPanel({
                   setWorkflowContext(
                     createPartialImplementationWorkflowContext({
                       lastUserGoal: originalGoal,
+                      inspectedPaths: agentSuccessfulReadPaths,
                       partialSummary,
                       assistantResult,
                       source: "agent_max_steps_reached",
@@ -4213,6 +4214,7 @@ export default function AiPanel({
                   setWorkflowContext(
                     createPartialImplementationWorkflowContext({
                       lastUserGoal: originalGoal,
+                      inspectedPaths: agentSuccessfulReadPaths,
                       partialSummary,
                       assistantResult,
                       source: "agent_empty_response",
@@ -4265,6 +4267,8 @@ export default function AiPanel({
                                       : "Request exactly one concrete implementation tool call next. If a file edit is needed, request write_file for the smallest safe continuation. If more inspection is genuinely needed, request one read_file only.")),
                               {
                                 silentUserAppend: true,
+                                inspectedPaths: agentSuccessfulReadPaths,
+                                lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
                             );

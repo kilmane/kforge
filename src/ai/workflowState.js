@@ -509,6 +509,7 @@ export function createPartialImplementationWorkflowContext({
   lastUserGoal = "",
   lastEditedPath = "",
   editedPaths = [],
+  inspectedPaths = [],
   changedFileSummaries = [],
   partialSummary = "",
   assistantResult = null,
@@ -516,6 +517,7 @@ export function createPartialImplementationWorkflowContext({
   source = "partial_implementation",
 } = {}) {
   const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
+  const normalizedInspectedPaths = normalizeWorkflowPathList(inspectedPaths);
   const normalizedChangedFileSummaries =
     normalizeChangedFileSummaries(changedFileSummaries);
   const cleanLastEditedPath = String(lastEditedPath || "").trim();
@@ -549,6 +551,7 @@ export function createPartialImplementationWorkflowContext({
     lastUserGoal: String(lastUserGoal || "").trim(),
     lastEditedPath: finalLastEditedPath,
     editedPaths: finalEditedPaths,
+    inspectedPaths: normalizedInspectedPaths,
     changedFileSummaries: normalizedChangedFileSummaries,
     partialSummary: String(partialSummary || "").trim(),
     assistantResult: finalAssistantResult,
@@ -560,6 +563,7 @@ export function createPartialImplementationWorkflowContext({
 export function createCompletedImplementationWorkflowContext({
   lastEditedPath = "",
   editedPaths = [],
+  inspectedPaths = [],
   changedFileSummaries = [],
   preWriteSnapshots = [],
   changeSummary = "",
@@ -572,6 +576,7 @@ export function createCompletedImplementationWorkflowContext({
   source = "tool_batch",
 } = {}) {
   const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
+  const normalizedInspectedPaths = normalizeWorkflowPathList(inspectedPaths);
   const normalizedChangedFileSummaries =
     normalizeChangedFileSummaries(changedFileSummaries);
   const normalizedPreWriteSnapshots =
@@ -608,6 +613,7 @@ export function createCompletedImplementationWorkflowContext({
     nextStep,
     lastEditedPath: finalLastEditedPath,
     editedPaths: finalEditedPaths,
+    inspectedPaths: normalizedInspectedPaths,
     changedFileSummaries: normalizedChangedFileSummaries,
     preWriteSnapshots: normalizedPreWriteSnapshots,
     changeSummary: String(changeSummary || "").trim(),
