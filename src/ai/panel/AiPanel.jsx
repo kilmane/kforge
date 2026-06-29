@@ -3388,8 +3388,10 @@ export default function AiPanel({
               const agentSuccessfulDirPaths = [];
               const initialAgentSuccessfulReadPaths = Array.isArray(batchCalls)
                 ? batchCalls
-                    .filter((call) => call?.toolName === "read_file")
-                    .map((call) => String(call?.args?.path || "").trim())
+                    .filter((call) =>
+                      INSPECTION_TOOL_NAMES.has(String(call?.toolName || "").trim()),
+                    )
+                    .map((call) => String(call?.args?.path || call?.args?.dirPath || "").trim())
                     .filter(Boolean)
                 : [];
               const agentSuccessfulReadPaths = Array.from(
@@ -3547,10 +3549,10 @@ export default function AiPanel({
                   const result = await runTool({ toolName, args });
 
                   if (shouldUseImplementationJobController) {
-                    if (result?.ok && toolName === "read_file") {
+                    if (result?.ok && INSPECTION_TOOL_NAMES.has(toolName)) {
                       implementationJob = rememberImplementationInspection(
                         implementationJob,
-                        args?.path,
+                        args?.path || args?.dirPath,
                       );
                     } else if (toolName === "write_file" || toolName === "mkdir") {
                       implementationJob = rememberImplementationWriteAttempt(
@@ -3567,8 +3569,8 @@ export default function AiPanel({
                     }
                   }
 
-                  if (result?.ok && toolName === "read_file") {
-                    const path = String(args?.path || "").trim();
+                  if (result?.ok && INSPECTION_TOOL_NAMES.has(toolName)) {
+                    const path = String(args?.path || args?.dirPath || "").trim();
                     if (path) agentSuccessfulReadPaths.push(path);
                   }
 
