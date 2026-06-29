@@ -2897,6 +2897,23 @@ export default function AiPanel({
               ? successfulWritePaths[successfulWritePaths.length - 1]
               : "";
 
+          const successfulInspectionPaths = Array.from(
+            new Set(
+              [
+                ...triggerToolInspectedPaths,
+                ...executedBatchResults
+                  .filter(
+                    (item) =>
+                      item?.ok &&
+                      INSPECTION_TOOL_NAMES.has(String(item?.toolName || "").trim()),
+                  )
+                  .map((item) =>
+                    String(item?.args?.path || item?.args?.dirPath || "").trim(),
+                  ),
+              ].filter(Boolean),
+            ),
+          );
+
           const fallbackReadPath = latestWrittenPath || activeTab?.path || "";
 
           const allWritesFailed =
@@ -3068,6 +3085,7 @@ export default function AiPanel({
               createCompletedImplementationWorkflowContext({
                 lastEditedPath: latestWrittenPath || "",
                 editedPaths: successfulWritePaths,
+                inspectedPaths: successfulInspectionPaths,
                 preWriteSnapshots: getSnapshotsForPaths(
                   preWriteSnapshotsRef.current,
                   successfulWritePaths,
