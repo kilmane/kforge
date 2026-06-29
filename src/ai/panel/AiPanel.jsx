@@ -1400,8 +1400,14 @@ function extractXmlToolCalls(text) {
   const hasDirectToolTag = Array.from(ALLOWED_MODEL_TOOLS).some((toolName) =>
     s.includes(`<${toolName}>`),
   );
-  const hasInvokeToolCall = /<invoke\s+name="[^"]+"\s*>/i.test(s);
-  if (!s.includes("<tool_call") && !hasDirectToolTag && !hasInvokeToolCall) {
+  const hasInvokeToolCall = /<invoke\s+name=["'][^"']+["']\s*>/i.test(s);
+  const hasNamespacedToolCall = /<minimax:tool_call\b/i.test(s);
+  if (
+    !s.includes("<tool_call") &&
+    !hasNamespacedToolCall &&
+    !hasDirectToolTag &&
+    !hasInvokeToolCall
+  ) {
     return [];
   }
 
@@ -1409,7 +1415,7 @@ function extractXmlToolCalls(text) {
   // Variant 0: <tool_call>list_dir
   // { "path": "src" }
   const simpleToolCallRe =
-    /<tool_call>\s*([A-Za-z0-9_:-]+)\s*([\s\S]*?)(?=<\/tool_call>|<tool_call>|$)/gi;
+    /<(?:minimax:)?tool_call>\s*([A-Za-z0-9_:-]+)\s*([\s\S]*?)(?=<\/(?:minimax:)?tool_call>|<(?:minimax:)?tool_call>|$)/gi;
   let simpleMatch;
   while ((simpleMatch = simpleToolCallRe.exec(s)) !== null) {
     const name = String(simpleMatch[1] || "").trim();
@@ -1481,7 +1487,7 @@ function extractXmlToolCalls(text) {
     }
   }
   // Variant A: <invoke name="..."> ... </invoke>
-  const invokeRe = /<invoke\s+name="([^"]+)"\s*>([\s\S]*?)<\/invoke>/g;
+  const invokeRe = /<invoke\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/invoke>/g;
   let m;
   while ((m = invokeRe.exec(s)) !== null) {
     const name = String(m[1] || "").trim();
@@ -1490,7 +1496,7 @@ function extractXmlToolCalls(text) {
     if (!ALLOWED_MODEL_TOOLS.has(name)) continue;
 
     const args = {};
-    const paramRe = /<parameter\s+name="([^"]+)"\s*>([\s\S]*?)<\/parameter>/g;
+    const paramRe = /<parameter\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/parameter>/g;
     let p;
     while ((p = paramRe.exec(body)) !== null) {
       const k = String(p[1] || "").trim();
