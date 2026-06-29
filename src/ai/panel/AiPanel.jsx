@@ -42,6 +42,10 @@ import {
   normalizeVisualCssReplacementItems,
 } from "../implementation/visualCssEditController.js";
 import {
+  SIMPLE_FORM_CONTROL_EDIT_LABEL,
+  buildSimpleFormControlEdit,
+} from "../implementation/simpleFormControlEditController.js";
+import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
   buildBuiltInModernReactStarterImplementation,
   canUseBuiltInModernReactStarterImplementation,
@@ -3786,6 +3790,110 @@ export default function AiPanel({
                   const inspectionOnlyActions =
                     isSimpleFormControlInspectionOnlyEdit
                       ? [
+                          {
+                            label: SIMPLE_FORM_CONTROL_EDIT_LABEL,
+                            onClick: async () => {
+                              appendMessage(
+                                "user",
+                                `Choice: ${SIMPLE_FORM_CONTROL_EDIT_LABEL}`,
+                              );
+
+                              const simpleControlTargetPath =
+                                agentSuccessfulReadPaths.find((item) =>
+                                  [
+                                    "src/app.jsx",
+                                    "src/app.js",
+                                    "app/page.jsx",
+                                    "app/page.tsx",
+                                  ].includes(
+                                    String(item || "")
+                                      .trim()
+                                      .replace(/\\/g, "/")
+                                      .toLowerCase(),
+                                  ),
+                                ) || "src/App.jsx";
+
+                              appendMessage(
+                                "assistant",
+                                "Preparing the reset-button edit for your approval. KForge will create one small reviewed file-change request or stop safely.",
+                              );
+
+                              try {
+                                const currentAppContent = String(
+                                  (await openFile(simpleControlTargetPath)) ?? "",
+                                );
+
+                                const editResult = buildSimpleFormControlEdit({
+                                  goal: inspectionOnlyOriginalGoal,
+                                  path: simpleControlTargetPath,
+                                  currentContent: currentAppContent,
+                                });
+
+                                if (!editResult.ok) {
+                                  appendMessage(
+                                    "assistant",
+                                    "KForge could not prepare the deterministic reset-button edit.\n\n" +
+                                      `${editResult.reason || "The inspected file did not match the supported form pattern."}\n\n` +
+                                      "No files were changed. This controller step will not loop.",
+                                    {
+                                      actions: [
+                                        {
+                                          label: SUGGESTED_ACTION_LABEL.STOP,
+                                          onClick: () => {
+                                            appendMessage(
+                                              "user",
+                                              `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                            );
+                                            appendMessage(
+                                              "assistant",
+                                              "Stopped. No files were changed by the deterministic reset-button executor.",
+                                            );
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  );
+                                  return;
+                                }
+
+                                appendMessage(
+                                  "assistant",
+                                  "```tool\n" +
+                                    JSON.stringify(
+                                      {
+                                        name: "write_file",
+                                        args: {
+                                          path: simpleControlTargetPath,
+                                          content: editResult.nextContent,
+                                        },
+                                      },
+                                      null,
+                                      2,
+                                    ) +
+                                    "\n```",
+                                  {
+                                    meta: {
+                                      allowModelToolExecution: true,
+                                      modelToolExecutionKind: String(
+                                        triggerToolTaskKind || "project_edit",
+                                      ),
+                                      previewErrorEvidenceGate: false,
+                                      controlledReadOnlyToolExecution: false,
+                                      modelToolOriginalGoal: inspectionOnlyOriginalGoal,
+                                      modelToolInspectedPaths: [simpleControlTargetPath],
+                                    },
+                                  },
+                                );
+                              } catch (err) {
+                                appendMessage(
+                                  "assistant",
+                                  "KForge could not prepare the deterministic reset-button edit because of an internal error.\n\n" +
+                                    `${String(err?.message || err || "Unknown error")}\n\n` +
+                                    "No files were changed.",
+                                );
+                              }
+                            },
+                          },
                           {
                             label: "Switch model first",
                             onClick: () => {
