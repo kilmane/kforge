@@ -1398,7 +1398,7 @@ function extractSingleAgentToolCall(text, activeFilePath) {
 function extractXmlToolCalls(text) {
   const s = String(text || "");
   const hasDirectToolTag = Array.from(ALLOWED_MODEL_TOOLS).some((toolName) =>
-    s.includes(`<${toolName}>`),
+    new RegExp(`<${toolName}\\b[^>]*>`, "i").test(s),
   );
   const hasInvokeToolCall = /<invoke\s+name=["'][^"']+["']\s*>/i.test(s);
   const hasNamespacedToolCall = /<minimax:tool_call\b/i.test(s);
@@ -1443,14 +1443,23 @@ function extractXmlToolCalls(text) {
   // Also supports any allowed tool name as the outer tag.
   for (const directToolName of ALLOWED_MODEL_TOOLS) {
     const directRe = new RegExp(
-      `<${directToolName}>\\s*([\\s\\S]*?)\\s*</${directToolName}>`,
+      `<${directToolName}\\b([^>]*)>\\s*([\\s\\S]*?)\\s*</${directToolName}>`,
       "gi",
     );
 
     let directMatch;
     while ((directMatch = directRe.exec(s)) !== null) {
-      const body = String(directMatch[1] || "").trim();
+      const attributeText = String(directMatch[1] || "");
+      const body = String(directMatch[2] || "").trim();
       let args = {};
+
+      const attrRe = /([A-Za-z0-9_:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+      let attrMatch;
+      while ((attrMatch = attrRe.exec(attributeText)) !== null) {
+        const key = String(attrMatch[1] || "").trim();
+        const value = String(attrMatch[2] ?? attrMatch[3] ?? "").trim();
+        if (key) args[key] = value;
+      }
 
       if (body.startsWith("{") && body.endsWith("}")) {
         try {
