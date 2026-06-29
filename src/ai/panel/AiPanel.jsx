@@ -3410,12 +3410,16 @@ export default function AiPanel({
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
-              const initialAgentSuccessfulReadPaths = Array.isArray(batchCalls)
-                ? batchCalls
-                    .filter((call) =>
-                      INSPECTION_TOOL_NAMES.has(String(call?.toolName || "").trim()),
+              const initialAgentSuccessfulReadPaths = Array.isArray(executedBatchResults)
+                ? executedBatchResults
+                    .filter(
+                      (item) =>
+                        item?.ok &&
+                        INSPECTION_TOOL_NAMES.has(String(item?.toolName || "").trim()),
                     )
-                    .map((call) => String(call?.args?.path || call?.args?.dirPath || "").trim())
+                    .map((item) =>
+                      String(item?.args?.path || item?.args?.dirPath || "").trim(),
+                    )
                     .filter(Boolean)
                 : [];
               const agentSuccessfulReadPaths = Array.from(
