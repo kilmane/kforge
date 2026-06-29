@@ -78,6 +78,87 @@ function basename(p) {
   return parts[parts.length - 1] || p;
 }
 
+const MODEL_TOOL_FALLBACK_ALLOWED_NAMES = new Set([
+  "read_file",
+  "list_dir",
+  "search_in_file",
+  "write_file",
+  "mkdir",
+]);
+
+function normalizeModelToolFallbackShape(obj) {
+  if (!obj || typeof obj !== "object") return null;
+
+  if (typeof obj.name === "string")
+    return { name: obj.name, args: obj.args ?? {} };
+  if (typeof obj.tool === "string")
+    return { name: obj.tool, args: obj.input ?? obj.args ?? {} };
+  if (typeof obj.tool_name === "string")
+    return { name: obj.tool_name, args: obj.parameters ?? obj.args ?? {} };
+  if (typeof obj.function === "string")
+    return { name: obj.function, args: obj.arguments ?? obj.args ?? {} };
+
+  return null;
+}
+
+function safeParseModelToolFallbackJson(payload = "") {
+  try {
+    const normalized = normalizeModelToolFallbackShape(JSON.parse(payload));
+    const name = String(normalized?.name || "").trim();
+    if (!MODEL_TOOL_FALLBACK_ALLOWED_NAMES.has(name)) return null;
+    return { name, args: normalized.args ?? {} };
+  } catch {
+    return null;
+  }
+}
+
+function extractModelToolFallbackBlock(output = "") {
+  const raw = String(output || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const jsonFenceRe = /```json\s*([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonFenceRe.exec(raw)) !== null) {
+    const payload = String(match[1] || "").trim();
+    if (safeParseModelToolFallbackJson(payload)) {
+      return {
+        toolBlock: String(match[0] || "").trim(),
+        cleaned: raw.replace(match[0], "").trim(),
+      };
+    }
+  }
+
+  const anyFenceRe = /```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g;
+  while ((match = anyFenceRe.exec(raw)) !== null) {
+    const payload = String(match[1] || "").trim();
+    if (safeParseModelToolFallbackJson(payload)) {
+      return {
+        toolBlock: String(match[0] || "").trim(),
+        cleaned: raw.replace(match[0], "").trim(),
+      };
+    }
+  }
+
+  if (safeParseModelToolFallbackJson(trimmed)) {
+    return { toolBlock: trimmed, cleaned: "" };
+  }
+
+  const allowedNames = [...MODEL_TOOL_FALLBACK_ALLOWED_NAMES].join("|");
+  const directToolXmlRe = new RegExp(
+    `^\\s*<\\s*(?:${allowedNames})\\b[\\s\\S]*$`,
+    "i",
+  );
+
+  if (
+    /<tool_call\b|<\/tool_call>|<invoke\s+name=["'][^"']+["']\s*>|<minimax:tool_call\b/i.test(trimmed) ||
+    directToolXmlRe.test(trimmed)
+  ) {
+    return { toolBlock: trimmed, cleaned: "" };
+  }
+
+  return null;
+}
 const DEFAULT_KFORGE_SYSTEM = `
 You are KForge, a vibe-coding assistant running inside a tool-enabled environment.
 
@@ -8012,6 +8093,12 @@ setWorkflowContext({
           return "";
         });
 
+        const fallbackToolBlock =
+          toolBlocks.length === 0 ? extractModelToolFallbackBlock(cleaned) : null;
+        if (fallbackToolBlock) {
+          toolBlocks.push(fallbackToolBlock.toolBlock);
+          cleaned = fallbackToolBlock.cleaned;
+        }
         cleaned = String(cleaned || "").trim();
 
         const cleanedLower = cleaned.toLowerCase();
