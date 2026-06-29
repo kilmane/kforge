@@ -17,6 +17,8 @@ import { search_in_file } from "./search_in_file.js";
 
 const ABSOLUTE_PATH_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
 
+const READ_FILE_FULL_TEXT_MAX_BYTES = 200_000;
+
 function summarizeText(text, maxChars = 700) {
   const s = String(text ?? "");
   if (s.length <= maxChars) return s;
@@ -270,6 +272,10 @@ export async function read_file(args = {}) {
   const content = await openFile(filePath);
   const text = String(content ?? "");
   const byteLen = new TextEncoder().encode(text).length;
+  if (isSourceLikeFile(filePath) && byteLen <= READ_FILE_FULL_TEXT_MAX_BYTES) {
+    return `Read ${byteLen} bytes (Path: ${filePath})\n\n--- File contents ---\n${text}`;
+  }
+
   const preview = summarizeText(text, 700);
 
   return `Read ${byteLen} bytes (Path: ${filePath})\n\n--- File preview ---\n${preview}`;
