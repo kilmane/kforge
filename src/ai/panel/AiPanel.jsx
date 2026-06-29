@@ -3458,10 +3458,12 @@ export default function AiPanel({
                   })),
                 ],
                 tools: continuationTools,
-                initialSeenToolCalls: batchCalls.map((call) => ({
-                  name: call.toolName,
-                  args: call.args,
-                })),
+                initialSeenToolCalls: executedBatchResults
+                  .filter((item) => item?.ok)
+                  .map((item) => ({
+                    name: item.toolName,
+                    args: item.args,
+                  })),
                 callModel: async ({ messages: workingMessages }) => {
                   const input = buildAgentConversationInput(
                     workingMessages,
