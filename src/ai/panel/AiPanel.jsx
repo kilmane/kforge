@@ -42,9 +42,10 @@ import {
   normalizeVisualCssReplacementItems,
 } from "../implementation/visualCssEditController.js";
 import {
-  SIMPLE_FORM_CONTROL_EDIT_LABEL,
-  buildSimpleFormControlEdit,
-} from "../implementation/simpleFormControlEditController.js";
+  SMALL_CONTROL_EDIT_LABEL,
+  buildSmallControlEdit,
+  isSmallControlEditGoal,
+} from "../implementation/smallControlEditController.js";
 import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
   buildBuiltInModernReactStarterImplementation,
@@ -3804,7 +3805,7 @@ export default function AiPanel({
                       )
                       .filter(Boolean);
 
-                  const hasInspectedLikelyAppFileForSimpleControlEdit =
+                  const hasInspectedLikelyAppFileForSmallControlEdit =
                     normalizedAgentSuccessfulReadPaths.some((item) =>
                       [
                         "src/app.jsx",
@@ -3814,33 +3815,24 @@ export default function AiPanel({
                       ].includes(item),
                     );
 
-                  const isSimpleFormControlInspectionOnlyEdit =
+                  const isSmallControlInspectionOnlyEdit =
                     !isFixToolExecution &&
                     !isBlockedWriteRecoveryContinuation &&
-                    hasInspectedLikelyAppFileForSimpleControlEdit &&
-                    (
-                      (
-                        /\b(reset|clear|clears|clearing)\b/.test(inspectionOnlyGoalText) &&
-                        /\b(form|input|field|button|control)\b/.test(inspectionOnlyGoalText)
-                      ) ||
-                      (
-                        /\b(add|create|show|include)\b.*\bbutton\b/.test(inspectionOnlyGoalText) &&
-                        /\b(form|input|field|control)\b/.test(inspectionOnlyGoalText)
-                      )
-                    );
+                    hasInspectedLikelyAppFileForSmallControlEdit &&
+                    isSmallControlEditGoal(inspectionOnlyGoalText);
 
                   const inspectionOnlyActions =
-                    isSimpleFormControlInspectionOnlyEdit
+                    isSmallControlInspectionOnlyEdit
                       ? [
                           {
-                            label: SIMPLE_FORM_CONTROL_EDIT_LABEL,
+                            label: SMALL_CONTROL_EDIT_LABEL,
                             onClick: async () => {
                               appendMessage(
                                 "user",
-                                `Choice: ${SIMPLE_FORM_CONTROL_EDIT_LABEL}`,
+                                `Choice: ${SMALL_CONTROL_EDIT_LABEL}`,
                               );
 
-                              const simpleControlTargetPath =
+                              const smallControlTargetPath =
                                 agentSuccessfulReadPaths.find((item) =>
                                   [
                                     "src/app.jsx",
@@ -3857,24 +3849,24 @@ export default function AiPanel({
 
                               appendMessage(
                                 "assistant",
-                                "Preparing the reset-button edit for your approval. KForge will create one small reviewed file-change request or stop safely.",
+                                "Preparing the small control edit for your approval. KForge will create one small reviewed file-change request or stop safely.",
                               );
 
                               try {
                                 const currentAppContent = String(
-                                  (await openFile(simpleControlTargetPath)) ?? "",
+                                  (await openFile(smallControlTargetPath)) ?? "",
                                 );
 
-                                const editResult = buildSimpleFormControlEdit({
+                                const editResult = buildSmallControlEdit({
                                   goal: inspectionOnlyOriginalGoal,
-                                  path: simpleControlTargetPath,
+                                  path: smallControlTargetPath,
                                   currentContent: currentAppContent,
                                 });
 
                                 if (!editResult.ok) {
                                   appendMessage(
                                     "assistant",
-                                    "KForge could not prepare the deterministic reset-button edit.\n\n" +
+                                    "KForge could not prepare the safe small control edit.\n\n" +
                                       `${editResult.reason || "The inspected file did not match the supported form pattern."}\n\n` +
                                       "No files were changed. This controller step will not loop.",
                                     {
@@ -3888,7 +3880,7 @@ export default function AiPanel({
                                             );
                                             appendMessage(
                                               "assistant",
-                                              "Stopped. No files were changed by the deterministic reset-button executor.",
+                                              "Stopped. No files were changed by the safe small control executor.",
                                             );
                                           },
                                         },
@@ -3905,7 +3897,7 @@ export default function AiPanel({
                                       {
                                         name: "write_file",
                                         args: {
-                                          path: simpleControlTargetPath,
+                                          path: smallControlTargetPath,
                                           content: editResult.nextContent,
                                         },
                                       },
@@ -3922,14 +3914,14 @@ export default function AiPanel({
                                       previewErrorEvidenceGate: false,
                                       controlledReadOnlyToolExecution: false,
                                       modelToolOriginalGoal: inspectionOnlyOriginalGoal,
-                                      modelToolInspectedPaths: [simpleControlTargetPath],
+                                      modelToolInspectedPaths: [smallControlTargetPath],
                                     },
                                   },
                                 );
                               } catch (err) {
                                 appendMessage(
                                   "assistant",
-                                  "KForge could not prepare the deterministic reset-button edit because of an internal error.\n\n" +
+                                  "KForge could not prepare the safe small control edit because of an internal error.\n\n" +
                                     `${String(err?.message || err || "Unknown error")}\n\n` +
                                     "No files were changed.",
                                 );
@@ -3959,7 +3951,7 @@ export default function AiPanel({
                               setWorkflowContext(null);
                               appendMessage(
                                 "assistant",
-                                "Manual path for this reset-button edit:\n\n" +
+                                "Manual path for this small control edit:\n\n" +
                                   "1. In the inspected app file, find the existing form state and submit handler.\n" +
                                   "2. Add one small reset handler that restores the form state to the existing empty/default form value.\n" +
                                   "3. Add one secondary button inside the existing form with type=\"button\" so it does not submit the form.\n" +
@@ -4039,7 +4031,7 @@ export default function AiPanel({
                       ? `I inspected ${blockedWriteRecoveryTargetPath || "the blocked file"} for blocked-write recovery, but I did not change any files yet.`
                       : isFixToolExecution
                         ? "I inspected the relevant files for the fix, but I did not change any files yet."
-                        : isSimpleFormControlInspectionOnlyEdit
+                        : isSmallControlInspectionOnlyEdit
                           ? "I inspected the likely app file for this simple form/control edit, but the model did not produce a concrete file-change request. No files were changed."
                           : "I inspected the project, but I did not change any files yet. The requested edit has not been completed yet.",
                     {
