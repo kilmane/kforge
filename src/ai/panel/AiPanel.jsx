@@ -52,6 +52,14 @@ import {
   canUseBuiltInModernReactStarterImplementation,
 } from "../planning/builtInModernReactStarter.js";
 import {
+  buildAppBuildImplementationPrompt,
+  createAppBuildJob,
+  getAppBuildInspectionQueue,
+  getAppBuildSuccessfulInspectedPaths,
+  rememberAppBuildInspectionResult,
+  summarizeAppBuildInspection,
+} from "../appBuild/appBuildJobController.js";
+import {
   ASSISTANT_ACTION_RESULT,
   ASSISTANT_ACTION_TYPE,
   buildAssistantResultProtocol,
@@ -2348,6 +2356,104 @@ export default function AiPanel({
       setWorkflowContext,
     ],
   );
+
+  const runAppBuildJobStartupInspection = useCallback(
+    async ({ originalGoal = "", detectedTemplateName = "", detectedKind = "" } = {}) => {
+      let job = createAppBuildJob({
+        originalGoal,
+        detectedTemplateName,
+        detectedKind,
+      });
+
+      const inspectionQueue = getAppBuildInspectionQueue(job);
+
+      if (inspectionQueue.length === 0) {
+        appendMessage(
+          "assistant",
+          "App-build startup inspection had no files to inspect. No files were changed.",
+        );
+        return;
+      }
+
+      appendMessage(
+        "assistant",
+        "Working… starting controlled app-build inspection.\n\n" +
+          "KForge will inspect the project structure first. No files will be changed during this startup pass.",
+      );
+
+      for (const path of inspectionQueue) {
+        appendMessage("assistant", `Working… reading ${path}.`);
+
+        const result = await runTool({
+          toolName: "read_file",
+          args: { path },
+        });
+
+        const resultText =
+          result?.result === undefined
+            ? ""
+            : typeof result.result === "string"
+              ? result.result
+              : JSON.stringify(result.result, null, 2);
+
+        job = rememberAppBuildInspectionResult(job, {
+          path,
+          ok: !!result?.ok,
+          result: resultText,
+          error: result?.error ? String(result.error) : "",
+        });
+      }
+
+      const inspectedPaths = getAppBuildSuccessfulInspectedPaths(job);
+      const implementationPrompt = buildAppBuildImplementationPrompt(job);
+
+      appendMessage(
+        "assistant",
+        summarizeAppBuildInspection(job) +
+          "\n\nReady to continue with a controlled app-build implementation from inspected evidence. No files have been changed yet.",
+        {
+          actions: [
+            {
+              label: "Continue controlled implementation",
+              onClick: () => {
+                appendMessage("user", "Choice: Continue controlled implementation");
+
+                if (typeof sendWithPrompt !== "function") {
+                  appendMessage(
+                    "assistant",
+                    "I could not continue automatically from the app-build inspection. No files were changed.",
+                  );
+                  return;
+                }
+
+                sendWithPrompt(implementationPrompt, {
+                  silentUserAppend: true,
+                  skipCompletedWorkflowRoute: true,
+                  skipDirectWorkflowHandoffRoute: true,
+                  forceProjectEdit: true,
+                  inspectedPaths,
+                  lastUserGoal: originalGoal,
+                  modelToolOriginalGoal: originalGoal,
+                  modelToolInspectedPaths: inspectedPaths,
+                });
+              },
+            },
+            {
+              label: SUGGESTED_ACTION_LABEL.STOP,
+              onClick: () => {
+                appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                appendMessage(
+                  "assistant",
+                  "Stopped after app-build startup inspection. No files were changed.",
+                );
+              },
+            },
+          ],
+        },
+      );
+    },
+    [appendMessage, runTool, sendWithPrompt],
+  );
   // Model-initiated tool detection: scan assistant messages.
   useEffect(() => {
     if (!Array.isArray(messages) || messages.length === 0) return;
@@ -2387,6 +2493,26 @@ export default function AiPanel({
           if (!content) continue;
 
           const msgKey = String(msg?.id ?? msg?.ts ?? i);
+
+          if (msg?.meta?.appBuildJobRequest === true) {
+            const key = `app_build_job:${msgKey}`;
+            if (
+              GLOBAL_SEEN_TOOL_KEYS.has(key) ||
+              processedKeysRef.current.has(key)
+            ) {
+              continue;
+            }
+
+            GLOBAL_SEEN_TOOL_KEYS.add(key);
+            processedKeysRef.current.add(key);
+
+            await runAppBuildJobStartupInspection({
+              originalGoal: msg.meta.appBuildJobGoal || "",
+              detectedTemplateName: msg.meta.appBuildDetectedTemplateName || "",
+              detectedKind: msg.meta.appBuildDetectedKind || "",
+            });
+            return;
+          }
 
           if (msg?.meta?.builtInModernReactStarterRequest === true) {
             const key = `built_in_modern_react_starter:${msgKey}`;
@@ -4377,6 +4503,7 @@ export default function AiPanel({
     setWorkflowContext,
     workflowContext?.lastUserGoal,
     runBuiltInModernReactStarter,
+    runAppBuildJobStartupInspection,
   ]);
 
   const handleRequestToolOk = useCallback(() => {

@@ -2985,16 +2985,30 @@ export default function App() {
 
     if (!hasBroadBuildAppAsk) return false;
 
-    const hasExplicitFileOrUiTarget =
-      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|component|page|screen|layout|heading|title|button|footer|navbar|text|copy|label|style|ui|ux|file)\b/.test(
+    const hasWholeAppTarget =
+      /\b(app|website|site|dashboard|platform|portal|system|tool|planner|tracker|calculator|estimator|manager|workspace)\b/.test(
         s,
       );
+
+    const hasExplicitFileTarget =
+      /\b(src[\\/]|app\.(jsx?|tsx?)|index\.(html|jsx?|tsx?|css)|package\.json|\.jsx?\b|\.tsx?\b|\.css\b|file)\b/.test(
+        s,
+      );
+
+    const hasConcreteSmallUiTarget =
+      /\b(component|heading|title|button|footer|navbar|text|copy|label)\b/.test(
+        s,
+      ) && !hasWholeAppTarget;
 
     const hasQuotedConcreteEdit =
       /["'“”‘’`][^"'“”‘’`]+["'“”‘’`]/.test(raw) &&
       /\b(to|with|say|says|called|named)\b/.test(s);
 
-    return !hasExplicitFileOrUiTarget && !hasQuotedConcreteEdit;
+    return (
+      !hasExplicitFileTarget &&
+      !hasConcreteSmallUiTarget &&
+      !hasQuotedConcreteEdit
+    );
   }
 
   function buildOpenProjectBuildAppClarifierMessage(text = "") {
@@ -7286,8 +7300,8 @@ setWorkflowContext({
                       "Model Reminder\n\n" +
                         "!! Check/use a capable model now !!\n\n" +
                         "You are about to start serious app implementation in the current project.\n\n" +
-                        "For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.\n\n" +
-                        "If you are already using one, you can continue. Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits.",
+                        "For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list. If you are already using one, you can continue.\n\n" +
+                        "Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits.",
                       {
                         actions: [
                           {
@@ -7304,24 +7318,15 @@ setWorkflowContext({
                             label: "Continue implementation",
                             onClick: () => {
                               appendMessage("user", "Choice: Continue implementation");
-                              const runPrompt = sendWithPromptRef.current || sendWithPrompt;
-
-                              if (typeof runPrompt !== "function") {
-                                appendMessage(
-                                  "assistant",
-                                  "I could not continue automatically. Please resend the app request after choosing the model.",
-                                );
-                                return;
-                              }
-
-                              runPrompt(
-                                `Start implementation in the current project.\n\nOriginal request:\n${draft}\n\nInspect the relevant files first. Then request the smallest safe file change. Do not replace the whole app unless inspection shows it is only a starter placeholder.`,
+                              appendMessage(
+                                "assistant",
+                                "Working… handing this app build to KForge's controlled App Build Job Controller.\n\n" +
+                                  "KForge will inspect the project first. No files will be changed during the startup inspection.",
                                 {
-                                  silentUserAppend: true,
-                                  skipCompletedWorkflowRoute: true,
-                                  skipDirectWorkflowHandoffRoute: true,
-                                  forceProjectEdit: true,
-                                  lastUserGoal: draft,
+                                  meta: {
+                                    appBuildJobRequest: true,
+                                    appBuildJobGoal: draft,
+                                  },
                                 },
                               );
                             },
@@ -8217,11 +8222,21 @@ setWorkflowContext({
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             isVisualCssIterationGoal(originalNoToolRequest || builtInStarterGoal);
           const deterministicVisualCssInspectPath = "src/App.css";
-          const noToolAlreadyInspectedPaths = Array.isArray(opts.inspectedPaths)
-            ? opts.inspectedPaths
-                .map((item) => String(item || "").trim().replace(/\\/g, "/").toLowerCase())
-                .filter(Boolean)
-            : [];
+          const noToolCarryoverInspectedPaths = (
+            Array.isArray(opts.modelToolInspectedPaths)
+              ? opts.modelToolInspectedPaths
+              : Array.isArray(opts.inspectedPaths)
+                ? opts.inspectedPaths
+                : Array.isArray(workflowContext?.inspectedPaths)
+                  ? workflowContext.inspectedPaths
+                  : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+
+          const noToolAlreadyInspectedPaths = noToolCarryoverInspectedPaths
+            .map((item) => item.replace(/\\/g, "/").toLowerCase())
+            .filter(Boolean);
           const hasAlreadyInspectedDeterministicVisualCssPath =
             noToolAlreadyInspectedPaths.includes(
               deterministicVisualCssInspectPath.toLowerCase(),
@@ -8450,6 +8465,10 @@ setWorkflowContext({
                     !isPartialImplementationNoToolRecovery,
                   forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
                   forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
+                  inspectedPaths: noToolCarryoverInspectedPaths,
+                  modelToolInspectedPaths: noToolCarryoverInspectedPaths,
+                  modelToolOriginalGoal: originalNoToolRequest,
+                  lastUserGoal: originalNoToolRequest,
                 });
               },
             });
