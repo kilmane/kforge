@@ -2271,7 +2271,7 @@ export default function AiPanel({
       if (!suitability.ok) {
         appendMessage(
           "assistant",
-          "Built-in Modern React Starter is not safe for this step.\n\n" +
+          "KForge built-in polished starter is not safe for this step.\n\n" +
             suitability.reason +
             "\n\nNo files were changed.",
         );
@@ -2284,14 +2284,14 @@ export default function AiPanel({
       if (files.length === 0) {
         appendMessage(
           "assistant",
-          "Built-in Modern React Starter did not produce any files.\n\nNo files were changed.",
+          "KForge built-in polished starter did not produce any files.\n\nNo files were changed.",
         );
         return;
       }
 
       appendMessage(
         "assistant",
-        `Working… applying built-in Modern React Starter (${starter.title || "Modern app"}).`,
+        `Working… applying KForge built-in polished starter (${starter.title || "Modern app"}).`,
       );
 
       const successfulWritePaths = [];
@@ -2331,7 +2331,7 @@ export default function AiPanel({
       if (successfulWritePaths.length === 0) {
         appendMessage(
           "assistant",
-          "Built-in Modern React Starter did not complete any file writes.\n\n" +
+          "KForge built-in polished starter did not complete any file writes.\n\n" +
             (cancelledWritePaths.length > 0
               ? "The write request was cancelled.\n\n"
               : "") +
@@ -2355,7 +2355,7 @@ export default function AiPanel({
             successfulWritePaths,
           ),
           completedSummary:
-            "Built-in Modern React Starter implementation was applied.",
+            "KForge built-in polished starter was applied.",
           source: "built_in_modern_react_starter",
         });
 
@@ -2371,7 +2371,7 @@ export default function AiPanel({
       appendMessage(
         "assistant",
         `Done — updated ${fileCountLabel}.\n\n` +
-          `Implementation: built-in Modern React Starter (${starter.title || "Modern app"}).\n\n` +
+          `Implementation: KForge built-in polished starter (${starter.title || "Modern app"}).\n\n` +
           `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
           `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
           buildPostEditNextStepMessage(completedWorkflowContext),

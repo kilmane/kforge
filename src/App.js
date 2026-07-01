@@ -8382,7 +8382,7 @@ setWorkflowContext({
 
                 appendMessage(
                   "assistant",
-                  "Working… handing the built-in Modern React Starter to KForge's safe tool runner.\n\n" +
+                  "Working… handing KForge's built-in polished starter to the safe tool runner.\n\n" +
                     "KForge will request approval before writing each starter file.",
                   {
                     meta: {

@@ -1,5 +1,5 @@
 export const BUILT_IN_MODERN_REACT_STARTER_LABEL =
-  "Use built-in Modern React Starter implementation";
+  "Use KForge built-in polished starter";
 
 export const BUILT_IN_MODERN_REACT_STARTER_TARGET_PATHS = Object.freeze([
   "src/App.jsx",
