@@ -5164,7 +5164,9 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         promptTask = {
           kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
           confidence: "high",
-          source: "forced_project_edit_continuation",
+          source: opts.forceAppBuildImplementation
+            ? "app_build_implementation"
+            : "forced_project_edit_continuation",
         };
       }
       const isAdvisoryTestOverride =
@@ -8009,6 +8011,9 @@ setWorkflowContext({
         : "";
 
       const isPerformanceProjectTask = promptTask.source === "performance_intent";
+      const isAppBuildImplementationTask =
+        promptTask.source === "app_build_implementation" ||
+        opts.forceAppBuildImplementation === true;
 
       const performanceToolInstruction = isPerformanceProjectTask
         ? "\n\nPerformance task guidance:\n" +
@@ -8019,6 +8024,19 @@ setWorkflowContext({
           "- If enough evidence is already available, either request one smallest safe write_file change or explain clearly that no safe code edit is justified.\n" +
           "- Do not blindly add React.memo, useMemo, or useCallback everywhere. Use them only when inspected code shows repeated unnecessary renders, expensive calculations, unstable props, or a specific measurable bottleneck.\n" +
           "- Prefer the smallest evidence-based performance fix, such as removing unused work/assets, simplifying render paths, reducing oversized media, or tightening an obviously inefficient loop.\n"
+        : "";
+
+      const appBuildImplementationToolInstruction = isAppBuildImplementationTask
+        ? "\n\nControlled App Build implementation guidance:\n" +
+          "- Startup inspection is complete. Use the inspected evidence already provided; do not repeat broad discovery.\n" +
+          "- Emit exactly one valid fenced ```tool``` block in this answer.\n" +
+          "- Request one write_file tool call for one inspected source/style file that advances the next safe app-build step.\n" +
+          "- Do not present the app as complete after a markup/source write if the coherent polished UI still needs a style/CSS pass.\n" +
+          "- If JSX/HTML introduces className/layout hooks that are not already styled by inspected CSS, the next app-build step must target the relevant inspected CSS/style file.\n" +
+          "- The write_file content must be the complete full file text with the safe app-build change applied.\n" +
+          "- Do not return fragments, placeholders, abbreviated content, scripts, or prose-only implementation.\n" +
+          "- Keep the existing project stack and dependency simplicity unless package.json evidence proves otherwise.\n" +
+          "- Do not claim Preview, build, tests, deployment, or service setup unless KForge provides evidence.\n"
         : "";
 
       const featureBlueprintInstruction = isFeatureBlueprintTask
@@ -8035,7 +8053,7 @@ setWorkflowContext({
 
       const toolInstruction =
         !effectiveAskForPatch && !shouldSuppressToolsForPrompt
-          ? advisoryOverrideInstruction + performanceToolInstruction + "\n\nIMPORTANT:\n" +
+          ? advisoryOverrideInstruction + performanceToolInstruction + appBuildImplementationToolInstruction + "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
             "For multi-file implementation requests, inspect each likely existing target file before writing it unless that exact file was already read in this conversation.\n" +
@@ -8159,6 +8177,9 @@ setWorkflowContext({
           promptTask.kind === "broken_preview_debug";
         const isPartialImplementationNoToolRecovery =
           promptTask.source === "partial_implementation_continuation";
+        const isAppBuildImplementationNoToolRecovery =
+          promptTask.source === "app_build_implementation" ||
+          opts.forceAppBuildImplementation === true;
 
         // Append cleaned assistant output (keeps transcript readable)
         if (shouldShowAdvisoryNoActionRecovery || shouldShowProjectEditNoToolRecovery) {
@@ -8170,16 +8191,23 @@ setWorkflowContext({
 
           const noToolTaskLabel = isFixNoToolRecovery
             ? "fix/debug request"
-            : isPartialImplementationNoToolRecovery
-              ? "partial implementation continuation"
-              : "project edit request";
+            : isAppBuildImplementationNoToolRecovery
+              ? "controlled app-build implementation"
+              : isPartialImplementationNoToolRecovery
+                ? "partial implementation continuation"
+                : "project edit request";
 
           const malformedToolNote = hasXmlLikeToolCall
             ? "\n\nIt may have returned malformed tool-like text instead of a valid KForge tool request."
             : "";
 
-          const noToolRecoveryMessage = isRiskyNoToolModel
-            ? "The selected model did not produce a usable KForge tool request.\n\n" +
+          const noToolRecoveryMessage = isAppBuildImplementationNoToolRecovery
+            ? "The app-build worker did not produce a valid KForge write-tool request.\n\n" +
+              "No files were changed." +
+              malformedToolNote +
+              "\n\nStartup inspection evidence is already available. Choose a safe next action."
+            : isRiskyNoToolModel
+              ? "The selected model did not produce a usable KForge tool request.\n\n" +
               "No files were changed." +
               malformedToolNote +
               "\n\nThis often happens with weak, custom, unverified, or tool-unreliable models.\n\n" +
@@ -8196,9 +8224,11 @@ setWorkflowContext({
           const focusedNoToolPrompt =
             (isFixNoToolRecovery
               ? "Continue the previous fix/debug task.\n\n"
-              : isPartialImplementationNoToolRecovery
-                ? "Continue the previous implementation.\n\n"
-                : "Continue the previous project edit.\n\n") +
+              : isAppBuildImplementationNoToolRecovery
+                ? "Continue the controlled app-build implementation.\n\n"
+                : isPartialImplementationNoToolRecovery
+                  ? "Continue the previous implementation.\n\n"
+                  : "Continue the previous project edit.\n\n") +
             `Original request: ${originalNoToolRequest}\n\n` +
             "Your previous reply did not produce a usable KForge tool request.\n" +
             "Request exactly one valid fenced ```tool``` block next.\n" +
@@ -8219,6 +8249,7 @@ setWorkflowContext({
           const isDeterministicVisualCssNoToolInspection =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
+            !isAppBuildImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             isVisualCssIterationGoal(originalNoToolRequest || builtInStarterGoal);
           const deterministicVisualCssInspectPath = "src/App.css";
@@ -8245,12 +8276,14 @@ setWorkflowContext({
           const isPlainProjectEditNoToolRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
+            !isAppBuildImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             !isDeterministicVisualCssNoToolInspection;
 
           const shouldOfferBuiltInStarterRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
+            !isAppBuildImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             !isSmallFileTargetedNoToolEdit &&
             !isDeterministicVisualCssNoToolInspection;
@@ -8368,6 +8401,28 @@ setWorkflowContext({
             });
           }
 
+          if (isAppBuildImplementationNoToolRecovery) {
+            noToolRecoveryActions.push({
+              label: "Retry controlled app-build implementation",
+              onClick: () => {
+                appendMessage("user", "Choice: Retry controlled app-build implementation");
+                sendWithPrompt(focusedNoToolPrompt, {
+                  silentUserAppend: true,
+                  skipCompletedWorkflowRoute: true,
+                  skipDirectWorkflowHandoffRoute: true,
+                  forceProjectEdit: true,
+                  forceAppBuildImplementation: true,
+                  forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
+                  forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
+                  inspectedPaths: noToolCarryoverInspectedPaths,
+                  modelToolInspectedPaths: noToolCarryoverInspectedPaths,
+                  modelToolOriginalGoal: originalNoToolRequest,
+                  lastUserGoal: originalNoToolRequest,
+                });
+              },
+            });
+          }
+
           if (
             isDeterministicVisualCssNoToolInspection &&
             hasAlreadyInspectedDeterministicVisualCssPath &&
@@ -8440,6 +8495,7 @@ setWorkflowContext({
             );
 
           const shouldOfferFocusedNoToolRetry =
+            !isAppBuildImplementationNoToolRecovery &&
             !(
               (
                 isPlainProjectEditNoToolRecovery &&
@@ -8641,6 +8697,7 @@ setWorkflowContext({
               meta: {
                 allowModelToolExecution: true,
                 modelToolExecutionKind: String(promptTask.kind || "unknown"),
+                modelToolExecutionSource: String(promptTask.source || ""),
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
                 controlledReadOnlyToolExecution:
                   opts.controlledReadOnlyToolExecution === true,

@@ -221,7 +221,11 @@ export function buildAppBuildImplementationPrompt(job = {}) {
     "- Treat this as a broad frontend app-build job, not a tiny wording edit.\n" +
     "- Use the inspected evidence below; do not repeat broad discovery.\n" +
     "- Preserve the existing project stack and local build simplicity.\n" +
-    "- Request safe file writes through KForge tools only.\n" +
+    "- Emit exactly one valid fenced ```tool``` block next.\n" +
+    "- Request one write_file tool call for one inspected source/style file that advances the next safe app-build step.\n" +
+    "- Do not present the app as complete after a markup/source write if the coherent polished UI still needs a style/CSS pass.\n" +
+    "- If JSX/HTML introduces className/layout hooks that are not already styled by inspected CSS, the next app-build step must target the relevant inspected CSS/style file.\n" +
+    "- write_file content must be the complete full file text, not a fragment, placeholder, or abbreviated patch.\n" +
     "- Do not claim Preview, build, tests, deployment, or service setup unless evidence exists.\n\n" +
     "Inspected project evidence:\n\n" +
     (evidence || "(No inspected evidence was captured.)")

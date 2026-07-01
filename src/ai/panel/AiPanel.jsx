@@ -735,6 +735,41 @@ function buildToolBatchDoneMessage(results) {
 
   return "";
 }
+
+function isLikelyAppBuildMarkupPath(path = "") {
+  const normalized = String(path || "").trim().replace(/\\/g, "/").toLowerCase();
+  return /\.(jsx?|tsx?|html)$/.test(normalized);
+}
+
+function isLikelyAppBuildStylePath(path = "") {
+  const normalized = String(path || "").trim().replace(/\\/g, "/").toLowerCase();
+  return /\.(css|scss|sass|less)$/.test(normalized);
+}
+
+function appBuildWriteIntroducesStyleHooks(results = []) {
+  return (Array.isArray(results) ? results : []).some((item) => {
+    const toolName = String(item?.toolName || "").trim();
+    const path = String(item?.args?.path || "").trim();
+    const content = String(item?.args?.content || "");
+
+    if (!item?.ok || toolName !== "write_file") return false;
+    if (!isLikelyAppBuildMarkupPath(path)) return false;
+
+    const classNameMatches = content.match(/\bclassName\s*=/g) || [];
+    return classNameMatches.length >= 2;
+  });
+}
+
+function shouldContinueAppBuildAfterSuccessfulWrite({
+  successfulWritePaths = [],
+  executedBatchResults = [],
+} = {}) {
+  const paths = Array.isArray(successfulWritePaths) ? successfulWritePaths : [];
+  const wroteMarkup = paths.some(isLikelyAppBuildMarkupPath);
+  const wroteStyle = paths.some(isLikelyAppBuildStylePath);
+
+  return wroteMarkup && !wroteStyle && appBuildWriteIntroducesStyleHooks(executedBatchResults);
+}
 function getLatestUserMessageText(messages) {
   const items = Array.isArray(messages) ? messages : [];
   for (let i = items.length - 1; i >= 0; i -= 1) {
@@ -2431,6 +2466,7 @@ export default function AiPanel({
                   skipCompletedWorkflowRoute: true,
                   skipDirectWorkflowHandoffRoute: true,
                   forceProjectEdit: true,
+                  forceAppBuildImplementation: true,
                   inspectedPaths,
                   lastUserGoal: originalGoal,
                   modelToolOriginalGoal: originalGoal,
@@ -2680,6 +2716,11 @@ export default function AiPanel({
             triggerToolMessage?.meta?.modelToolExecutionKind ||
               (triggerToolIsRecoveredProjectEditToolExecution ? "project_edit" : ""),
           ).trim();
+          const triggerToolExecutionSource = String(
+            triggerToolMessage?.meta?.modelToolExecutionSource || "",
+          ).trim();
+          const isAppBuildToolExecution =
+            triggerToolExecutionSource === "app_build_implementation";
           const isFixToolExecution =
             triggerToolTaskKind === "broken_preview_debug";
           const isControlledReadOnlyToolExecution =
@@ -3216,6 +3257,101 @@ export default function AiPanel({
                 "No files were changed.\n\n" +
                 "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
             );
+          } else if (
+            isAppBuildToolExecution &&
+            successfulWritePaths.length > 0 &&
+            shouldContinueAppBuildAfterSuccessfulWrite({
+              successfulWritePaths,
+              executedBatchResults,
+            })
+          ) {
+            const appBuildOriginalGoal = String(
+              triggerToolOriginalGoal || latestUserText || "",
+            ).trim();
+            const appBuildContinueInspectedPaths = Array.from(
+              new Set(
+                [
+                  ...successfulInspectionPaths,
+                  ...successfulWritePaths,
+                ].filter(Boolean),
+              ),
+            );
+            const appBuildFileCountLabel =
+              successfulWritePaths.length === 1
+                ? "1 file"
+                : String(successfulWritePaths.length) + " files";
+            const appBuildPathLines = successfulWritePaths
+              .map((path) => "- " + path)
+              .join("\n");
+            const appBuildPartialSummary =
+              "The app-build worker wrote markup/source with layout or class hooks, but no style file was written in this app-build phase.";
+
+            const partialWorkflowContext = createPartialImplementationWorkflowContext({
+              lastUserGoal: appBuildOriginalGoal,
+              lastEditedPath: latestWrittenPath || "",
+              editedPaths: successfulWritePaths,
+              inspectedPaths: appBuildContinueInspectedPaths,
+              partialSummary: appBuildPartialSummary,
+              nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+              source: "app_build_implementation",
+            });
+
+            if (typeof setWorkflowContext === "function") {
+              setWorkflowContext(partialWorkflowContext);
+            }
+
+            const continueAppBuildPrompt =
+              "Continue the controlled app-build implementation.\n\n" +
+              "Original app request: " + appBuildOriginalGoal + "\n\n" +
+              "Files already written in this app-build phase:\n" +
+              appBuildPathLines +
+              "\n\nInspected/written evidence paths available:\n" +
+              appBuildContinueInspectedPaths.map((path) => "- " + path).join("\n") +
+              "\n\nThe previous app-build write introduced markup/layout/class hooks but did not write a style file. Do not repeat broad discovery. Continue with exactly one valid fenced tool block. If an inspected CSS/style file is available, request one write_file tool call for the relevant CSS/style file to make the app visually polished, vibrant, modern, and responsive. If no style target is known from inspected evidence, request exactly one read_file or list_dir tool to locate the relevant style target. The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
+
+            appendMessage(
+              "assistant",
+              "App-build implementation is partially complete.\n\n" +
+                "KForge wrote " + appBuildFileCountLabel + ":\n" +
+                appBuildPathLines +
+                "\n\n" +
+                "This app-build pass introduced markup/layout hooks without a matching style-file write, so KForge will not mark the app as complete yet.\n\n" +
+                "Next safe step: continue with one inspected source/style write, normally the relevant CSS/style file, to complete a coherent polished frontend slice.\n\n" +
+                "No Preview, build, or tests have been run yet.",
+              {
+                actions: [
+                  {
+                    label: "Continue app-build implementation",
+                    onClick: () => {
+                      appendMessage("user", "Choice: Continue app-build implementation");
+                      if (typeof sendWithPrompt === "function") {
+                        sendWithPrompt(continueAppBuildPrompt, {
+                          silentUserAppend: true,
+                          skipCompletedWorkflowRoute: true,
+                          skipDirectWorkflowHandoffRoute: true,
+                          forceProjectEdit: true,
+                          forceAppBuildImplementation: true,
+                          inspectedPaths: appBuildContinueInspectedPaths,
+                          modelToolInspectedPaths: appBuildContinueInspectedPaths,
+                          modelToolOriginalGoal: appBuildOriginalGoal,
+                          lastUserGoal: appBuildOriginalGoal,
+                        });
+                      }
+                    },
+                  },
+                  {
+                    label: SUGGESTED_ACTION_LABEL.STOP,
+                    onClick: () => {
+                      appendMessage("user", "Choice: Stop");
+                      appendMessage(
+                        "assistant",
+                        "Stopped after partial app-build implementation. No further files were changed.",
+                      );
+                    },
+                  },
+                ],
+              },
+            );
           } else if (successfulWritePaths.length > 0) {
             const completedWorkflowContext =
               createCompletedImplementationWorkflowContext({
@@ -3254,6 +3390,7 @@ export default function AiPanel({
             });
           } else if (
             !isFixToolExecution &&
+            !isAppBuildToolExecution &&
             triggerToolTaskKind === "project_edit" &&
             isVisualCssIterationGoal(triggerToolOriginalGoal || latestUserText) &&
             !executedBatchResults.some((item) => {
@@ -3303,6 +3440,7 @@ export default function AiPanel({
             );
           } else if (
             !isFixToolExecution &&
+            !isAppBuildToolExecution &&
             triggerToolTaskKind === "project_edit" &&
             isVisualCssIterationGoal(triggerToolOriginalGoal || latestUserText) &&
             executedBatchResults.some((item) => {
