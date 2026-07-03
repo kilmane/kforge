@@ -1003,6 +1003,55 @@ function clearApiKeyFingerprint(providerId) {
   }
 }
 
+
+function shouldClearKforgeStorageKey(key) {
+  if (typeof key !== "string") return false;
+
+  // Preserve masked API-key display fingerprints. The real API keys live in the
+  // OS keychain, but these local labels help Settings show which key is set.
+  if (key.startsWith("kforge.apiKeyFingerprint.v1.")) return false;
+
+  return key.startsWith("kforge.") || key.startsWith("kforge:");
+}
+
+async function clearKforgeLocalUiCache() {
+  try {
+    const confirmed = window.confirm(
+      "Clear KForge local UI/cache state? This will not delete your project files or API keys stored in the OS keychain. KForge will reload after clearing.",
+    );
+    if (!confirmed) return;
+  } catch {
+    return;
+  }
+
+  try {
+    const storage = window.localStorage;
+    for (let i = storage.length - 1; i >= 0; i -= 1) {
+      const key = storage.key(i);
+      if (shouldClearKforgeStorageKey(key)) storage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    window.sessionStorage?.clear();
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (window.caches?.keys) {
+      const names = await window.caches.keys();
+      await Promise.all(names.map((name) => window.caches.delete(name)));
+    }
+  } catch {
+    // ignore
+  }
+
+  window.location.reload();
+}
+
 function isModelCapabilityGatePolicy(modelWorkflowPolicy = null) {
   const mode = modelWorkflowPolicy?.mode || "unknown";
   return mode === "advisory_only" || mode === "guarded_edit";
@@ -9256,6 +9305,7 @@ setWorkflowContext({
         onSetEndpoint={setEndpointForProvider}
         onSaveKey={handleSaveKey}
         onClearKey={handleClearKey}
+        onClearLocalCache={clearKforgeLocalUiCache}
         focusProviderId={settingsFocusProviderId}
         message={settingsMessage}
       />

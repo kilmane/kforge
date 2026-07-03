@@ -127,6 +127,7 @@ export default function SettingsModal({
   onSetEndpoint,
   onSaveKey,
   onClearKey,
+  onClearLocalCache = null,
   focusProviderId,
   message,
 }) {
@@ -454,6 +455,33 @@ export default function SettingsModal({
                     </div>
                   </div>
                 ) : null}
+
+                {/* Maintenance */}
+                <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Maintenance</div>
+                      <div className="text-xs opacity-60 mt-1 space-y-1">
+                        <div>
+                          Clears KForge local UI/cache state. Does not delete
+                          your project files.
+                        </div>
+                        <div>
+                          API keys stored in the OS keychain are not deleted.
+                        </div>
+                        <div>KForge will reload after clearing.</div>
+                      </div>
+                    </div>
+                    <button
+                      className={buttonClass("danger", !onClearLocalCache)}
+                      onClick={onClearLocalCache || undefined}
+                      disabled={!onClearLocalCache}
+                      type="button"
+                    >
+                      Clear KForge local cache
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -462,7 +490,7 @@ export default function SettingsModal({
         {/* Footer */}
         <div className="h-12 px-4 border-t border-zinc-800 flex items-center justify-between shrink-0">
           <div className="text-xs opacity-60">
-            Phase 3.4: provider ergonomics + Settings UX (UI-only).
+            Provider settings and maintenance.
           </div>
           <button
             className={buttonClass("primary")}
