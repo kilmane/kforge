@@ -8034,16 +8034,18 @@ setWorkflowContext({
           "- Do not present the app as complete after a markup/source write if the coherent polished UI still needs a style/CSS pass.\n" +
           "- If JSX/HTML introduces className/layout hooks that are not already styled by inspected CSS, the next app-build step must target the relevant inspected CSS/style file.\n" +
           "- For polished dark, vibrant, glass, gradient, or image-backed layouts, ensure hero titles, headings, labels, controls, and card text have explicit high-contrast colors against their immediate backgrounds; do not rely on starter/global heading defaults.\n" +
-          "- For app dashboards, use compact functional headers: make the app name/title the primary header identity; slogans or motivational lines should be smaller supporting text or omitted, not the largest visual element. Keep nearby key metrics/actions, then the main workflow; avoid long sentence-style hero headlines, giant marketing copy, viewport-scaled typography, negative tracking, or tall hero blocks unless the original request explicitly asks for a landing page.\n" +
+          "- For native select/dropdown controls, style select plus option/optgroup with explicit background, color, and WebkitTextFillColor where useful so opened dropdown options remain visible on dark, glass, gradient, and light themes; do not rely on inherited transparent backgrounds.\n" +
+          "- For app dashboards/tools, use compact functional headers. The primary h1/visual title must be the app/product name or literal tool category from the original request, not a slogan, motivational sentence, or value proposition. Put slogans/taglines in smaller supporting text, or omit them. Do not make an eyebrow/kicker the only place the app name appears while a slogan becomes the dominant H1. Do not duplicate the same or near-identical app/tool name in both an eyebrow/kicker and the H1, including punctuation, slash, spacing, or wording variants. The H1 should be the single dominant app/tool name; if the H1 already names the app/tool, omit the eyebrow/kicker unless it adds a genuinely different short category/context label. Supporting lede/tagline/slogan text must be visibly smaller than the H1, width-constrained, and must not overflow, clip, or become the dominant header text. Keep nearby key metrics/actions, then the main workflow; avoid long sentence-style hero headlines, giant marketing copy, viewport-scaled typography, negative tracking, or tall hero blocks unless the original request explicitly asks for a landing page.\n" +
           "- Compose the first screen as a usable app view: keep the core interactive workflow, key controls, and requested summary/progress/streak widgets visible or clearly reachable without making the hero the whole experience.\n" +
+          "- Make the structure domain-specific before styling: identify 2-4 entities, states, or workflows from the request and shape the layout/interactions around them. Avoid reusing the same generic hero + stat cards + form + list dashboard pattern unless it genuinely fits the domain. Use domain-specific labels, sections, controls, empty states, and item actions.\n" +
           "- Preserve requested visual summary widgets such as streaks, progress, totals, charts, or status cards when polishing layout or styles; make them visually rich but compact, and do not drop them to simplify the page.\n" +
           "- Summary, streak, progress, total, and status metrics must be truthfully derived from user-managed data, or clearly labeled as demo/sample data; do not use fake non-zero defaults such as minimum streaks or inflated progress for a clean user state.\n" +
           "- If user-managed data is empty, derived metrics should normally show zero, neutral, or empty-state values instead of fake activity.\n" +
           "- If list items have status, completion, stage, priority, progress, or workflow state, provide visible item-level controls to update those states, and make summaries/progress respond to those updates.\n" +
-          "- For data-entry apps, include a form-only clear/reset control near the submit action when useful, and keep it separate from app-data reset: form clear/reset should only clear current input fields, while app-data clear/reset should clear user-managed app data and reset visible derived metrics.\n" +
-          "- Important destructive app-data reset actions should be visible and understandable, preferably in a top-level toolbar/header or near app-level summaries, but styled as secondary/destructive rather than the primary positive action.\n" +
+          "- For data-entry apps, include a form-only clear/reset control near the submit action or in an app-level toolbar when useful, and keep it separate from app-data reset: form clear/reset should only clear current input fields, while app-data clear/reset should clear user-managed app data and reset visible derived metrics to honest empty/neutral values.\n" +
+          "- App-data reset actions should normally be named for the real app action, such as Reset app, Clear tracker, or Clear all data; do not label them Reset demo data unless the user explicitly requested a demo/sample app. App-data reset must not restore seeded records as if they were user data. When layout allows on desktop, place compact app-level actions such as form clear and app-data reset in a top-right header toolbar; keep destructive actions visually secondary/destructive.\n" +
           "- Basic add/create/edit flows must be usable: valid submits should update visible state, required fields should be obvious, date/number/select fields should have sensible defaults when useful, and blocked submits should show simple inline feedback instead of silently doing nothing.\n" +
-          "- If sample/demo data is used, keep it separate from user-managed state, clearly label it as demo data, or provide a prominent clear/reset demo-data action.\n" +
+          "- Avoid seeded demo/sample user records unless explicitly requested or clearly useful for explaining the UI. Prefer empty user-managed state with good empty states and sensible form defaults. If sample/demo data is used, keep it separate from user-managed state, clearly label it as demo/sample data, and do not let app-level reset restore demo records unless the app is explicitly a demo.\n" +
           "- The write_file content must be the complete full file text with the safe app-build change applied.\n" +
           "- Do not return fragments, placeholders, abbreviated content, scripts, or prose-only implementation.\n" +
           "- Keep the existing project stack and dependency simplicity unless package.json evidence proves otherwise.\n" +
@@ -8232,20 +8234,61 @@ setWorkflowContext({
             ? String(workflowContext?.lastUserGoal || opts.lastUserGoal || draft).trim()
             : String(opts.lastUserGoal || workflowContext?.lastUserGoal || draft).trim();
 
-          const focusedNoToolPrompt =
+          const noToolCarryoverInspectedPaths = (
+            Array.isArray(opts.modelToolInspectedPaths)
+              ? opts.modelToolInspectedPaths
+              : Array.isArray(opts.inspectedPaths)
+                ? opts.inspectedPaths
+                : Array.isArray(workflowContext?.inspectedPaths)
+                  ? workflowContext.inspectedPaths
+                  : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+
+          const appBuildRetryInspectedPathLines =
+            noToolCarryoverInspectedPaths.length > 0
+              ? noToolCarryoverInspectedPaths.map((path) => "- " + path).join("\n")
+              : "- (none recorded)";
+
+          const appBuildEditedPathLines =
+            Array.isArray(workflowContext?.editedPaths) &&
+            workflowContext.editedPaths.length > 0
+              ? workflowContext.editedPaths.map((path) => "- " + path).join("\n")
+              : "- (none recorded)";
+
+          const genericFocusedNoToolPrompt =
             (isFixNoToolRecovery
               ? "Continue the previous fix/debug task.\n\n"
-              : isAppBuildImplementationNoToolRecovery
-                ? "Continue the controlled app-build implementation.\n\n"
-                : isPartialImplementationNoToolRecovery
-                  ? "Continue the previous implementation.\n\n"
-                  : "Continue the previous project edit.\n\n") +
+              : isPartialImplementationNoToolRecovery
+                ? "Continue the previous implementation.\n\n"
+                : "Continue the previous project edit.\n\n") +
             `Original request: ${originalNoToolRequest}\n\n` +
             "Your previous reply did not produce a usable KForge tool request.\n" +
             "Request exactly one valid fenced ```tool``` block next.\n" +
             "If inspection is needed, request one read_file or list_dir tool first.\n" +
             "If editing is possible, request one write_file tool for the smallest safe change.\n" +
             "Do not give only prose. Do not request more than one tool.";
+
+          const appBuildNoToolRetryPrompt =
+            "Retry the controlled app-build implementation from the previous failed model response.\n\n" +
+            `Original app request: ${originalNoToolRequest}\n\n` +
+            "Files already written in this app-build phase:\n" +
+            appBuildEditedPathLines +
+            "\n\nInspected/written evidence paths available:\n" +
+            appBuildRetryInspectedPathLines +
+            "\n\nYour previous reply did not produce a usable KForge tool request. " +
+            "Do not repeat broad discovery. Request exactly one valid fenced ```tool``` block next. " +
+            "If no app source file has been written yet, request one write_file for the inspected app source file to implement the first coherent frontend slice. " +
+            "If source markup/layout/class hooks were written but no style file was written, prefer one write_file for an inspected CSS/style file to complete the polished frontend slice. " +
+            "Ensure native select/dropdown controls style select plus option/optgroup with explicit background, color, and WebkitTextFillColor where useful. " +
+            "If the inspected source still has a required source-level issue such as slogan as the H1 with the app name only in an eyebrow, duplicate or near-identical app/tool name in both eyebrow/kicker and H1 including punctuation, slash, spacing, or wording variants, real app-data reset labelled as demo-data reset, app-data reset restoring seeded/demo records, seeded demo/sample user records without an explicit demo/sample request, missing item-level controls, missing requested widgets, or broken add/create/edit behavior, request exactly one source-file write before CSS. If the issue is only lede/tagline/slogan visual sizing, width, overflow, clipping, or dominance while the source hierarchy is otherwise correct, request exactly one CSS/style-file write instead. " +
+            "If no style target is known from inspected evidence, request exactly one read_file or list_dir tool to locate it. " +
+            "The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
+
+          const focusedNoToolPrompt = isAppBuildImplementationNoToolRecovery
+            ? appBuildNoToolRetryPrompt
+            : genericFocusedNoToolPrompt;
 
           const builtInStarterGoal = String(
             opts.lastUserGoal ||
@@ -8264,18 +8307,6 @@ setWorkflowContext({
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             isVisualCssIterationGoal(originalNoToolRequest || builtInStarterGoal);
           const deterministicVisualCssInspectPath = "src/App.css";
-          const noToolCarryoverInspectedPaths = (
-            Array.isArray(opts.modelToolInspectedPaths)
-              ? opts.modelToolInspectedPaths
-              : Array.isArray(opts.inspectedPaths)
-                ? opts.inspectedPaths
-                : Array.isArray(workflowContext?.inspectedPaths)
-                  ? workflowContext.inspectedPaths
-                  : []
-          )
-            .map((item) => String(item || "").trim())
-            .filter(Boolean);
-
           const noToolAlreadyInspectedPaths = noToolCarryoverInspectedPaths
             .map((item) => item.replace(/\\/g, "/").toLowerCase())
             .filter(Boolean);

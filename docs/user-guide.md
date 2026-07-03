@@ -616,6 +616,20 @@ To choose or change the model first, use **Change Provider/Model** in the AI hea
 
 After choosing a starter, use **Preview → Generate**, then **Preview → Install**, then return to chat to continue the build.
 
+## Controlled app-build flow
+
+For larger app-building requests, KForge may use a guarded build loop instead of changing many files at once.
+
+You may see buttons such as:
+
+* **Start implementation in this project** — confirms you want KForge to build inside the open project.
+* **Continue implementation** — starts the guarded build path after the model reminder.
+* **Continue controlled implementation** — continues after KForge has inspected project files. No files were changed during inspection.
+* **Approve write_file** — lets you review and approve one file write.
+* **Continue app-build implementation** — appears when the first write created only part of the app, such as source markup without matching styles.
+
+This is normal. KForge is trying to inspect first, write one file at a time, and avoid claiming Preview, build, tests, deployment, or service setup unless those actions actually ran.
+
 ## After KForge edits files
 
 After KForge completes an implementation edit, it may show:
@@ -632,7 +646,7 @@ Common suggested actions include:
 * **Continue editing** — describe the next change you want
 * **No action needed** — leave the completed workflow alone
 
-If KForge only completed part of a larger implementation, it may suggest **Continue implementation** so the work can proceed in a controlled loop.
+If KForge only completed part of a larger implementation, it may suggest **Continue implementation**, **Continue controlled implementation**, or **Continue app-build implementation** so the work can proceed in a guarded loop, often one source or style file at a time.
 
 If dependencies are missing, use **Preview Panel → Install** first.
 When KForge hands you to Preview, it may ask you to reply with:
