@@ -117,6 +117,30 @@ function extractModelToolFallbackBlock(output = "") {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  const looseToolFenceRe = /```(?:tool|tool_call)\s*([\s\S]*?)(?:<\/tool_call>|```|$)/gi;
+  let looseMatch;
+  while ((looseMatch = looseToolFenceRe.exec(raw)) !== null) {
+    const payload = String(looseMatch[1] || "").trim();
+    if (safeParseModelToolFallbackJson(payload)) {
+      return {
+        toolBlock: String(looseMatch[0] || "").trim(),
+        cleaned: raw.replace(looseMatch[0], "").trim(),
+      };
+    }
+  }
+
+  const looseAnyFenceRe = /```[a-zA-Z0-9_-]*\s*([\s\S]*)$/i;
+  const looseAnyFenceMatch = raw.match(looseAnyFenceRe);
+  if (looseAnyFenceMatch) {
+    const payload = String(looseAnyFenceMatch[1] || "").trim();
+    if (safeParseModelToolFallbackJson(payload)) {
+      return {
+        toolBlock: String(looseAnyFenceMatch[0] || "").trim(),
+        cleaned: raw.replace(looseAnyFenceMatch[0], "").trim(),
+      };
+    }
+  }
+
   const jsonFenceRe = /```json\s*([\s\S]*?)```/g;
   let match;
   while ((match = jsonFenceRe.exec(raw)) !== null) {
@@ -828,6 +852,26 @@ function TranscriptBubble({
   const textTone = isSystem ? "text-amber-100" : "text-zinc-100";
   const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
 
+  const invokedActionKeysRef = useRef(new Set());
+  const [, setActionVersion] = useState(0);
+
+  useEffect(() => {
+    invokedActionKeysRef.current = new Set();
+    setActionVersion((version) => version + 1);
+  }, [actions, actionLabel, onAction]);
+
+  const runBubbleAction = useCallback((event, key, handler) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    if (invokedActionKeysRef.current.has(key)) return;
+
+    invokedActionKeysRef.current.add(key);
+    setActionVersion((version) => version + 1);
+
+    handler(event);
+  }, []);
+
   const actionButtons = Array.isArray(actions)
     ? actions.filter((a) => a && a.label && typeof a.onClick === "function")
     : [];
@@ -852,19 +896,25 @@ function TranscriptBubble({
           <div className="mt-2 flex flex-wrap gap-2">
             {actionButtons.map((a, idx) => {
               const resolved = isResolvedActionLabel(a.label);
+              const actionKey = `${a.label}_${idx}`;
+              const actionUsed = invokedActionKeysRef.current.has(actionKey);
 
               return resolved ? (
                 <span
-                  key={`${a.label}_${idx}`}
+                  key={actionKey}
                   className="text-xs px-2 py-0.5 rounded border border-zinc-700 bg-zinc-900/40 text-zinc-400 cursor-default select-none"
                 >
                   {a.label}
                 </span>
               ) : (
                 <button
-                  key={`${a.label}_${idx}`}
-                  className="text-xs underline opacity-90 hover:opacity-100"
-                  onClick={a.onClick}
+                  key={actionKey}
+                  className={[
+                    "text-xs underline opacity-90 hover:opacity-100",
+                    actionUsed ? "opacity-60 cursor-not-allowed no-underline" : "",
+                  ].join(" ")}
+                  onClick={(event) => runBubbleAction(event, actionKey, a.onClick)}
+                  disabled={actionUsed}
                   type="button"
                 >
                   {a.label}
@@ -8154,10 +8204,15 @@ setWorkflowContext({
             cleanedLower.includes("kforge can help with this through")
           );
 
+        const hasToolLikeFence = /```(?:tool|tool_call)\b/i.test(out);
+
         const hasXmlLikeToolCall =
           /<tool_call\b|<\/tool_call>|<invoke\s+name=["'][^"']+["']\s*>|<minimax:tool_call\b/i.test(
             out,
           );
+
+        const hasMalformedToolLikeOutput =
+          hasXmlLikeToolCall || hasToolLikeFence;
 
         const shouldShowAdvisoryNoActionRecovery =
           isAdvisoryTestOverride &&
@@ -8210,7 +8265,7 @@ setWorkflowContext({
                 ? "partial implementation continuation"
                 : "project edit request";
 
-          const malformedToolNote = hasXmlLikeToolCall
+          const malformedToolNote = hasMalformedToolLikeOutput
             ? "\n\nIt may have returned malformed tool-like text instead of a valid KForge tool request."
             : "";
 

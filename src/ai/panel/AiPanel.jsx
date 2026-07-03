@@ -392,11 +392,13 @@ function tryParseNaturalLanguageToolCall(text) {
 function stripToolBlocksForChat(text) {
   let s = String(text || "");
 
-  // Remove complete tool fences
-  s = s.replace(/```(?:tool|tool_call)\s*[\s\S]*?```/gi, "");
+  // Remove complete/loose tool fences, including malformed model endings.
+  s = s.replace(/```(?:tool|tool_call)\s*[\s\S]*?(?:```|<\/tool_call>|$)/gi, "");
 
-  // Remove incomplete tool fences that never closed
-  s = s.replace(/```(?:tool|tool_call)\s*[\s\S]*$/gi, "");
+  // Remove json/other fenced blocks only when the payload is a valid KForge tool request.
+  s = s.replace(/```(?:json|[a-zA-Z0-9_-]*)\s*([\s\S]*?)(?:```|$)/gi, (full, payload) => {
+    return safeParseToolRequestJson(String(payload || "").trim()) ? "" : full;
+  });
 
   // Remove the helper line sometimes emitted before tool calls
   s = s.replace(/^\(Model requested one or more tools\.\)\s*$/gim, "");
@@ -5022,7 +5024,7 @@ export default function AiPanel({
                   providerReady={providerReady}
                 />
 
-                <OutputPanel aiOutput={aiOutput} />
+                <OutputPanel aiOutput={stripToolBlocksForChat(aiOutput)} />
 
                 {aiProvider === "ollama" && (
                   <OllamaHelperPanel
@@ -5278,7 +5280,7 @@ export default function AiPanel({
                 providerReady={providerReady}
               />
 
-              <OutputPanel aiOutput={aiOutput} />
+              <OutputPanel aiOutput={stripToolBlocksForChat(aiOutput)} />
 
               {aiProvider === "ollama" && (
                 <OllamaHelperPanel
