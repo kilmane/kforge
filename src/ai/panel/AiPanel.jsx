@@ -3507,72 +3507,95 @@ export default function AiPanel({
               "Request exactly one valid fenced write_file tool block for that source file. Do not request CSS/style yet. Remove the repeated eyebrow/kicker entirely, or replace it with a genuinely different short category/context label. Keep the H1 as the single dominant app title. Keep the supporting lede/tagline below the H1. Preserve all app state, handlers, controls, reset behavior, dropdowns, metrics, and layout hooks. The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
 
             const appBuildCssContinuationPrompt =
-              "Continue the controlled app-build implementation.\n\n" +
+              "Continue the controlled app-build implementation with the styling pass only.\n\n" +
               "Original app request: " + appBuildOriginalGoal + "\n\n" +
               "Files already written in this app-build phase:\n" +
               appBuildPathLines +
               "\n\nInspected/written evidence paths available:\n" +
               appBuildContinueInspectedPaths.map((path) => "- " + path).join("\n") +
-              "\n\nThe previous app-build write introduced markup/layout/class hooks but did not write a style file. Do not repeat broad discovery. Continue with exactly one valid fenced tool block. If an inspected CSS/style file is available, request one write_file tool call for the relevant CSS/style file to make the app visually polished, vibrant, modern, responsive, and balanced. Ensure hero titles, headings, labels, controls, and card text have explicit high-contrast colors against their immediate backgrounds. For native select/dropdown controls, style select plus option/optgroup with explicit background, color, and WebkitTextFillColor where useful so opened dropdown options remain visible on dark, glass, gradient, and light themes. Keep app dashboard/tool headers compact and functional so the first screen shows core interactive functionality, app-level actions, and requested summary/progress/streak widgets without giant marketing hero typography; the primary h1/visual title must be the app/product name or literal tool category from the original request, not a slogan, motivational sentence, or value proposition. Put slogans/taglines in smaller supporting text, or omit them. Do not make an eyebrow/kicker the only place the app name appears while a slogan becomes the dominant H1 unless the request asks for a landing page. Do not duplicate the same or near-identical app/tool name in both an eyebrow/kicker and the H1, including punctuation, slash, spacing, or wording variants; the H1 should be the single dominant app/tool name, while any eyebrow/kicker should be omitted unless it adds genuinely different short category/context. Supporting lede/tagline/slogan text must be visibly smaller than the H1, width-constrained, and must not overflow, clip, or become the dominant header text. Preserve and style visually rich compact summary widgets, but keep metrics data-true rather than fake or inflated. Preserve distinct form reset and app-data reset controls when both concepts exist: form reset clears inputs only, while app-data reset clears user-managed data and visible derived metrics to honest empty/neutral values. Real app-data reset actions should be named for the real app action, such as Reset app, Clear tracker, or Clear all data, not Reset demo data unless the request explicitly asks for a demo/sample app. When layout allows on desktop, compact app-level actions such as form clear and app-data reset should sit in a top-right header toolbar, with destructive actions styled as secondary/destructive. Ensure item-level controls exist for visible status, completion, stage, priority, progress, or workflow state, and ensure summaries/progress respond to those updates. Important destructive app-data reset actions should be visible in an app-level context, but not styled as the primary positive action. Ensure add/create/edit flows are usable: valid submits update visible state, required fields are clear, useful defaults are provided for date/number/select fields, and blocked submits show inline feedback. If the inspected source makes a slogan, motivational sentence, or value proposition the H1/dominant title while the app name is only an eyebrow/kicker, duplicates the same or near-identical app/tool name in both an eyebrow/kicker and H1, including punctuation, slash, spacing, or wording variants, labels a real app-data reset as demo-data reset, restores seeded/demo records from app-data reset, or uses seeded demo/sample user records without an explicit demo/sample request, request exactly one source-file write to fix the source-level issue before the CSS pass, even if a style file is also missing. If the issue is only lede/tagline/slogan visual sizing, width, overflow, clipping, or dominance while the source hierarchy is otherwise correct, request exactly one CSS/style-file write instead. If a required header hierarchy/slogan sizing fix, reset control, item-level status/progress control, data-true metric fix, interaction fix, or requested widget is missing from source, request exactly one source-file write instead of a CSS write. If no style target is known from inspected evidence, request exactly one read_file or list_dir tool to locate the relevant style target. The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
+              "\n\nThe source markup/layout write succeeded and introduced className/layout hooks. " +
+              "Do not rewrite the source file. Request exactly one valid fenced write_file tool block for the inspected CSS/style file that styles those hooks into a polished, responsive app. " +
+              "Preserve the source behavior, data model, reset behavior, and interactions. " +
+              "Style native select/dropdown controls with explicit background, color, and WebkitTextFillColor where useful. " +
+              "If no inspected CSS/style target is available, request exactly one read_file or list_dir tool to locate it. " +
+              "The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
 
             const continueAppBuildPrompt = appBuildRepeatedTitleIssue
               ? appBuildSourceHeaderFixPrompt
               : appBuildCssContinuationPrompt;
 
-            appendMessage(
-              "assistant",
-              "App-build implementation is partially complete.\n\n" +
-                "KForge wrote " + appBuildFileCountLabel + ":\n" +
-                appBuildPathLines +
-                "\n\n" +
-                (appBuildRepeatedTitleIssue
-                  ? "KForge detected a repeated/near-duplicate eyebrow/kicker and H1 title in the source, so it will not continue to CSS yet.\n\n"
-                  : "This app-build pass introduced markup/layout hooks without a matching style-file write, so KForge will not mark the app as complete yet.\n\n") +
-                (appBuildRepeatedTitleIssue
-                  ? "Next safe step: fix the repeated source header with one source-file write before CSS.\n\n"
-                  : "Next safe step: continue with one inspected source/style write, normally the relevant CSS/style file, to complete a coherent polished frontend slice.\n\n") +
-                "No Preview, build, or tests have been run yet.",
-              {
-                actions: [
-                  {
-                    label: appBuildRepeatedTitleIssue
-                      ? "Fix app-build source header"
-                      : "Continue app-build implementation",
-                    onClick: () => {
-                      appendMessage(
-                        "user",
-                        appBuildRepeatedTitleIssue
-                          ? "Choice: Fix app-build source header"
-                          : "Choice: Continue app-build implementation",
-                      );
-                      if (typeof sendWithPrompt === "function") {
-                        sendWithPrompt(continueAppBuildPrompt, {
-                          silentUserAppend: true,
-                          skipCompletedWorkflowRoute: true,
-                          skipDirectWorkflowHandoffRoute: true,
-                          forceProjectEdit: true,
-                          forceAppBuildImplementation: true,
-                          inspectedPaths: appBuildContinueInspectedPaths,
-                          modelToolInspectedPaths: appBuildContinueInspectedPaths,
-                          modelToolOriginalGoal: appBuildOriginalGoal,
-                          lastUserGoal: appBuildOriginalGoal,
-                        });
-                      }
+            const continueAppBuildOptions = {
+              silentUserAppend: true,
+              skipCompletedWorkflowRoute: true,
+              skipDirectWorkflowHandoffRoute: true,
+              forceProjectEdit: true,
+              forceAppBuildImplementation: true,
+              inspectedPaths: appBuildContinueInspectedPaths,
+              modelToolInspectedPaths: appBuildContinueInspectedPaths,
+              modelToolOriginalGoal: appBuildOriginalGoal,
+              lastUserGoal: appBuildOriginalGoal,
+            };
+
+            if (!appBuildRepeatedTitleIssue && typeof sendWithPrompt === "function") {
+              appendMessage(
+                "assistant",
+                "App-build source pass complete.\n\n" +
+                  "KForge wrote " + appBuildFileCountLabel + ":\n" +
+                  appBuildPathLines +
+                  "\n\nWorking… continuing automatically to the CSS/style pass.\n\n" +
+                  "KForge will still request approval before any style-file write.\n\n" +
+                  "No Preview, build, or tests have been run yet.",
+              );
+
+              setTimeout(() => {
+                sendWithPrompt(appBuildCssContinuationPrompt, continueAppBuildOptions);
+              }, 0);
+            } else {
+              appendMessage(
+                "assistant",
+                "App-build implementation is partially complete.\n\n" +
+                  "KForge wrote " + appBuildFileCountLabel + ":\n" +
+                  appBuildPathLines +
+                  "\n\n" +
+                  (appBuildRepeatedTitleIssue
+                    ? "KForge detected a repeated/near-duplicate eyebrow/kicker and H1 title in the source, so it will not continue to CSS yet.\n\n"
+                    : "This app-build pass introduced markup/layout hooks without a matching style-file write, so KForge will not mark the app as complete yet.\n\n") +
+                  (appBuildRepeatedTitleIssue
+                    ? "Next safe step: fix the repeated source header with one source-file write before CSS.\n\n"
+                    : "Next safe step: continue with one inspected source/style write, normally the relevant CSS/style file, to complete a coherent polished frontend slice.\n\n") +
+                  "No Preview, build, or tests have been run yet.",
+                {
+                  actions: [
+                    {
+                      label: appBuildRepeatedTitleIssue
+                        ? "Fix app-build source header"
+                        : "Continue app-build implementation",
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          appBuildRepeatedTitleIssue
+                            ? "Choice: Fix app-build source header"
+                            : "Choice: Continue app-build implementation",
+                        );
+                        if (typeof sendWithPrompt === "function") {
+                          sendWithPrompt(continueAppBuildPrompt, continueAppBuildOptions);
+                        }
+                      },
                     },
-                  },
-                  {
-                    label: SUGGESTED_ACTION_LABEL.STOP,
-                    onClick: () => {
-                      appendMessage("user", "Choice: Stop");
-                      appendMessage(
-                        "assistant",
-                        "Stopped after partial app-build implementation. No further files were changed.",
-                      );
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", "Choice: Stop");
+                        appendMessage(
+                          "assistant",
+                          "Stopped after partial app-build implementation. No further files were changed.",
+                        );
+                      },
                     },
-                  },
-                ],
-              },
-            );
+                  ],
+                },
+              );
+            }
           } else if (successfulWritePaths.length > 0) {
             const completedWorkflowContext =
               createCompletedImplementationWorkflowContext({
