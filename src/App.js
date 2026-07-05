@@ -21,6 +21,7 @@ import {
 import {
   BUILT_IN_MODERN_REACT_STARTER_LABEL,
 } from "./ai/planning/builtInModernReactStarter";
+import { buildAppBuildLayoutContract } from "./ai/appBuild/appBuildLayoutContract";
 
 
 import { isVisualCssIterationGoal } from "./ai/iteration/iterationController";
@@ -853,17 +854,53 @@ function TranscriptBubble({
   const roleLabel = isSystem ? "system" : isUser ? "you" : "assistant";
 
   const invokedActionKeysRef = useRef(new Set());
+  const pressedActionKeysRef = useRef(new Set());
+  const actionsArmedRef = useRef(false);
   const [, setActionVersion] = useState(0);
 
   useEffect(() => {
     invokedActionKeysRef.current = new Set();
+    pressedActionKeysRef.current = new Set();
+    actionsArmedRef.current = false;
     setActionVersion((version) => version + 1);
+
+    try {
+      const active = document.activeElement;
+      if (active && typeof active.blur === "function") {
+        active.blur();
+      }
+    } catch {
+      // Ignore focus cleanup failures; action safety still depends on pointer gating.
+    }
+
+    const timer = window.setTimeout(() => {
+      actionsArmedRef.current = true;
+      setActionVersion((version) => version + 1);
+    }, 750);
+
+    return () => window.clearTimeout(timer);
   }, [actions, actionLabel, onAction]);
+
+  const armPointerAction = useCallback((event, key) => {
+    event?.stopPropagation?.();
+
+    const nativeEvent = event?.nativeEvent || event;
+    if (!event || nativeEvent?.isTrusted === false) return;
+    if (!actionsArmedRef.current) return;
+
+    pressedActionKeysRef.current.add(key);
+  }, []);
 
   const runBubbleAction = useCallback((event, key, handler) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
 
+    const nativeEvent = event?.nativeEvent || event;
+    if (!event || nativeEvent?.isTrusted === false) return;
+    if (!actionsArmedRef.current) return;
+    if (!pressedActionKeysRef.current.has(key)) return;
+    pressedActionKeysRef.current.delete(key);
+    if (typeof handler !== "function") return;
     if (invokedActionKeysRef.current.has(key)) return;
 
     invokedActionKeysRef.current.add(key);
@@ -898,6 +935,7 @@ function TranscriptBubble({
               const resolved = isResolvedActionLabel(a.label);
               const actionKey = `${a.label}_${idx}`;
               const actionUsed = invokedActionKeysRef.current.has(actionKey);
+              const actionDisabled = actionUsed || !actionsArmedRef.current;
 
               return resolved ? (
                 <span
@@ -911,10 +949,16 @@ function TranscriptBubble({
                   key={actionKey}
                   className={[
                     "text-xs underline opacity-90 hover:opacity-100",
-                    actionUsed ? "opacity-60 cursor-not-allowed no-underline" : "",
+                    actionDisabled ? "opacity-60 cursor-not-allowed no-underline" : "",
                   ].join(" ")}
+                  onPointerDown={(event) => armPointerAction(event, actionKey)}
+                  onKeyDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
                   onClick={(event) => runBubbleAction(event, actionKey, a.onClick)}
-                  disabled={actionUsed}
+                  disabled={actionDisabled}
+                  tabIndex={-1}
                   type="button"
                 >
                   {a.label}
@@ -925,7 +969,16 @@ function TranscriptBubble({
         ) : actionLabel && onAction ? (
           <button
             className="mt-2 text-xs underline opacity-90 hover:opacity-100"
-            onClick={onAction}
+            onPointerDown={(event) => armPointerAction(event, "single-action")}
+            onKeyDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) =>
+              runBubbleAction(event, "single-action", onAction)
+            }
+            disabled={!actionsArmedRef.current}
+            tabIndex={-1}
             type="button"
           >
             {actionLabel}
@@ -8113,6 +8166,14 @@ setWorkflowContext({
       const isAppBuildImplementationTask =
         promptTask.source === "app_build_implementation" ||
         opts.forceAppBuildImplementation === true;
+      const appBuildLayoutContract = isAppBuildImplementationTask
+        ? buildAppBuildLayoutContract(
+            opts.modelToolOriginalGoal ||
+              opts.lastUserGoal ||
+              workflowContext?.lastUserGoal ||
+              draft,
+          )
+        : "";
 
       const performanceToolInstruction = isPerformanceProjectTask
         ? "\n\nPerformance task guidance:\n" +
@@ -8127,6 +8188,8 @@ setWorkflowContext({
 
       const appBuildImplementationToolInstruction = isAppBuildImplementationTask
         ? "\n\nControlled App Build implementation guidance:\n" +
+          appBuildLayoutContract +
+          "\n" +
           "- Startup inspection is complete. Use the inspected evidence already provided; do not repeat broad discovery.\n" +
           "- Emit exactly one valid fenced ```tool``` block in this answer.\n" +
           "- Request one write_file tool call for one inspected source/style file that advances the next safe app-build step.\n" +
@@ -8137,6 +8200,7 @@ setWorkflowContext({
           "- For app dashboards/tools, use compact functional headers. The primary h1/visual title must be the app/product name or literal tool category from the original request, not a slogan, motivational sentence, or value proposition. Put slogans/taglines in smaller supporting text, or omit them. Do not make an eyebrow/kicker the only place the app name appears while a slogan becomes the dominant H1. Do not duplicate the same or near-identical app/tool name in both an eyebrow/kicker and the H1, including punctuation, slash, spacing, or wording variants. The H1 should be the single dominant app/tool name; if the H1 already names the app/tool, omit the eyebrow/kicker unless it adds a genuinely different short category/context label. Supporting lede/tagline/slogan text must be visibly smaller than the H1, width-constrained, and must not overflow, clip, or become the dominant header text. Keep nearby key metrics/actions, then the main workflow; avoid long sentence-style hero headlines, giant marketing copy, viewport-scaled typography, negative tracking, or tall hero blocks unless the original request explicitly asks for a landing page.\n" +
           "- Compose the first screen as a usable app view: keep the core interactive workflow, key controls, and requested summary/progress/streak widgets visible or clearly reachable without making the hero the whole experience.\n" +
           "- Make the structure domain-specific before styling: identify 2-4 entities, states, or workflows from the request and shape the layout/interactions around them. Avoid reusing the same generic hero + stat cards + form + list dashboard pattern unless it genuinely fits the domain. Use domain-specific labels, sections, controls, empty states, and item actions.\n" +
+          "- Choose one request-fitting layout archetype before writing source/CSS, such as calendar-first scheduling, day timeline, sidebar operations, weekly grid/streak lane, subject columns/revision queue, compact tool cockpit, split quote-builder, or category checklist. Use that archetype to decide section order, density, navigation, and item actions; do not add theme switching unless requested.\n" +
           "- Preserve requested visual summary widgets such as streaks, progress, totals, charts, or status cards when polishing layout or styles; make them visually rich but compact, and do not drop them to simplify the page.\n" +
           "- Summary, streak, progress, total, and status metrics must be truthfully derived from user-managed data, or clearly labeled as demo/sample data; do not use fake non-zero defaults such as minimum streaks or inflated progress for a clean user state.\n" +
           "- If user-managed data is empty, derived metrics should normally show zero, neutral, or empty-state values instead of fake activity.\n" +
@@ -8315,14 +8379,14 @@ setWorkflowContext({
                 : "project edit request";
 
           const malformedToolNote = hasMalformedToolLikeOutput
-            ? "\n\nIt may have returned malformed tool-like text instead of a valid KForge tool request."
+            ? "\n\nThe model response looked like it was trying to change files, but KForge could not read it safely."
             : "";
 
           const noToolRecoveryMessage = isAppBuildImplementationNoToolRecovery
-            ? "The app-build worker did not produce a valid KForge write-tool request.\n\n" +
+            ? "KForge could not understand the model's file-change request.\n\n" +
               "No files were changed." +
               malformedToolNote +
-              "\n\nStartup inspection evidence is already available. Choose a safe next action."
+              "\n\nThe project has already been inspected, so you can safely try again or choose another option below."
             : isRiskyNoToolModel
               ? "The selected model did not produce a usable KForge tool request.\n\n" +
               "No files were changed." +

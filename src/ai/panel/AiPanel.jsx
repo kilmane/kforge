@@ -59,6 +59,8 @@ import {
   rememberAppBuildInspectionResult,
   summarizeAppBuildInspection,
 } from "../appBuild/appBuildJobController.js";
+import { buildAppBuildLayoutContract } from "../appBuild/appBuildLayoutContract.js";
+import { evaluateAppBuildQualityGate } from "../appBuild/appBuildQualityGate.js";
 import {
   ASSISTANT_ACTION_RESULT,
   ASSISTANT_ACTION_TYPE,
@@ -2114,6 +2116,7 @@ export default function AiPanel({
   const processedKeysRef = useRef(new Set());
   const toolBatchRunningRef = useRef(false);
   const toolBatchRescanNeededRef = useRef(false);
+  const appBuildBlockedWriteCountsRef = useRef(new Map());
   const [toolScanTick, setToolScanTick] = useState(0);
 
   // ✅ Reset caches when conversation clears
@@ -2121,6 +2124,7 @@ export default function AiPanel({
     if (!Array.isArray(messages) || messages.length === 0) {
       processedKeysRef.current = new Set();
       toolBatchRescanNeededRef.current = false;
+      appBuildBlockedWriteCountsRef.current = new Map();
       GLOBAL_SEEN_TOOL_KEYS.clear();
     }
   }, [messages]);
@@ -2652,6 +2656,7 @@ export default function AiPanel({
 
             GLOBAL_SEEN_TOOL_KEYS.add(key);
             processedKeysRef.current.add(key);
+            appBuildBlockedWriteCountsRef.current = new Map();
 
             await runAppBuildJobStartupInspection({
               originalGoal: msg.meta.appBuildJobGoal || "",
@@ -2990,6 +2995,47 @@ export default function AiPanel({
           const executedBatchResults = [];
 
           for (const call of batchCalls) {
+            const callToolName = String(call?.toolName || "").trim();
+            const callPath = String(call?.args?.path || "").trim();
+
+            if (
+              isAppBuildToolExecution &&
+              isBlockedWriteRecoveryToolExecution &&
+              callToolName === "write_file" &&
+              normalizeBlindWriteGuardPath(callPath) !==
+                normalizeBlindWriteGuardPath(triggerToolBlockedWriteTargetPath)
+            ) {
+              executedBatchResults.push({
+                toolName: callToolName,
+                args: call.args || {},
+                ok: false,
+                cancelled: false,
+                error:
+                  "KForge blocked this app-build recovery write because blocked-write recovery must retry the blocked source file before any CSS/style or other file write.",
+                result: "",
+              });
+              continue;
+            }
+
+            if (isAppBuildToolExecution) {
+              const qualityDecision = evaluateAppBuildQualityGate({
+                originalGoal: triggerToolOriginalGoal || latestUserText,
+                toolCall: { name: call.toolName, args: call.args },
+              });
+
+              if (!qualityDecision.ok) {
+                executedBatchResults.push({
+                  toolName: String(call.toolName || ""),
+                  args: call.args || {},
+                  ok: false,
+                  cancelled: false,
+                  error: qualityDecision.reason,
+                  result: "",
+                });
+                continue;
+              }
+            }
+
             const result = await runTool({
               toolName: call.toolName,
               args: call.args,
@@ -3214,6 +3260,33 @@ export default function AiPanel({
             const blockedWriteReason =
               doneMessage ||
               "No files were written. KForge did not receive a detailed blocked-write reason.";
+            const isAppBuildQualityGateBlockedWrite =
+              isAppBuildToolExecution &&
+              !!failedWriteTargetPath &&
+              /KForge blocked this app-build write/i.test(blockedWriteReason);
+            const normalizedBlockedWriteReason = blockedWriteReason
+              .toLowerCase()
+              .replace(/\s+/g, " ")
+              .trim();
+            const appBuildBlockedWriteKey = [
+              normalizeBlindWriteGuardPath(triggerToolOriginalGoal || latestUserText),
+              normalizeBlindWriteGuardPath(failedWriteTargetPath),
+              normalizedBlockedWriteReason,
+            ].join("|");
+            const appBuildBlockedWriteCount = isAppBuildQualityGateBlockedWrite
+              ? (appBuildBlockedWriteCountsRef.current.get(appBuildBlockedWriteKey) ||
+                  0) + 1
+              : 0;
+
+            if (isAppBuildQualityGateBlockedWrite) {
+              appBuildBlockedWriteCountsRef.current.set(
+                appBuildBlockedWriteKey,
+                appBuildBlockedWriteCount,
+              );
+            }
+
+            const isRepeatedAppBuildQualityGateBlock =
+              isAppBuildQualityGateBlockedWrite && appBuildBlockedWriteCount >= 2;
             const failedWriteActions = [];
             failedWriteActions.push({
               label: "Switch model and continue",
@@ -3232,7 +3305,9 @@ export default function AiPanel({
                 blockedWriteReason,
               );
             const shouldOfferBlockedWriteRetry =
-              !!failedWriteTargetPath && !isDestructiveShrinkBlockedWrite;
+              !!failedWriteTargetPath &&
+              !isDestructiveShrinkBlockedWrite &&
+              !isRepeatedAppBuildQualityGateBlock;
 
             if (shouldOfferBlockedWriteRetry) {
               failedWriteActions.push({
@@ -3255,7 +3330,9 @@ export default function AiPanel({
 
                   appendMessage(
                     "assistant",
-                    `Retrying ${failedWriteTargetPath} with blocked-write recovery guidance. KForge will not accept a fragment or destructive rewrite; any write must preserve the full inspected file and apply only the smallest requested change.`,
+                    isAppBuildToolExecution
+                      ? `Retrying the controlled app-build source write for ${failedWriteTargetPath}. Replace the starter source with a complete full app source file that satisfies the layout contract. Do not switch to CSS yet.`
+                      : `Retrying ${failedWriteTargetPath} with blocked-write recovery guidance. KForge will not accept a fragment or destructive rewrite; any write must preserve the full inspected file and apply only the smallest requested change.`,
                   );
 
                   appendMessage(
@@ -3276,6 +3353,9 @@ export default function AiPanel({
                         modelToolExecutionKind: String(
                           triggerToolTaskKind || "project_edit",
                         ),
+                        modelToolExecutionSource: isAppBuildToolExecution
+                          ? "app_build_implementation"
+                          : String(triggerToolExecutionSource || ""),
                         previewErrorEvidenceGate: false,
                         controlledReadOnlyToolExecution: false,
                         modelToolOriginalGoal: retryGoal,
@@ -3331,6 +3411,9 @@ export default function AiPanel({
               "assistant",
               "The requested file changes did not complete.\n\n" +
                 "No files were written. KForge blocked the write or the requested write failed.\n\n" +
+                (isRepeatedAppBuildQualityGateBlock
+                  ? "KForge blocked the same app-build source issue twice. To avoid a retry loop, switch to a stronger model or stop. No files were written.\n\n"
+                  : "") +
                 "Choose a safe next action:",
               { actions: failedWriteActions },
             );
@@ -3936,6 +4019,34 @@ export default function AiPanel({
                   const requestedPath = String(args?.path || "").trim();
 
                   if (
+                    isAppBuildToolExecution &&
+                    isBlockedWriteRecoveryToolExecution &&
+                    toolName === "write_file" &&
+                    normalizeBlindWriteGuardPath(requestedPath) !==
+                      normalizeBlindWriteGuardPath(triggerToolBlockedWriteTargetPath)
+                  ) {
+                    return {
+                      ok: false,
+                      error:
+                        "KForge blocked this app-build recovery write because blocked-write recovery must retry the blocked source file before any CSS/style or other file write.",
+                    };
+                  }
+
+                  if (isAppBuildToolExecution) {
+                    const qualityDecision = evaluateAppBuildQualityGate({
+                      originalGoal: triggerToolOriginalGoal || latestUserText,
+                      toolCall: { name: toolName, args },
+                    });
+
+                    if (!qualityDecision.ok) {
+                      return {
+                        ok: false,
+                        error: qualityDecision.reason,
+                      };
+                    }
+                  }
+
+                  if (
                     isPerformanceContinuation &&
                     toolName === "read_file" &&
                     isBinaryAssetPath(requestedPath)
@@ -4180,6 +4291,8 @@ export default function AiPanel({
                 } else {
                   const isBlockedWriteRecoveryContinuation =
                     isBlockedWriteRecoveryToolExecution && !isFixToolExecution;
+                  const isAppBuildBlockedWriteRecoveryContinuation =
+                    isBlockedWriteRecoveryContinuation && isAppBuildToolExecution;
                   const blockedWriteRecoveryTargetPath =
                     triggerToolBlockedWriteTargetPath ||
                     agentSuccessfulReadPaths[agentSuccessfulReadPaths.length - 1] ||
@@ -4383,8 +4496,19 @@ export default function AiPanel({
                             onClick: () => {
                               const originalGoal = inspectionOnlyOriginalGoal;
 
-                              const continuePrompt = isBlockedWriteRecoveryContinuation
-                                ? "Recover from the blocked file write.\n\n" +
+                              const continuePrompt = isAppBuildBlockedWriteRecoveryContinuation
+                                ? "Retry the controlled app-build source implementation after a blocked write.\n\n" +
+                                  `Original app request: ${originalGoal}\n\n` +
+                                  buildAppBuildLayoutContract(originalGoal) +
+                                  "\n\n" +
+                                  `Blocked source target: ${blockedWriteRecoveryTargetPath}\n\n` +
+                                  blockedWriteRecoveryReasonLine +
+                                  "The blocked source file has now been inspected. Stay in controlled app-build implementation; do not switch to a CSS/style pass yet.\n" +
+                                  "No app source file has been successfully written in this retry path. Request exactly one write_file tool call next for the blocked source target.\n" +
+                                  "Replace the starter source with a complete full app source file that satisfies the layout contract and fixes the blocked app-build issue while preserving the existing project stack, imports, mount behavior, and local build simplicity.\n" +
+                                  "Do not request CSS/style-file writes until a source markup/layout write has succeeded."
+                                : isBlockedWriteRecoveryContinuation
+                                  ? "Recover from the blocked file write.\n\n" +
                                   `Original request: ${originalGoal}\n\n` +
                                   `Blocked write target: ${blockedWriteRecoveryTargetPath}\n\n` +
                                   blockedWriteRecoveryReasonLine +
@@ -4405,7 +4529,9 @@ export default function AiPanel({
 
                               appendMessage(
                                 "assistant",
-                                isFixToolExecution
+                                isAppBuildBlockedWriteRecoveryContinuation
+                                  ? "Retrying the controlled app-build source write. I will ask the model for one corrected source-file change, not a CSS pass."
+                                  : isFixToolExecution
                                   ? "Continuing the fix attempt. I will ask the model to request one concrete fix action next."
                                   : "Continuing the edit attempt. I will ask the model to request one concrete file change next.",
                               );
@@ -4418,7 +4544,12 @@ export default function AiPanel({
                                     skipCompletedWorkflowRoute: true,
                                     skipDirectWorkflowHandoffRoute: true,
                                     forceProjectEdit: true,
+                                    forceAppBuildImplementation:
+                                      isAppBuildBlockedWriteRecoveryContinuation,
                                     inspectedPaths: agentSuccessfulReadPaths,
+                                    modelToolInspectedPaths: agentSuccessfulReadPaths,
+                                    modelToolOriginalGoal: originalGoal,
+                                    lastUserGoal: originalGoal,
                                     forceModelCapabilityTestOverride: true,
                                   },
                                 );
