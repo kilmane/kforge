@@ -7473,15 +7473,104 @@ setWorkflowContext({
                             label: "Continue implementation",
                             onClick: () => {
                               appendMessage("user", "Choice: Continue implementation");
+
+                              const startControlledAppBuildWithVisualDirection = (
+                                visualDirectionLabel,
+                                visualDirectionInstruction,
+                              ) => {
+                                const selectedVisualDirection = String(
+                                  visualDirectionInstruction || "Use inferred default.",
+                                ).trim();
+                                const visualDirectionGoal =
+                                  `${draft}\n\nKForge visual direction: ${selectedVisualDirection}`;
+
+                                appendMessage(
+                                  "user",
+                                  `Choice: ${visualDirectionLabel}`,
+                                );
+                                appendMessage(
+                                  "assistant",
+                                  "Working… handing this app build to KForge's controlled App Build Job Controller.\n\n" +
+                                    `Visual direction: ${visualDirectionLabel}\n\n` +
+                                    "KForge will inspect the project first. No files will be changed during the startup inspection.",
+                                  {
+                                    meta: {
+                                      appBuildJobRequest: true,
+                                      appBuildJobGoal: visualDirectionGoal,
+                                    },
+                                  },
+                                );
+                              };
+
+                              const visualDirectionOptions = [
+                                {
+                                  label: "Use inferred default",
+                                  instruction: "Use inferred default.",
+                                },
+                                {
+                                  label: "Light / airy",
+                                  instruction: "Light / airy.",
+                                },
+                                {
+                                  label: "Dark / premium",
+                                  instruction: "Dark / premium.",
+                                },
+                                {
+                                  label: "Colourful / playful",
+                                  instruction: "Colourful / playful.",
+                                },
+                                {
+                                  label: "Minimal / professional",
+                                  instruction: "Minimal / professional.",
+                                },
+                                {
+                                  label: "Warm / editorial",
+                                  instruction: "Warm / editorial.",
+                                },
+                                {
+                                  label: "High-contrast dashboard",
+                                  instruction: "High-contrast dashboard.",
+                                },
+                              ];
+
                               appendMessage(
                                 "assistant",
-                                "Working… handing this app build to KForge's controlled App Build Job Controller.\n\n" +
-                                  "KForge will inspect the project first. No files will be changed during the startup inspection.",
+                                "Choose a visual direction for this app build.\n\n" +
+                                  "KForge will still infer the app structure from your request. This only steers the look: palette, background treatment, cards, density, and typography feel.",
                                 {
-                                  meta: {
-                                    appBuildJobRequest: true,
-                                    appBuildJobGoal: draft,
-                                  },
+                                  actions: [
+                                    ...visualDirectionOptions.map((option) => ({
+                                      label: option.label,
+                                      onClick: () =>
+                                        startControlledAppBuildWithVisualDirection(
+                                          option.label,
+                                          option.instruction,
+                                        ),
+                                    })),
+                                    {
+                                      label: "Back to chat",
+                                      onClick: () => {
+                                        appendMessage("user", "Choice: Back to chat");
+                                        appendMessage(
+                                          "assistant",
+                                          "Back to chat — no implementation started and no files were changed.",
+                                        );
+                                      },
+                                    },
+                                    {
+                                      label: SUGGESTED_ACTION_LABEL.STOP,
+                                      onClick: () => {
+                                        appendMessage(
+                                          "user",
+                                          `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                        );
+                                        appendMessage(
+                                          "assistant",
+                                          "Stopped — no implementation started and no files were changed.",
+                                        );
+                                      },
+                                    },
+                                  ],
                                 },
                               );
                             },
