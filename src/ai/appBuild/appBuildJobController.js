@@ -102,6 +102,23 @@ function sanitizeEvidenceText(value = "", maxChars = 8000) {
   );
 }
 
+function extractReadFileFullContent(value = "") {
+  const text = String(value || "");
+  const fullContentMarker = "\n\n--- File contents ---\n";
+  const fullContentIndex = text.indexOf(fullContentMarker);
+
+  if (fullContentIndex >= 0) {
+    return text.slice(fullContentIndex + fullContentMarker.length);
+  }
+
+  const previewMarker = "\n\n--- File preview ---\n";
+  if (text.includes(previewMarker)) {
+    return "";
+  }
+
+  return text;
+}
+
 function getInspectionItems(job = {}) {
   return Array.isArray(job.inspections) ? job.inspections : [];
 }
@@ -189,7 +206,7 @@ export function rememberAppBuildInspectionResult(
     const baselineAlreadyCaptured = currentBaselineSnapshots.some(
       (item) => normalizePathKey(item?.path) === key,
     );
-    const previousContent = String(result || "");
+    const previousContent = extractReadFileFullContent(result);
     const byteLength = getTextByteLength(previousContent);
 
     if (

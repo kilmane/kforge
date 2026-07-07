@@ -136,6 +136,31 @@ function shouldBlockIndexHtmlMountIdChange({
     "For React/Vite apps, preserve the existing mount id unless you also inspect and update the matching main entry file."
   );
 }
+function looksLikeReadFileWrapperContent(content = "") {
+  return /^Read \d+ bytes \(Path: [\s\S]*?\)\n\n--- File (?:contents|preview) ---\n/.test(
+    String(content || ""),
+  );
+}
+
+function shouldAllowKForgeBaselineRestoreWrite({
+  args = {},
+  rawPath = "",
+  resolvedPath = "",
+  content = "",
+} = {}) {
+  const requestedPath = String(rawPath || "").trim();
+  const restorePath = String(args?.kforgeBaselineRestorePath || "").trim();
+
+  return (
+    args?.kforgeAppBuildBaselineRestore === true &&
+    requestedPath &&
+    restorePath === requestedPath &&
+    isSourceLikeFile(resolvedPath) &&
+    !looksLikePlaceholderWrite(content) &&
+    !looksLikeReadFileWrapperContent(content)
+  );
+}
+
 function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
   const next = String(nextContent ?? "");
   const existing =
@@ -325,11 +350,20 @@ export async function write_file(args = {}) {
     existingContent = null;
   }
 
-  const blockedReason = shouldBlockSuspiciousWrite({
-    path: filePath,
-    existingContent,
-    nextContent: content,
+  const allowKForgeBaselineRestoreWrite = shouldAllowKForgeBaselineRestoreWrite({
+    args,
+    rawPath,
+    resolvedPath: filePath,
+    content,
   });
+
+  const blockedReason = allowKForgeBaselineRestoreWrite
+    ? ""
+    : shouldBlockSuspiciousWrite({
+        path: filePath,
+        existingContent,
+        nextContent: content,
+      });
 
   if (blockedReason) {
     throw new Error(blockedReason);

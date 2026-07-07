@@ -1212,6 +1212,8 @@ function buildAppBuildBaselineRestoreToolMessage(snapshots = []) {
                 typeof snapshot?.previousContent === "string"
                   ? snapshot.previousContent
                   : "",
+              kforgeAppBuildBaselineRestore: true,
+              kforgeBaselineRestorePath: String(snapshot?.path || "").trim(),
             },
           },
           null,
@@ -1536,18 +1538,6 @@ function buildPostEditCompletionActions({
           {
             label: "Start over with different look",
             onClick: () => {
-              const confirmed = window.confirm(
-                "This will restore files changed by the last app-build, then reopen the visual-direction chooser. Your generated app will be replaced, but your project folder and dependencies will stay.",
-              );
-
-              if (!confirmed) {
-                appendMessage(
-                  "assistant",
-                  "Cancelled. No files were restored and no new app-build was started.",
-                );
-                return;
-              }
-
               const restorePaths = appBuildRestoreSnapshots
                 .map((snapshot) => String(snapshot?.path || "").trim())
                 .filter(Boolean);
@@ -1558,28 +1548,65 @@ function buildPostEditCompletionActions({
               appendMessage("user", "Choice: Start over with different look");
               appendMessage(
                 "assistant",
-                "Preparing to restore the files changed by the last controlled app-build to their pre-app-build baseline.\n\n" +
+                "Confirm start-over restore.\n\n" +
+                  "This will restore files changed by the last app-build, then reopen the visual-direction chooser. Your generated app will be replaced, but your project folder and dependencies will stay.\n\n" +
                   "Files to restore:\n" +
-                  restorePathLines +
-                  "\n\nKForge will request normal write approval for each restore write. After the restore completes, KForge will reopen the visual-direction chooser.\n\n" +
-                  "Preview, build, and tests have not been run after this restore.",
-              );
-              appendMessage(
-                "assistant",
-                buildAppBuildBaselineRestoreToolMessage(appBuildRestoreSnapshots),
+                  restorePathLines,
                 {
-                  meta: {
-                    allowModelToolExecution: true,
-                    modelToolExecutionKind: "project_edit",
-                    modelToolExecutionSource: "app_build_restore_different_look",
-                    previewErrorEvidenceGate: false,
-                    controlledReadOnlyToolExecution: false,
-                    modelToolOriginalGoal: appBuildOriginalGoal,
-                    modelToolInspectedPaths: restorePaths,
-                    modelToolAppBuildRestoreDifferentLook: true,
-                    modelToolAppBuildRestoreOriginalGoal: appBuildOriginalGoal,
-                    modelToolAppBuildRestorePaths: restorePaths,
-                  },
+                  actions: [
+                    {
+                      label: "Restore and choose new look",
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          "Choice: Restore and choose new look",
+                        );
+                        appendMessage(
+                          "assistant",
+                          "Preparing to restore the files changed by the last controlled app-build to their pre-app-build baseline.\n\n" +
+                            "Files to restore:\n" +
+                            restorePathLines +
+                            "\n\nKForge will request normal write approval for each restore write. After the restore completes, KForge will reopen the visual-direction chooser.\n\n" +
+                            "Preview, build, and tests have not been run after this restore.",
+                        );
+                        appendMessage(
+                          "assistant",
+                          buildAppBuildBaselineRestoreToolMessage(
+                            appBuildRestoreSnapshots,
+                          ),
+                          {
+                            meta: {
+                              allowModelToolExecution: true,
+                              modelToolExecutionKind: "project_edit",
+                              modelToolExecutionSource:
+                                "app_build_restore_different_look",
+                              previewErrorEvidenceGate: false,
+                              controlledReadOnlyToolExecution: false,
+                              modelToolOriginalGoal: appBuildOriginalGoal,
+                              modelToolInspectedPaths: restorePaths,
+                              modelToolAppBuildRestoreDifferentLook: true,
+                              modelToolAppBuildRestoreOriginalGoal:
+                                appBuildOriginalGoal,
+                              modelToolAppBuildRestorePaths: restorePaths,
+                            },
+                          },
+                        );
+                      },
+                    },
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage(
+                          "user",
+                          "Choice: " + SUGGESTED_ACTION_LABEL.STOP,
+                        );
+                        appendMessage(
+                          "assistant",
+                          "Cancelled. No files were restored and no new app-build was started.",
+                        );
+                      },
+                    },
+                  ],
                 },
               );
             },
