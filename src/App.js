@@ -9314,7 +9314,7 @@ setWorkflowContext({
   const topBarEl = (
     <div className="h-12 flex items-center gap-3 px-3 border-b border-zinc-800 relative z-50 bg-zinc-950">
       <button
-        className={buttonClass}
+        className={buttonClass()}
         onClick={toggleFocusMode}
         title="Focus Mode: hide explorer/editor and expand chat"
       >
