@@ -43,6 +43,59 @@ Updated: YYYY-MM-DD
 
 ---
 
+# Phase 14.6-c — App-build Layout Archetype Variety
+
+Status: Planned
+Added: 2026-07-07
+Updated: 2026-07-07
+
+**Why**
+
+Phase 14.6-b added a pre-build visual direction chooser. Phase 14.6-b2 added **Start over with different look**, which can restore the files changed by the last controlled app-build to their pre-app-build baseline and then reopen the visual direction chooser.
+
+The next layout-variety work should now treat "look" as more than colors or theme tokens. Users can safely reject one generated direction and rebuild from the same original request, so KForge can become more ambitious about varying the overall app shape while still preserving a recovery path.
+
+Stable restore point before this phase:
+
+- Commit: `42eb06c`
+- Tags:
+  - `checkpoint-phase-14.6-b2-complete`
+  - `checkpoint-phase-14.6-b2-start-over-restore-hotfix`
+
+**Where**
+
+- `src/ai/appBuild/appBuildLayoutContract.js`
+- `src/ai/appBuild/appBuildDesignDna.js`
+- `src/ai/appBuild/appBuildJobController.js`
+- `src/ai/panel/AiPanel.jsx`
+- post-edit completion actions and visual-direction restore flow
+
+**Plan**
+
+1. Define a small set of app-build layout archetypes, such as dashboard workspace, split planner, marketing/tool hybrid, editorial checklist, form-first tool, kanban/board, compact utility, and high-density operations view.
+2. Route broad app-build requests toward an archetype based on domain, entities, workflow, and visual direction.
+3. Make archetype choice affect structure, hierarchy, navigation shape, panel composition, list/card treatment, and first-screen density, not just colors.
+4. Keep the visual direction chooser simple. Do not overload the user with a second confusing menu unless testing proves it is needed.
+5. Ensure Start over with different look remains compatible with archetype variety. Rebuilding from a different visual direction may also produce a different layout shape when the archetype inference reasonably changes.
+6. Keep true post-build restyling out of this phase. That remains a later dedicated visual restyle/recomposition ship.
+
+**Risks / gotchas**
+
+- Too many archetypes may create prompt bloat or inconsistent output.
+- "Different look" can imply different layout shape, but it must still preserve the original app request and core workflow.
+- Restore must remain truthful: KForge restores changed files, asks for write approval, and does not claim Preview/build/tests after restore.
+- Avoid making app-build generation depend on Tailwind or new dependencies until the Tailwind decision is intentionally reopened.
+
+**Done when**
+
+- App-build prompts can produce visibly different layout shapes for different app domains and visual directions.
+- The generated app still has a coherent core workflow, not only a visual shell.
+- Start over with different look still restores and reopens the chooser safely after a completed controlled app-build.
+- Build passes with existing warnings only.
+- Docs/handoff mention the 14.6-b2 restore point and the distinction between pre-build rebuild and true post-build restyle.
+
+---
+
 # Template Expansion — Additional Framework Templates
 
 Status: Planned

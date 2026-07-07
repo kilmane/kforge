@@ -628,6 +628,18 @@ You may see buttons such as:
 * **Approve write_file** — lets you review and approve one file write.
 * **Continue app-build implementation** — appears when the first write created only part of the app, such as source markup without matching styles.
 
+Before a controlled app-build starts, KForge may ask you to choose a **visual direction**. This is a pre-build choice, not a finished-app restyle. It helps steer the generated app's look and feel, such as palette, background treatment, card style, density, spacing, and typography feel.
+
+Common visual direction choices include:
+
+* **Use inferred default**
+* **Light / airy**
+* **Dark / premium**
+* **Colourful / playful**
+* **Minimal / professional**
+* **Warm / editorial**
+* **High-contrast dashboard**
+
 This is normal. KForge is trying to inspect first, write one file at a time, and avoid claiming Preview, build, tests, deployment, or service setup unless those actions actually ran.
 
 ## After KForge edits files
@@ -643,10 +655,15 @@ Common suggested actions include:
 * **Preview the app** — use **Preview Panel → Preview** to run or view the project
 * **Status** — check what KForge changed and what has or has not been verified
 * **Show changes** — ask KForge to review the changed files it recorded
+* **Start over with different look** — restore the files changed by the last controlled app-build, then choose a new visual direction and rebuild from the same original request
 * **Continue editing** — describe the next change you want
 * **No action needed** — leave the completed workflow alone
 
 If KForge only completed part of a larger implementation, it may suggest **Continue implementation**, **Continue controlled implementation**, or **Continue app-build implementation** so the work can proceed in a guarded loop, often one source or style file at a time.
+
+If **Start over with different look** appears, KForge has stored enough pre-app-build baseline information to attempt a safe restore of the files changed by that controlled app-build. If you choose it, KForge will ask you to confirm in chat, then request normal write approval for the restore writes. After the restore completes, KForge reopens the visual direction chooser so you can rebuild the same app request with a different look.
+
+This is a safe start-over/rebuild route. It is not the same as true post-build restyling of an already generated app. Preview, build, and tests are not automatically run after the restore, and KForge should not claim they passed unless you run the relevant check.
 
 If dependencies are missing, use **Preview Panel → Install** first.
 When KForge hands you to Preview, it may ask you to reply with:
