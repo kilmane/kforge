@@ -1153,6 +1153,154 @@ function getPostEditSnapshotForPath(context = null, path = "") {
   );
 }
 
+function stripKForgeVisualDirectionFromGoal(goal = "") {
+  return String(goal || "")
+    .trim()
+    .replace(/\n{2,}KForge visual direction:[\s\S]*$/i, "")
+    .trim();
+}
+
+function getAppBuildBaselineSnapshotForPath(context = null, path = "") {
+  const target = normalizePostEditReviewPath(path);
+  if (!target) return null;
+
+  const snapshots = Array.isArray(context?.appBuildBaselineSnapshots)
+    ? context.appBuildBaselineSnapshots
+    : [];
+
+  return (
+    snapshots.find(
+      (snapshot) => normalizePostEditReviewPath(snapshot?.path) === target,
+    ) || null
+  );
+}
+
+function getRestorableAppBuildBaselineSnapshots(context = null) {
+  if (context?.source !== "app_build_implementation") return [];
+
+  const editedPaths = getPostEditEditedPaths(context);
+  if (editedPaths.length === 0) return [];
+
+  const restoreSnapshots = editedPaths
+    .map((path) => {
+      const snapshot = getAppBuildBaselineSnapshotForPath(context, path);
+      if (!snapshot || typeof snapshot.previousContent !== "string") {
+        return null;
+      }
+
+      return {
+        ...snapshot,
+        path,
+      };
+    })
+    .filter(Boolean);
+
+  return restoreSnapshots.length === editedPaths.length ? restoreSnapshots : [];
+}
+
+function buildAppBuildBaselineRestoreToolMessage(snapshots = []) {
+  return (Array.isArray(snapshots) ? snapshots : [])
+    .map((snapshot) => {
+      return (
+        "```tool\n" +
+        JSON.stringify(
+          {
+            name: "write_file",
+            args: {
+              path: String(snapshot?.path || "").trim(),
+              content:
+                typeof snapshot?.previousContent === "string"
+                  ? snapshot.previousContent
+                  : "",
+            },
+          },
+          null,
+          2,
+        ) +
+        "\n```"
+      );
+    })
+    .join("\n\n");
+}
+
+function buildAppBuildVisualDirectionActions({
+  appendMessage = null,
+  originalGoal = "",
+} = {}) {
+  if (typeof appendMessage !== "function") return [];
+
+  const cleanGoal = stripKForgeVisualDirectionFromGoal(originalGoal);
+  if (!cleanGoal) return [];
+
+  const startControlledAppBuildWithVisualDirection = (
+    visualDirectionLabel,
+    visualDirectionInstruction,
+  ) => {
+    const selectedVisualDirection = String(
+      visualDirectionInstruction || "Use inferred default.",
+    ).trim();
+    const visualDirectionGoal =
+      cleanGoal + "\n\nKForge visual direction: " + selectedVisualDirection;
+
+    appendMessage("user", "Choice: " + visualDirectionLabel);
+    appendMessage(
+      "assistant",
+      "Working… handing this app build to KForge's controlled App Build Job Controller.\n\n" +
+        "Visual direction: " +
+        visualDirectionLabel +
+        "\n\n" +
+        "KForge will inspect the project first. No files will be changed during the startup inspection.",
+      {
+        meta: {
+          appBuildJobRequest: true,
+          appBuildJobGoal: visualDirectionGoal,
+        },
+      },
+    );
+  };
+
+  const visualDirectionOptions = [
+    { label: "Use inferred default", instruction: "Use inferred default." },
+    { label: "Light / airy", instruction: "Light / airy." },
+    { label: "Dark / premium", instruction: "Dark / premium." },
+    { label: "Colourful / playful", instruction: "Colourful / playful." },
+    { label: "Minimal / professional", instruction: "Minimal / professional." },
+    { label: "Warm / editorial", instruction: "Warm / editorial." },
+    { label: "High-contrast dashboard", instruction: "High-contrast dashboard." },
+  ];
+
+  return [
+    ...visualDirectionOptions.map((option) => ({
+      label: option.label,
+      onClick: () =>
+        startControlledAppBuildWithVisualDirection(
+          option.label,
+          option.instruction,
+        ),
+    })),
+    {
+      label: "Back to chat",
+      onClick: () => {
+        appendMessage("user", "Choice: Back to chat");
+        appendMessage(
+          "assistant",
+          "Back to chat — no new app-build started and no further files were changed.",
+        );
+      },
+    },
+    {
+      label: SUGGESTED_ACTION_LABEL.STOP,
+      onClick: () => {
+        appendMessage("user", "Choice: " + SUGGESTED_ACTION_LABEL.STOP);
+        appendMessage(
+          "assistant",
+          "Stopped — no new app-build started and no further files were changed.",
+        );
+      },
+    },
+  ];
+}
+
 function buildPostEditChangedExcerpt(previousContent = "", currentContent = "") {
   const before = String(previousContent || "");
   const after = String(currentContent || "");
@@ -1278,6 +1426,14 @@ function buildPostEditCompletionActions({
       goal: starterGoal,
       inspectedPaths: editedPaths,
     }).ok;
+  const appBuildRestoreSnapshots = getRestorableAppBuildBaselineSnapshots(context);
+  const appBuildOriginalGoal = stripKForgeVisualDirectionFromGoal(
+    originalGoal || context?.lastUserGoal || "",
+  );
+  const canStartOverWithDifferentLook =
+    context?.source === "app_build_implementation" &&
+    appBuildRestoreSnapshots.length > 0 &&
+    !!appBuildOriginalGoal;
 
   return [
     {
@@ -1375,6 +1531,61 @@ function buildPostEditCompletionActions({
         );
       },
     },
+    ...(canStartOverWithDifferentLook
+      ? [
+          {
+            label: "Start over with different look",
+            onClick: () => {
+              const confirmed = window.confirm(
+                "This will restore files changed by the last app-build, then reopen the visual-direction chooser. Your generated app will be replaced, but your project folder and dependencies will stay.",
+              );
+
+              if (!confirmed) {
+                appendMessage(
+                  "assistant",
+                  "Cancelled. No files were restored and no new app-build was started.",
+                );
+                return;
+              }
+
+              const restorePaths = appBuildRestoreSnapshots
+                .map((snapshot) => String(snapshot?.path || "").trim())
+                .filter(Boolean);
+              const restorePathLines = restorePaths
+                .map((path) => "- " + path)
+                .join("\n");
+
+              appendMessage("user", "Choice: Start over with different look");
+              appendMessage(
+                "assistant",
+                "Preparing to restore the files changed by the last controlled app-build to their pre-app-build baseline.\n\n" +
+                  "Files to restore:\n" +
+                  restorePathLines +
+                  "\n\nKForge will request normal write approval for each restore write. After the restore completes, KForge will reopen the visual-direction chooser.\n\n" +
+                  "Preview, build, and tests have not been run after this restore.",
+              );
+              appendMessage(
+                "assistant",
+                buildAppBuildBaselineRestoreToolMessage(appBuildRestoreSnapshots),
+                {
+                  meta: {
+                    allowModelToolExecution: true,
+                    modelToolExecutionKind: "project_edit",
+                    modelToolExecutionSource: "app_build_restore_different_look",
+                    previewErrorEvidenceGate: false,
+                    controlledReadOnlyToolExecution: false,
+                    modelToolOriginalGoal: appBuildOriginalGoal,
+                    modelToolInspectedPaths: restorePaths,
+                    modelToolAppBuildRestoreDifferentLook: true,
+                    modelToolAppBuildRestoreOriginalGoal: appBuildOriginalGoal,
+                    modelToolAppBuildRestorePaths: restorePaths,
+                  },
+                },
+              );
+            },
+          },
+        ]
+      : []),
     ...(canOfferBuiltInStarterQualityRecovery
       ? [
           {
@@ -2879,6 +3090,8 @@ export default function AiPanel({
           ).trim();
           const isAppBuildToolExecution =
             triggerToolExecutionSource === "app_build_implementation";
+          const isAppBuildDifferentLookRestoreToolExecution =
+            triggerToolExecutionSource === "app_build_restore_different_look";
           const isFixToolExecution =
             triggerToolTaskKind === "broken_preview_debug";
           const isControlledReadOnlyToolExecution =
@@ -2886,6 +3099,11 @@ export default function AiPanel({
           const triggerToolOriginalGoal = String(
             triggerToolMessage?.meta?.modelToolOriginalGoal || latestUserText || "",
           ).trim();
+          const triggerToolAppBuildRestoreOriginalGoal =
+            stripKForgeVisualDirectionFromGoal(
+              triggerToolMessage?.meta?.modelToolAppBuildRestoreOriginalGoal ||
+                triggerToolOriginalGoal,
+            );
           const recoveredProjectEditInspectedPaths =
             triggerToolIsRecoveredProjectEditToolExecution
               ? collectRecoveredProjectEditInspectedPaths(
@@ -3500,6 +3718,77 @@ export default function AiPanel({
                 "No files were changed.\n\n" +
                 "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
             );
+          } else if (
+            isAppBuildDifferentLookRestoreToolExecution &&
+            successfulWritePaths.length > 0
+          ) {
+            const restoreHadFailures =
+              failedWritePaths.length > 0 || failedDirPaths.length > 0;
+            const restoredPathLines = successfulWritePaths
+              .map((path) => "- " + path)
+              .join("\n");
+            const restoreOriginalGoal =
+              triggerToolAppBuildRestoreOriginalGoal ||
+              stripKForgeVisualDirectionFromGoal(triggerToolOriginalGoal || latestUserText);
+
+            if (restoreHadFailures) {
+              appendMessage(
+                "assistant",
+                "Start-over restore only partially completed.\n\n" +
+                  "Restored files:\n" +
+                  restoredPathLines +
+                  "\n\nKForge will not reopen the visual-direction chooser after a partial restore. Review the project state before starting another app-build.\n\n" +
+                  "Preview, build, and tests have not been run after this partial restore.",
+                {
+                  actions: [
+                    {
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", "Choice: " + SUGGESTED_ACTION_LABEL.STOP);
+                        appendMessage(
+                          "assistant",
+                          "Stopped after partial restore. No new app-build started.",
+                        );
+                      },
+                    },
+                  ],
+                },
+              );
+            } else {
+              const restoredWorkflowContext =
+                createCompletedImplementationWorkflowContext({
+                  lastUserGoal: restoreOriginalGoal,
+                  lastEditedPath: latestWrittenPath || "",
+                  editedPaths: successfulWritePaths,
+                  inspectedPaths: successfulInspectionPaths,
+                  preWriteSnapshots: getSnapshotsForPaths(
+                    preWriteSnapshotsRef.current,
+                    successfulWritePaths,
+                  ),
+                  completedSummary:
+                    "KForge restored the files changed by the last controlled app-build to their pre-app-build baseline.",
+                  source: "app_build_restore_different_look",
+                });
+
+              if (typeof setWorkflowContext === "function") {
+                setWorkflowContext(restoredWorkflowContext);
+              }
+
+              appendMessage(
+                "assistant",
+                "Restored the files changed by the last controlled app-build to their pre-app-build baseline.\n\n" +
+                  "Restored files:\n" +
+                  restoredPathLines +
+                  "\n\nChoose a new visual direction to start the app-build again.\n\n" +
+                  "Preview, build, and tests have not been run after this restore.",
+                {
+                  actions: buildAppBuildVisualDirectionActions({
+                    appendMessage,
+                    originalGoal: restoreOriginalGoal,
+                  }),
+                },
+              );
+            }
           } else if (
             isAppBuildToolExecution &&
             successfulWritePaths.length > 0 &&
@@ -5576,3 +5865,4 @@ export default function AiPanel({
     </div>
   );
 }
+
