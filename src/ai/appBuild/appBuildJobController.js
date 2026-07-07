@@ -10,6 +10,8 @@ const DEFAULT_APP_BUILD_INSPECTION_QUEUE = [
   "src/index.css",
 ];
 
+const MAX_APP_BUILD_BASELINE_SNAPSHOT_BYTES = 200 * 1024;
+
 export const APP_BUILD_JOB_STATUS = Object.freeze({
   CREATED: "created",
   INSPECTION_PENDING: "inspection_pending",
@@ -32,6 +34,46 @@ function normalizePath(path = "") {
 
 function normalizePathKey(path = "") {
   return normalizePath(path).toLowerCase();
+}
+
+function getTextByteLength(text = "") {
+  return new TextEncoder().encode(String(text || "")).length;
+}
+
+function normalizeAppBuildBaselineSnapshots(snapshots = []) {
+  const seen = new Set();
+  const normalized = [];
+
+  for (const item of Array.isArray(snapshots) ? snapshots : []) {
+    const path = normalizePath(item?.path);
+    const key = normalizePathKey(path);
+    if (!path || !key || seen.has(key)) continue;
+
+    const previousContent =
+      typeof item?.previousContent === "string"
+        ? item.previousContent
+        : typeof item?.content === "string"
+          ? item.content
+          : "";
+    const byteLength = Number.isFinite(Number(item?.byteLength))
+      ? Number(item.byteLength)
+      : getTextByteLength(previousContent);
+
+    if (byteLength > MAX_APP_BUILD_BASELINE_SNAPSHOT_BYTES) continue;
+
+    seen.add(key);
+    normalized.push({
+      path,
+      previousContent,
+      byteLength,
+      capturedAt: Number.isFinite(Number(item?.capturedAt))
+        ? Number(item.capturedAt)
+        : Date.now(),
+      source: String(item?.source || "app_build_startup_inspection").trim(),
+    });
+  }
+
+  return normalized;
 }
 
 function uniqueNormalizedPaths(paths = []) {
@@ -100,6 +142,9 @@ export function createAppBuildJob(seed = {}) {
     updatedAt: Number(seed.updatedAt || Date.now()),
     inspectionQueue,
     inspections: Array.isArray(seed.inspections) ? seed.inspections : [],
+    appBuildBaselineSnapshots: normalizeAppBuildBaselineSnapshots(
+      seed.appBuildBaselineSnapshots,
+    ),
   };
 
   return {
@@ -135,6 +180,35 @@ export function rememberAppBuildInspectionResult(
     inspectedAt: Date.now(),
   };
 
+  const currentBaselineSnapshots = normalizeAppBuildBaselineSnapshots(
+    current.appBuildBaselineSnapshots,
+  );
+  let appBuildBaselineSnapshots = currentBaselineSnapshots;
+
+  if (ok) {
+    const baselineAlreadyCaptured = currentBaselineSnapshots.some(
+      (item) => normalizePathKey(item?.path) === key,
+    );
+    const previousContent = String(result || "");
+    const byteLength = getTextByteLength(previousContent);
+
+    if (
+      !baselineAlreadyCaptured &&
+      byteLength <= MAX_APP_BUILD_BASELINE_SNAPSHOT_BYTES
+    ) {
+      appBuildBaselineSnapshots = [
+        ...currentBaselineSnapshots,
+        {
+          path: cleanPath,
+          previousContent,
+          byteLength,
+          capturedAt: Date.now(),
+          source: "app_build_startup_inspection",
+        },
+      ];
+    }
+  }
+
   const inspections = [
     ...getInspectionItems(current).filter(
       (item) => normalizePathKey(item?.path) !== key,
@@ -145,6 +219,7 @@ export function rememberAppBuildInspectionResult(
   const nextJob = {
     ...current,
     inspections,
+    appBuildBaselineSnapshots,
     updatedAt: Date.now(),
   };
 
@@ -176,6 +251,11 @@ export function getAppBuildSuccessfulInspectedPaths(job = {}) {
       .filter((item) => item?.ok)
       .map((item) => item.path),
   );
+}
+
+export function getAppBuildBaselineSnapshots(job = {}) {
+  const current = createAppBuildJob(job);
+  return normalizeAppBuildBaselineSnapshots(current.appBuildBaselineSnapshots);
 }
 
 export function summarizeAppBuildInspection(job = {}) {

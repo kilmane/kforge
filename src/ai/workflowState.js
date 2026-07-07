@@ -151,6 +151,10 @@ function normalizePreWriteSnapshots(preWriteSnapshots = []) {
     .filter((item) => item.path);
 }
 
+function normalizeAppBuildBaselineSnapshots(appBuildBaselineSnapshots = []) {
+  return normalizePreWriteSnapshots(appBuildBaselineSnapshots);
+}
+
 function normalizeAssistantActionResult(result = "") {
   const cleanResult = String(result || "").trim();
 
@@ -510,6 +514,7 @@ export function createPartialImplementationWorkflowContext({
   lastEditedPath = "",
   editedPaths = [],
   inspectedPaths = [],
+  appBuildBaselineSnapshots = [],
   changedFileSummaries = [],
   partialSummary = "",
   assistantResult = null,
@@ -518,6 +523,8 @@ export function createPartialImplementationWorkflowContext({
 } = {}) {
   const normalizedEditedPaths = normalizeWorkflowPathList(editedPaths);
   const normalizedInspectedPaths = normalizeWorkflowPathList(inspectedPaths);
+  const normalizedAppBuildBaselineSnapshots =
+    normalizeAppBuildBaselineSnapshots(appBuildBaselineSnapshots);
   const normalizedChangedFileSummaries =
     normalizeChangedFileSummaries(changedFileSummaries);
   const cleanLastEditedPath = String(lastEditedPath || "").trim();
@@ -552,6 +559,7 @@ export function createPartialImplementationWorkflowContext({
     lastEditedPath: finalLastEditedPath,
     editedPaths: finalEditedPaths,
     inspectedPaths: normalizedInspectedPaths,
+    appBuildBaselineSnapshots: normalizedAppBuildBaselineSnapshots,
     changedFileSummaries: normalizedChangedFileSummaries,
     partialSummary: String(partialSummary || "").trim(),
     assistantResult: finalAssistantResult,
@@ -561,11 +569,13 @@ export function createPartialImplementationWorkflowContext({
 }
 
 export function createCompletedImplementationWorkflowContext({
+  lastUserGoal = "",
   lastEditedPath = "",
   editedPaths = [],
   inspectedPaths = [],
   changedFileSummaries = [],
   preWriteSnapshots = [],
+  appBuildBaselineSnapshots = [],
   changeSummary = "",
   completedSummary = "",
   partialSummary = "",
@@ -581,6 +591,8 @@ export function createCompletedImplementationWorkflowContext({
     normalizeChangedFileSummaries(changedFileSummaries);
   const normalizedPreWriteSnapshots =
     normalizePreWriteSnapshots(preWriteSnapshots);
+  const normalizedAppBuildBaselineSnapshots =
+    normalizeAppBuildBaselineSnapshots(appBuildBaselineSnapshots);
   const cleanLastEditedPath = String(lastEditedPath || "").trim();
   const finalLastEditedPath =
     cleanLastEditedPath ||
@@ -611,11 +623,13 @@ export function createCompletedImplementationWorkflowContext({
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.COMPLETED,
     nextStep,
+    lastUserGoal: String(lastUserGoal || "").trim(),
     lastEditedPath: finalLastEditedPath,
     editedPaths: finalEditedPaths,
     inspectedPaths: normalizedInspectedPaths,
     changedFileSummaries: normalizedChangedFileSummaries,
     preWriteSnapshots: normalizedPreWriteSnapshots,
+    appBuildBaselineSnapshots: normalizedAppBuildBaselineSnapshots,
     changeSummary: String(changeSummary || "").trim(),
     completedSummary: String(completedSummary || "").trim(),
     partialSummary: String(partialSummary || "").trim(),
