@@ -8996,6 +8996,22 @@ setWorkflowContext({
           )
             .map((item) => String(item || "").trim())
             .filter(Boolean);
+          const modelToolAppBuildBaselineSnapshots = Array.isArray(
+            opts.appBuildBaselineSnapshots,
+          )
+            ? opts.appBuildBaselineSnapshots
+            : Array.isArray(workflowContext?.appBuildBaselineSnapshots)
+              ? workflowContext.appBuildBaselineSnapshots
+              : [];
+          const modelToolAppBuildEditedPaths = (
+            Array.isArray(opts.appBuildEditedPaths)
+              ? opts.appBuildEditedPaths
+              : Array.isArray(workflowContext?.editedPaths)
+                ? workflowContext.editedPaths
+                : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
 
           for (const tb of toolBlocks) {
             appendMessage("assistant", tb, {
@@ -9008,6 +9024,8 @@ setWorkflowContext({
                   opts.controlledReadOnlyToolExecution === true,
                 modelToolOriginalGoal,
                 modelToolInspectedPaths,
+                modelToolAppBuildBaselineSnapshots,
+                modelToolAppBuildEditedPaths,
               },
             });
           }

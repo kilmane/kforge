@@ -54,6 +54,7 @@ import {
 import {
   buildAppBuildImplementationPrompt,
   createAppBuildJob,
+  getAppBuildBaselineSnapshots,
   getAppBuildInspectionQueue,
   getAppBuildSuccessfulInspectedPaths,
   rememberAppBuildInspectionResult,
@@ -142,6 +143,44 @@ function getSnapshotsForPaths(snapshots = [], paths = []) {
   return (Array.isArray(snapshots) ? snapshots : []).filter((snapshot) =>
     wanted.has(String(snapshot?.path || "").trim()),
   );
+}
+
+function getSnapshotByteLength(text = "") {
+  return new TextEncoder().encode(String(text || "")).length;
+}
+
+function normalizeAppBuildBaselineSnapshotList(snapshots = []) {
+  return (Array.isArray(snapshots) ? snapshots : [])
+    .map((item) => {
+      const previousContent =
+        typeof item?.previousContent === "string" ? item.previousContent : "";
+      return {
+        path: String(item?.path || "").trim(),
+        previousContent,
+        byteLength: Number.isFinite(Number(item?.byteLength))
+          ? Number(item.byteLength)
+          : getSnapshotByteLength(previousContent),
+        capturedAt: Number.isFinite(Number(item?.capturedAt))
+          ? Number(item.capturedAt)
+          : Date.now(),
+        source: String(item?.source || "app_build_startup_inspection").trim(),
+      };
+    })
+    .filter((item) => item.path);
+}
+
+function normalizeAppBuildEditedPathList(paths = []) {
+  const seen = new Set();
+  const normalized = [];
+
+  for (const item of Array.isArray(paths) ? paths : []) {
+    const path = String(item || "").trim();
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    normalized.push(path);
+  }
+
+  return normalized;
 }
 
 function uidShort() {
@@ -2555,6 +2594,7 @@ export default function AiPanel({
       }
 
       const inspectedPaths = getAppBuildSuccessfulInspectedPaths(job);
+      const appBuildBaselineSnapshots = getAppBuildBaselineSnapshots(job);
       const implementationPrompt = buildAppBuildImplementationPrompt(job);
 
       appendMessage(
@@ -2583,6 +2623,8 @@ export default function AiPanel({
                   forceProjectEdit: true,
                   forceAppBuildImplementation: true,
                   inspectedPaths,
+                  appBuildBaselineSnapshots,
+                  appBuildEditedPaths: [],
                   lastUserGoal: originalGoal,
                   modelToolOriginalGoal: originalGoal,
                   modelToolInspectedPaths: inspectedPaths,
@@ -2862,6 +2904,13 @@ export default function AiPanel({
             metaToolInspectedPaths.length > 0
               ? metaToolInspectedPaths
               : recoveredProjectEditInspectedPaths;
+          const triggerToolAppBuildBaselineSnapshots =
+            normalizeAppBuildBaselineSnapshotList(
+              triggerToolMessage?.meta?.modelToolAppBuildBaselineSnapshots,
+            );
+          const triggerToolAppBuildEditedPaths = normalizeAppBuildEditedPathList(
+            triggerToolMessage?.meta?.modelToolAppBuildEditedPaths,
+          );
           const isBlockedWriteRecoveryToolExecution =
             triggerToolMessage?.meta?.modelToolBlockedWriteRecovery === true;
           const triggerToolBlockedWriteTargetPath = String(
@@ -3477,6 +3526,10 @@ export default function AiPanel({
             const appBuildPathLines = successfulWritePaths
               .map((path) => "- " + path)
               .join("\n");
+            const appBuildCombinedEditedPaths = normalizeAppBuildEditedPathList([
+              ...triggerToolAppBuildEditedPaths,
+              ...successfulWritePaths,
+            ]);
             const appBuildRepeatedTitleIssue =
               findAppBuildRepeatedHeaderTitleIssue(executedBatchResults);
             const appBuildPartialSummary = appBuildRepeatedTitleIssue
@@ -3486,8 +3539,9 @@ export default function AiPanel({
             const partialWorkflowContext = createPartialImplementationWorkflowContext({
               lastUserGoal: appBuildOriginalGoal,
               lastEditedPath: latestWrittenPath || "",
-              editedPaths: successfulWritePaths,
+              editedPaths: appBuildCombinedEditedPaths,
               inspectedPaths: appBuildContinueInspectedPaths,
+              appBuildBaselineSnapshots: triggerToolAppBuildBaselineSnapshots,
               partialSummary: appBuildPartialSummary,
               nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
               source: "app_build_implementation",
@@ -3531,6 +3585,8 @@ export default function AiPanel({
               forceProjectEdit: true,
               forceAppBuildImplementation: true,
               inspectedPaths: appBuildContinueInspectedPaths,
+              appBuildBaselineSnapshots: triggerToolAppBuildBaselineSnapshots,
+              appBuildEditedPaths: appBuildCombinedEditedPaths,
               modelToolInspectedPaths: appBuildContinueInspectedPaths,
               modelToolOriginalGoal: appBuildOriginalGoal,
               lastUserGoal: appBuildOriginalGoal,
@@ -3597,16 +3653,33 @@ export default function AiPanel({
               );
             }
           } else if (successfulWritePaths.length > 0) {
+            const completedEditedPaths = isAppBuildToolExecution
+              ? normalizeAppBuildEditedPathList([
+                  ...triggerToolAppBuildEditedPaths,
+                  ...successfulWritePaths,
+                ])
+              : successfulWritePaths;
             const completedWorkflowContext =
               createCompletedImplementationWorkflowContext({
+                lastUserGoal: isAppBuildToolExecution
+                  ? triggerToolOriginalGoal || latestUserText
+                  : workflowContext?.lastUserGoal || latestUserText,
                 lastEditedPath: latestWrittenPath || "",
-                editedPaths: successfulWritePaths,
+                editedPaths: completedEditedPaths,
                 inspectedPaths: successfulInspectionPaths,
                 preWriteSnapshots: getSnapshotsForPaths(
                   preWriteSnapshotsRef.current,
-                  successfulWritePaths,
+                  completedEditedPaths,
                 ),
-                source: "tool_batch",
+                appBuildBaselineSnapshots: isAppBuildToolExecution
+                  ? getSnapshotsForPaths(
+                      triggerToolAppBuildBaselineSnapshots,
+                      completedEditedPaths,
+                    )
+                  : [],
+                source: isAppBuildToolExecution
+                  ? "app_build_implementation"
+                  : "tool_batch",
               });
 
             if (typeof setWorkflowContext === "function") {
