@@ -52,7 +52,7 @@ const SIGNALS = {
     /\b(fitness|workout|exercise|training|habit|streak|health|wellness|water|sleep|mood|meal|food|nutrition|calorie|macro|diet|recovery|mobility|cardio|strength)\b/,
   ],
   planning: [
-    /\b(planner|plan|schedule|calendar|booking|appointment|reservation|itinerary|timeline|agenda|daily|weekly|monthly|task|study|revision|lesson|session|subject|exam)\b/,
+    /\b(planner|plan|schedule|calendar|booking|appointment|reservation|itinerary|timeline|agenda|daily|weekly|monthly|task|study|revision|lesson|session|subject|exam|checklist|checklists|travel|trip|trips|packing|pack|packed|destination|journey|journeys|prep|preparation)\b/,
   ],
   marketing: [
     /\b(landing|website|homepage|marketing|brand|business|lead|signup|sales|hero|benefits|service page|portfolio site)\b/,
@@ -407,7 +407,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "balanced workflow workspace with summary, primary controls, and item/state area arranged by task priority",
     guidance:
-      "use a familiar but polished workspace only when no stronger archetype fits; avoid making it the default skeleton for every app",
+      "use a familiar but polished workspace only when no stronger archetype fits; must still show a distinct workflow-specific structure in JSX/class names; avoid making it the default skeleton for every app",
     compositionRhythm: "balanced sections with compact summaries and a clear primary workflow lane",
     navigationPattern: "compact top toolbar with responsive section access when useful",
     firstScreenStrategy:
@@ -429,7 +429,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "split planner with a planning lane, upcoming/current items, and detail or checklist panel",
     guidance:
-      "shape the split around phases, dates, priorities, or preparation states rather than generic form/list columns",
+      "must show a true planner/detail, phase/detail, or overview/detail split in JSX/class names; shape the split around phases, dates, priorities, or preparation states rather than generic form/list columns",
     compositionRhythm: "left-to-right or top-to-bottom planning flow from overview to detail",
     navigationPattern: "tabs, segmented controls, or a compact planner rail",
     firstScreenStrategy:
@@ -451,7 +451,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "editorial checklist page with warm sections, grouped tasks, notes, and contextual progress",
     guidance:
-      "use section rhythm, grouped cards, and human-friendly labels to avoid a sterile dashboard skeleton",
+      "must show grouped editorial sections, checklist clusters, phase groups, or note-like panels in JSX/class names; avoid making a metric strip the main shape; use section rhythm and human-friendly labels to avoid a sterile dashboard skeleton",
     compositionRhythm: "story-like grouped sections with checklist clusters and compact progress cues",
     navigationPattern: "section anchors, tabs, or soft category chips",
     firstScreenStrategy:
@@ -474,7 +474,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "board layout with workflow columns, draggable-feeling cards or explicit status controls, and compact summaries",
     guidance:
-      "use stages/statuses from the request; avoid generic To Do / Doing / Done when better domain states exist",
+      "must show clear board lanes/columns or responsive lane groups in JSX/class names; use stages/statuses from the request; avoid generic To Do / Doing / Done when better domain states exist",
     compositionRhythm: "horizontal or responsive stacked lanes organized by workflow state",
     navigationPattern: "board filters, tabs, or compact toolbar controls",
     firstScreenStrategy:
@@ -510,7 +510,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "timeline or journey layout with sequenced phases, milestones, checklists, and contextual notes",
     guidance:
-      "organize by time, phase, preparation stage, or journey step instead of generic list sections",
+      "must show a visible sequence of phases, steps, milestones, or journey groups in JSX/class names; organize by time, phase, preparation stage, or journey step instead of generic list sections",
     compositionRhythm: "vertical or horizontal sequence from next/current stage through later stages",
     navigationPattern: "phase tabs, step chips, or a timeline rail",
     firstScreenStrategy:
@@ -532,7 +532,7 @@ const LAYOUT_ARCHETYPE_PRESETS = Object.freeze({
     layoutComposition:
       "bento dashboard with varied card sizes, one dominant workflow card, and compact supporting widgets",
     guidance:
-      "use card variety to create shape; do not make every widget equal-sized stat cards",
+      "must show asymmetric card rhythm in JSX/class names with one dominant workflow card and varied supporting cards; do not make every widget equal-sized stat cards",
     compositionRhythm: "asymmetric card grid with one hero workflow card and smaller status/action cards",
     navigationPattern: "compact top toolbar with card-level actions",
     firstScreenStrategy:
@@ -644,7 +644,7 @@ function inferLayoutArchetype(text = "", signals = {}, visualDirectionPreset) {
   }
 
   if (candidates.size === 0) {
-    add("balancedWorkspace", 3);
+    add("balancedWorkspace", 2);
     add("bentoDashboard", 2);
     add("compactUtility", 2);
     add("sidebarApp", 1);
@@ -652,12 +652,12 @@ function inferLayoutArchetype(text = "", signals = {}, visualDirectionPreset) {
 
   switch (visualDirectionPreset?.label) {
     case "Colourful / playful":
-      add("bentoDashboard", candidates.has("bentoDashboard") ? 2 : 1);
-      add("kanbanBoard", candidates.has("kanbanBoard") ? 2 : 1);
+      add("bentoDashboard", candidates.has("bentoDashboard") ? 3 : 2);
+      add("kanbanBoard", candidates.has("kanbanBoard") ? 3 : 2);
       break;
     case "Warm / editorial":
-      add("editorialChecklist", candidates.has("editorialChecklist") ? 2 : 1);
-      add("timelineJourney", candidates.has("timelineJourney") ? 2 : 1);
+      add("editorialChecklist", candidates.has("editorialChecklist") ? 3 : 2);
+      add("timelineJourney", candidates.has("timelineJourney") ? 3 : 2);
       break;
     case "Minimal / professional":
       add("compactUtility", candidates.has("compactUtility") ? 2 : 1);
@@ -775,6 +775,7 @@ export function buildAppBuildDesignDnaPrompt(originalGoal = "") {
     `- anti-sameness guard: ${dna.avoidStyle}\n` +
     "- Visual direction is not a fixed app template. It may guide palette, luminance, card treatment, background treatment, typography feel, density, and light composition emphasis, but it must not replace the selected layout archetype, data model, required workflows, or inspected project evidence.\n" +
     "- Layout archetype is composition grammar, not an app-type template. Do not treat it as a travel template, fitness template, business template, or any other fixed domain template.\n" +
+    "- The first source write must make the selected layout archetype visible in JSX structure and class names. Do not merely restyle the old generic header + metric cards + form/list skeleton.\n" +
     "- Use the selected layout archetype to create a visibly distinct first-pass composition while preserving the requested core workflow and truthful user-managed data behavior.\n" +
     "- responsive fit guard: prevent page-level horizontal scrolling. Top-level shells must use width: min(100%, ...), max-width: calc(100vw - safe padding), box-sizing: border-box, and overflow-x: hidden only as a last-resort page safeguard. Do not make the app shell wider than the viewport.\n" +
     "- responsive grid guard: CSS grids must use minmax(0, 1fr), wrap summary cards at medium widths, and avoid fixed multi-column layouts that exceed the viewport. Header/toolbars must wrap instead of pushing content off-screen.\n" +

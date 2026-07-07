@@ -9,6 +9,7 @@ export function buildAppBuildLayoutContract(originalGoal = "") {
     "- Shape sections, labels, item actions, empty states, and summaries around the request-specific entities and workflow.\n" +
     "- Choose layout structure from the workflow needs, such as a tool cockpit, planner board, timeline, table workspace, split editor, wizard, feed, operational console, or mixed workspace; these are generic composition options, not app-type routes.\n" +
     "- Infer any layout archetype as composition grammar from domain, workflow, entities, and selected visual direction; visual direction may influence density, rhythm, and navigation shape, but workflow and inspected evidence must win.\n" +
+    "- The first source write must make the selected layout archetype visible in JSX structure and class names; do not merely restyle the old generic header + metric cards + form/list skeleton.\n" +
     "- Forms, stats, cards, lists, tables, timelines, calendars, charts, and navigation should support the inferred primary workflow surface rather than replacing it.\n" +
     "- Do not use unrequested named demo records. Start user-managed data empty unless the user explicitly asks for demo/sample data.\n" +
     "- App-data reset must clear user-managed data and derived metrics to empty/neutral values; it must not restore seed records." +
