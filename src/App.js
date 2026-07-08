@@ -18,9 +18,6 @@ import {
   buildFreeAppBrief,
   renderStarterRecommendation,
 } from "./ai/planning/appBriefProtocol";
-import {
-  BUILT_IN_MODERN_REACT_STARTER_LABEL,
-} from "./ai/planning/builtInModernReactStarter";
 import { buildAppBuildLayoutContract } from "./ai/appBuild/appBuildLayoutContract";
 import { buildAppBuildDesignDnaPrompt } from "./ai/appBuild/appBuildDesignDna";
 
@@ -3114,12 +3111,13 @@ export default function App() {
   }
 
 
-  function isOpenProjectBuildAppClarifierIntent(text = "") {
+  function isOpenProjectBuildAppClarifierIntent(text = "", options = {}) {
+    const allowApprovedBlueprintStart = options.allowApprovedBlueprintStart === true;
     const raw = String(text || "");
     const s = raw.toLowerCase().trim();
 
     if (!s) return false;
-    if (isFeatureBlueprintIntent(text)) return false;
+    if (!allowApprovedBlueprintStart && isFeatureBlueprintIntent(text)) return false;
 
     if (
       /^(how|why|what|when|where)\b/.test(s) ||
@@ -3691,10 +3689,36 @@ export default function App() {
     );
   }
 
+  function hasExplicitServiceExclusionIntent(text = "") {
+    const s = String(text || "")
+      .toLowerCase()
+      .trim();
+
+    if (!s) return false;
+
+    const serviceMention =
+      /\b(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b/.test(
+        s,
+      );
+
+    if (!serviceMention) return false;
+
+    return (
+      /\b(do not|don't|dont|no|without)\b[^.?!\n]*(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b/.test(
+        s,
+      ) ||
+      /\b(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b[^.?!\n]*\b(not now|not yet|later|after the frontend|after frontend)\b/.test(
+        s,
+      )
+    );
+  }
+
   function isCombinedOpenAiSupabaseServiceIntent(text = "") {
     const s = String(text || "")
       .toLowerCase()
       .trim();
+
+    if (hasExplicitServiceExclusionIntent(s)) return false;
 
     const mentionsOpenAI = s.includes("openai");
     const mentionsSupabase = s.includes("supabase");
@@ -3757,6 +3781,8 @@ export default function App() {
     const s = String(text || "")
       .toLowerCase()
       .trim();
+
+    if (hasExplicitServiceExclusionIntent(s)) return false;
 
     if (!s || !s.includes("supabase")) return false;
 
@@ -3883,6 +3909,8 @@ export default function App() {
 
     if (!s) return false;
 
+    if (hasExplicitServiceExclusionIntent(s)) return false;
+
     const hasDeferredDeployContext =
       /\b(later|eventually|in\s+the\s+future|future|not\s+now)\b/.test(s) ||
       /\b(will\s+need|will\s+use|prepare|ready\s+for)\b/.test(s);
@@ -3947,6 +3975,8 @@ export default function App() {
       .trim();
 
     if (!s) return null;
+
+    if (hasExplicitServiceExclusionIntent(s)) return null;
 
     const hasContextOnlyLanguage =
       /\b(will\s+need|need|needs|needed|should\s+use|should\s+have|will\s+use|would\s+use|going\s+to\s+use|later|eventually|for\s+this\s+app|for\s+the\s+app|support)\b/.test(
@@ -7880,17 +7910,22 @@ setWorkflowContext({
               actions: [
                 ...openServiceActions,
                 {
-                  label: "Keep planning / editing the app",
+                  label: "Continue without opening Services",
                   onClick: () => {
                     appendMessage(
                       "user",
-                      "Choice: Keep planning / editing the app",
+                      "Choice: Continue without opening Services",
                     );
                     setWorkflowContext(null);
                     appendMessage(
                       "assistant",
-                      "Okay — I’ll treat the service wording as context, not a request to open Services now.\n\nTell me the next planning or editing step you want.",
+                      "Okay — I’ll treat the service wording as context, not a request to open Services now. Continuing the original request without opening Services.",
                     );
+                    sendWithPrompt(draft, {
+                      silentUserAppend: true,
+                      skipCompletedWorkflowRoute: true,
+                      skipDirectWorkflowHandoffRoute: true,
+                    });
                   },
                 },
                 {
@@ -8553,22 +8588,19 @@ setWorkflowContext({
             ? appBuildNoToolRetryPrompt
             : genericFocusedNoToolPrompt;
 
-          const builtInStarterGoal = String(
+          const noToolRecoveryGoal = String(
             opts.lastUserGoal ||
               workflowContext?.lastUserGoal ||
               originalNoToolRequest ||
               draft,
           ).trim();
 
-          const isSmallFileTargetedNoToolEdit =
-            isFileTargetedProjectEditIntent(builtInStarterGoal);
-
           const isDeterministicVisualCssNoToolInspection =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
             !isAppBuildImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
-            isVisualCssIterationGoal(originalNoToolRequest || builtInStarterGoal);
+            isVisualCssIterationGoal(originalNoToolRequest || noToolRecoveryGoal);
           const deterministicVisualCssInspectPath = "src/App.css";
           const noToolAlreadyInspectedPaths = noToolCarryoverInspectedPaths
             .map((item) => item.replace(/\\/g, "/").toLowerCase())
@@ -8584,20 +8616,6 @@ setWorkflowContext({
             !isAppBuildImplementationNoToolRecovery &&
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
             !isDeterministicVisualCssNoToolInspection;
-
-          const shouldOfferBuiltInStarterRecovery =
-            !isFixNoToolRecovery &&
-            !isPartialImplementationNoToolRecovery &&
-            !isAppBuildImplementationNoToolRecovery &&
-            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
-            !isSmallFileTargetedNoToolEdit &&
-            !isDeterministicVisualCssNoToolInspection;
-
-          const builtInStarterDefaultPaths = [
-            "src/App.jsx",
-            "src/App.css",
-            "src/index.css",
-          ];
 
           const templateHintForNoToolAppInspect = String(
             detectedTemplateName || detectedKind || "",
@@ -8669,36 +8687,6 @@ setWorkflowContext({
                       modelToolExecutionKind: String(WORKFLOW_TASK_KIND.PROJECT_EDIT),
                       previewErrorEvidenceGate: false,
                       controlledReadOnlyToolExecution: false,
-                    },
-                  },
-                );
-              },
-            });
-          }
-
-          if (shouldOfferBuiltInStarterRecovery) {
-            noToolRecoveryActions.push({
-              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
-              onClick: () => {
-                appendMessage(
-                  "user",
-                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
-                );
-
-                appendMessage(
-                  "assistant",
-                  "Working… handing KForge's built-in polished starter to the safe tool runner.\n\n" +
-                    "KForge will request approval before writing each starter file.",
-                  {
-                    meta: {
-                      builtInModernReactStarterRequest: true,
-                      builtInModernReactStarterGoal: builtInStarterGoal,
-                      builtInModernReactStarterInspectedPaths:
-                        builtInStarterDefaultPaths,
-                      builtInModernReactStarterProjectTemplateInfo: {
-                        detectedTemplate: { name: detectedTemplateName },
-                        kind: detectedKind,
-                      },
                     },
                   },
                 );
@@ -8784,7 +8772,7 @@ setWorkflowContext({
 
           const noToolSimpleControlGoal = [
             originalNoToolRequest,
-            builtInStarterGoal,
+            noToolRecoveryGoal,
           ]
             .join(" ")
             .toLowerCase();
@@ -8888,6 +8876,147 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.START_IMPLEMENTATION,
                   onClick: () => {
                     appendMessage("user", "Choice: Start implementation");
+
+                    const shouldUseControlledAppBuildFromBlueprint =
+                      isOpenProjectBuildAppClarifierIntent(draft, {
+                        allowApprovedBlueprintStart: true,
+                      });
+
+                    if (shouldUseControlledAppBuildFromBlueprint) {
+                      appendMessage(
+                        "assistant",
+                        "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.",
+                        {
+                          actions: [
+                            {
+                              label: "Switch model first",
+                              onClick: () => {
+                                appendMessage("user", "Choice: Switch model first");
+                                appendMessage(
+                                  "assistant",
+                                  "Choose a Recommended builder or High capability model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
+                                );
+                              },
+                            },
+                            {
+                              label: "Continue implementation",
+                              onClick: () => {
+                                appendMessage("user", "Choice: Continue implementation");
+
+                                const startControlledAppBuildWithVisualDirection = (
+                                  visualDirectionLabel,
+                                  visualDirectionInstruction,
+                                ) => {
+                                  const selectedVisualDirection = String(
+                                    visualDirectionInstruction || "Use inferred default.",
+                                  ).trim();
+                                  const visualDirectionGoal =
+                                    `${draft}\n\nKForge visual direction: ${selectedVisualDirection}`;
+
+                                  appendMessage(
+                                    "user",
+                                    `Choice: ${visualDirectionLabel}`,
+                                  );
+                                  appendMessage(
+                                    "assistant",
+                                    "Working… handing this app build to KForge's controlled App Build Job Controller.\n\n" +
+                                      `Visual direction: ${visualDirectionLabel}\n\n` +
+                                      "KForge will inspect the project first. No files will be changed during the startup inspection.",
+                                    {
+                                      meta: {
+                                        appBuildJobRequest: true,
+                                        appBuildJobGoal: visualDirectionGoal,
+                                      },
+                                    },
+                                  );
+                                };
+
+                                const visualDirectionOptions = [
+                                  {
+                                    label: "Use inferred default",
+                                    instruction: "Use inferred default.",
+                                  },
+                                  {
+                                    label: "Light / airy",
+                                    instruction: "Light / airy.",
+                                  },
+                                  {
+                                    label: "Dark / premium",
+                                    instruction: "Dark / premium.",
+                                  },
+                                  {
+                                    label: "Colourful / playful",
+                                    instruction: "Colourful / playful.",
+                                  },
+                                  {
+                                    label: "Minimal / professional",
+                                    instruction: "Minimal / professional.",
+                                  },
+                                  {
+                                    label: "Warm / editorial",
+                                    instruction: "Warm / editorial.",
+                                  },
+                                  {
+                                    label: "High-contrast dashboard",
+                                    instruction: "High-contrast dashboard.",
+                                  },
+                                ];
+
+                                appendMessage(
+                                  "assistant",
+                                  "Choose a visual direction for this app build.\n\n" +
+                                    "KForge will still infer the app structure from your request. This only steers the look: palette, background treatment, cards, density, and typography feel.",
+                                  {
+                                    actions: [
+                                      ...visualDirectionOptions.map((option) => ({
+                                        label: option.label,
+                                        onClick: () =>
+                                          startControlledAppBuildWithVisualDirection(
+                                            option.label,
+                                            option.instruction,
+                                          ),
+                                      })),
+                                      {
+                                        label: "Back to chat",
+                                        onClick: () => {
+                                          appendMessage("user", "Choice: Back to chat");
+                                          appendMessage(
+                                            "assistant",
+                                            "Back to chat — no implementation started and no files were changed.",
+                                          );
+                                        },
+                                      },
+                                      {
+                                        label: SUGGESTED_ACTION_LABEL.STOP,
+                                        onClick: () => {
+                                          appendMessage(
+                                            "user",
+                                            `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                                          );
+                                          appendMessage(
+                                            "assistant",
+                                            "Stopped — no implementation started and no files were changed.",
+                                          );
+                                        },
+                                      },
+                                    ],
+                                  },
+                                );
+                              },
+                            },
+                            {
+                              label: "Back to chat",
+                              onClick: () => {
+                                appendMessage("user", "Choice: Back to chat");
+                                appendMessage("assistant", "Back to chat — no implementation started and no files were changed.");
+                              },
+                            },
+                          ],
+                        },
+                      );
+                      return;
+                    }
+
                     appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Start implementation from the approved plan.\n\n" +
@@ -8896,6 +9025,8 @@ setWorkflowContext({
                       {
                         silentUserAppend: true,
                         skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                        forceProjectEdit: true,
                       },
                     );
                   },
@@ -9061,6 +9192,8 @@ setWorkflowContext({
       inferPromptTaskKind,
       buildSmartProviderSwitchMessage,
       isExplicitNewWorkflowIntent,
+      isOpenProjectBuildAppClarifierIntent,
+      getAmbiguousServiceTrigger,
       buildBlockedModelPolicyFollowupMessage,
       buildWorkflowPreviewRoutingMessage,
       buildWorkflowShowChangesMessage,

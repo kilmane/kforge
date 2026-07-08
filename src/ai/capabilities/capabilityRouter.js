@@ -69,6 +69,24 @@ function hasDeferredOrPlanningIntent(text) {
   );
 }
 
+function hasExplicitServiceExclusionIntent(text) {
+  const serviceMention =
+    /\b(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b/.test(
+      text,
+    );
+
+  if (!serviceMention) return false;
+
+  return (
+    /\b(do not|don't|dont|no|without)\b[^.?!\n]*(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b/.test(
+      text,
+    ) ||
+    /\b(supabase|backend|database|db|auth|login|accounts?|deployment|deploy|host|hosting|vercel|netlify|environment variables?|env|\.env)\b[^.?!\n]*\b(not now|not yet|later|after the frontend|after frontend)\b/.test(
+      text,
+    )
+  );
+}
+
 function hasBroaderAppPlanningShape(text) {
   return (
     hasAnyWord(text, [
@@ -225,6 +243,8 @@ function getMentionedServiceCapabilities(text) {
 }
 
 function getDeferredServiceCapability(text, sourcePrefix, serviceTrigger) {
+  if (hasExplicitServiceExclusionIntent(text)) return null;
+
   if (!hasDeferredOrPlanningIntent(text)) return null;
 
   if (hasBroaderAppPlanningShape(text)) {
@@ -246,6 +266,8 @@ function getMultiServiceCapability(text) {
   const serviceOptions = getMentionedServiceCapabilities(text);
 
   if (serviceOptions.length < 2) return null;
+
+  if (hasExplicitServiceExclusionIntent(text)) return null;
 
   if (hasDeferredOrPlanningIntent(text) && hasBroaderAppPlanningShape(text)) {
     return {
@@ -356,6 +378,7 @@ function getAiServiceCapability(text) {
 
 function getSupabaseCapability(text) {
   if (!hasWord(text, "supabase")) return null;
+  if (hasExplicitServiceExclusionIntent(text)) return null;
 
   const deferredDecision = getDeferredServiceCapability(
     text,
@@ -480,6 +503,10 @@ export function getCapabilityRouteDecision(text = "", options = {}) {
   const emptyProjectFolder = Boolean(options.emptyProjectFolder);
 
   if (!projectOpen || emptyProjectFolder) return null;
+
+  if (hasExplicitServiceExclusionIntent(s) && hasBroaderAppPlanningShape(s)) {
+    return null;
+  }
 
   const checks = [
     getMultiServiceCapability,

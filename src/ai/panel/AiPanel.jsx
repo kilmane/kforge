@@ -47,11 +47,6 @@ import {
   isSmallControlEditGoal,
 } from "../implementation/smallControlEditController.js";
 import {
-  BUILT_IN_MODERN_REACT_STARTER_LABEL,
-  buildBuiltInModernReactStarterImplementation,
-  canUseBuiltInModernReactStarterImplementation,
-} from "../planning/builtInModernReactStarter.js";
-import {
   buildAppBuildImplementationPrompt,
   createAppBuildJob,
   getAppBuildBaselineSnapshots,
@@ -1408,7 +1403,6 @@ function buildPostEditCompletionActions({
   context = null,
   appendMessage = null,
   sendWithPrompt = null,
-  runBuiltInModernReactStarter = null,
   originalGoal = "",
 } = {}) {
   if (typeof appendMessage !== "function") return [];
@@ -1418,16 +1412,6 @@ function buildPostEditCompletionActions({
     : [];
   const lastChangedPath =
     editedPaths.length > 0 ? editedPaths[editedPaths.length - 1] : "";
-  const starterGoal = String(
-    originalGoal || context?.lastUserGoal || "",
-  ).trim();
-  const canOfferBuiltInStarterQualityRecovery =
-    context?.source !== "built_in_modern_react_starter" &&
-    typeof runBuiltInModernReactStarter === "function" &&
-    canUseBuiltInModernReactStarterImplementation({
-      goal: starterGoal,
-      inspectedPaths: editedPaths,
-    }).ok;
   const appBuildRestoreSnapshots = getRestorableAppBuildBaselineSnapshots(context);
   const appBuildOriginalGoal = stripKForgeVisualDirectionFromGoal(
     originalGoal || context?.lastUserGoal || "",
@@ -1612,25 +1596,7 @@ function buildPostEditCompletionActions({
             },
           },
         ]
-      : []),
-    ...(canOfferBuiltInStarterQualityRecovery
-      ? [
-          {
-            label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
-            onClick: () => {
-              appendMessage(
-                "user",
-                `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
-              );
-              runBuiltInModernReactStarter({
-                originalGoal: starterGoal,
-                inspectedPaths: editedPaths,
-              });
-            },
-          },
-        ]
-      : []),
-    {
+      : []),    {
       label: SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
       onClick: () => {
         appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.CONTINUE_EDITING}`);
@@ -2652,138 +2618,6 @@ export default function AiPanel({
     ],
   );
 
-  const runBuiltInModernReactStarter = useCallback(
-    async ({ originalGoal = "", inspectedPaths = [], projectTemplateInfo = null } = {}) => {
-      const suitability = canUseBuiltInModernReactStarterImplementation({
-        goal: originalGoal,
-        inspectedPaths,
-        projectTemplateInfo,
-      });
-
-      if (!suitability.ok) {
-        appendMessage(
-          "assistant",
-          "KForge built-in polished starter is not safe for this step.\n\n" +
-            suitability.reason +
-            "\n\nNo files were changed.",
-        );
-        return;
-      }
-
-      const starter = buildBuiltInModernReactStarterImplementation(originalGoal);
-      const files = Array.isArray(starter.files) ? starter.files : [];
-
-      if (files.length === 0) {
-        appendMessage(
-          "assistant",
-          "KForge built-in polished starter did not produce any files.\n\nNo files were changed.",
-        );
-        return;
-      }
-
-      appendMessage(
-        "assistant",
-        `Working… applying KForge built-in polished starter (${starter.title || "Modern app"}).`,
-      );
-
-      const successfulWritePaths = [];
-      const cancelledWritePaths = [];
-      const failedWritePaths = [];
-
-      for (const file of files) {
-        const filePath = String(file?.path || "").trim();
-        const content = String(file?.content || "");
-
-        if (!filePath || !content) {
-          failedWritePaths.push(filePath || "(unknown path)");
-          continue;
-        }
-
-        const result = await runTool({
-          toolName: "write_file",
-          args: {
-            path: filePath,
-            content,
-          },
-        });
-
-        if (result?.ok) {
-          successfulWritePaths.push(filePath);
-          continue;
-        }
-
-        if (result?.cancelled) {
-          cancelledWritePaths.push(filePath);
-          break;
-        }
-
-        failedWritePaths.push(filePath);
-      }
-
-      if (successfulWritePaths.length === 0) {
-        appendMessage(
-          "assistant",
-          "KForge built-in polished starter did not complete any file writes.\n\n" +
-            (cancelledWritePaths.length > 0
-              ? "The write request was cancelled.\n\n"
-              : "") +
-            (failedWritePaths.length > 0
-              ? "Failed paths:\n- " + failedWritePaths.join("\n- ") + "\n\n"
-              : "") +
-            "No starter implementation was completed.",
-        );
-        return;
-      }
-
-      const latestWrittenPath =
-        successfulWritePaths[successfulWritePaths.length - 1] || "";
-
-      const completedWorkflowContext =
-        createCompletedImplementationWorkflowContext({
-          lastEditedPath: latestWrittenPath,
-          editedPaths: successfulWritePaths,
-          preWriteSnapshots: getSnapshotsForPaths(
-            preWriteSnapshotsRef.current,
-            successfulWritePaths,
-          ),
-          completedSummary:
-            "KForge built-in polished starter was applied.",
-          source: "built_in_modern_react_starter",
-        });
-
-      if (typeof setWorkflowContext === "function") {
-        setWorkflowContext(completedWorkflowContext);
-      }
-
-      const fileCountLabel =
-        successfulWritePaths.length === 1
-          ? "1 file"
-          : `${successfulWritePaths.length} files`;
-
-      appendMessage(
-        "assistant",
-        `Done — updated ${fileCountLabel}.\n\n` +
-          `Implementation: KForge built-in polished starter (${starter.title || "Modern app"}).\n\n` +
-          `${buildPostEditChangeSummary(completedWorkflowContext)}\n\n` +
-          `${buildPostEditVerificationMessage(completedWorkflowContext)}\n\n` +
-          buildPostEditNextStepMessage(completedWorkflowContext),
-        {
-          actions: buildPostEditCompletionActions({
-            context: completedWorkflowContext,
-            appendMessage,
-            sendWithPrompt,
-          }),
-        },
-      );
-    },
-    [
-      appendMessage,
-      runTool,
-      sendWithPrompt,
-      setWorkflowContext,
-    ],
-  );
-
   const runAppBuildJobStartupInspection = useCallback(
     async ({ originalGoal = "", detectedTemplateName = "", detectedKind = "" } = {}) => {
       let job = createAppBuildJob({
@@ -2946,35 +2780,6 @@ export default function AiPanel({
             return;
           }
 
-          if (msg?.meta?.builtInModernReactStarterRequest === true) {
-            const key = `built_in_modern_react_starter:${msgKey}`;
-            if (
-              GLOBAL_SEEN_TOOL_KEYS.has(key) ||
-              processedKeysRef.current.has(key)
-            ) {
-              continue;
-            }
-
-            GLOBAL_SEEN_TOOL_KEYS.add(key);
-            processedKeysRef.current.add(key);
-
-            await runBuiltInModernReactStarter({
-              originalGoal: msg.meta.builtInModernReactStarterGoal || "",
-              inspectedPaths: Array.isArray(
-                msg.meta.builtInModernReactStarterInspectedPaths,
-              )
-                ? msg.meta.builtInModernReactStarterInspectedPaths
-                : [],
-              projectTemplateInfo:
-                msg.meta.builtInModernReactStarterProjectTemplateInfo &&
-                typeof msg.meta.builtInModernReactStarterProjectTemplateInfo ===
-                  "object"
-                  ? msg.meta.builtInModernReactStarterProjectTemplateInfo
-                  : null,
-            });
-            return;
-          }
-
           const pendingCalls = [];
           const isExplicitModelToolExecution =
             msg?.meta?.allowModelToolExecution === true;
@@ -3026,7 +2831,93 @@ export default function AiPanel({
             const blocks = extractFencedBlocks(content);
             for (const b of blocks) {
               const parsed = safeParseToolRequestJson(b.payload);
-              if (!parsed) continue;
+              if (!parsed) {
+                if (isExplicitModelToolExecution) {
+                  const tiny = hashString(
+                    `unparseable|${b.source}|${String(b.payload || "").slice(0, 2000)}`,
+                  );
+                  const key = `mtool:unparseable:${msgKey}:${tiny}`;
+
+                  if (
+                    !GLOBAL_SEEN_TOOL_KEYS.has(key) &&
+                    !processedKeysRef.current.has(key)
+                  ) {
+                    GLOBAL_SEEN_TOOL_KEYS.add(key);
+                    processedKeysRef.current.add(key);
+
+                    const retryGoal = String(
+                      msg?.meta?.modelToolOriginalGoal ||
+                        getNearestUserMessageTextBeforeIndex(messages, i) ||
+                        "",
+                    ).trim();
+                    const retryInspectedPaths = Array.isArray(
+                      msg?.meta?.modelToolInspectedPaths,
+                    )
+                      ? msg.meta.modelToolInspectedPaths
+                          .map((item) => String(item || "").trim())
+                          .filter(Boolean)
+                      : [];
+                    const isAppBuildParseFailure =
+                      String(msg?.meta?.modelToolExecutionSource || "") ===
+                      "app_build_implementation";
+                    const actions = [];
+
+                    if (isAppBuildParseFailure && typeof sendWithPrompt === "function") {
+                      actions.push({
+                        label: "Retry controlled app-build implementation",
+                        onClick: () => {
+                          appendMessage(
+                            "user",
+                            "Choice: Retry controlled app-build implementation",
+                          );
+                          sendWithPrompt(
+                            "Retry the controlled app-build implementation after an unreadable tool request.\n\n" +
+                              `Original app request: ${retryGoal}\n\n` +
+                              "The previous model response produced a fenced tool block that KForge could not parse as valid JSON, so no approval prompt was shown and no files were changed.\n\n" +
+                              "Use the already inspected evidence. Request exactly one valid fenced ```tool``` block containing JSON with shape { \"name\": \"write_file\", \"args\": { \"path\": \"...\", \"content\": \"...\" } }. " +
+                              "For write_file, content must be the complete full file text. Do not use natural-language tool shorthand. Do not claim Preview, build, tests, deployment, or service setup.",
+                            {
+                              silentUserAppend: true,
+                              skipCompletedWorkflowRoute: true,
+                              skipDirectWorkflowHandoffRoute: true,
+                              forceProjectEdit: true,
+                              forceAppBuildImplementation: true,
+                              inspectedPaths: retryInspectedPaths,
+                              modelToolInspectedPaths: retryInspectedPaths,
+                              modelToolOriginalGoal: retryGoal,
+                              lastUserGoal: retryGoal,
+                              forceModelCapabilityTestOverride: true,
+                            },
+                          );
+                        },
+                      });
+                    }
+
+                    actions.push({
+                      label: SUGGESTED_ACTION_LABEL.STOP,
+                      onClick: () => {
+                        appendMessage("user", `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`);
+                        appendMessage(
+                          "assistant",
+                          "Stopped. No files were changed by the unreadable tool request.",
+                        );
+                      },
+                    });
+
+                    appendMessage(
+                      "assistant",
+                      "KForge could not understand the model's file-change request.\n\n" +
+                        "No files were changed, and no approval prompt was shown because the fenced tool block was not valid KForge tool JSON.\n\n" +
+                        "This is a parser/format safety stop, not an approved edit.",
+                      { actions },
+                    );
+                  }
+
+                  return;
+                }
+
+                continue;
+              }
 
               const args = { ...(parsed.args || {}) };
 
@@ -4017,7 +3908,6 @@ export default function AiPanel({
                 context: completedWorkflowContext,
                 appendMessage,
                 sendWithPrompt,
-                runBuiltInModernReactStarter,
                 originalGoal: workflowContext?.lastUserGoal || latestUserText,
               }),
             });
@@ -5002,8 +4892,7 @@ export default function AiPanel({
                       context: completedWorkflowContext,
                       appendMessage,
                       sendWithPrompt,
-                      runBuiltInModernReactStarter,
-                      originalGoal: workflowContext?.lastUserGoal || latestUserText,
+                            originalGoal: workflowContext?.lastUserGoal || latestUserText,
                     }),
                   },
                 );
@@ -5030,8 +4919,7 @@ export default function AiPanel({
                     context: completedWorkflowContext,
                     appendMessage,
                     sendWithPrompt,
-                    runBuiltInModernReactStarter,
-                    originalGoal: workflowContext?.lastUserGoal || latestUserText,
+                        originalGoal: workflowContext?.lastUserGoal || latestUserText,
                   }),
                 });
               } else if (agentResult?.stopReason === "max_steps_reached") {
@@ -5123,30 +5011,7 @@ export default function AiPanel({
                             );
                           }
                         },
-                      },
-                      ...(!isPerformanceToolExecution &&
-                        !isFixToolExecution &&
-                        canUseBuiltInModernReactStarterImplementation({
-                          goal: originalGoal,
-                          inspectedPaths: agentSuccessfulReadPaths,
-                        }).ok
-                        ? [
-                            {
-                              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
-                              onClick: () => {
-                                appendMessage(
-                                  "user",
-                                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
-                                );
-                                runBuiltInModernReactStarter({
-                                  originalGoal,
-                                  inspectedPaths: agentSuccessfulReadPaths,
-                                });
-                              },
-                            },
-                          ]
-                        : []),
-                      {
+                      },                      {
                         label: stopActionLabel,
                         onClick: () => {
                           appendMessage(
@@ -5253,30 +5118,7 @@ export default function AiPanel({
                             );
                           }
                         },
-                      },
-                      ...(!isPerformanceToolExecution &&
-                        !isFixToolExecution &&
-                        canUseBuiltInModernReactStarterImplementation({
-                          goal: originalGoal,
-                          inspectedPaths: agentSuccessfulReadPaths,
-                        }).ok
-                        ? [
-                            {
-                              label: BUILT_IN_MODERN_REACT_STARTER_LABEL,
-                              onClick: () => {
-                                appendMessage(
-                                  "user",
-                                  `Choice: ${BUILT_IN_MODERN_REACT_STARTER_LABEL}`,
-                                );
-                                runBuiltInModernReactStarter({
-                                  originalGoal,
-                                  inspectedPaths: agentSuccessfulReadPaths,
-                                });
-                              },
-                            },
-                          ]
-                        : []),
-                    ],
+                      },                    ],
                   },
                 );
               } else if (
@@ -5321,7 +5163,6 @@ export default function AiPanel({
     CHAT_CONTEXT_TURNS,
     setWorkflowContext,
     workflowContext?.lastUserGoal,
-    runBuiltInModernReactStarter,
     runAppBuildJobStartupInspection,
   ]);
 
