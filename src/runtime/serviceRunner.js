@@ -121,6 +121,10 @@ export async function openExternalUrl(url) {
   });
 }
 
+export async function githubListRepos() {
+  return invoke("github_list_repos");
+}
+
 export async function githubCloneIntoFolder({
   repoUrl,
   parentDir,

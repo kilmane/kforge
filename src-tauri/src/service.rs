@@ -29,6 +29,14 @@ pub struct GithubRepoState {
     pub branch: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubRepoListItem {
+    pub name_with_owner: String,
+    pub url: String,
+    pub is_private: bool,
+}
+
 fn emit_log(app: &AppHandle, kind: &str, line: &str) {
     let _ = app.emit(
         "kforge://service/log",
@@ -1591,6 +1599,60 @@ pub fn github_open_repo(app: AppHandle, project_path: String) -> Result<(), Stri
         .map_err(|error| format!("Failed to open browser: {}", error))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn github_list_repos() -> Result<Vec<GithubRepoListItem>, String> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    if !command_exists(&cwd, "gh") {
+        return Err(
+            "GitHub CLI (gh) is not installed or not available in PATH. Install GitHub CLI, restart KForge, then try again."
+                .to_string(),
+        );
+    }
+
+    let auth_output = Command::new("gh")
+        .args(["auth", "status"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|error| format!("Failed to check GitHub CLI authentication: {}", error))?;
+
+    if !auth_output.status.success() {
+        let detail = String::from_utf8_lossy(&auth_output.stderr).trim().to_string();
+        return Err(if detail.is_empty() {
+            "GitHub CLI is not signed in. Run gh auth login, then try again.".to_string()
+        } else {
+            format!("GitHub CLI is not signed in. Run gh auth login, then try again. {}", detail)
+        });
+    }
+
+    let output = Command::new("gh")
+        .args([
+            "repo",
+            "list",
+            "--limit",
+            "100",
+            "--json",
+            "nameWithOwner,url,isPrivate",
+        ])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|error| format!("Failed to list GitHub repositories: {}", error))?;
+
+    if !output.status.success() {
+        let detail = first_non_empty_line(&String::from_utf8_lossy(&output.stderr))
+            .or_else(|| first_non_empty_line(&String::from_utf8_lossy(&output.stdout)))
+            .unwrap_or_else(|| "No additional error details were returned.".to_string());
+
+        return Err(format!("Could not list GitHub repositories. {}", detail));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let repos: Vec<GithubRepoListItem> = serde_json::from_str(&stdout)
+        .map_err(|error| format!("Could not parse GitHub repository list: {}", error))?;
+
+    Ok(repos)
 }
 
 #[tauri::command]

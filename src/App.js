@@ -1962,20 +1962,74 @@ export default function App() {
   }, []);
   const handleNewProject = useCallback(async () => {
     const mode = window.prompt(
-      "New Project\n\nPress Enter for local project\nor type 2 to import from GitHub\n\n1 — Create local project\n2 — Import from GitHub",
+      "New Project\n\nPress Enter for local project\nor type 2 to import from GitHub by URL\nor type 3 to browse your GitHub repos\n\n1 — Create local project\n2 — Import from GitHub by URL\n3 — Browse my GitHub repos",
       "1",
     );
 
-    if (!mode) return;
+    if (mode === null) return;
 
+    const modeChoice = String(mode || "").trim() || "1";
     let folder;
 
-    if (mode.trim() === "2") {
-      const repoUrl = window.prompt(
-        "GitHub repository URL\n\nExample:\nhttps://github.com/user/repo",
-      );
+    if (modeChoice === "2" || modeChoice === "3") {
+      let repoUrl = "";
 
-      if (!repoUrl) return;
+      if (modeChoice === "2") {
+        repoUrl = window.prompt(
+          "GitHub repository URL\n\nExample:\nhttps://github.com/user/repo",
+        );
+
+        if (!repoUrl) return;
+      } else {
+        try {
+          const { githubListRepos } = await import("./runtime/serviceRunner");
+          const reposRaw = await githubListRepos();
+          const repos = Array.isArray(reposRaw)
+            ? reposRaw.filter((repo) => repo?.url && repo?.nameWithOwner)
+            : [];
+
+          if (!repos.length) {
+            setAiTestOutput(
+              "GitHub import failed:\n\nNo GitHub repositories were returned. Make sure GitHub CLI is installed and signed in with gh auth login.",
+            );
+            return;
+          }
+
+          const visibleRepos = repos.slice(0, 30);
+          const repoList = visibleRepos
+            .map(
+              (repo, index) =>
+                `${index + 1}. ${repo.nameWithOwner}${repo.isPrivate ? " (private)" : ""}`,
+            )
+            .join("\n");
+          const extraNote =
+            repos.length > visibleRepos.length
+              ? `\n\nShowing first ${visibleRepos.length} of ${repos.length} repositories.`
+              : "";
+          const selected = window.prompt(
+            `Browse my GitHub repos\n\nChoose a repo number to import:\n\n${repoList}${extraNote}`,
+            "1",
+          );
+
+          if (!selected) return;
+
+          const selectedIndex = Number.parseInt(String(selected).trim(), 10) - 1;
+          const selectedRepo = visibleRepos[selectedIndex];
+
+          if (!selectedRepo) {
+            setAiTestOutput(
+              "GitHub import failed:\n\nThat repo number was not valid. Try New Project → Browse my GitHub repos again.",
+            );
+            return;
+          }
+
+          repoUrl = selectedRepo.url;
+        } catch (err) {
+          const msg = formatTauriError ? formatTauriError(err) : String(err);
+          setAiTestOutput(`GitHub repo browse failed:\n\n${msg}`);
+          return;
+        }
+      }
 
       const projectNameInput = window.prompt(
         "Project folder name (leave blank to use repo name)",

@@ -417,9 +417,17 @@ Examples:
 
 ## New Project
 
-Use **New Project** when you want to start fresh.
+Use **New Project** when you want to start fresh or import an existing GitHub repository.
 
-Depending on the build, this may also include import flows such as importing from GitHub.
+Current beta choices may include:
+
+* **1 — Create local project**
+* **2 — Import from GitHub by URL**
+* **3 — Browse my GitHub repos**
+
+Use **Import from GitHub by URL** when you already have the repository URL.
+
+Use **Browse my GitHub repos** when GitHub CLI is installed and signed in on your computer. KForge will ask GitHub CLI for your repositories, show a numbered list, then clone the selected repository into the folder you choose.
 
 ## Close Folder
 
@@ -552,7 +560,7 @@ Examples:
 * “Set up Supabase” → KForge may guide you to **Services → Backend → Supabase**
 * “Add OpenAI to this app” → KForge may guide you to **Services → AI → OpenAI**
 * “This app will need deployment later” → KForge may ask whether this is context or whether you want **Services → Deploy** now
-* “Connect GitHub” → use **Services → Code → GitHub** for the current project, or **New Project → Import from GitHub** when importing an existing repository
+* “Connect GitHub” → use **Services → Code → GitHub** for the current project, or **New Project → Import from GitHub by URL / Browse my GitHub repos** when importing an existing repository
 * “Create a starter app” → KForge may guide you to **Preview → Generate**
 * “Run git status” → KForge may guide you to **Terminal**
 
@@ -1108,7 +1116,8 @@ Typical GitHub actions may include:
 Important distinction:
 
 * use **Services → Code → GitHub** for the current local project
-* use **New Project → Import from GitHub** when importing an existing GitHub repository into KForge
+* use **New Project → Import from GitHub by URL** when importing an existing GitHub repository from a pasted URL
+* use **New Project → Browse my GitHub repos** when you want KForge to list repositories from your signed-in GitHub CLI account
 
 ## Deploy
 
@@ -1210,11 +1219,21 @@ Less useful candidates:
 
 ## D) I want to connect GitHub
 
+For the current local project:
+
 1. make sure Git for Windows is installed
 2. if you want KForge to publish/push to GitHub, also install GitHub CLI and sign in once with `gh auth login`
 3. open your project
 4. go to Services → Code → GitHub
 5. use the relevant GitHub action
+
+To import an existing GitHub repository:
+
+1. click New Project
+2. choose **2 — Import from GitHub by URL** if you already have the repository URL
+3. choose **3 — Browse my GitHub repos** if GitHub CLI is installed and signed in
+4. choose the destination folder
+5. KForge clones the repository and opens it as the current project
 
 For setup steps, see the [Windows Setup Guide](windows-setup.md).
 

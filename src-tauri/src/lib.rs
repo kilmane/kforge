@@ -69,6 +69,7 @@ pub fn run() {
             service::supabase_create_query_helper,
             service::supabase_quick_connect,
             service::github_pull,
+            service::github_list_repos,
             service::github_clone_repo,
             service::deploy_open_vercel,
             service::deploy_open_netlify,
