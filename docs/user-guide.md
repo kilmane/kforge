@@ -370,6 +370,8 @@ This keeps help close to the AI workflow.
 
 From the screenshot, the Help menu includes topics such as:
 
+* User Guide
+* Windows Setup Guide
 * Providers and Models
 * Models Color + Labels
 * Terminology
@@ -1088,12 +1090,25 @@ Mentioning a service during planning is not always the same as asking KForge to 
 
 Use **Services → Code → GitHub** for actions on the current local project.
 
-Typical actions may include:
+Before using GitHub publishing from KForge, your computer needs:
 
-* publish
-* push
-* pull
-* open repository
+* **Git for Windows** for normal Git repository commands
+* **GitHub CLI** for GitHub account connection and repository publishing
+* one successful GitHub CLI sign-in with `gh auth login`
+
+For beginner installation steps, see the [Windows Setup Guide](windows-setup.md).
+
+Typical GitHub actions may include:
+
+* **Publish** — initialise Git if needed, create a GitHub repository, set the `origin` remote, create the first commit, and push the project
+* **Push changes** — commit and push local changes to GitHub after the project is already connected
+* **Pull latest** — pull the latest changes from the connected GitHub repository
+* **Open on GitHub** — open the connected repository in your browser
+
+Important distinction:
+
+* use **Services → Code → GitHub** for the current local project
+* use **New Project → Import from GitHub** when importing an existing GitHub repository into KForge
 
 ## Deploy
 
@@ -1195,9 +1210,13 @@ Less useful candidates:
 
 ## D) I want to connect GitHub
 
-1. open your project
-2. go to Services → Code → GitHub
-3. use the relevant GitHub action
+1. make sure Git for Windows is installed
+2. if you want KForge to publish/push to GitHub, also install GitHub CLI and sign in once with `gh auth login`
+3. open your project
+4. go to Services → Code → GitHub
+5. use the relevant GitHub action
+
+For setup steps, see the [Windows Setup Guide](windows-setup.md).
 
 ## E) I want to add backend support with Supabase
 

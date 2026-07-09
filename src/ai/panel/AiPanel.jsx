@@ -2037,6 +2037,11 @@ const AI_HELP_LINKS = [
     url: "https://kilmane.github.io/kforge/user-guide.html",
   },
   {
+    id: "windows_setup",
+    label: "Windows Setup Guide",
+    url: "https://kilmane.github.io/kforge/windows-setup.html",
+  },
+  {
     id: "workspace_awareness",
     label: "Workspace Awareness",
     url: "https://kilmane.github.io/kforge/workspace-awareness.html",

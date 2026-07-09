@@ -1503,6 +1503,41 @@ export default function ServicePanel({ projectPath }) {
                 background: "rgba(24, 24, 27, 0.35)",
               }}
             >
+              <div
+                style={{
+                  display: "grid",
+                  gap: "6px",
+                  padding: "10px 12px",
+                  border: "1px solid rgba(59, 130, 246, 0.35)",
+                  borderRadius: "8px",
+                  background: "rgba(59, 130, 246, 0.08)",
+                  color: "#dbeafe",
+                  fontSize: "13px",
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong style={{ color: "#eff6ff" }}>
+                  First-time GitHub setup
+                </strong>
+                <div>
+                  KForge uses Git and GitHub CLI on your computer for this
+                  workflow. Install Git for Windows and GitHub CLI, then sign in
+                  once with <code>gh auth login</code>. Check Help →
+                  Windows Setup Guide for installation steps, or Help → User
+                  Guide for how to use GitHub with KForge.
+                </div>
+                <div style={{ color: "#bfdbfe" }}>
+                  Publish will initialise Git if needed, create the GitHub
+                  repository, set the origin remote, create the first commit,
+                  and push the project. After that, use Push changes, Pull
+                  latest, or Open on GitHub.
+                </div>
+                <div style={{ color: "#bfdbfe" }}>
+                  If publishing fails, check the Activity log for missing Git,
+                  missing GitHub CLI, or GitHub sign-in messages.
+                </div>
+              </div>
+
               <label
                 style={{
                   display: "grid",
@@ -1570,7 +1605,7 @@ export default function ServicePanel({ projectPath }) {
                 className="command-runner-runButton"
                 onClick={() => handleSetup(activeProvider)}
                 disabled={isBusy || isPlanned}
-                title="Publish this project to GitHub"
+                title="Create a GitHub repository, set origin, commit, and push using GitHub CLI"
               >
                 {isBusy ? "Working..." : "Publish"}
               </button>
