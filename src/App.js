@@ -9550,10 +9550,7 @@ setWorkflowContext({
       <button
         className={buttonClass("ghost")}
         onClick={() => {
-          const next = !memoryOpen;
-          setMemoryOpen(next);
-          setFocusMode(!next);
-          // open memory => focus OFF, hide memory => focus ON
+          setMemoryOpen((current) => !current);
         }}
         title="Toggle Project Memory"
       >
@@ -9625,12 +9622,6 @@ setWorkflowContext({
       <div className="flex-1 flex min-h-0">
         {!focusMode ? (
           <div className="w-72 border-r border-zinc-800 min-h-0 flex flex-col">
-            {memoryOpen ? (
-              <div className="max-h-[45%] overflow-auto border-b border-zinc-800">
-                <ProjectMemoryPanel />
-              </div>
-            ) : null}
-
             <div className="flex-1 min-h-0">
               <Explorer
                 tree={tree}
@@ -9676,13 +9667,19 @@ setWorkflowContext({
 
       <div className="shrink-0 bg-zinc-950 relative z-50">{topBarEl}</div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex-1 min-h-0 overflow-hidden">
         <DockShell
           main={classicLayout}
           dockPanel={aiPanelEl}
           dockOpen={aiPanelOpen}
           dockMode={focusMode ? "full" : "bottom"}
         />
+
+        {memoryOpen ? (
+          <div className="absolute left-0 top-0 bottom-0 z-40 w-[28rem] max-w-[90vw] overflow-auto border-r border-zinc-800 bg-zinc-950 shadow-2xl">
+            <ProjectMemoryPanel />
+          </div>
+        ) : null}
       </div>
     </div>
   );
