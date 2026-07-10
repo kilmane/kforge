@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import {
   getProjectMemory,
   setProjectMemory,
+  setProjectRoot,
+  loadProjectMemoryForCurrentRoot,
   saveProjectMemoryForCurrentRoot,
 } from "../lib/fs";
 
@@ -41,9 +43,37 @@ export default function ProjectMemoryPanel({ projectPath = null } = {}) {
   const [expandedDecisions, setExpandedDecisions] = useState({});
 
   useEffect(() => {
-    setLocalMemory(clone(getProjectMemory()));
-    setExpandedAnchors({});
-    setExpandedDecisions({});
+    let cancelled = false;
+    const activeProjectPath = String(projectPath || "").trim();
+
+    async function loadForActiveProject() {
+      setExpandedAnchors({});
+      setExpandedDecisions({});
+
+      if (!activeProjectPath) {
+        setLocalMemory(clone(getProjectMemory()));
+        return;
+      }
+
+      try {
+        setProjectRoot(activeProjectPath);
+        const loaded = await loadProjectMemoryForCurrentRoot();
+        if (!cancelled) {
+          setLocalMemory(clone(loaded || getProjectMemory()));
+        }
+      } catch (err) {
+        console.error("[kforge] loadProjectMemory failed:", err);
+        if (!cancelled) {
+          setLocalMemory(clone(getProjectMemory()));
+        }
+      }
+    }
+
+    loadForActiveProject();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectPath]);
 
   function sync(next) {
