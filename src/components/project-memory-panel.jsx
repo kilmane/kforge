@@ -1,5 +1,5 @@
 // src/components/project-memory-panel.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getProjectMemory,
   setProjectMemory,
@@ -32,13 +32,19 @@ const removeButtonClass =
 const cardClass =
   "rounded border border-zinc-800 bg-zinc-900/60 p-2 shadow-sm";
 
-export default function ProjectMemoryPanel() {
+export default function ProjectMemoryPanel({ projectPath = null } = {}) {
   const [memory, setLocalMemory] = useState(() => clone(getProjectMemory()));
   const [anchorText, setAnchorText] = useState("");
   const [decisionText, setDecisionText] = useState("");
   const [workingPath, setWorkingPath] = useState("");
   const [expandedAnchors, setExpandedAnchors] = useState({});
   const [expandedDecisions, setExpandedDecisions] = useState({});
+
+  useEffect(() => {
+    setLocalMemory(clone(getProjectMemory()));
+    setExpandedAnchors({});
+    setExpandedDecisions({});
+  }, [projectPath]);
 
   function sync(next) {
     setLocalMemory(next);
@@ -135,6 +141,30 @@ export default function ProjectMemoryPanel() {
   const workingSet = Array.isArray(memory.working_set)
     ? memory.working_set
     : [];
+  const activeProjectPath = String(projectPath || "").trim();
+
+  if (!activeProjectPath) {
+    return (
+      <div className="h-full min-h-0 overflow-y-auto p-3 text-sm space-y-4 border-t border-zinc-800 bg-zinc-950">
+        <div>
+          <h3 className="font-semibold">Project Memory</h3>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+            Project notes that KForge can include as context during AI-assisted work.
+          </p>
+        </div>
+
+        <div className="rounded border border-amber-900/50 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-100">
+          <div className="font-semibold text-amber-200">No project open</div>
+          <p className="mt-1">
+            Open a project folder to view or edit that project&apos;s saved memory.
+          </p>
+          <p className="mt-2 text-amber-200/80">
+            Saved memories are stored inside each project at .kforge/project-memory.json.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full min-h-0 overflow-y-auto p-3 text-sm space-y-5 border-t border-zinc-800 bg-zinc-950">
@@ -143,6 +173,12 @@ export default function ProjectMemoryPanel() {
         <p className="mt-1 text-xs leading-relaxed text-zinc-400">
           Project notes that KForge can include as context during AI-assisted work.
         </p>
+        <div
+          className="mt-2 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-400 break-all"
+          title={activeProjectPath}
+        >
+          Reading: {activeProjectPath}
+        </div>
       </div>
 
       {/* Anchors */}

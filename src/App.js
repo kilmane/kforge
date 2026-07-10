@@ -1933,6 +1933,7 @@ export default function App() {
     setIncludeActiveFile(false);
 
     // --- Project/editor ---
+    setProjectRoot(null);
     setProjectPath(null);
     setTree([]);
     setTabs([]);
@@ -1945,6 +1946,7 @@ export default function App() {
 
   const handleCloseFolder = useCallback(() => {
     setFocusMode(true);
+    setProjectRoot(null);
     setProjectPath(null);
     setWorkflowContext(null);
     setTree([]);
@@ -9677,7 +9679,7 @@ setWorkflowContext({
 
         {memoryOpen ? (
           <div className="absolute left-0 top-0 bottom-0 z-40 w-[28rem] max-w-[90vw] overflow-auto border-r border-zinc-800 bg-zinc-950 shadow-2xl">
-            <ProjectMemoryPanel />
+            <ProjectMemoryPanel projectPath={projectPath} />
           </div>
         ) : null}
       </div>
