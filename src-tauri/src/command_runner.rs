@@ -3,6 +3,9 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use tauri::{AppHandle, Emitter};
 
 #[derive(Default)]
@@ -45,22 +48,29 @@ pub fn command_run(
         }
 
         #[cfg(target_os = "windows")]
-        let mut child = match Command::new("cmd")
-            .args(["/C", &trimmed])
-            .current_dir(&cwd)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(e) => {
-                let _ = app_handle.emit("kforge://command/log", format!("Failed to start: {}", e));
-                if let Ok(mut guard) = state_handle.lock() {
-                    guard.running = false;
-                    guard.child_pid = None;
+        let mut child = {
+            let mut command = Command::new("cmd");
+            command
+                .args(["/D", "/S", "/C"])
+                .raw_arg(&trimmed)
+                .current_dir(&cwd)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            match command.spawn() {
+                Ok(child) => child,
+                Err(e) => {
+                    let _ = app_handle.emit(
+                        "kforge://command/log",
+                        format!("Failed to start: {}", e),
+                    );
+                    if let Ok(mut guard) = state_handle.lock() {
+                        guard.running = false;
+                        guard.child_pid = None;
+                    }
+                    let _ = app_handle.emit("kforge://command/status", "idle");
+                    return;
                 }
-                let _ = app_handle.emit("kforge://command/status", "idle");
-                return;
             }
         };
 
@@ -74,7 +84,10 @@ pub fn command_run(
         {
             Ok(child) => child,
             Err(e) => {
-                let _ = app_handle.emit("kforge://command/log", format!("Failed to start: {}", e));
+                let _ = app_handle.emit(
+                    "kforge://command/log",
+                    format!("Failed to start: {}", e),
+                );
                 if let Ok(mut guard) = state_handle.lock() {
                     guard.running = false;
                     guard.child_pid = None;
