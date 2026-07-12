@@ -1055,6 +1055,42 @@ function clearApiKeyFingerprint(providerId) {
 }
 
 
+const AI_PROJECT_SYSTEM_STORAGE_PREFIX = "kforge:ai:project-system:";
+
+function normalizeProjectStoragePath(projectPath) {
+  return String(projectPath || "").trim().replace(/\\/g, "/");
+}
+
+function aiProjectSystemStorageKey(projectPath) {
+  const normalized = normalizeProjectStoragePath(projectPath);
+  return normalized
+    ? `${AI_PROJECT_SYSTEM_STORAGE_PREFIX}${encodeURIComponent(normalized)}`
+    : "";
+}
+
+function readProjectAiSystem(projectPath) {
+  const key = aiProjectSystemStorageKey(projectPath);
+  if (!key) return "";
+
+  try {
+    const value = window.localStorage.getItem(key);
+    return typeof value === "string" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function saveProjectAiSystem(projectPath, value) {
+  const key = aiProjectSystemStorageKey(projectPath);
+  if (!key) return;
+
+  try {
+    window.localStorage.setItem(key, String(value ?? ""));
+  } catch {
+    // ignore
+  }
+}
+
 function shouldClearKforgeStorageKey(key) {
   if (typeof key !== "string") return false;
 
@@ -1596,6 +1632,22 @@ export default function App() {
   const [aiTemperature, setAiTemperature] = useState(0.2);
   const [aiMaxTokens, setAiMaxTokens] = useState(4000);
 
+  const handleAiSystemChange = useCallback(
+    (value) => {
+      setAiSystem(value);
+      if (projectPath) saveProjectAiSystem(projectPath, value);
+    },
+    [projectPath],
+  );
+
+  useEffect(() => {
+    if (!projectPath) {
+      setAiSystem("");
+      return;
+    }
+
+    setAiSystem(readProjectAiSystem(projectPath));
+  }, [projectPath]);
   const [aiRunning, setAiRunning] = useState(false);
   const [aiOutput, setAiOutput] = useState("");
 
@@ -9463,7 +9515,7 @@ setWorkflowContext({
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}
       aiSystem={aiSystem}
-      setAiSystem={setAiSystem}
+      setAiSystem={handleAiSystemChange}
       aiTemperature={aiTemperature}
       setAiTemperature={setAiTemperature}
       aiMaxTokens={aiMaxTokens}
