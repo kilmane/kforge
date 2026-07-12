@@ -336,3 +336,65 @@ Only proceed if:
 **Done when**
 
 - One of these candidates is intentionally selected for a dedicated ship, or explicitly removed from the backlog.
+
+---
+
+# Legacy AI Advanced Controls and Patch Preview Plumbing
+
+Status: Shelved
+Added: 2026-07-12
+Updated: 2026-07-12
+
+**Decision**
+
+The user-facing Advanced settings surface was removed during the AI controls simplification ship.
+
+The normal AI experience now keeps **Attach current file** directly above the prompt. Project-specific behavior instructions and expert model parameters live under **Settings → AI controls**.
+
+The old controls should not return in their previous form. Revisit them only if KForge later introduces a clearly redesigned review workflow with proven user value.
+
+**Parked implementation**
+
+- `src/ai/panel/PatchPreviewPanel.jsx` remains as an unrendered standalone legacy component.
+- `src/ai/panel/OutputPanel.jsx` remains as an unrendered standalone legacy component.
+- `src/App.js` retains hidden patch-workflow plumbing:
+  - `askForPatch` / `setAskForPatch`
+  - `setPatchPreview`
+  - `setPatchPreviewVisible`
+  - `maybeCapturePatchPreview`
+  - `effectiveAskForPatch`
+  - unified-diff prompt instructions and retry propagation
+- `src/App.js` retains write-only `setAiOutput` state updates even though the raw Output panel is no longer rendered.
+- Model workflow policy can still allow or force patch-preview-style requests internally.
+
+**Why it remains parked**
+
+Some of this plumbing may still influence request construction and model-policy routing even though the dedicated UI is gone. It should not be deleted casually as part of unrelated cleanup.
+
+The current product decision is:
+
+- no user-facing Advanced settings window
+- no Suggest edits toggle
+- no dedicated Patch Preview panel
+- no raw Output panel
+- normal app iteration remains chat-led and tool-controlled
+
+**Risks / gotchas**
+
+- A model policy may still request a unified diff without a dedicated preview surface.
+- Removing only part of the plumbing could break retries, model-policy behavior, or project-edit routing.
+- Restoring the old panels would reintroduce the clutter this ship intentionally removed.
+- Raw output should not be shown twice alongside the normal assistant transcript.
+
+**Plan if revisited**
+
+1. Decide explicitly between permanent retirement and a redesigned review workflow.
+2. If retiring it, remove the standalone components, hidden state, request branches, patch instructions, retry propagation, and related model-policy flags together.
+3. If redesigning it, use a chat-led review card or controlled confirmation action rather than restoring the old Advanced settings surface.
+4. Verify that project edits, weaker-model policy, retries, and app-build workflows still behave truthfully.
+5. Run a production build and visual smoke test before committing.
+
+**Done when**
+
+- The legacy plumbing is either fully removed with no hidden patch mode or dead raw-output state, or
+- a deliberately redesigned review workflow replaces it without restoring the old cluttered UI.

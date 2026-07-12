@@ -6,10 +6,12 @@ export default function ParametersPanel({
   setAiTemperature,
   aiMaxTokens,
   setAiMaxTokens,
-  providerReady,
+  disabled = false,
+  title = "Expert model controls",
 }) {
-  const handleTemperatureChange = (e) => {
-    const raw = String(e.target.value ?? "").trim();
+  const handleTemperatureChange = (event) => {
+    const raw = String(event.target.value ?? "").trim();
+
     if (raw === "") {
       setAiTemperature(0);
       return;
@@ -21,49 +23,52 @@ export default function ParametersPanel({
     setAiTemperature(next);
   };
 
-  const handleMaxTokensChange = (e) => {
-    const raw = String(e.target.value ?? "").trim();
+  const handleMaxTokensChange = (event) => {
+    const raw = String(event.target.value ?? "").trim();
 
-    // Allow clearing while editing without forcing weird values.
     if (raw === "") {
       setAiMaxTokens("");
       return;
     }
 
-    // Digits only for a clean integer field.
     const digitsOnly = raw.replace(/[^\d]/g, "");
     if (digitsOnly === "") {
       setAiMaxTokens("");
       return;
     }
 
-    // Normalize away leading zeros: "04000" -> 4000
     const normalized = String(parseInt(digitsOnly, 10));
     setAiMaxTokens(normalized === "NaN" ? "" : Number(normalized));
   };
 
   const handleMaxTokensBlur = () => {
-    const n = Number(aiMaxTokens);
-    if (!Number.isFinite(n) || n < 1) {
+    const next = Number(aiMaxTokens);
+
+    if (!Number.isFinite(next) || next < 1) {
       setAiMaxTokens(4000);
       return;
     }
-    setAiMaxTokens(Math.max(1, Math.floor(n)));
+
+    setAiMaxTokens(Math.max(1, Math.floor(next)));
   };
 
   return (
-    <div className="space-y-2">
-      <div className="text-xs uppercase tracking-wide opacity-60">
-        Parameters
+    <div className="space-y-3">
+      <div>
+        <div className="text-sm font-semibold">{title}</div>
+        <div className="text-xs opacity-60 mt-1 leading-snug">
+          Optional generation controls for experienced users. The defaults are
+          suitable for normal KForge use.
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <div className="text-xs opacity-60 mb-1">Temperature</div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <div className="text-xs opacity-70 mb-1">Temperature</div>
           <input
             className={[
               "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
-              !providerReady ? "opacity-60 cursor-not-allowed" : "",
+              disabled ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
             type="number"
             step="0.1"
@@ -71,16 +76,16 @@ export default function ParametersPanel({
             max="2"
             value={aiTemperature}
             onChange={handleTemperatureChange}
-            disabled={!providerReady}
+            disabled={disabled}
           />
-        </div>
+        </label>
 
-        <div>
-          <div className="text-xs opacity-60 mb-1">Max tokens</div>
+        <label className="block">
+          <div className="text-xs opacity-70 mb-1">Max tokens</div>
           <input
             className={[
               "w-full px-2 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
-              !providerReady ? "opacity-60 cursor-not-allowed" : "",
+              disabled ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
             type="number"
             step="100"
@@ -88,9 +93,9 @@ export default function ParametersPanel({
             value={aiMaxTokens}
             onChange={handleMaxTokensChange}
             onBlur={handleMaxTokensBlur}
-            disabled={!providerReady}
+            disabled={disabled}
           />
-        </div>
+        </label>
       </div>
     </div>
   );

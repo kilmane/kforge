@@ -55,7 +55,7 @@ This guide is written for early beta testers. It is designed to help you get sta
 10a. Workspace Awareness
 11. The AI panel
 12. Chat vs Transcript
-13. Prompt box and advanced AI controls
+13. Prompt box and AI settings
 14. Preview
 15. Generate
 16. Install, Preview, Stop, and Open
@@ -738,82 +738,133 @@ It may include:
 
 ---
 
-# 13) Prompt box and advanced AI controls
+# 13) Prompt box and AI settings
 
 The prompt box sits at the bottom of the AI area.
 
-It includes:
+Directly above the prompt field, KForge shows the **Attach current file** control.
 
+The prompt area includes:
+
+* **Attach current file**
 * the main prompt field
-* Send
-* Test connection
+* **Send**
+* **Test connection**
 
-The current advanced area also shows several useful AI controls.
+KForge keeps the normal AI panel focused on chat and controlled project work.
 
-## System (optional)
+Provider configuration, project behaviour, and expert model controls are available in **Settings** instead of being mixed into the prompt area.
 
-The **System (optional)** field is available in **Advanced settings**.
+## Attach current file
 
-It lets you give the AI a higher-level instruction about how it should behave during the chat.
+Use **Attach current file** when the AI needs the exact contents of the file currently open in the editor.
 
-A normal prompt tells the AI what you want now.  
-A system instruction tells the AI how you want it to behave while helping.
+The control sits directly above the prompt field, so it remains available without opening another menu.
 
-Use it for stable behaviour, workflow rules, tone, or caution level.
+When enabled, KForge includes the active file with the next prompt.
+
+This is useful when:
+
+* you want code-aware help
+* you want debugging based on exact file content
+* you want the AI to explain or modify a particular file
+* the file contains details that are not visible from the project structure alone
+
+The attached file appears beside the control.
+
+Use **Remove** to stop attaching it.
+
+If no file is open, the control is unavailable.
+
+Attaching a file does not automatically change it. KForge’s normal controlled editing and tool-confirmation workflow still applies.
+
+## Provider and model menu
+
+The provider/model button at the top of the AI panel opens a small menu.
+
+It contains:
+
+* **Change Provider / Model**
+* **Configure AI**
+
+Use **Change Provider / Model** to select the AI provider and model used for requests.
+
+Use **Configure AI** to open Settings directly on the current provider, where you can manage its API key and endpoint.
+
+The normal provider/model menu no longer contains an Advanced settings surface.
+
+## Settings → AI controls
+
+Open **Settings** and select **AI controls** to configure:
+
+* **Project behavior override**
+* **Expert model controls**
+
+Normal prompts and app iteration do not require these controls.
+
+### Project behavior override
+
+The **Project behavior override** is an optional higher-level instruction for the AI.
+
+A normal prompt tells the AI what you want it to do now.
+
+A project behavior override tells the AI how you want it to behave while helping with the current project.
+
+It can be used for stable workflow preferences, tone, caution level, or response style.
 
 Examples:
 
-```text
+~~~text
 Work one step at a time. Do not jump ahead. Wait for my result before continuing.
+~~~
 
-```
-
-```text
+~~~text
 Do not claim that you created, edited, saved, committed, pushed, or deleted any file unless the action actually happened through a tool or I confirmed it.
-```
+~~~
 
-```text
+~~~text
 Explain things for a beginner. Avoid jargon where possible. Use short steps.
-```
+~~~
 
-System instructions can help reduce confusion and improve consistency, but they do not guarantee perfect behaviour. Always check important file changes, commands, provider settings, and generated code yourself.
-### How System optional fits KForge guardrails
+The override is saved separately for each project.
 
-The **System (optional)** field is for user-provided behaviour preferences.
+When you reopen a project, KForge restores the override saved for that project.
 
-It can help you ask KForge to work in a particular style, such as one step at a time, beginner-friendly explanations, cautious coding, or stricter truthfulness.
+Switching to another project loads that project’s own value. Clearing the field saves a blank override for the current project.
 
-It is not the same as KForge’s built-in safety and workflow guardrails.
+You must have a project open before editing this field.
 
-Built-in guardrails still matter. For example, KForge should still avoid false tool claims, avoid pretending to inspect files it has not inspected, respect project-root safety, and keep guided workflows truthful.
+Project behavior instructions can reduce confusion and improve consistency, but they do not guarantee perfect behaviour. Always check important commands, file changes, provider settings, and generated code yourself.
 
-Think of **System (optional)** as your extra instruction layer, not a replacement for KForge’s core safety rules.
+### How the project behavior override fits KForge guardrails
 
-For ready-made examples, use the **Behavior Templates** link beside the System field, or open:
+The **Project behavior override** is an extra user-provided instruction layer.
 
-```text
+It is not a replacement for KForge’s built-in safety, workflow, and truthfulness guardrails.
+
+Built-in guardrails should still prevent false tool claims, avoid pretending to inspect files that were not inspected, respect project-root safety, and keep guided workflows truthful.
+
+For ready-made examples, use the **Behavior Templates** link beside the field, or open:
+
+~~~text
 https://kilmane.github.io/kforge/behavior-templates.html
-```
+~~~
 
-## Parameters
+## Expert model controls
 
-The visible parameter shown in the screenshot is:
+The **Expert model controls** section contains optional generation settings for experienced users.
 
-* **Temperature**
+The defaults are suitable for normal KForge use.
 
-The example value shown is:
+### Temperature
 
-```text
-0.2
-```
-
-### Temperature explained
+Temperature controls how varied or predictable model responses may be.
 
 Lower temperature usually means:
 
 * more direct
 * more predictable
-* safer for coding and precise edits
+* more consistent for coding and precise edits
 
 Higher temperature usually means:
 
@@ -823,68 +874,28 @@ Higher temperature usually means:
 
 For implementation work, low or moderate values are usually the best starting point.
 
-## Output area
+### Max tokens
 
-The advanced area also shows an output region labeled:
+Max tokens limits the approximate maximum length of the model’s generated response.
 
-```text
-Output will appear here...
-```
+A larger value allows longer answers or code output but may use more time or provider allowance.
 
-This suggests KForge can surface output or preview-style results in that area for certain workflows.
+A smaller value can keep responses shorter but may cause a long answer or implementation to stop early.
 
-## Prompt-related controls
+Leave the default in place unless you have a specific reason to change it.
 
-Visible controls include:
+## Removed legacy controls
 
-* **Use current file**
-* **Send current file with prompt**
+The normal AI panel no longer shows:
+
+* an **Advanced settings** window
 * **Suggest edits (preview)**
+* the old read-only **Patch Preview** panel
+* the raw **Output** panel
 
-### Use current file
-
-This uses the currently open file as the active file context.
-
-### Send current file with prompt
-
-This includes the current file content with the request.
-
-Useful when:
-
-* you want code-aware help
-* you want debugging based on exact file content
-* you want the AI to explain or edit a specific file
-
-### Suggest edits (preview)
-
-This is useful when you want to review suggested changes before applying them.
-
-A good beginner use case is cautious editing.
-
-Turn it on when you want a review-first workflow instead of immediately acting on every suggestion.
-
-### Patch Preview (read-only)
-
-When KForge shows a **Patch Preview**, it is showing suggested file changes for review.
-
-Patch Preview is read-only by itself.
-
-It lets you inspect what would change before deciding what to do next.
-
-Long patches scroll inside the preview box, so the chat and input area stay usable while you review larger diffs.
-
-If the preview does not look like a standard file patch, KForge may show a warning so you know to review it carefully before copying or applying it manually.
-
-Depending on the current build, Patch Preview controls may include:
-
-* **Hide** — closes or hides the preview without applying anything
-* **Copy patch** — copies the suggested patch text so you can review, save, or apply it manually elsewhere
-* **Discard** — throws away the current preview suggestion
-
-Patch Preview is useful when you want caution, especially with weaker models, unfamiliar files, or larger edits.
+Normal app iteration is chat-led and uses KForge’s controlled tools and workflow actions.
 
 ---
-
 # 14) Preview
 
 The Preview area is where KForge helps you run or inspect projects.

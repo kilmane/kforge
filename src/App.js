@@ -1649,7 +1649,7 @@ export default function App() {
     setAiSystem(readProjectAiSystem(projectPath));
   }, [projectPath]);
   const [aiRunning, setAiRunning] = useState(false);
-  const [aiOutput, setAiOutput] = useState("");
+  const [, setAiOutput] = useState("");
 
   // Transcript (in-memory only)
   const [messages, setMessages] = useState([]); // {id, role, content, ts, action?, actions?}
@@ -1723,8 +1723,8 @@ export default function App() {
 
   // Phase 3.4.6 — Patch Preview (read-only)
   const [askForPatch, setAskForPatch] = useState(false);
-  const [patchPreview, setPatchPreview] = useState(null); // string | null
-  const [patchPreviewVisible, setPatchPreviewVisible] = useState(true);
+  const [, setPatchPreview] = useState(null); // retained for future Patch Preview workflow
+  const [, setPatchPreviewVisible] = useState(true);
 
   const activeTab = useMemo(() => {
     if (!activeFilePath) return null;
@@ -2390,21 +2390,7 @@ export default function App() {
     }
   }, [includeActiveFile, activeTab, appendMessage]);
 
-  const copyPatchToClipboard = useCallback(async () => {
-    if (!patchPreview) return;
-    try {
-      await navigator.clipboard.writeText(patchPreview);
-      appendMessage("system", "Patch copied to clipboard.");
-    } catch (err) {
-      appendMessage("system", `Copy failed: ${formatTauriError(err)}`);
-    }
-  }, [patchPreview, appendMessage]);
 
-  const discardPatchPreview = useCallback(() => {
-    setPatchPreview(null);
-    setPatchPreviewVisible(true);
-    appendMessage("system", "Patch preview discarded.");
-  }, [appendMessage]);
 
   const maybeCapturePatchPreview = useCallback((assistantText, options = {}) => {
     const allowCapture = options?.allowCapture === true;
@@ -2572,12 +2558,6 @@ export default function App() {
     }
   }, [aiProvider, runAi, appendMessage, openSettings]);
 
-  const handleUseActiveFileAsPrompt = useCallback(() => {
-    if (!activeTab) return;
-    const text = activeTab.content ?? "";
-    if (!text.trim()) return;
-    setAiPrompt(text);
-  }, [activeTab]);
 
   const handleProviderChange = useCallback(
     (nextProviderId) => {
@@ -9495,17 +9475,9 @@ setWorkflowContext({
       handleRetryLast={handleRetryLast}
       clearConversation={clearConversation}
       activeTab={activeTab}
-      handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
       includeActiveFile={includeActiveFile}
       setIncludeActiveFile={setIncludeActiveFile}
       activeFileChip={activeFileChip}
-      askForPatch={askForPatch}
-      setAskForPatch={setAskForPatch}
-      patchPreview={patchPreview}
-      patchPreviewVisible={patchPreviewVisible}
-      copyPatchToClipboard={copyPatchToClipboard}
-      setPatchPreviewVisible={setPatchPreviewVisible}
-      discardPatchPreview={discardPatchPreview}
       appendMessage={appendMessage}
       updateMessage={updateMessage}
       onWorkspaceTreeRefresh={handleRefreshTree}
@@ -9514,19 +9486,12 @@ setWorkflowContext({
       aiPrompt={aiPrompt}
       setAiPrompt={setAiPrompt}
       handlePromptKeyDown={handlePromptKeyDown}
-      aiSystem={aiSystem}
-      setAiSystem={handleAiSystemChange}
-      aiTemperature={aiTemperature}
-      setAiTemperature={setAiTemperature}
-      aiMaxTokens={aiMaxTokens}
-      setAiMaxTokens={setAiMaxTokens}
       runAi={runAi}
       handleSendChat={handleSendChat}
       sendWithPrompt={sendWithPrompt}
       handleAiTest={handleAiTest}
       aiTestStatus={aiTestStatus}
       guardrailText={guardrailText}
-      aiOutput={aiOutput}
       endpoints={endpoints}
       invoke={invoke}
       setAiTestOutput={setAiTestOutput}
@@ -9715,6 +9680,14 @@ setWorkflowContext({
         onSaveKey={handleSaveKey}
         onClearKey={handleClearKey}
         onClearLocalCache={clearKforgeLocalUiCache}
+        aiSystem={aiSystem}
+        setAiSystem={handleAiSystemChange}
+        aiTemperature={aiTemperature}
+        setAiTemperature={setAiTemperature}
+        aiMaxTokens={aiMaxTokens}
+        setAiMaxTokens={setAiMaxTokens}
+        projectPath={projectPath}
+        invoke={invoke}
         focusProviderId={settingsFocusProviderId}
         message={settingsMessage}
       />

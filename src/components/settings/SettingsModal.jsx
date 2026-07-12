@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import SystemPanel from "../../ai/panel/SystemPanel.jsx";
+import ParametersPanel from "../../ai/panel/ParametersPanel.jsx";
 
 function inputClass(disabled = false) {
   return [
@@ -19,6 +21,7 @@ function buttonClass(variant = "primary", disabled = false) {
 }
 
 const OPTIONAL_ENDPOINT_PROVIDER_IDS = new Set(["ollama", "lmstudio"]);
+const AI_SETTINGS_ID = "__ai_settings__";
 
 function endpointFieldSpec(providerId) {
   if (providerId === "ollama") {
@@ -128,10 +131,18 @@ export default function SettingsModal({
   onSaveKey,
   onClearKey,
   onClearLocalCache = null,
+  aiSystem = "",
+  setAiSystem = () => {},
+  aiTemperature = 0.2,
+  setAiTemperature = () => {},
+  aiMaxTokens = 4000,
+  setAiMaxTokens = () => {},
+  projectPath = "",
+  invoke = null,
   focusProviderId,
   message,
 }) {
-  const [activeId, setActiveId] = useState(providers?.[0]?.id || "openai");
+  const [activeId, setActiveId] = useState(AI_SETTINGS_ID);
   const [keyDrafts, setKeyDrafts] = useState({}); // providerId -> string
 
   const providerButtonRefs = useRef({}); // providerId -> element
@@ -151,9 +162,12 @@ export default function SettingsModal({
   );
 
   const activeProvider = useMemo(() => {
+    if (activeId === AI_SETTINGS_ID) return null;
+
     const list = providers || [];
-    return list.find((p) => p.id === activeId) || list[0] || null;
+    return list.find((p) => p.id === activeId) || null;
   }, [providers, activeId]);
+  const isAiSettings = activeId === AI_SETTINGS_ID;
   const activeKeyFingerprint = activeProvider
     ? apiKeyFingerprints?.[activeProvider.id] || ""
     : "";
@@ -186,7 +200,13 @@ export default function SettingsModal({
 
   useEffect(() => {
     if (!open) return;
-    if (focusProviderId) setActiveId(focusProviderId);
+
+    if (focusProviderId) {
+      setActiveId(focusProviderId);
+      return;
+    }
+
+    setActiveId(AI_SETTINGS_ID);
   }, [open, focusProviderId]);
 
   useEffect(() => {
@@ -241,8 +261,8 @@ export default function SettingsModal({
 
         {/* Subheader */}
         <div className="p-4 border-b border-zinc-800 text-xs opacity-70 shrink-0">
-          Configure providers here. The main panel must not show API keys or
-          endpoints.
+          Configure AI behavior, expert model controls, providers, API keys,
+          and endpoints here. The main AI panel stays focused on chat.
           {message ? (
             <span className="ml-2 opacity-90">• {message}</span>
           ) : null}
@@ -259,8 +279,30 @@ export default function SettingsModal({
           <div className="border-r border-zinc-800 min-h-0 overflow-hidden">
             <div ref={leftListRef} className="h-full overflow-auto p-3">
               <div className="text-[11px] opacity-60 px-2 mb-3 leading-snug">
-                Tip: select a provider on the left to configure its API key (and
-                endpoint where required).
+                Select AI for project behavior and expert controls, or choose a
+                provider to configure its API key and endpoint.
+              </div>
+
+              <div className="mb-4">
+                <div className="text-xs uppercase tracking-wide opacity-60 px-2 mb-2">
+                  AI
+                </div>
+
+                <button
+                  className={[
+                    "w-full text-left px-2 py-2 rounded border outline-none",
+                    isAiSettings
+                      ? "bg-zinc-900 border-zinc-700"
+                      : "bg-transparent border-transparent hover:bg-zinc-900/50 hover:border-zinc-800",
+                  ].join(" ")}
+                  onClick={() => setActiveId(AI_SETTINGS_ID)}
+                  type="button"
+                >
+                  <div className="text-sm font-semibold">AI controls</div>
+                  <div className="text-xs opacity-60 mt-0.5">
+                    Project behavior and expert model controls
+                  </div>
+                </button>
               </div>
 
               <div className="mb-4">
@@ -331,7 +373,40 @@ export default function SettingsModal({
 
           {/* Right panel (scrollable) */}
           <div className="min-h-0 overflow-auto p-4">
-            {!activeProvider ? (
+            {isAiSettings ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-lg font-semibold">AI</div>
+                  <div className="text-xs opacity-70 mt-1 leading-snug">
+                    Configure project-specific behavior and optional expert
+                    generation controls.
+                  </div>
+                </div>
+
+                <div className="border border-zinc-800 rounded-lg p-3">
+                  <SystemPanel
+                    aiSystem={aiSystem}
+                    setAiSystem={setAiSystem}
+                    disabled={!projectPath}
+                    invoke={invoke}
+                    description={
+                      projectPath
+                        ? "Saved for the current project and automatically restored when this project opens."
+                        : "Open a project to set a project behavior override."
+                    }
+                  />
+                </div>
+
+                <div className="border border-zinc-800 rounded-lg p-3">
+                  <ParametersPanel
+                    aiTemperature={aiTemperature}
+                    setAiTemperature={setAiTemperature}
+                    aiMaxTokens={aiMaxTokens}
+                    setAiMaxTokens={setAiMaxTokens}
+                  />
+                </div>
+              </div>
+            ) : !activeProvider ? (
               <div className="text-sm opacity-70">No provider selected.</div>
             ) : (
               <div className="space-y-4">
@@ -490,7 +565,7 @@ export default function SettingsModal({
         {/* Footer */}
         <div className="h-12 px-4 border-t border-zinc-800 flex items-center justify-between shrink-0">
           <div className="text-xs opacity-60">
-            Provider settings and maintenance.
+            AI, provider, and maintenance settings.
           </div>
           <button
             className={buttonClass("primary")}

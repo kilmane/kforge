@@ -9,15 +9,10 @@ import React, {
 import PreviewPanel from "../../runtime/PreviewPanel.jsx";
 import CommandRunnerPanel from "../../runtime/CommandRunnerPanel.jsx";
 import ServicePanel from "../../runtime/ServicePanel.jsx";
-import PatchPreviewPanel from "./PatchPreviewPanel.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import PromptPanel from "./PromptPanel.jsx";
-import SystemPanel from "./SystemPanel.jsx";
-import ParametersPanel from "./ParametersPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
-import OutputPanel from "./OutputPanel.jsx";
-import OllamaHelperPanel from "./OllamaHelperPanel.jsx";
 
 import { runToolCall } from "../tools/toolRuntime.js";
 import { runToolHandler } from "../tools/handlers/index.js";
@@ -1959,8 +1954,6 @@ function ProviderMenuButton({
   provider,
   model,
   configured,
-  advancedOpen,
-  onToggleAdvanced,
   onChangeProviderModel,
   onConfigure,
 }) {
@@ -2015,16 +2008,6 @@ function ProviderMenuButton({
             Configure AI
           </button>
 
-          <button
-            type="button"
-            className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-900"
-            onClick={() => {
-              setOpen(false);
-              onToggleAdvanced();
-            }}
-          >
-            {advancedOpen ? "Advanced settings ▴" : "Advanced settings ▾"}
-          </button>
         </div>
       ) : null}
     </div>
@@ -2208,20 +2191,11 @@ export default function AiPanel({
 
   // prompt
   activeTab,
-  handleUseActiveFileAsPrompt,
   includeActiveFile,
   setIncludeActiveFile,
   activeFileChip,
 
-  askForPatch,
-  setAskForPatch,
 
-  // patch preview state/handlers (kept in App)
-  patchPreview,
-  patchPreviewVisible,
-  copyPatchToClipboard,
-  setPatchPreviewVisible,
-  discardPatchPreview,
   appendMessage,
   updateMessage,
   onWorkspaceTreeRefresh,
@@ -2232,13 +2206,6 @@ export default function AiPanel({
   setAiPrompt,
   handlePromptKeyDown,
 
-  // system + params
-  aiSystem,
-  setAiSystem,
-  aiTemperature,
-  setAiTemperature,
-  aiMaxTokens,
-  setAiMaxTokens,
 
   // actions
   runAi,
@@ -2248,8 +2215,7 @@ export default function AiPanel({
   aiTestStatus,
   guardrailText,
 
-  // output + ollama helper
-  aiOutput,
+  // runtime helpers
   endpoints,
   invoke,
   setAiTestOutput,
@@ -2268,8 +2234,6 @@ export default function AiPanel({
     return `Working${".".repeat(activityTick % 4)}`;
   }, [activityTick]);
 
-  // ✅ Advanced settings (power user knobs). Calm by default.
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // ✅ Provider/Model picker (not "advanced")
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -5231,8 +5195,6 @@ export default function AiPanel({
               provider={aiProvider}
               model={aiModelStr || "(none)"}
               configured={providerReady}
-              advancedOpen={advancedOpen}
-              onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
               onChangeProviderModel={() => setModelPickerOpen(true)}
               onConfigure={() =>
                 openSettings(aiProvider, "Configure in Settings")
@@ -5381,53 +5343,7 @@ export default function AiPanel({
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Top content area (no page scrolling) */}
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            {/* Patch preview stays above chat when present */}
-            {patchPreviewVisible || patchPreview ? (
-              <div className="shrink-0 px-3 pt-3 pb-2">
-                <PatchPreviewPanel
-                  patchPreview={patchPreview}
-                  patchPreviewVisible={patchPreviewVisible}
-                  setPatchPreviewVisible={setPatchPreviewVisible}
-                  copyPatchToClipboard={copyPatchToClipboard}
-                  discardPatchPreview={discardPatchPreview}
-                  buttonClass={buttonClass}
-                />
-              </div>
-            ) : null}
 
-            {/* Advanced panels only when toggled */}
-            {advancedOpen ? (
-              <div className="shrink-0 space-y-4">
-                <SystemPanel
-                  aiSystem={aiSystem}
-                  setAiSystem={setAiSystem}
-                  providerReady={providerReady}
-                  invoke={invoke}
-                />
-
-                <ParametersPanel
-                  aiTemperature={aiTemperature}
-                  setAiTemperature={setAiTemperature}
-                  aiMaxTokens={aiMaxTokens}
-                  setAiMaxTokens={setAiMaxTokens}
-                  providerReady={providerReady}
-                />
-
-                <OutputPanel aiOutput={stripToolBlocksForChat(aiOutput)} />
-
-                {aiProvider === "ollama" && (
-                  <OllamaHelperPanel
-                    aiRunning={aiRunning}
-                    endpoints={endpoints}
-                    invoke={invoke}
-                    setAiTestOutput={setAiTestOutput}
-                    setRuntimeReachable={setRuntimeReachable}
-                    formatTauriError={formatTauriError}
-                    buttonClass={buttonClass}
-                  />
-                )}
-              </div>
-            ) : null}
 
             {/* CHAT / TRANSCRIPT AREA */}
             <div className="flex-1 min-h-0 overflow-hidden rounded border border-zinc-800/60 bg-zinc-950/30 m-3">
@@ -5452,7 +5368,7 @@ export default function AiPanel({
                     clearConversation={clearConversation}
                     onRequestToolOk={handleRequestToolOk}
                     onRequestToolErr={handleRequestToolErr}
-                    showDevTools={isDevBuild && devToolsEnabled && advancedOpen}
+                    showDevTools={isDevBuild && devToolsEnabled}
                     hideChrome={false}
                   />
                 ) : (
@@ -5539,24 +5455,15 @@ export default function AiPanel({
           <div className="sticky bottom-0 z-20 shrink-0 border-t border-zinc-800 p-3 space-y-3 bg-zinc-950">
             <PromptPanel
               activeTab={activeTab}
-              handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
               includeActiveFile={includeActiveFile}
               setIncludeActiveFile={setIncludeActiveFile}
               activeFileChip={activeFileChip}
-              askForPatch={askForPatch}
-              setAskForPatch={setAskForPatch}
-              patchPreview={patchPreview}
-              patchPreviewVisible={patchPreviewVisible}
-              copyPatchToClipboard={copyPatchToClipboard}
-              setPatchPreviewVisible={setPatchPreviewVisible}
-              discardPatchPreview={discardPatchPreview}
               aiPrompt={aiPrompt}
               setAiPrompt={setAiPrompt}
               handlePromptKeyDown={handlePromptKeyDownFromPrompt}
               providerReady={providerReady}
               appendMessage={appendMessage}
               buttonClass={buttonClass}
-              advancedOpen={advancedOpen}
             />
 
             <ActionsPanel
@@ -5570,7 +5477,6 @@ export default function AiPanel({
               aiProvider={aiProvider}
               buttonClass={buttonClass}
               showTest={true}
-              showGuardrail={advancedOpen}
             />
           </div>
         </div>
@@ -5596,14 +5502,6 @@ export default function AiPanel({
             buttonClass={buttonClass}
           />
 
-          <PatchPreviewPanel
-            patchPreview={patchPreview}
-            patchPreviewVisible={patchPreviewVisible}
-            setPatchPreviewVisible={setPatchPreviewVisible}
-            copyPatchToClipboard={copyPatchToClipboard}
-            discardPatchPreview={discardPatchPreview}
-            buttonClass={buttonClass}
-          />
 
           <TranscriptPanel
             messages={messages}
@@ -5618,24 +5516,15 @@ export default function AiPanel({
 
           <PromptPanel
             activeTab={activeTab}
-            handleUseActiveFileAsPrompt={handleUseActiveFileAsPrompt}
             includeActiveFile={includeActiveFile}
             setIncludeActiveFile={setIncludeActiveFile}
             activeFileChip={activeFileChip}
-            askForPatch={askForPatch}
-            setAskForPatch={setAskForPatch}
-            patchPreview={patchPreview}
-            patchPreviewVisible={patchPreviewVisible}
-            copyPatchToClipboard={copyPatchToClipboard}
-            setPatchPreviewVisible={setPatchPreviewVisible}
-            discardPatchPreview={discardPatchPreview}
             aiPrompt={aiPrompt}
             setAiPrompt={setAiPrompt}
             handlePromptKeyDown={handlePromptKeyDownFromPrompt}
             providerReady={providerReady}
             appendMessage={appendMessage}
             buttonClass={buttonClass}
-            advancedOpen={advancedOpen}
           />
 
           <ActionsPanel
@@ -5649,41 +5538,8 @@ export default function AiPanel({
             aiProvider={aiProvider}
             buttonClass={buttonClass}
             showTest={true}
-            showGuardrail={advancedOpen}
           />
 
-          {advancedOpen ? (
-            <div className="space-y-4">
-              <SystemPanel
-                aiSystem={aiSystem}
-                setAiSystem={setAiSystem}
-                providerReady={providerReady}
-                invoke={invoke}
-              />
-
-              <ParametersPanel
-                aiTemperature={aiTemperature}
-                setAiTemperature={setAiTemperature}
-                aiMaxTokens={aiMaxTokens}
-                setAiMaxTokens={setAiMaxTokens}
-                providerReady={providerReady}
-              />
-
-              <OutputPanel aiOutput={stripToolBlocksForChat(aiOutput)} />
-
-              {aiProvider === "ollama" && (
-                <OllamaHelperPanel
-                  aiRunning={aiRunning}
-                  endpoints={endpoints}
-                  invoke={invoke}
-                  setAiTestOutput={setAiTestOutput}
-                  setRuntimeReachable={setRuntimeReachable}
-                  formatTauriError={formatTauriError}
-                  buttonClass={buttonClass}
-                />
-              )}
-            </div>
-          ) : null}
         </div>
       )}
 

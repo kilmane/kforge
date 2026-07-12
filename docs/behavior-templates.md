@@ -2,11 +2,13 @@
 
 # Behavior Templates
 
-_Last updated: 28 April 2026_
+_Last updated: 12 July 2026_
 
-Behavior templates are optional instructions you can paste into KForge’s **System (optional)** field in the **Advanced settings** section.
+Behavior templates are optional instructions you can paste into **Settings → AI controls → Project behavior override**.
 
 They help guide how the AI should behave during a chat.
+
+The override is saved separately for each project. Switching projects loads the behavior override saved for that project.
 
 Use them when you want the assistant to follow a steady rule, style, or workflow, such as:
 
@@ -23,9 +25,9 @@ Use them when you want the assistant to follow a steady rule, style, or workflow
 
 ---
 
-## What is the System field?
+## What is the Project behavior override?
 
-The **System (optional)** field is a higher-level instruction for the AI.
+The **Project behavior override** is a higher-level instruction for the AI.
 
 A normal prompt says:
 
@@ -217,12 +219,12 @@ Good for:
 
 ## How to use a behavior template
 
-1. Open KForge.
-2. Open the AI panel.
-3. Open **Advanced settings**.
-4. Find **System (optional)**.
+1. Open KForge and open a project.
+2. Open **Settings**.
+3. Select **AI controls**.
+4. Find **Project behavior override**.
 5. Paste one template into the box.
-6. Send your normal prompt.
+6. Close Settings and send your normal prompt.
 
 You can edit templates before using them.
 
@@ -246,7 +248,7 @@ You do not need a system instruction for every prompt.
 
 For simple one-off questions, the normal prompt box is enough.
 
-Use **System (optional)** when you want the AI to follow a steady behaviour across the conversation.
+Use **Project behavior override** when you want the AI to follow a steady behaviour while working on the current project.
 
 ---
 
