@@ -15,7 +15,10 @@ import PromptPanel from "./PromptPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
 
 import { runToolCall } from "../tools/toolRuntime.js";
-import { runToolHandler } from "../tools/handlers/index.js";
+import {
+  preflightToolHandler,
+  runToolHandler,
+} from "../tools/handlers/index.js";
 import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import { isVisualCssIterationGoal } from "../iteration/iterationController.js";
@@ -224,11 +227,11 @@ function dirnameOfPath(p) {
 /**
  * Phase 3.6.4 — Model-initiated tool calls (consent-gated)
  *
- * We accept:
- * - ```tool / ```tool_call fenced JSON
- * - ```json fenced JSON (if it parses to a tool request)
- * - bare JSON tool request
- * - XML-ish tool calls (two common variants)
+ * Primary model-facing contract:
+ * - exactly one fenced ```tool block containing JSON
+ *
+ * Legacy parsers remain compatibility-only for previously supported responses.
+ * Models must not be instructed to emit XML, bare JSON, ```json, or shorthand.
  *
  * Safety:
  * - whitelist only read-only tools
@@ -1731,10 +1734,10 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- Prefer this order for implementation-oriented inspection: candidate read_file from workspace context when available, otherwise list_dir(".") or a candidate folder, then read_file on the most likely existing target.\n` +
     `- Do NOT inspect subdirectories like node_modules unless the user explicitly asks.\n` +
     `- Do NOT read more files once you have enough information to continue the edit or provide the final answer.\n` +
-    `- If you need a tool, output ONLY a tool request in the exact fenced format.\n` +
-    `- Do NOT describe the tool call in plain English.\n` +
-    `- Do NOT write list_dir(path) or read_file(path).\n` +
-    `- Return only a single tool block when requesting a tool, like:\n` +
+    `- If you need a tool, output ONLY exactly one fenced \`\`\`tool block containing JSON.\n` +
+    `- Output no prose before or after the tool block.\n` +
+    `- Do NOT use XML tool tags, bare JSON, \`\`\`json fences, or function-like shorthand such as list_dir(path) or read_file(path).\n` +
+    `- Return only this single fenced JSON tool block shape:\n` +
     `\`\`\`tool\n{ "name": "list_dir", "args": { "path": "." } }\n\`\`\`\n\n` +
     `Conversation so far:\n${transcriptLines.join("\n")}\n\n` +
     `Continue from the latest state.`
@@ -2544,6 +2547,35 @@ export default function AiPanel({
 
   const runTool = useCallback(
     async ({ toolName, args }) => {
+      if (toolName === "write_file") {
+        const preflight = await preflightToolHandler(toolName, args);
+
+        if (!preflight?.ok) {
+          const error = String(
+            preflight?.error || "KForge blocked this file write before approval.",
+          );
+
+          appendTranscript({
+            role: "system",
+            content:
+              "KForge blocked this file write before approval.\n\n" + error,
+            meta: {
+              kind: "tool_status",
+              toolName,
+              phase: "error",
+            },
+          });
+
+          return {
+            ok: false,
+            toolName,
+            args,
+            cancelled: false,
+            error,
+          };
+        }
+      }
+
       const res = await runToolCall({
         toolCall: { name: toolName, args },
         appendTranscript,
@@ -2844,7 +2876,7 @@ export default function AiPanel({
                               `Original app request: ${retryGoal}\n\n` +
                               "The previous model response produced a fenced tool block that KForge could not parse as valid JSON, so no approval prompt was shown and no files were changed.\n\n" +
                               "Use the already inspected evidence. Request exactly one valid fenced ```tool``` block containing JSON with shape { \"name\": \"write_file\", \"args\": { \"path\": \"...\", \"content\": \"...\" } }. " +
-                              "For write_file, content must be the complete full file text. Do not use natural-language tool shorthand. Do not claim Preview, build, tests, deployment, or service setup.",
+                              "For write_file, content must be the complete full file text. Do not use XML tool tags, bare JSON, ```json fences, natural-language shorthand, or function-like syntax. Do not claim Preview, build, tests, deployment, or service setup.",
                             {
                               silentUserAppend: true,
                               skipCompletedWorkflowRoute: true,
@@ -4766,6 +4798,13 @@ export default function AiPanel({
                               : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
                             onClick: () => {
                               const originalGoal = inspectionOnlyOriginalGoal;
+                              const continuationContextPath = String(
+                                blockedWriteRecoveryTargetPath ||
+                                  agentSuccessfulReadPaths[
+                                    agentSuccessfulReadPaths.length - 1
+                                  ] ||
+                                  "",
+                              ).trim();
 
                               const continuePrompt = isAppBuildBlockedWriteRecoveryContinuation
                                 ? "Retry the controlled app-build source implementation after a blocked write.\n\n" +
@@ -4819,6 +4858,7 @@ export default function AiPanel({
                                       isAppBuildBlockedWriteRecoveryContinuation,
                                     inspectedPaths: agentSuccessfulReadPaths,
                                     modelToolInspectedPaths: agentSuccessfulReadPaths,
+                                    contextFilePath: continuationContextPath,
                                     modelToolOriginalGoal: originalGoal,
                                     lastUserGoal: originalGoal,
                                     forceModelCapabilityTestOverride: true,

@@ -145,11 +145,11 @@ function buildModelAdviceForBrief(folderState = {}) {
       "1. Open an empty project folder.\n" +
       "2. Click Preview → Generate.\n" +
       "3. Click Preview → Install.\n" +
-      "4. Return to this chat to continue.\n\n" +
+      "4. Return to this chat and resend your app request again.\n\n" +
       "Notes:\n" +
       "- **Generate** creates the starter template for your project.\n" +
       "- **Install** adds the packages needed by that template.\n" +
-      "- After Generate and Install are finished, return to this chat, so KForge can help you continue building your app.\n" +
+      "- After Generate and Install are finished, return to this chat and resend the same app request. KForge will then show the app-build choices and begin controlled implementation.\n" +
       "- Or click the button below for the AI-assisted plan.\n\n";
 
   return (
@@ -189,9 +189,17 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
     /\b(landing page|brochure|marketing page|portfolio|static site|one page|one-page|simple website)\b/,
   ]);
 
-  const backendSignals = hasAnyPattern(text, [
-    /\b(save|saved|store|stored|persist|persistence|database|backend|server|login|auth|account|accounts|user accounts|submissions|supabase)\b/,
+  const explicitNoBackendSignals = hasAnyPattern(text, [
+    /\b(no|without)\s+(backend|server|database|db|login|auth|accounts?|user accounts|persistence|saved data)\b/,
+    /\b(frontend[-\s]?only|client[-\s]?side[-\s]?only|local[-\s]?only)\b/,
+    /\b(do not|don't|dont)\s+(need|use|want|include|add)\s+(a\s+)?(backend|server|database|db|login|auth|accounts?|persistence)\b/,
   ]);
+
+  const backendSignals =
+    !explicitNoBackendSignals &&
+    hasAnyPattern(text, [
+      /\b(save|saved|store|stored|persist|persistence|database|backend|server|login|auth|account|accounts|user accounts|submissions|supabase)\b/,
+    ]);
 
   const supabaseSignals = /\bsupabase\b/.test(text);
 
@@ -347,9 +355,9 @@ export function buildFreeAppBrief({ userText = "", folderState = {} } = {}) {
       : APP_BRIEF_CONFIDENCE.LOW,
     reason:
       "This needs an interactive app starter because the request involves dynamic behaviour, app logic, user input, calculations, data display, external data, or generated results rather than a simple static page. KForge can refine the exact screens and integrations after the starter is generated.",
-    needsBackend: "maybe",
-    needsDatabase: "unknown",
-    needsAuth: "unknown",
+    needsBackend: explicitNoBackendSignals ? "no" : "maybe",
+    needsDatabase: explicitNoBackendSignals ? "no" : "unknown",
+    needsAuth: explicitNoBackendSignals ? "no" : "unknown",
     needsExternalApi: externalApiSignals ? "maybe" : "unknown",
     nextAction: "generate_template",
     question: null,

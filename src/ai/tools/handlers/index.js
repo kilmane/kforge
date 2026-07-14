@@ -337,7 +337,7 @@ export async function list_dir(args = {}) {
  * write_file
  * args: { path, content }
  */
-export async function write_file(args = {}) {
+async function prepareWriteFile(args = {}) {
   const rawPath = ensurePathCanResolve(args?.path, "write_file");
   const content = args?.content ?? "";
 
@@ -364,6 +364,46 @@ export async function write_file(args = {}) {
         existingContent,
         nextContent: content,
       });
+
+  return {
+    content,
+    filePath,
+    blockedReason,
+  };
+}
+
+export async function preflightToolHandler(toolName, args = {}) {
+  const t = String(toolName || "").trim();
+
+  if (t !== "write_file") {
+    return { ok: true, toolName: t, args };
+  }
+
+  try {
+    const prepared = await prepareWriteFile(args);
+
+    if (prepared.blockedReason) {
+      return {
+        ok: false,
+        toolName: t,
+        args,
+        error: prepared.blockedReason,
+      };
+    }
+
+    return { ok: true, toolName: t, args };
+  } catch (err) {
+    return {
+      ok: false,
+      toolName: t,
+      args,
+      error: String(err?.message || err || "Write preflight failed."),
+    };
+  }
+}
+
+export async function write_file(args = {}) {
+  const { content, filePath, blockedReason } = await prepareWriteFile(args);
 
   if (blockedReason) {
     throw new Error(blockedReason);

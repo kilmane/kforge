@@ -111,6 +111,12 @@ function safeParseModelToolFallbackJson(payload = "") {
   }
 }
 
+function hasKnownBadKforgeXmlToolAttempt(output = "") {
+  return /<\s*\/?\s*kforge_(?:read_file|list_dir|search_in_file|write_file|mkdir)\b/i.test(
+    String(output || ""),
+  );
+}
+
 function extractModelToolFallbackBlock(output = "") {
   const raw = String(output || "");
   const trimmed = raw.trim();
@@ -226,6 +232,9 @@ Model usage hints:
 
 Tool rules:
 - You MUST use available tools to create or modify files when the user asks for implementation work.
+- When requesting a tool, output exactly one fenced \`\`\`tool block containing JSON with shape { "name": "...", "args": { ... } }.
+- Output no prose before or after the tool block.
+- Do not use XML tool tags, bare JSON, \`\`\`json fences, or function-like tool shorthand.
 - Do NOT output full file contents in chat.
 - Do not pretend that files were changed when no tool was used.
 - Advisory-only answers, workflow handoffs, manual setup guidance, preview guidance, terminal guidance, and general explanation responses must not emit tool calls.
@@ -1470,6 +1479,33 @@ function getDirectHandoffFollowupRouteDecision({
 
     if (/^[1-5]$/.test(s)) {
       return { action: "open_project_starter_choice" };
+    }
+  }
+
+  const isStarterScaffoldHandoff = [
+    "starter_generated_or_needs_help",
+    "project_opened_or_needs_help",
+  ].includes(String(workflowContext?.expectedResult || "").trim());
+
+  if (isStarterScaffoldHandoff) {
+    if (isWorkflowStopOrBackIntent(text)) {
+      return { action: "stop_waiting" };
+    }
+
+    const hasScaffoldCompletionReport =
+      /\b(installed|ready|done|finished|complete|completed)\b/.test(s);
+
+    const hasPostScaffoldBuildContinuation =
+      /\b(generated|created|scaffolded|made)\b.*\b(template|starter|project|app|vite|react)\b/.test(s) ||
+      /\b(installed|install(ed)?)\b.*\b(dependencies|packages)\b/.test(s) ||
+      /\b(dependencies|packages)\b.*\b(installed|ready)\b/.test(s) ||
+      /\b(ready\s+to\s+build|ready\s+for\s+build|start\s+building|continue\s+building|build\s+the\s+app|build\s+it|make\s+the\s+app|start\s+implementation|continue\s+implementation)\b/.test(s);
+
+    if (
+      hasScaffoldCompletionReport ||
+      hasPostScaffoldBuildContinuation
+    ) {
+      return { action: "resume_app_build_after_scaffold" };
     }
   }
 
@@ -5130,7 +5166,7 @@ export default function App() {
         isPostScaffoldReadyToBuildIntent(text)
       ) {
         return {
-          kind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
+          kind: "open_project_build_app_clarifier",
           confidence: "high",
           source: "post_scaffold_ready_to_build",
         };
@@ -5428,6 +5464,16 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
       });
 
       if (
+        opts.forceOpenProjectBuildAppClarifier &&
+        !!projectPath &&
+        !(Array.isArray(tree) && tree.length === 0)
+      ) {
+        promptTask = {
+          kind: "open_project_build_app_clarifier",
+          confidence: "high",
+          source: "forced_post_scaffold_app_build_clarifier",
+        };
+      } else if (
         opts.forceProjectEdit &&
         !!projectPath &&
         !(Array.isArray(tree) && tree.length === 0)
@@ -5782,6 +5828,37 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
         if (directHandoffFollowupRoute.action === "stop_waiting") {
           setWorkflowContext(null);
           appendMessage("assistant", "Stopped — no action taken.");
+          return;
+        }
+
+        if (
+          directHandoffFollowupRoute.action ===
+          "resume_app_build_after_scaffold"
+        ) {
+          const originalGoal = String(
+            workflowContext?.lastUserGoal || draft,
+          ).trim();
+          const projectReady =
+            !!projectPath && !(Array.isArray(tree) && tree.length === 0);
+
+          if (!projectReady) {
+            appendMessage(
+              "assistant",
+              "KForge still needs a populated starter project before continuing the app build. Open the generated project, then use Preview → Generate and Preview → Install if needed. No files were changed.",
+            );
+            return;
+          }
+
+          appendMessage(
+            "assistant",
+            "Starter setup detected. Returning the original app request to KForge's normal app-build choices and controlled implementation flow.",
+          );
+
+          sendWithPrompt(originalGoal || draft, {
+            silentUserAppend: true,
+            skipCompletedWorkflowRoute: true,
+            forceOpenProjectBuildAppClarifier: true,
+          });
           return;
         }
 
@@ -8306,9 +8383,30 @@ setWorkflowContext({
         setProviderSwitchNote("");
       }
 
-      // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
+      // Refresh an internally supplied continuation-context file.
+      // This is separate from the user-facing "Attach current file" toggle.
       let fileSnapshot = null;
-      if (includeActiveFile) {
+      const contextFilePath = String(opts.contextFilePath || "").trim();
+
+      if (contextFilePath) {
+        try {
+          fileSnapshot = {
+            path: contextFilePath,
+            content: String((await openFile(contextFilePath)) ?? ""),
+          };
+        } catch (err) {
+          appendMessage(
+            "assistant",
+            `KForge could not refresh the inspected file context for ${contextFilePath}.\n\n` +
+              `${String(err?.message || err || "Unknown error")}\n\n` +
+              "No continuation was sent and no files were changed.",
+          );
+          return;
+        }
+      }
+
+      // Phase 3.4.5: capture a snapshot of the active file (path + content) iff toggle is enabled.
+      if (!fileSnapshot && includeActiveFile) {
         if (activeTab?.path) {
           fileSnapshot = {
             path: activeTab.path,
@@ -8440,6 +8538,7 @@ setWorkflowContext({
           "- Use the heading: Feature Blueprint.\n" +
           "- Include exactly these sections: Likely files to inspect/change, Implementation steps, Risks/unknowns, Preview/check plan.\n" +
           "- Treat file paths as likely candidates until inspection confirms them. Do not imply inspected certainty.\n" +
+          "- In Preview/check plan, make every preview instruction explicitly post-implementation. For heading or title wording changes, use: After implementation, open Preview and confirm the heading changed.\n" +
           "- Prefer KForge-native verification language such as Preview Panel → Preview instead of telling the user to run terminal commands, unless terminal commands are explicitly needed.\n" +
           "- Keep bullets and numbered steps on separate lines so the plan is easy to scan.\n" +
           "- Keep it practical and concise. Do not claim files were changed.\n"
@@ -8479,9 +8578,10 @@ setWorkflowContext({
             "If a plausible existing file already exists, read and reuse that file instead of creating a duplicate new file.\n" +
             "\n" +
             "For implementation requests, do NOT stop at narrative intent such as saying you will inspect or modify files.\n" +
-            "After a brief explanation, actually emit exactly one tool block when inspection or editing is needed.\n" +
-            "If inspection is needed, the same answer must include the single tool request instead of stopping after prose.\n" +
-            "Instead, output exactly one ```tool fenced block containing JSON like:\n" +
+            "When requesting a tool, output exactly one fenced ```tool block containing JSON.\n" +
+            "Output no prose before or after the tool block.\n" +
+            "Do NOT use XML tool tags, bare JSON, ```json fences, or function-like tool shorthand.\n" +
+            "Use this exact shape:\n" +
             "```tool\n" +
             '{ "name": "write_file", "args": { "path": "index.html", "content": "<file text>" } }\n' +
             "```\n" +
@@ -8542,8 +8642,11 @@ setWorkflowContext({
             out,
           );
 
+        const hasKnownBadXmlToolCall =
+          hasKnownBadKforgeXmlToolAttempt(out);
+
         const hasMalformedToolLikeOutput =
-          hasXmlLikeToolCall || hasToolLikeFence;
+          hasXmlLikeToolCall || hasKnownBadXmlToolCall || hasToolLikeFence;
 
         const shouldShowAdvisoryNoActionRecovery =
           isAdvisoryTestOverride &&
@@ -8567,7 +8670,12 @@ setWorkflowContext({
           !shouldShowAdvisoryNoActionRecovery &&
           (
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
-            promptTask.kind === "broken_preview_debug"
+            promptTask.kind === "broken_preview_debug" ||
+            (
+              projectOpen &&
+              !shouldSuppressToolsForPrompt &&
+              hasKnownBadXmlToolCall
+            )
           ) &&
           toolBlocks.length === 0 &&
           !askForPatch;
@@ -8708,9 +8816,12 @@ setWorkflowContext({
           const templateHintForNoToolAppInspect = String(
             detectedTemplateName || detectedKind || "",
           ).toLowerCase();
-          const likelyAppInspectPath = templateHintForNoToolAppInspect.includes("next")
-            ? "app/page.jsx"
-            : "src/App.jsx";
+          const activeNoToolInspectPath = String(activeTab?.path || "").trim();
+          const likelyAppInspectPath =
+            activeNoToolInspectPath ||
+            (templateHintForNoToolAppInspect.includes("next")
+              ? "app/page.jsx"
+              : "src/App.jsx");
           const hasAlreadyInspectedLikelyAppPath =
             noToolAlreadyInspectedPaths.includes(
               likelyAppInspectPath.toLowerCase(),
@@ -8720,13 +8831,19 @@ setWorkflowContext({
 
           if (
             isPlainProjectEditNoToolRecovery &&
-            !isRiskyNoToolModel &&
             !hasAlreadyInspectedLikelyAppPath
           ) {
             noToolRecoveryActions.push({
-              label: "Inspect app file",
+              label: activeNoToolInspectPath
+                ? "Inspect current file"
+                : "Inspect app file",
               onClick: () => {
-                appendMessage("user", "Choice: Inspect app file");
+                appendMessage(
+                  "user",
+                  activeNoToolInspectPath
+                    ? "Choice: Inspect current file"
+                    : "Choice: Inspect app file",
+                );
                 appendMessage(
                   "assistant",
                   `Inspecting ${likelyAppInspectPath} first. This is a deterministic KForge inspection step, not another model retry. KForge will request approval before any file write.`,
@@ -8875,8 +8992,19 @@ setWorkflowContext({
               /\b(form|input|field|control)\b/.test(noToolSimpleControlGoal)
             );
 
+          const hasDeterministicNoToolInspectionAvailable =
+            (
+              isPlainProjectEditNoToolRecovery &&
+              !hasAlreadyInspectedLikelyAppPath
+            ) ||
+            (
+              isDeterministicVisualCssNoToolInspection &&
+              !hasAlreadyInspectedDeterministicVisualCssPath
+            );
+
           const shouldOfferFocusedNoToolRetry =
             !isAppBuildImplementationNoToolRecovery &&
+            !hasDeterministicNoToolInspectionAvailable &&
             !(
               (
                 isPlainProjectEditNoToolRecovery &&
@@ -9129,7 +9257,7 @@ setWorkflowContext({
                         `Original feature request: ${draft}\n\n` +
                         `Current blueprint:\n${cleaned}\n\n` +
                         "Do not edit files.\n\n" +
-                        "Improve the blueprint for real app building: first useful vertical slice, modern polished responsive UI/UX by default, likely files to inspect/change, staged implementation steps, service readiness where relevant, risks/unknowns, and Preview/check plan.\n\n" +
+                        "Improve the blueprint for real app building: first useful vertical slice, modern polished responsive UI/UX by default, likely files to inspect/change, staged implementation steps, service readiness where relevant, risks/unknowns, and Preview/check plan. Make every preview instruction explicitly post-implementation. For heading or title wording changes, use: After implementation, open Preview and confirm the heading changed.\n\n" +
                         "Service readiness includes Supabase/backend/auth/database, AI/provider/OpenAI, GitHub/repo, deployment/Vercel/Netlify, and payments/Stripe only where relevant to the user request.\n\n" +
                         "Rules: do not focus only on payments unless the user requested payments; do not claim any service setup, deployment, GitHub push, Preview, build, or tests were checked; keep the refined blueprint practical for producing a working app, not just rewording the same plan.",
                       {

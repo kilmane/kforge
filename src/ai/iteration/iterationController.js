@@ -62,13 +62,13 @@ export function isVisualCssIterationGoal(text = "") {
   if (!s) return false;
 
   const hasDirectVisualIntent =
-    /\b(ui|ux|visual|style|styling|css|layout|readability|readable|theme|palette|colour|color|heading|title|background|contrast|polished|modern)\b/.test(
+    /\b(ui|ux|visual|style|styling|css|layout|readability|readable|theme|palette|colour|color|background|contrast|polished|modern)\b/.test(
       s,
-    );
+   );
 
   if (hasDirectVisualIntent) return true;
 
-  const hasVisualTargetOnlyWord = /\b(button|card)\b/.test(s);
+  const hasVisualTargetOnlyWord = /\b(button|card|heading|title)\b/.test(s);
   const hasVisualModifier =
     /\b(bright|dark|lighter|darker|bold|smaller|larger|bigger|center|centered|centred|centre|align|aligned|rounded|shadow|spacing|margin|padding|font|readable|contrast|colour|color)\b/.test(
       s,
