@@ -244,7 +244,7 @@ export default function SettingsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-16">
+    <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-start justify-center pt-16">
       {/* Constrain height so left can scroll */}
       <div className="bg-zinc-950 w-[980px] max-w-[95vw] h-[85vh] rounded-xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col">
         {/* Header */}
@@ -404,6 +404,32 @@ export default function SettingsModal({
                     aiMaxTokens={aiMaxTokens}
                     setAiMaxTokens={setAiMaxTokens}
                   />
+                </div>
+
+                <div className="border border-zinc-800 rounded-lg p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">Maintenance</div>
+                      <div className="text-xs opacity-60 mt-1 space-y-1">
+                        <div>
+                          Clears KForge local UI/cache state. Does not delete
+                          your project files.
+                        </div>
+                        <div>
+                          API keys stored in the OS keychain are not deleted.
+                        </div>
+                        <div>KForge will reload after clearing.</div>
+                      </div>
+                    </div>
+                    <button
+                      className={buttonClass("danger", !onClearLocalCache)}
+                      onClick={onClearLocalCache || undefined}
+                      disabled={!onClearLocalCache}
+                      type="button"
+                    >
+                      Clear KForge local cache
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : !activeProvider ? (

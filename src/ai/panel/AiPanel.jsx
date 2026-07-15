@@ -5225,7 +5225,7 @@ export default function AiPanel({
 
   return (
     <div
-      className={`${aiPanelWidthClass} border-l border-zinc-800 min-h-0 h-full flex flex-col`}
+      className={`${aiPanelWidthClass} relative overflow-hidden border-l border-zinc-800 min-h-0 h-full flex flex-col`}
     >
       {/* AI header: GPT-clean control */}
       <div className="p-2 border-b border-zinc-800 sticky top-0 z-30 bg-zinc-950">
@@ -5336,12 +5336,6 @@ export default function AiPanel({
 
         {isDevBuild ? (
           <>
-            {previewOpen ? (
-              <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
-                <PreviewPanel projectPath={projectPath} />
-              </div>
-            ) : null}
-
             {terminalOpen ? (
               <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
                 <CommandRunnerPanel projectPath={projectPath} />
@@ -5582,6 +5576,41 @@ export default function AiPanel({
 
         </div>
       )}
+
+      {isDevBuild && previewOpen ? (
+        <div
+          className="absolute inset-0 z-[80] flex items-start justify-center bg-black/75 p-4 pt-16 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preview workspace"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div>
+                <div className="text-sm font-semibold text-zinc-100">
+                  Preview workspace
+                </div>
+                <div className="mt-0.5 text-xs text-zinc-400">
+                  Generate, install, run, and inspect the current project here.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+                onClick={() => setPreviewOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <PreviewPanel projectPath={projectPath} />
+          </div>
+        </div>
+      ) : null}
 
       {/* Change Provider/Model modal */}
       {modelPickerOpen ? (
