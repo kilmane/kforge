@@ -14,6 +14,7 @@ import {
   makeDir,
 } from "../../../lib/fs";
 import { search_in_file } from "./search_in_file.js";
+import { shouldBlockInteractiveCapabilityLoss } from "./writePreservationGuard.js";
 
 const ABSOLUTE_PATH_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
 
@@ -200,6 +201,18 @@ function shouldBlockSuspiciousWrite({ path, existingContent, nextContent }) {
       "write_file blocked: this would shrink an existing source file by more than 80%. " +
       "Read the file first and provide the full intended file contents."
     );
+  }
+
+  if (!looksLikeStarterOrPlaceholderSourceContent(existing)) {
+    const interactiveCapabilityLossBlock = shouldBlockInteractiveCapabilityLoss({
+      path,
+      existingContent: existing,
+      nextContent: next,
+    });
+
+    if (interactiveCapabilityLossBlock) {
+      return interactiveCapabilityLossBlock;
+    }
   }
 
   if (
