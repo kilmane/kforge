@@ -905,15 +905,6 @@ function findAppBuildRepeatedHeaderTitleIssue(results = []) {
 
   return null;
 }
-function getLatestUserMessageText(messages) {
-  const items = Array.isArray(messages) ? messages : [];
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    if (String(items[i]?.role || "") === "user") {
-      return String(items[i]?.content || "").trim();
-    }
-  }
-  return "";
-}
 function getNearestUserMessageTextBeforeIndex(messages, index) {
   const items = Array.isArray(messages) ? messages : [];
   const max = Math.min(
