@@ -22,7 +22,6 @@ import { buildAppBuildLayoutContract } from "./ai/appBuild/appBuildLayoutContrac
 import { buildAppBuildDesignDnaPrompt } from "./ai/appBuild/appBuildDesignDna";
 
 
-import { isVisualCssIterationGoal } from "./ai/iteration/iterationController";
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
@@ -8791,27 +8790,14 @@ setWorkflowContext({
               draft,
           ).trim();
 
-          const isDeterministicVisualCssNoToolInspection =
-            !isFixNoToolRecovery &&
-            !isPartialImplementationNoToolRecovery &&
-            !isAppBuildImplementationNoToolRecovery &&
-            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
-            isVisualCssIterationGoal(originalNoToolRequest || noToolRecoveryGoal);
-          const deterministicVisualCssInspectPath = "src/App.css";
           const noToolAlreadyInspectedPaths = noToolCarryoverInspectedPaths
             .map((item) => item.replace(/\\/g, "/").toLowerCase())
             .filter(Boolean);
-          const hasAlreadyInspectedDeterministicVisualCssPath =
-            noToolAlreadyInspectedPaths.includes(
-              deterministicVisualCssInspectPath.toLowerCase(),
-            );
-
           const isPlainProjectEditNoToolRecovery =
             !isFixNoToolRecovery &&
             !isPartialImplementationNoToolRecovery &&
             !isAppBuildImplementationNoToolRecovery &&
-            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT &&
-            !isDeterministicVisualCssNoToolInspection;
+            promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT;
 
           const templateHintForNoToolAppInspect = String(
             detectedTemplateName || detectedKind || "",
@@ -8869,36 +8855,6 @@ setWorkflowContext({
             });
           }
 
-          if (isDeterministicVisualCssNoToolInspection && !hasAlreadyInspectedDeterministicVisualCssPath) {
-            noToolRecoveryActions.push({
-              label: "Inspect likely style file",
-              onClick: () => {
-                appendMessage("user", "Choice: Inspect likely style file");
-                appendMessage(
-                  "assistant",
-                  `Inspecting ${deterministicVisualCssInspectPath} first. This is a deterministic KForge inspection step, not another model retry. KForge will request approval before any file write.`,
-                );
-                appendMessage(
-                  "assistant",
-                  "```tool\n" +
-                    JSON.stringify({
-                      name: "read_file",
-                      args: { path: deterministicVisualCssInspectPath },
-                    }) +
-                    "\n```",
-                  {
-                    meta: {
-                      allowModelToolExecution: true,
-                      modelToolExecutionKind: String(WORKFLOW_TASK_KIND.PROJECT_EDIT),
-                      previewErrorEvidenceGate: false,
-                      controlledReadOnlyToolExecution: false,
-                    },
-                  },
-                );
-              },
-            });
-          }
-
           if (isAppBuildImplementationNoToolRecovery) {
             noToolRecoveryActions.push({
               label: "Retry controlled app-build implementation",
@@ -8917,25 +8873,6 @@ setWorkflowContext({
                   modelToolOriginalGoal: originalNoToolRequest,
                   lastUserGoal: originalNoToolRequest,
                 });
-              },
-            });
-          }
-
-          if (
-            isDeterministicVisualCssNoToolInspection &&
-            hasAlreadyInspectedDeterministicVisualCssPath &&
-            !isRiskyNoToolModel
-          ) {
-            noToolRecoveryActions.push({
-              label: "Switch model first",
-              onClick: () => {
-                appendMessage("user", "Choice: Switch model first");
-                appendMessage(
-                  "assistant",
-                  "The likely style file was already inspected, but the model still did not produce a usable file-change request.\n\n" +
-                    "Switch to a Recommended builder or High capability model, then retry the edit. KForge will keep inspect-before-write, path safety, and write approval active.\n\n" +
-                    "No files were changed.",
-                );
               },
             });
           }
@@ -8993,28 +8930,16 @@ setWorkflowContext({
             );
 
           const hasDeterministicNoToolInspectionAvailable =
-            (
-              isPlainProjectEditNoToolRecovery &&
-              !hasAlreadyInspectedLikelyAppPath
-            ) ||
-            (
-              isDeterministicVisualCssNoToolInspection &&
-              !hasAlreadyInspectedDeterministicVisualCssPath
-            );
+            isPlainProjectEditNoToolRecovery &&
+            !hasAlreadyInspectedLikelyAppPath;
 
           const shouldOfferFocusedNoToolRetry =
             !isAppBuildImplementationNoToolRecovery &&
             !hasDeterministicNoToolInspectionAvailable &&
             !(
-              (
-                isPlainProjectEditNoToolRecovery &&
-                hasAlreadyInspectedLikelyAppPath &&
-                isSimpleFormControlNoToolEdit
-              ) ||
-              (
-                isDeterministicVisualCssNoToolInspection &&
-                hasAlreadyInspectedDeterministicVisualCssPath
-              )
+              isPlainProjectEditNoToolRecovery &&
+              hasAlreadyInspectedLikelyAppPath &&
+              isSimpleFormControlNoToolEdit
             );
 
           if (shouldOfferFocusedNoToolRetry) {
