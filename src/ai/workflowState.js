@@ -107,6 +107,10 @@ function normalizeWorkflowPathList(paths = []) {
   return normalized;
 }
 
+export function mergeWorkflowPathLists(...pathLists) {
+  return normalizeWorkflowPathList(pathLists.flat());
+}
+
 function normalizeChangedFileSummaries(changedFileSummaries = []) {
   const sourceSummaries = Array.isArray(changedFileSummaries)
     ? changedFileSummaries
@@ -497,13 +501,21 @@ export function createCompletedFeatureBlueprintWorkflowContext({
 
 export function createImplementationInProgressWorkflowContext({
   lastUserGoal = "",
+  inspectedPaths = [],
+  modelToolInspectedPaths = [],
   source = "send_with_prompt",
 } = {}) {
+  const normalizedInspectedPaths = normalizeWorkflowPathList(inspectedPaths);
+  const normalizedModelToolInspectedPaths =
+    normalizeWorkflowPathList(modelToolInspectedPaths);
+
   return {
     taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
     status: WORKFLOW_STATUS.IN_PROGRESS,
     nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
     lastUserGoal: String(lastUserGoal || "").trim(),
+    inspectedPaths: normalizedInspectedPaths,
+    modelToolInspectedPaths: normalizedModelToolInspectedPaths,
     updatedAt: Date.now(),
     source,
   };

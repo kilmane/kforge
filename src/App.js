@@ -32,6 +32,7 @@ import {
   createBugfixWorkflowContext,
   createDirectHandoffWorkflowContext,
   createImplementationInProgressWorkflowContext,
+  mergeWorkflowPathLists,
   SUGGESTED_ACTION_LABEL,
   VERIFICATION_STATUS,
   WORKFLOW_NEXT_STEP,
@@ -8369,7 +8370,20 @@ setWorkflowContext({
       }
 
       if (projectEditRoute.action === "project_edit") {
-        setWorkflowContext(createImplementationInProgressWorkflowContext({ lastUserGoal: opts.lastUserGoal || draft }));
+        const carryoverInspectedPaths = mergeWorkflowPathLists(
+          workflowContext?.inspectedPaths,
+          workflowContext?.modelToolInspectedPaths,
+          opts.inspectedPaths,
+          opts.modelToolInspectedPaths,
+        );
+
+        setWorkflowContext(
+          createImplementationInProgressWorkflowContext({
+            lastUserGoal: opts.lastUserGoal || draft,
+            inspectedPaths: carryoverInspectedPaths,
+            modelToolInspectedPaths: carryoverInspectedPaths,
+          }),
+        );
       } else if (projectEditRoute.action === "project_fix") {
         setWorkflowContext(createBugfixWorkflowContext(workflowContext, "project_fix_route"));
       }
