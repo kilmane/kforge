@@ -1107,6 +1107,10 @@ function shouldClearKforgeStorageKey(key) {
   // OS keychain, but these local labels help Settings show which key is set.
   if (key.startsWith("kforge.apiKeyFingerprint.v1.")) return false;
 
+  // Preserve per-project behavior overrides. These are project data, not
+  // disposable UI/cache state.
+  if (key.startsWith(AI_PROJECT_SYSTEM_STORAGE_PREFIX)) return false;
+
   return key.startsWith("kforge.") || key.startsWith("kforge:");
 }
 
