@@ -298,6 +298,26 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
   };
 }
 
+export function buildImplementationJobInspectionPrompt(
+  job,
+  fallbackGoal = "",
+  options = {},
+) {
+  const current = createImplementationJob(job);
+  const originalGoal = current.originalGoal || String(fallbackGoal || "").trim();
+  const isFix = options.isFix === true;
+
+  return (
+    (isFix ? "Inspect before fixing.\n\n" : "Inspect before editing.\n\n") +
+    `Original request: ${originalGoal}\n\n` +
+    "The previous model response tried to request write_file before inspection evidence was available.\n" +
+    "Do not request write_file yet. Request exactly one inspection tool call next: read_file, list_dir, or search_in_file.\n" +
+    (isFix
+      ? "After the inspection result is available, continue with the smallest safe fix only if needed."
+      : "After the inspection result is available, continue with the smallest safe edit only if needed.")
+  );
+}
+
 export function buildImplementationJobFocusedPrompt(job, fallbackGoal = "") {
   const current = createImplementationJob(job);
   const originalGoal = current.originalGoal || String(fallbackGoal || "").trim();

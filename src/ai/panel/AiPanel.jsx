@@ -23,6 +23,7 @@ import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import {
   buildImplementationJobFocusedPrompt,
+  buildImplementationJobInspectionPrompt,
   createImplementationJob,
   evaluateImplementationToolRequest,
   getImplementationJobAllowedNextActions,
@@ -3128,15 +3129,11 @@ export default function AiPanel({
 
                       if (typeof sendWithPrompt === "function") {
                         sendWithPrompt(
-                          (isFixToolExecution
-                            ? "Inspect before fixing.\n\n"
-                            : "Inspect before editing.\n\n") +
-                            `Original request: ${originalGoal}\n\n` +
-                            "The previous model response tried to request write_file before inspection evidence was available.\n" +
-                            "Do not request write_file yet. Request exactly one inspection tool call next: read_file, list_dir, or search_in_file.\n" +
-                            (isFixToolExecution
-                              ? "After the inspection result is available, continue with the smallest safe fix only if needed."
-                              : "After the inspection result is available, continue with the smallest safe edit only if needed."),
+                          buildImplementationJobInspectionPrompt(
+                            { originalGoal },
+                            originalGoal,
+                            { isFix: isFixToolExecution },
+                          ),
                           {
                             silentUserAppend: true,
                             forceModelCapabilityTestOverride: true,
