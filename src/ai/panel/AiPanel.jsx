@@ -2233,7 +2233,7 @@ export default function AiPanel({
     return localStorage.getItem("kforge:devToolsEnabled") === "1";
   });
 
-  // 🔧 Preview runner panel (dev-only runtime tool).
+  // 🔧 User-facing runtime workspaces.
   // Collapsed by default to keep UI calm.
   const [previewOpen, setPreviewOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -4947,8 +4947,7 @@ export default function AiPanel({
 
             <HelpMenuPlaceholder invoke={invoke} />
 
-            {isDevBuild ? (
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -5021,7 +5020,6 @@ export default function AiPanel({
                   <span className="font-medium">Services</span>
                 </button>
               </div>
-            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -5038,8 +5036,7 @@ export default function AiPanel({
           </div>
         </div>
 
-        {isDevBuild ? (
-          <>
+        <>
             {terminalOpen ? (
               <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
                 <CommandRunnerPanel projectPath={projectPath} />
@@ -5060,7 +5057,6 @@ export default function AiPanel({
               </div>
             ) : null}
           </>
-        ) : null}
         {providerSwitchNote ? (
           <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
@@ -5281,7 +5277,7 @@ export default function AiPanel({
         </div>
       )}
 
-      {isDevBuild && previewOpen ? (
+      {previewOpen ? (
         <div
           className="absolute inset-0 z-[80] flex items-start justify-center bg-black/75 p-4 pt-16 backdrop-blur-sm"
           role="dialog"
