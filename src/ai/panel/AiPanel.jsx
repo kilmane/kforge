@@ -25,6 +25,8 @@ import {
   buildImplementationJobFocusedPrompt,
   createImplementationJob,
   evaluateImplementationToolRequest,
+  getImplementationJobAllowedNextActions,
+  IMPLEMENTATION_JOB_ACTION,
   IMPLEMENTATION_JOB_TOOL_DECISION,
   rememberImplementationInspection,
   rememberImplementationToolFailure,
@@ -4352,6 +4354,14 @@ export default function AiPanel({
                     hasInspectedLikelyAppFileForSmallControlEdit &&
                     isSmallControlEditGoal(inspectionOnlyGoalText);
 
+                  const implementationAllowedNextActions =
+                    getImplementationJobAllowedNextActions(implementationJob);
+                  const shouldOfferImplementationContinuation =
+                    isFixToolExecution ||
+                    implementationAllowedNextActions.includes(
+                      IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
+                    );
+
                   const inspectionOnlyActions =
                     isSmallControlInspectionOnlyEdit
                       ? [
@@ -4504,7 +4514,8 @@ export default function AiPanel({
                             },
                           },
                         ]
-                      : [
+                      : shouldOfferImplementationContinuation
+                        ? [
                           {
                             label: isFixToolExecution
                               ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
@@ -4581,7 +4592,8 @@ export default function AiPanel({
                               }
                             },
                           },
-                        ];
+                        ]
+                        : [];
 
                   appendMessage(
                     "assistant",
