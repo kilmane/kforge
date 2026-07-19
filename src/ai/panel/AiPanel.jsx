@@ -22,6 +22,7 @@ import {
 import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import {
+  buildImplementationJobFocusedPrompt,
   createImplementationJob,
   evaluateImplementationToolRequest,
   IMPLEMENTATION_JOB_TOOL_DECISION,
@@ -4540,14 +4541,15 @@ export default function AiPanel({
                                   "Do not return a fragment, placeholder, abbreviated content, comment-only content, or only the newly added JSX/button.\n" +
                                   "Preserve the existing app structure, state, handlers, imports, styling hooks, copy, and all unrelated behavior.\n" +
                                   "For a reset-button request, add only the minimal reset handler/button needed to clear the existing form."
-                                : (isFixToolExecution
-                                    ? "Continue the previous fix/debug task.\n\n"
-                                    : "Continue the previous project edit.\n\n") +
-                                  `Original request: ${originalGoal}\n\n` +
-                                  "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                  (isFixToolExecution
-                                    ? "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
-                                    : "Request exactly one write_file tool call next, or explain briefly why a file edit is impossible.");
+                                : isFixToolExecution
+                                  ? "Continue the previous fix/debug task.\n\n" +
+                                    `Original request: ${originalGoal}\n\n` +
+                                    "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                    "Request exactly one tool call next. If the inspected evidence shows a file change is needed, request one write_file tool call for the smallest safe fix. If no code change is needed, explain the inspected evidence clearly and stop."
+                                  : buildImplementationJobFocusedPrompt(
+                                      implementationJob,
+                                      originalGoal,
+                                    );
 
                               appendMessage(
                                 "assistant",

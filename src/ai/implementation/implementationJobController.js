@@ -103,6 +103,15 @@ function normalizeToolRecord(record = {}) {
 export function createImplementationJob(seed = {}) {
   const now = Date.now();
   const createdAt = Number.isFinite(seed.createdAt) ? seed.createdAt : now;
+  const inspectedPaths = normalizeImplementationPathList(seed.inspectedPaths);
+  const defaultAllowedNextActions =
+    inspectedPaths.length > 0
+      ? [
+          IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
+          IMPLEMENTATION_JOB_ACTION.INSPECT_SPECIFIC_FILE,
+          IMPLEMENTATION_JOB_ACTION.STOP,
+        ]
+      : [IMPLEMENTATION_JOB_ACTION.INSPECT_LIKELY_FILE];
 
   return {
     jobId: String(seed.jobId || "").trim() || createImplementationJobId(),
@@ -114,7 +123,7 @@ export function createImplementationJob(seed = {}) {
     modelPolicyKind: String(seed.modelPolicyKind || "").trim(),
     createdAt,
     updatedAt: Number.isFinite(seed.updatedAt) ? seed.updatedAt : now,
-    inspectedPaths: normalizeImplementationPathList(seed.inspectedPaths),
+    inspectedPaths,
     attemptedWrites: normalizeImplementationPathList(seed.attemptedWrites),
     successfulWrites: normalizeImplementationPathList(seed.successfulWrites),
     blockedWrites: normalizeImplementationPathList(seed.blockedWrites),
@@ -126,10 +135,14 @@ export function createImplementationJob(seed = {}) {
       : [],
     allowedNextActions: Array.isArray(seed.allowedNextActions)
       ? seed.allowedNextActions.map((item) => String(item || "").trim()).filter(Boolean)
-      : [IMPLEMENTATION_JOB_ACTION.INSPECT_LIKELY_FILE],
+      : defaultAllowedNextActions,
     lastAssistantResult: seed.lastAssistantResult || null,
     lastSafeStopReason: String(seed.lastSafeStopReason || "").trim(),
   };
+}
+
+export function getImplementationJobAllowedNextActions(job) {
+  return [...createImplementationJob(job).allowedNextActions];
 }
 
 export function rememberImplementationInspection(job, path = "") {
