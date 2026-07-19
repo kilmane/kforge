@@ -298,6 +298,37 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
   };
 }
 
+export function buildImplementationJobBlockedWriteRecoveryPrompt(
+  job,
+  fallbackGoal = "",
+  options = {},
+) {
+  const current = createImplementationJob(job);
+  const originalGoal = current.originalGoal || String(fallbackGoal || "").trim();
+  const targetPath = normalizeImplementationPath(
+    options.targetPath ||
+      current.blockedWrites[current.blockedWrites.length - 1] ||
+      "",
+  );
+  const blockedReason = String(options.blockedReason || "").trim();
+  const blockedReasonSection = blockedReason
+    ? `Blocked write reason:\n${blockedReason}\n\n`
+    : "";
+
+  return (
+    "Recover from the blocked file write.\n\n" +
+    `Original request: ${originalGoal}\n\n` +
+    `Blocked write target: ${targetPath || "the inspected target file"}\n\n` +
+    blockedReasonSection +
+    "The target file has now been inspected. Do not repeat broad inspection.\n" +
+    "Request exactly one write_file tool call next for the blocked target.\n" +
+    "The write_file content must be the complete full current file text with only the smallest safe requested change applied.\n" +
+    "Do not return a fragment, placeholder, abbreviated content, comment-only content, or only the newly added JSX/button.\n" +
+    "Preserve the existing app structure, state, handlers, imports, styling hooks, copy, and all unrelated behavior.\n" +
+    "For a reset-button request, add only the minimal reset handler/button needed to clear the existing form."
+  );
+}
+
 export function buildImplementationJobInspectionPrompt(
   job,
   fallbackGoal = "",

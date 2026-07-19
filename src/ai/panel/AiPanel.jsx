@@ -22,6 +22,7 @@ import {
 import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import {
+  buildImplementationJobBlockedWriteRecoveryPrompt,
   buildImplementationJobFocusedPrompt,
   buildImplementationJobInspectionPrompt,
   createImplementationJob,
@@ -4539,16 +4540,16 @@ export default function AiPanel({
                                   "Replace the starter source with a complete full app source file that satisfies the layout contract and fixes the blocked app-build issue while preserving the existing project stack, imports, mount behavior, and local build simplicity.\n" +
                                   "Do not request CSS/style-file writes until a source markup/layout write has succeeded."
                                 : isBlockedWriteRecoveryContinuation
-                                  ? "Recover from the blocked file write.\n\n" +
-                                  `Original request: ${originalGoal}\n\n` +
-                                  `Blocked write target: ${blockedWriteRecoveryTargetPath}\n\n` +
-                                  blockedWriteRecoveryReasonLine +
-                                  "The target file has now been inspected. Do not repeat broad inspection.\n" +
-                                  "Request exactly one write_file tool call next for the blocked target.\n" +
-                                  "The write_file content must be the complete full current file text with only the smallest safe requested change applied.\n" +
-                                  "Do not return a fragment, placeholder, abbreviated content, comment-only content, or only the newly added JSX/button.\n" +
-                                  "Preserve the existing app structure, state, handlers, imports, styling hooks, copy, and all unrelated behavior.\n" +
-                                  "For a reset-button request, add only the minimal reset handler/button needed to clear the existing form."
+                                  ? buildImplementationJobBlockedWriteRecoveryPrompt(
+                                      implementationJob,
+                                      originalGoal,
+                                      {
+                                        targetPath:
+                                          blockedWriteRecoveryTargetPath,
+                                        blockedReason:
+                                          triggerToolBlockedWriteReason,
+                                      },
+                                    )
                                 : isFixToolExecution
                                   ? "Continue the previous fix/debug task.\n\n" +
                                     `Original request: ${originalGoal}\n\n` +
