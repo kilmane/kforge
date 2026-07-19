@@ -11,6 +11,12 @@ use std::{
 
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub struct PreviewState {
     active: Mutex<Option<ActivePreview>>,
 }
@@ -177,24 +183,30 @@ fn spawn_preview_process(
 
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
-    let mut child = if cfg!(windows) {
-        Command::new("cmd")
+    #[cfg(target_os = "windows")]
+    let mut child = {
+        let mut command = Command::new("cmd");
+        command
             .arg("/C")
             .arg(pnpm)
             .args(args)
             .current_dir(&project_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-    } else {
-        Command::new(pnpm)
-            .current_dir(&project_path)
-            .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+            .creation_flags(CREATE_NO_WINDOW);
+
+        command.spawn()
     }
     .map_err(|e| format!("Failed to spawn {}: {}", label, e))?;
+
+    #[cfg(not(target_os = "windows"))]
+    let mut child = Command::new(pnpm)
+        .current_dir(&project_path)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn {}: {}", label, e))?;
 
     let pid = child.id();
 
@@ -612,9 +624,12 @@ pub fn preview_stop(app: AppHandle, state: tauri::State<PreviewState>) -> Result
 
             #[cfg(target_os = "windows")]
             {
-                let _ = Command::new("taskkill")
+                let mut command = Command::new("taskkill");
+                command
                     .args(["/PID", &pid.to_string(), "/T", "/F"])
-                    .status();
+                    .creation_flags(CREATE_NO_WINDOW);
+
+                let _ = command.status();
             }
 
             #[cfg(not(target_os = "windows"))]
