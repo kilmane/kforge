@@ -4723,15 +4723,18 @@ export default function AiPanel({
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
-                              (isPerformanceToolExecution
-                                ? "Continue the previous performance diagnosis.\n\n"
+                              isPerformanceToolExecution
+                                ? "Continue the previous performance diagnosis.\n\n" +
+                                  `Original request: ${originalGoal}\n\n` +
+                                  "The previous run reached the safe tool-step limit without changing files. Do not reread the same files. Do not read binary assets as text. Request exactly one focused next step: one missing text evidence file, one smallest safe write_file change if evidence is enough, or a clear explanation that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback."
                                 : isFixToolExecution
-                                  ? "Continue the previous fix/debug task.\n\n"
-                                  : "Continue the previous implementation.\n\n") +
-                                `Original request: ${originalGoal}\n\n` +
-                                (isPerformanceToolExecution
-                                  ? "The previous run reached the safe tool-step limit without changing files. Do not reread the same files. Do not read binary assets as text. Request exactly one focused next step: one missing text evidence file, one smallest safe write_file change if evidence is enough, or a clear explanation that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback."
-                                  : "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused implementation tool call next. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."),
+                                  ? "Continue the previous fix/debug task.\n\n" +
+                                    `Original request: ${originalGoal}\n\n` +
+                                    "The previous run reached the safe tool-step limit without changing files. Do not repeat broad inspection. Request exactly one focused implementation tool call next. If editing is possible, request one smallest safe write_file change. If more inspection is genuinely needed, request one read_file or list_dir call."
+                                  : buildImplementationJobFocusedPrompt(
+                                      implementationJob,
+                                      originalGoal,
+                                    ),
                               {
                                 silentUserAppend: true,
                                 skipCompletedWorkflowRoute: true,
@@ -4832,18 +4835,19 @@ export default function AiPanel({
 
                           if (typeof sendWithPrompt === "function") {
                             sendWithPrompt(
-                              (isFixToolExecution
-                                ? "Continue the previous fix/debug task.\n\n"
+                              isFixToolExecution
+                                ? "Continue the previous fix/debug task.\n\n" +
+                                  `Original request: ${originalGoal}\n\n` +
+                                  "The project has already been inspected. Do not repeat broad inspection.\n" +
+                                  "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
                                 : isPerformanceToolExecution
-                                  ? "Continue the previous performance diagnosis.\n\n"
-                                  : "Continue the previous implementation.\n\n") +
-                                `Original request: ${originalGoal}\n\n` +
-                                (isPerformanceToolExecution
-                                  ? "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next diagnostic step: inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component; request one smallest safe write_file change if evidence is enough; or explain that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
-                                  : "The project has already been inspected. Do not repeat broad inspection.\n" +
-                                    (isFixToolExecution
-                                      ? "Request exactly one concrete tool call next. If a file edit is needed, request write_file for the smallest safe fix. If more inspection is genuinely needed, request one read_file only. If no code change is needed, explain the inspected evidence clearly and stop."
-                                      : "Request exactly one concrete implementation tool call next. If a file edit is needed, request write_file for the smallest safe continuation. If more inspection is genuinely needed, request one read_file only.")),
+                                  ? "Continue the previous performance diagnosis.\n\n" +
+                                    `Original request: ${originalGoal}\n\n` +
+                                    "The project has only been partially inspected. Do not reread the same file. Do not read binary assets as text. Request exactly one next diagnostic step: inspect one different missing text evidence target such as CSS, package.json, main entry, or a relevant component; request one smallest safe write_file change if evidence is enough; or explain that no safe code edit is justified. Do not blindly add React.memo, useMemo, or useCallback; use them only when inspected code shows a specific need."
+                                  : buildImplementationJobFocusedPrompt(
+                                      implementationJob,
+                                      originalGoal,
+                                    ),
                               {
                                 silentUserAppend: true,
                                 inspectedPaths: agentSuccessfulReadPaths,
