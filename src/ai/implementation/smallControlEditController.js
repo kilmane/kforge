@@ -17,6 +17,23 @@ function normalizeText(value = "") {
 
 export function getSmallControlEditOperation(goal = "") {
   const text = normalizeText(goal);
+  const isExistingControlCopyChange =
+    /\b(change|rename|update|replace|edit)\b[\s\S]{0,80}\b(label|text|wording|caption|copy)\b/.test(
+      text,
+    ) ||
+    /\b(label|text|wording|caption|copy)\b[\s\S]{0,80}\b(change|rename|update|replace|edit)\b/.test(
+      text,
+    );
+
+  if (isExistingControlCopyChange) {
+    return {
+      ok: false,
+      kind: "",
+      label: "",
+      reason:
+        "Changing an existing control label or text is not a reset-form creation edit.",
+    };
+  }
 
   if (
     /\b(reset|clear|clears|clearing)\b/.test(text) &&

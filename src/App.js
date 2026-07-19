@@ -33,6 +33,7 @@ import {
   createDirectHandoffWorkflowContext,
   createImplementationInProgressWorkflowContext,
   mergeWorkflowPathLists,
+  resolveProjectEditGoal,
   SUGGESTED_ACTION_LABEL,
   VERIFICATION_STATUS,
   WORKFLOW_NEXT_STEP,
@@ -8741,9 +8742,12 @@ setWorkflowContext({
               malformedToolNote +
               `\n\nThis was a ${noToolTaskLabel}. Choose a safe next action.`;
 
-          const originalNoToolRequest = isPartialImplementationNoToolRecovery
-            ? String(workflowContext?.lastUserGoal || opts.lastUserGoal || draft).trim()
-            : String(opts.lastUserGoal || workflowContext?.lastUserGoal || draft).trim();
+          const originalNoToolRequest = resolveProjectEditGoal({
+            explicitGoal: opts.lastUserGoal,
+            currentDraft: draft,
+            previousGoal: workflowContext?.lastUserGoal,
+            preservePreviousGoal: isPartialImplementationNoToolRecovery,
+          });
 
           const noToolCarryoverInspectedPaths = (
             Array.isArray(opts.modelToolInspectedPaths)
@@ -8762,6 +8766,21 @@ setWorkflowContext({
               ? noToolCarryoverInspectedPaths.map((path) => "- " + path).join("\n")
               : "- (none recorded)";
 
+          const noToolContinuationContextPath = String(
+            opts.contextFilePath ||
+              noToolCarryoverInspectedPaths[
+                noToolCarryoverInspectedPaths.length - 1
+              ] ||
+              "",
+          ).trim();
+
+          const genericRetryInspectedPathLines =
+            noToolCarryoverInspectedPaths.length > 0
+              ? noToolCarryoverInspectedPaths
+                  .map((path) => "- " + path)
+                  .join("\n")
+              : "- (none recorded)";
+
           const appBuildEditedPathLines =
             Array.isArray(workflowContext?.editedPaths) &&
             workflowContext.editedPaths.length > 0
@@ -8775,10 +8794,15 @@ setWorkflowContext({
                 ? "Continue the previous implementation.\n\n"
                 : "Continue the previous project edit.\n\n") +
             `Original request: ${originalNoToolRequest}\n\n` +
-            "Your previous reply did not produce a usable KForge tool request.\n" +
-            "Request exactly one valid fenced ```tool``` block next.\n" +
-            "If inspection is needed, request one read_file or list_dir tool first.\n" +
-            "If editing is possible, request one write_file tool for the smallest safe change.\n" +
+            "Your previous reply did not produce a usable KForge tool request.\n\n" +
+            (noToolCarryoverInspectedPaths.length > 0
+              ? "Already inspected evidence paths:\n" +
+                genericRetryInspectedPathLines +
+                "\n\nThe current contents of the continuation file are attached again. " +
+                "Do not request read_file or list_dir for an already inspected path. " +
+                "Use the attached inspected evidence and request exactly one write_file tool for the smallest safe change.\n"
+              : "No inspected file evidence is currently available. Request exactly one read_file or list_dir tool first.\n") +
+            "Return exactly one valid fenced ```tool``` block.\n" +
             "Do not give only prose. Do not request more than one tool.";
 
           const appBuildNoToolRetryPrompt =
@@ -8801,12 +8825,7 @@ setWorkflowContext({
             ? appBuildNoToolRetryPrompt
             : genericFocusedNoToolPrompt;
 
-          const noToolRecoveryGoal = String(
-            opts.lastUserGoal ||
-              workflowContext?.lastUserGoal ||
-              originalNoToolRequest ||
-              draft,
-          ).trim();
+          const noToolRecoveryGoal = originalNoToolRequest;
 
           const noToolAlreadyInspectedPaths = noToolCarryoverInspectedPaths
             .map((item) => item.replace(/\\/g, "/").toLowerCase())
@@ -8937,14 +8956,25 @@ setWorkflowContext({
             .join(" ")
             .toLowerCase();
 
-          const isSimpleFormControlNoToolEdit =
-            (
-              /\b(reset|clear|clears|clearing)\b/.test(noToolSimpleControlGoal) &&
-              /\b(form|input|field|button|control)\b/.test(noToolSimpleControlGoal)
+          const isSimpleControlLabelRename =
+            /\b(change|rename|update|replace|edit)\b[\s\S]{0,80}\b(label|text|wording|caption|copy)\b/.test(
+              noToolSimpleControlGoal,
             ) ||
+            /\b(label|text|wording|caption|copy)\b[\s\S]{0,80}\b(change|rename|update|replace|edit)\b/.test(
+              noToolSimpleControlGoal,
+            );
+
+          const isSimpleFormControlNoToolEdit =
+            !isSimpleControlLabelRename &&
             (
-              /\b(add|create|show|include)\b.*\bbutton\b/.test(noToolSimpleControlGoal) &&
-              /\b(form|input|field|control)\b/.test(noToolSimpleControlGoal)
+              (
+                /\b(reset|clear|clears|clearing)\b/.test(noToolSimpleControlGoal) &&
+                /\b(form|input|field|button|control)\b/.test(noToolSimpleControlGoal)
+              ) ||
+              (
+                /\b(add|create|show|include)\b.*\bbutton\b/.test(noToolSimpleControlGoal) &&
+                /\b(form|input|field|control)\b/.test(noToolSimpleControlGoal)
+              )
             );
 
           const hasDeterministicNoToolInspectionAvailable =
@@ -8968,6 +8998,7 @@ setWorkflowContext({
                 sendWithPrompt(focusedNoToolPrompt, {
                   silentUserAppend: true,
                   skipCompletedWorkflowRoute: true,
+                  skipDirectWorkflowHandoffRoute: true,
                   forceProjectEdit:
                     !isFixNoToolRecovery &&
                     !isPartialImplementationNoToolRecovery,
@@ -8975,6 +9006,7 @@ setWorkflowContext({
                   forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
                   inspectedPaths: noToolCarryoverInspectedPaths,
                   modelToolInspectedPaths: noToolCarryoverInspectedPaths,
+                  contextFilePath: noToolContinuationContextPath,
                   modelToolOriginalGoal: originalNoToolRequest,
                   lastUserGoal: originalNoToolRequest,
                 });
@@ -9268,13 +9300,15 @@ setWorkflowContext({
 
         // Surface tool requests as assistant bubbles so the tool runner can detect them
         if (shouldAllowModelToolExecution) {
-          const modelToolOriginalGoal = String(
-            opts.modelToolOriginalGoal ||
-              opts.lastUserGoal ||
-              workflowContext?.lastUserGoal ||
-              draft ||
-              "",
-          ).trim();
+          const modelToolOriginalGoal = resolveProjectEditGoal({
+            explicitGoal:
+              opts.modelToolOriginalGoal ||
+              opts.lastUserGoal,
+            currentDraft: draft,
+            previousGoal: workflowContext?.lastUserGoal,
+            preservePreviousGoal:
+              promptTask.source === "partial_implementation_continuation",
+          });
           const modelToolInspectedPaths = (
             Array.isArray(opts.modelToolInspectedPaths)
               ? opts.modelToolInspectedPaths

@@ -652,3 +652,20 @@ export function createCompletedImplementationWorkflowContext({
     source,
   };
 }
+
+export function resolveProjectEditGoal({
+  explicitGoal = "",
+  currentDraft = "",
+  previousGoal = "",
+  preservePreviousGoal = false,
+} = {}) {
+  const explicit = String(explicitGoal || "").trim();
+  const current = String(currentDraft || "").trim();
+  const previous = String(previousGoal || "").trim();
+
+  const candidates = preservePreviousGoal
+    ? [previous, explicit, current]
+    : [explicit, current, previous];
+
+  return candidates.find(Boolean) || "";
+}
