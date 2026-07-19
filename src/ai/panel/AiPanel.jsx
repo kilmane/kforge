@@ -30,9 +30,8 @@ import {
   getImplementationJobAllowedNextActions,
   IMPLEMENTATION_JOB_ACTION,
   IMPLEMENTATION_JOB_TOOL_DECISION,
-  rememberImplementationInspection,
   rememberImplementationToolFailure,
-  rememberImplementationWriteAttempt,
+  rememberImplementationToolResult,
 } from "../implementation/implementationJobController.js";
 import {
   SMALL_CONTROL_EDIT_LABEL,
@@ -4118,24 +4117,11 @@ export default function AiPanel({
                   const result = await runTool({ toolName, args });
 
                   if (shouldUseImplementationJobController) {
-                    if (result?.ok && INSPECTION_TOOL_NAMES.has(toolName)) {
-                      implementationJob = rememberImplementationInspection(
-                        implementationJob,
-                        args?.path || args?.dirPath,
-                      );
-                    } else if (toolName === "write_file" || toolName === "mkdir") {
-                      implementationJob = rememberImplementationWriteAttempt(
-                        implementationJob,
-                        { name: toolName, args },
-                        result,
-                      );
-                    } else if (!result?.ok) {
-                      implementationJob = rememberImplementationToolFailure(
-                        implementationJob,
-                        { name: toolName, args },
-                        result?.error || "Tool failed during implementation job.",
-                      );
-                    }
+                    implementationJob = rememberImplementationToolResult(
+                      implementationJob,
+                      { name: toolName, args },
+                      result,
+                    );
                   }
 
                   if (result?.ok && INSPECTION_TOOL_NAMES.has(toolName)) {

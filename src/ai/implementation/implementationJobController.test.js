@@ -10,6 +10,7 @@ import {
   getImplementationJobAllowedNextActions,
   rememberImplementationInspection,
   rememberImplementationToolFailure,
+  rememberImplementationToolResult,
   rememberImplementationWriteAttempt,
 } from "./implementationJobController";
 
@@ -201,6 +202,126 @@ test("rememberImplementationToolFailure exposes safe recovery actions", () => {
     IMPLEMENTATION_JOB_ACTION.SWITCH_MODEL,
     IMPLEMENTATION_JOB_ACTION.STOP,
   ]);
+});
+
+test("rememberImplementationToolResult records a successful inspection", () => {
+  const job = createImplementationJob({
+    originalGoal: "Update the app",
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    {
+      name: "read_file",
+      args: { path: "./src/App.jsx" },
+    },
+    {
+      ok: true,
+      result: "file contents",
+    },
+  );
+
+  expect(nextJob.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.INSPECTION_COMPLETE,
+  );
+  expect(nextJob.inspectedPaths).toEqual(["src/App.jsx"]);
+  expect(nextJob.allowedNextActions).toEqual([
+    IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
+    IMPLEMENTATION_JOB_ACTION.INSPECT_SPECIFIC_FILE,
+    IMPLEMENTATION_JOB_ACTION.STOP,
+  ]);
+});
+
+test("rememberImplementationToolResult records a successful directory inspection", () => {
+  const job = createImplementationJob();
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    {
+      name: "list_dir",
+      args: { dirPath: "./src/components" },
+    },
+    {
+      ok: true,
+      result: "AppCard.jsx",
+    },
+  );
+
+  expect(nextJob.inspectedPaths).toEqual(["src/components"]);
+  expect(nextJob.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.INSPECTION_COMPLETE,
+  );
+});
+
+test("rememberImplementationToolResult records successful and blocked writes", () => {
+  const job = createImplementationJob({
+    inspectedPaths: ["src/App.jsx"],
+  });
+
+  const successfulJob = rememberImplementationToolResult(
+    job,
+    {
+      name: "write_file",
+      args: { path: "src/App.jsx" },
+    },
+    {
+      ok: true,
+    },
+  );
+
+  const blockedJob = rememberImplementationToolResult(
+    job,
+    {
+      name: "write_file",
+      args: { path: "src/App.jsx" },
+    },
+    {
+      ok: false,
+      error: "Write blocked.",
+    },
+  );
+
+  expect(successfulJob.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.WRITE_SUCCEEDED,
+  );
+  expect(successfulJob.successfulWrites).toEqual(["src/App.jsx"]);
+
+  expect(blockedJob.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.WRITE_BLOCKED,
+  );
+  expect(blockedJob.blockedWrites).toEqual(["src/App.jsx"]);
+});
+
+test("rememberImplementationToolResult records a failed non-write tool", () => {
+  const job = createImplementationJob({
+    inspectedPaths: ["src/App.jsx"],
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    {
+      name: "search_in_file",
+      args: {
+        path: "src/App.jsx",
+        query: "missing text",
+      },
+    },
+    {
+      ok: false,
+      error: "Search failed.",
+    },
+  );
+
+  expect(nextJob.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.NEEDS_RECOVERY,
+  );
+  expect(nextJob.failedTools).toHaveLength(1);
+  expect(nextJob.failedTools[0]).toMatchObject({
+    toolName: "search_in_file",
+    path: "src/App.jsx",
+    ok: false,
+    error: "Search failed.",
+  });
 });
 
 test("buildImplementationJobInspectionPrompt preserves edit and fix guidance", () => {

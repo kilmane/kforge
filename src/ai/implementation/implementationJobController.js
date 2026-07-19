@@ -237,6 +237,41 @@ export function rememberImplementationToolFailure(job, toolCall = {}, error = ""
   };
 }
 
+export function rememberImplementationToolResult(
+  job,
+  toolCall = {},
+  result = {},
+) {
+  const current = createImplementationJob(job);
+  const toolName = String(
+    toolCall?.name || toolCall?.toolName || "",
+  ).trim();
+  const inspectedPath =
+    toolCall?.args?.path || toolCall?.args?.dirPath || "";
+
+  if (result?.ok && isImplementationReadTool(toolName)) {
+    return rememberImplementationInspection(current, inspectedPath);
+  }
+
+  if (isImplementationWriteTool(toolName)) {
+    return rememberImplementationWriteAttempt(
+      current,
+      toolCall,
+      result,
+    );
+  }
+
+  if (!result?.ok) {
+    return rememberImplementationToolFailure(
+      current,
+      toolCall,
+      result?.error || "Tool failed during implementation job.",
+    );
+  }
+
+  return current;
+}
+
 export function evaluateImplementationToolRequest(job, toolCall = {}, options = {}) {
   const current = createImplementationJob(job);
   const toolName = String(toolCall?.name || toolCall?.toolName || "").trim();
