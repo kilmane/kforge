@@ -6,6 +6,7 @@ import {
   buildImplementationJobFocusedPrompt,
   buildImplementationJobInspectionPrompt,
   createImplementationJob,
+  evaluateAndRememberImplementationToolRequest,
   evaluateImplementationToolRequest,
   getImplementationJobAllowedNextActions,
   rememberImplementationInspection,
@@ -117,6 +118,108 @@ test("evaluateImplementationToolRequest blocks a write before inspection", () =>
   expect(decision.ok).toBe(false);
   expect(decision.allowedNextActions).toEqual([
     IMPLEMENTATION_JOB_ACTION.INSPECT_LIKELY_FILE,
+    IMPLEMENTATION_JOB_ACTION.STOP,
+  ]);
+});
+
+test("evaluateAndRememberImplementationToolRequest records a blocked repeated read", () => {
+  const job = createImplementationJob({
+    inspectedPaths: ["src/App.jsx"],
+  });
+
+  const outcome = evaluateAndRememberImplementationToolRequest(
+    job,
+    {
+      name: "read_file",
+      args: { path: "./src/App.jsx" },
+    },
+    {
+      blockRepeatedReads: true,
+      requireInspectionBeforeWrite: true,
+    },
+  );
+
+  expect(outcome.decision.decision).toBe(
+    IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_REPEATED_READ,
+  );
+  expect(outcome.decision.ok).toBe(false);
+  expect(outcome.job.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.NEEDS_RECOVERY,
+  );
+  expect(outcome.job.failedTools).toHaveLength(1);
+  expect(outcome.job.failedTools[0]).toMatchObject({
+    toolName: "read_file",
+    path: "src/App.jsx",
+    ok: false,
+  });
+  expect(outcome.job.failedTools[0].error).toContain(
+    "blocked a repeated read",
+  );
+});
+
+test("evaluateAndRememberImplementationToolRequest records a blocked blind write", () => {
+  const job = createImplementationJob({
+    originalGoal: "Update the app",
+  });
+
+  const outcome = evaluateAndRememberImplementationToolRequest(
+    job,
+    {
+      name: "write_file",
+      args: {
+        path: "src/App.jsx",
+        content: "complete file text",
+      },
+    },
+    {
+      requireInspectionBeforeWrite: true,
+    },
+  );
+
+  expect(outcome.decision.decision).toBe(
+    IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION,
+  );
+  expect(outcome.decision.ok).toBe(false);
+  expect(outcome.job.status).toBe(
+    IMPLEMENTATION_JOB_STATUS.NEEDS_RECOVERY,
+  );
+  expect(outcome.job.failedTools).toHaveLength(1);
+  expect(outcome.job.failedTools[0]).toMatchObject({
+    toolName: "write_file",
+    path: "src/App.jsx",
+    ok: false,
+    error:
+      "KForge blocked a write request before any relevant file was inspected for this implementation job.",
+  });
+});
+
+test("evaluateAndRememberImplementationToolRequest leaves an allowed request unfailed", () => {
+  const job = createImplementationJob({
+    inspectedPaths: ["src/App.jsx"],
+  });
+
+  const outcome = evaluateAndRememberImplementationToolRequest(
+    job,
+    {
+      name: "write_file",
+      args: {
+        path: "src/App.jsx",
+        content: "complete file text",
+      },
+    },
+    {
+      requireInspectionBeforeWrite: true,
+    },
+  );
+
+  expect(outcome.decision.decision).toBe(
+    IMPLEMENTATION_JOB_TOOL_DECISION.ALLOW,
+  );
+  expect(outcome.decision.ok).toBe(true);
+  expect(outcome.job.failedTools).toEqual([]);
+  expect(outcome.job.allowedNextActions).toEqual([
+    IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
+    IMPLEMENTATION_JOB_ACTION.INSPECT_SPECIFIC_FILE,
     IMPLEMENTATION_JOB_ACTION.STOP,
   ]);
 });

@@ -26,11 +26,9 @@ import {
   buildImplementationJobFocusedPrompt,
   buildImplementationJobInspectionPrompt,
   createImplementationJob,
-  evaluateImplementationToolRequest,
+  evaluateAndRememberImplementationToolRequest,
   getImplementationJobAllowedNextActions,
   IMPLEMENTATION_JOB_ACTION,
-  IMPLEMENTATION_JOB_TOOL_DECISION,
-  rememberImplementationToolFailure,
   rememberImplementationToolResult,
 } from "../implementation/implementationJobController.js";
 import {
@@ -4086,30 +4084,22 @@ export default function AiPanel({
                   }
 
                   if (shouldUseImplementationJobController) {
-                    const implementationDecision = evaluateImplementationToolRequest(
-                      implementationJob,
-                      { name: toolName, args },
-                      {
-                        blockRepeatedReads: true,
-                        requireInspectionBeforeWrite: true,
-                      },
-                    );
-
-                    if (
-                      implementationDecision.decision ===
-                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_REPEATED_READ ||
-                      implementationDecision.decision ===
-                        IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION
-                    ) {
-                      implementationJob = rememberImplementationToolFailure(
+                    const implementationPreflight =
+                      evaluateAndRememberImplementationToolRequest(
                         implementationJob,
                         { name: toolName, args },
-                        implementationDecision.error,
+                        {
+                          blockRepeatedReads: true,
+                          requireInspectionBeforeWrite: true,
+                        },
                       );
 
+                    implementationJob = implementationPreflight.job;
+
+                    if (!implementationPreflight.decision.ok) {
                       return {
                         ok: false,
-                        error: implementationDecision.error,
+                        error: implementationPreflight.decision.error,
                       };
                     }
                   }

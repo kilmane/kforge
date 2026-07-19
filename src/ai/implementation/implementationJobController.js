@@ -333,6 +333,30 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
   };
 }
 
+export function evaluateAndRememberImplementationToolRequest(
+  job,
+  toolCall = {},
+  options = {},
+) {
+  const current = createImplementationJob(job);
+  const decision = evaluateImplementationToolRequest(
+    current,
+    toolCall,
+    options,
+  );
+
+  return {
+    job: decision.ok
+      ? current
+      : rememberImplementationToolFailure(
+          current,
+          toolCall,
+          decision.error,
+        ),
+    decision,
+  };
+}
+
 export function buildImplementationJobBlockedWriteRecoveryPrompt(
   job,
   fallbackGoal = "",
