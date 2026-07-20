@@ -4,6 +4,7 @@ import {
   WORKFLOW_TASK_KIND,
   createImplementationInProgressWorkflowContext,
   mergeWorkflowPathLists,
+  resolveWorkflowLikelyAppInspectPath,
 } from "./workflowState";
 
 test("createImplementationInProgressWorkflowContext stores unique normalized inspected paths", () => {
@@ -45,6 +46,34 @@ test("mergeWorkflowPathLists adds new inspected paths without duplicates", () =>
   );
 
   expect(merged).toEqual(["src/App.jsx", "src/App.css", "src/main.jsx"]);
+});
+
+test("resolveWorkflowLikelyAppInspectPath reuses a nested inspected app path", () => {
+  const path = resolveWorkflowLikelyAppInspectPath({
+    inspectedPaths: ["package.json", "hajj-companion/src/App.jsx"],
+    fallbackPath: "src/App.jsx",
+  });
+
+  expect(path).toBe("hajj-companion/src/App.jsx");
+});
+
+test("resolveWorkflowLikelyAppInspectPath prefers the active file", () => {
+  const path = resolveWorkflowLikelyAppInspectPath({
+    activePath: "D:\\workspace\\project\\src\\App.jsx",
+    inspectedPaths: ["hajj-companion/src/App.jsx"],
+    fallbackPath: "src/App.jsx",
+  });
+
+  expect(path).toBe("D:\\workspace\\project\\src\\App.jsx");
+});
+
+test("resolveWorkflowLikelyAppInspectPath uses the fallback when no match exists", () => {
+  const path = resolveWorkflowLikelyAppInspectPath({
+    inspectedPaths: ["package.json"],
+    fallbackPath: "app/page.jsx",
+  });
+
+  expect(path).toBe("app/page.jsx");
 });
 
 test("createImplementationInProgressWorkflowContext keeps unrelated workflow fields unchanged", () => {

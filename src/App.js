@@ -33,6 +33,7 @@ import {
   createDirectHandoffWorkflowContext,
   createImplementationInProgressWorkflowContext,
   mergeWorkflowPathLists,
+  resolveWorkflowLikelyAppInspectPath,
   resolveProjectEditGoal,
   SUGGESTED_ACTION_LABEL,
   VERIFICATION_STATUS,
@@ -8579,7 +8580,7 @@ setWorkflowContext({
             "- If the request changes appearance, layout, styling, CSS, colours, or visual polish, preserve the current visual identity and palette unless the user explicitly asks to replace it.\n" +
             "- Do not globally change page backgrounds, brand colours, theme tokens, or the overall palette just to improve readability; prefer targeted selector/property edits.\n" +
             "- When editing CSS or UI code, inspect the relevant existing CSS and component structure unless that exact evidence was already read in this conversation.\n" +
-            "- Before a write_file request for UI/CSS changes, briefly summarize the intended visual changes and what existing theme/palette will be preserved.\n" +
+            "- Keep visual-preservation reasoning internal and express it through the requested file content; do not add a prose summary outside the required tool block.\n" +
             "\n" +
             "Available chat tools are limited to: read_file, list_dir, search_in_file, write_file, mkdir.\n" +
             "For read-only file review requests, show-changes review requests, or requests to inspect a named changed file, request exactly one read_file tool call for the named path.\n" +
@@ -8614,7 +8615,33 @@ setWorkflowContext({
         fileSnapshot,
       );
 
-      const r = await runAi({ input: inputWithContext });
+      const configuredMaxOutputTokens = Number(aiMaxTokens);
+      const requestedMaxOutputTokens = Number(opts.maxOutputTokens);
+      const hasInspectedProjectEditContext =
+        (Array.isArray(opts.modelToolInspectedPaths) &&
+          opts.modelToolInspectedPaths.length > 0) ||
+        (Array.isArray(opts.inspectedPaths) &&
+          opts.inspectedPaths.length > 0);
+      const shouldRaiseContinuationOutputBudget =
+        opts.forceProjectEdit === true && hasInspectedProjectEditContext;
+      const effectiveMaxOutputTokens = Math.max(
+        Number.isFinite(configuredMaxOutputTokens) &&
+        configuredMaxOutputTokens > 0
+          ? Math.floor(configuredMaxOutputTokens)
+          : 0,
+        Number.isFinite(requestedMaxOutputTokens) &&
+        requestedMaxOutputTokens > 0
+          ? Math.floor(requestedMaxOutputTokens)
+          : 0,
+        shouldRaiseContinuationOutputBudget ? 8000 : 0,
+      );
+
+      const r = await runAi({
+        input: inputWithContext,
+        ...(effectiveMaxOutputTokens > 0
+          ? { max_output_tokens: effectiveMaxOutputTokens }
+          : {}),
+      });
 
       if (r.ok) {
         const out = r.output ?? "";
@@ -8840,15 +8867,20 @@ setWorkflowContext({
             detectedTemplateName || detectedKind || "",
           ).toLowerCase();
           const activeNoToolInspectPath = String(activeTab?.path || "").trim();
-          const likelyAppInspectPath =
-            activeNoToolInspectPath ||
-            (templateHintForNoToolAppInspect.includes("next")
+          const fallbackNoToolAppInspectPath =
+            templateHintForNoToolAppInspect.includes("next")
               ? "app/page.jsx"
-              : "src/App.jsx");
+              : "src/App.jsx";
+          const likelyAppInspectPath = resolveWorkflowLikelyAppInspectPath({
+            activePath: activeNoToolInspectPath,
+            inspectedPaths: noToolCarryoverInspectedPaths,
+            fallbackPath: fallbackNoToolAppInspectPath,
+          });
+          const likelyAppInspectPathKey = likelyAppInspectPath
+            .replace(/\\/g, "/")
+            .toLowerCase();
           const hasAlreadyInspectedLikelyAppPath =
-            noToolAlreadyInspectedPaths.includes(
-              likelyAppInspectPath.toLowerCase(),
-            );
+            noToolAlreadyInspectedPaths.includes(likelyAppInspectPathKey);
 
           const noToolRecoveryActions = [];
 

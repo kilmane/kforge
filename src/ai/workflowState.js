@@ -111,6 +111,38 @@ export function mergeWorkflowPathLists(...pathLists) {
   return normalizeWorkflowPathList(pathLists.flat());
 }
 
+export function resolveWorkflowLikelyAppInspectPath({
+  activePath = "",
+  inspectedPaths = [],
+  fallbackPath = "src/App.jsx",
+} = {}) {
+  const active = String(activePath || "").trim();
+  if (active) return active;
+
+  const fallback = String(fallbackPath || "").trim() || "src/App.jsx";
+  const fallbackKey = fallback
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "")
+    .toLowerCase();
+
+  const inspectedMatch = normalizeWorkflowPathList(inspectedPaths)
+    .slice()
+    .reverse()
+    .find((path) => {
+      const key = String(path || "")
+        .trim()
+        .replace(/\\/g, "/")
+        .replace(/^\.\/+/, "")
+        .replace(/^\/+/, "")
+        .toLowerCase();
+
+      return key === fallbackKey || key.endsWith(`/${fallbackKey}`);
+    });
+
+  return inspectedMatch || fallback;
+}
+
 function normalizeChangedFileSummaries(changedFileSummaries = []) {
   const sourceSummaries = Array.isArray(changedFileSummaries)
     ? changedFileSummaries
