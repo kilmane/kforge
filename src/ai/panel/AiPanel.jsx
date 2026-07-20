@@ -2992,6 +2992,8 @@ export default function AiPanel({
           ).trim();
           const isAppBuildToolExecution =
             triggerToolExecutionSource === "app_build_implementation";
+          const isVisualStyleContinuationToolExecution =
+            triggerToolMessage?.meta?.modelToolVisualStyleContinuation === true;
           const isAppBuildDifferentLookRestoreToolExecution =
             triggerToolExecutionSource === "app_build_restore_different_look";
           const isFixToolExecution =
@@ -3688,7 +3690,7 @@ export default function AiPanel({
               );
             }
           } else if (
-            isAppBuildToolExecution &&
+            (isAppBuildToolExecution || isVisualStyleContinuationToolExecution) &&
             successfulWritePaths.length > 0 &&
             shouldContinueAppBuildAfterSuccessfulWrite({
               successfulWritePaths,

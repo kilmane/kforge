@@ -72,6 +72,7 @@ import DockShell from "./layout/DockShell";
 import { previewDetectTemplates } from "./runtime/previewRunner";
 import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
 import { getCapabilityRouteDecision } from "./ai/capabilities/capabilityRouter";
+import { isVisualUiProjectEditIntent } from "./ai/visualEditIntent";
 function basename(p) {
   if (!p) return "";
   const normalized = p.replaceAll("\\", "/");
@@ -9034,6 +9035,12 @@ setWorkflowContext({
                   forceProjectEdit:
                     !isFixNoToolRecovery &&
                     !isPartialImplementationNoToolRecovery,
+                  forceVisualStyleContinuation:
+                    opts.forceVisualStyleContinuation === true ||
+                    (
+                      isPlainProjectEditNoToolRecovery &&
+                      isVisualUiProjectEditIntent(originalNoToolRequest)
+                    ),
                   forceAdvisoryTestOverride: !!isAdvisoryTestOverride,
                   forceModelCapabilityTestOverride: !!isModelCapabilityTestOverride,
                   inspectedPaths: noToolCarryoverInspectedPaths,
@@ -9250,6 +9257,9 @@ setWorkflowContext({
                         skipCompletedWorkflowRoute: true,
                         skipDirectWorkflowHandoffRoute: true,
                         forceProjectEdit: true,
+                        forceAppBuildImplementation: true,
+                        modelToolOriginalGoal: draft,
+                        lastUserGoal: draft,
                       },
                     );
                   },
@@ -9375,6 +9385,8 @@ setWorkflowContext({
                 allowModelToolExecution: true,
                 modelToolExecutionKind: String(promptTask.kind || "unknown"),
                 modelToolExecutionSource: String(promptTask.source || ""),
+                modelToolVisualStyleContinuation:
+                  opts.forceVisualStyleContinuation === true,
                 previewErrorEvidenceGate: opts.previewErrorEvidenceGate === true,
                 controlledReadOnlyToolExecution:
                   opts.controlledReadOnlyToolExecution === true,
