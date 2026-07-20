@@ -1501,7 +1501,7 @@ function buildPostEditCompletionActions({
     ...(canStartOverWithDifferentLook
       ? [
           {
-            label: "Start over with different look",
+            label: "Rebuild with different design",
             onClick: () => {
               const restorePaths = appBuildRestoreSnapshots
                 .map((snapshot) => String(snapshot?.path || "").trim())
@@ -1510,21 +1510,21 @@ function buildPostEditCompletionActions({
                 .map((path) => "- " + path)
                 .join("\n");
 
-              appendMessage("user", "Choice: Start over with different look");
+              appendMessage("user", "Choice: Rebuild with different design");
               appendMessage(
                 "assistant",
-                "Confirm start-over restore.\n\n" +
-                  "This will restore files changed by the last app-build, then reopen the visual-direction chooser. Your generated app will be replaced, but your project folder and dependencies will stay.\n\n" +
+                "Confirm app rebuild.\n\n" +
+                  "This will restore files changed by the last app-build, then reopen the visual-direction chooser and rebuild the app from its original goal. Your current generated app will be replaced, but your project folder and dependencies will stay.\n\n" +
                   "Files to restore:\n" +
                   restorePathLines,
                 {
                   actions: [
                     {
-                      label: "Restore and choose new look",
+                      label: "Restore and choose new design",
                       onClick: () => {
                         appendMessage(
                           "user",
-                          "Choice: Restore and choose new look",
+                          "Choice: Restore and choose new design",
                         );
                         appendMessage(
                           "assistant",
@@ -5038,27 +5038,6 @@ export default function AiPanel({
           </div>
         </div>
 
-        <>
-            {terminalOpen ? (
-              <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
-                <CommandRunnerPanel projectPath={projectPath} />
-              </div>
-            ) : null}
-
-            {servicesOpen ? (
-              <div
-                ref={servicesSectionRef}
-                className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/30"
-              >
-                <div
-                  ref={servicesPanelScrollRef}
-                  className="max-h-[70vh] overflow-auto"
-                >
-                  <ServicePanel projectPath={projectPath} />
-                </div>
-              </div>
-            ) : null}
-          </>
         {providerSwitchNote ? (
           <div className="mt-2 text-xs border border-zinc-800 rounded p-2 bg-zinc-900/20 flex items-start justify-between gap-2">
             <div className="opacity-80 leading-snug">{providerSwitchNote}</div>
@@ -5310,6 +5289,78 @@ export default function AiPanel({
             </div>
 
             <PreviewPanel projectPath={projectPath} />
+          </div>
+        </div>
+      ) : null}
+
+      {terminalOpen ? (
+        <div
+          className="absolute inset-0 z-[80] flex items-start justify-center bg-black/75 p-4 pt-16 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Terminal workspace"
+          onClick={() => setTerminalOpen(false)}
+        >
+          <div
+            className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div>
+                <div className="text-sm font-semibold text-zinc-100">
+                  Terminal workspace
+                </div>
+                <div className="mt-0.5 text-xs text-zinc-400">
+                  Run commands and inspect their output for the current project.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+                onClick={() => setTerminalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <CommandRunnerPanel projectPath={projectPath} />
+          </div>
+        </div>
+      ) : null}
+
+      {servicesOpen ? (
+        <div
+          ref={servicesSectionRef}
+          className="absolute inset-0 z-[80] flex items-start justify-center bg-black/75 p-4 pt-16 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Services workspace"
+          onClick={() => setServicesOpen(false)}
+        >
+          <div
+            ref={servicesPanelScrollRef}
+            className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div>
+                <div className="text-sm font-semibold text-zinc-100">
+                  Services workspace
+                </div>
+                <div className="mt-0.5 text-xs text-zinc-400">
+                  Connect and manage external tools for the current project.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+                onClick={() => setServicesOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <ServicePanel projectPath={projectPath} />
           </div>
         </div>
       ) : null}

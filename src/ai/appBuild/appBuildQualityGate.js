@@ -1,7 +1,3 @@
-function normalizeText(value = "") {
-  return String(value || "").toLowerCase();
-}
-
 function escapeRegExp(value = "") {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -132,26 +128,6 @@ function detectAppDataResetRestoresSeed(content = "") {
   return false;
 }
 
-function detectGenericBookingDashboardInsteadOfScheduleSurface(content = "") {
-  const source = String(content || "");
-  const text = normalizeText(source);
-
-  const hasStrongScheduleSurface =
-    /\b(schedule[-_\s]?board|calendar[-_\s]?grid|day[-_\s]?timeline|time[-_\s]?grid|slot[-_\s]?grid|appointment[-_\s]?lane|timeline[-_\s]?panel|agenda[-_\s]?board|availability[-_\s]?grid)\b/.test(
-      text,
-    );
-
-  const genericPieces = [
-    /\bstat(?:s|istic)?[-_\s]?(?:card|grid|panel|item)s?\b/.test(text),
-    /\b(form|booking[-_\s]?form|appointment[-_\s]?form)\b/.test(text),
-    /\b(list[-_\s]?panel|appointments?[-_\s]?grid|appointments?[-_\s]?list|booking[-_\s]?list|upcoming[-_\s]?list)\b/.test(
-      text,
-    ),
-  ].filter(Boolean).length;
-
-  return genericPieces >= 2 && !hasStrongScheduleSurface;
-}
-
 export function evaluateAppBuildQualityGate({
   originalGoal = "",
   toolCall = {},
@@ -181,14 +157,6 @@ export function evaluateAppBuildQualityGate({
       ok: false,
       reason:
         "KForge blocked this app-build write before approval because the app-data reset appears to restore seeded or starter records. Reset should clear user-managed booking data and derived metrics to empty or neutral values.",
-    };
-  }
-
-  if (detectGenericBookingDashboardInsteadOfScheduleSurface(content)) {
-    return {
-      ok: false,
-      reason:
-        "KForge blocked this app-build write before approval because the booking app still appears to use a generic stats/form/list structure without a calendar, timeline, schedule board, or availability surface as the main organizing view.",
     };
   }
 
