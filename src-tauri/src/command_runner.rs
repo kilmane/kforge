@@ -7,6 +7,9 @@ use std::thread;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use tauri::{AppHandle, Emitter};
 
 #[derive(Default)]
@@ -39,9 +42,7 @@ fn strip_ansi_sequences(value: &str) -> String {
                         break;
                     }
 
-                    if control_character == '\u{1b}'
-                        && chars.peek().copied() == Some('\\')
-                    {
+                    if control_character == '\u{1b}' && chars.peek().copied() == Some('\\') {
                         chars.next();
                         break;
                     }
@@ -116,15 +117,14 @@ pub fn command_run(
                 .raw_arg(&trimmed)
                 .current_dir(&cwd)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+                .stderr(Stdio::piped())
+                .creation_flags(CREATE_NO_WINDOW);
 
             match command.spawn() {
                 Ok(child) => child,
                 Err(e) => {
-                    let _ = app_handle.emit(
-                        "kforge://command/log",
-                        format!("Failed to start: {}", e),
-                    );
+                    let _ =
+                        app_handle.emit("kforge://command/log", format!("Failed to start: {}", e));
 
                     if let Ok(mut guard) = state_handle.lock() {
                         guard.running = false;
@@ -147,10 +147,7 @@ pub fn command_run(
         {
             Ok(child) => child,
             Err(e) => {
-                let _ = app_handle.emit(
-                    "kforge://command/log",
-                    format!("Failed to start: {}", e),
-                );
+                let _ = app_handle.emit("kforge://command/log", format!("Failed to start: {}", e));
 
                 if let Ok(mut guard) = state_handle.lock() {
                     guard.running = false;
@@ -217,10 +214,7 @@ pub fn command_run(
             if is_git_status_short(&trimmed) {
                 let _ = app_handle.emit("kforge://command/log", "Working tree clean.");
             } else {
-                let _ = app_handle.emit(
-                    "kforge://command/log",
-                    "Command completed successfully.",
-                );
+                let _ = app_handle.emit("kforge://command/log", "Command completed successfully.");
                 let _ = app_handle.emit("kforge://command/log", "No output returned.");
             }
         }
@@ -257,9 +251,11 @@ pub fn command_stop(
     if let Some(pid) = pid {
         #[cfg(target_os = "windows")]
         {
-            let _ = Command::new("taskkill")
+            let mut command = Command::new("taskkill");
+            command
                 .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .status();
+                .creation_flags(CREATE_NO_WINDOW);
+            let _ = command.status();
         }
 
         #[cfg(not(target_os = "windows"))]

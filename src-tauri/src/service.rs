@@ -7,6 +7,21 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn background_command(program: &str) -> Command {
+    let mut command = Command::new(program);
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    command
+}
+
 #[derive(Default)]
 pub struct ServiceRunnerState {
     pub running: bool,
@@ -118,7 +133,7 @@ fn run_command_capture(
 ) -> Result<String, String> {
     emit_log(app, "stdout", &format!("> {} {}", program, args.join(" ")));
 
-    let output = Command::new(program)
+    let output = background_command(program)
         .args(args)
         .current_dir(project_dir)
         .output()
@@ -158,13 +173,13 @@ fn run_shell_command_capture(
     emit_log(app, "stdout", &format!("> {}", trimmed));
 
     let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
+        background_command("cmd")
             .args(["/C", trimmed])
             .current_dir(project_dir)
             .output()
             .map_err(|error| format!("Failed to run shell command via cmd: {}", error))?
     } else {
-        Command::new("sh")
+        background_command("sh")
             .args(["-lc", trimmed])
             .current_dir(project_dir)
             .output()
@@ -222,7 +237,7 @@ fn install_pnpm_package(
     }
 }
 fn run_command_status(project_dir: &PathBuf, program: &str, args: &[&str]) -> Result<bool, String> {
-    let status = Command::new(program)
+    let status = background_command(program)
         .args(args)
         .current_dir(project_dir)
         .status()
@@ -237,14 +252,14 @@ fn command_exists(project_dir: &PathBuf, program: &str) -> bool {
 
 fn shell_command_exists(project_dir: &PathBuf, program: &str) -> bool {
     if cfg!(target_os = "windows") {
-        Command::new("cmd")
+        background_command("cmd")
             .args(["/C", &format!("where {}", program)])
             .current_dir(project_dir)
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)
     } else {
-        Command::new("sh")
+        background_command("sh")
             .args(["-lc", &format!("command -v {}", program)])
             .current_dir(project_dir)
             .output()
@@ -266,7 +281,7 @@ fn git_remote_exists(project_dir: &PathBuf, remote_name: &str) -> bool {
 }
 
 fn git_remote_url(project_dir: &PathBuf, remote_name: &str) -> Option<String> {
-    Command::new("git")
+    background_command("git")
         .args(["remote", "get-url", remote_name])
         .current_dir(project_dir)
         .output()
@@ -286,7 +301,7 @@ fn git_remote_url(project_dir: &PathBuf, remote_name: &str) -> Option<String> {
 }
 
 fn git_current_branch(project_dir: &PathBuf) -> Option<String> {
-    Command::new("git")
+    background_command("git")
         .args(["branch", "--show-current"])
         .current_dir(project_dir)
         .output()
@@ -1612,22 +1627,27 @@ pub fn github_list_repos() -> Result<Vec<GithubRepoListItem>, String> {
         );
     }
 
-    let auth_output = Command::new("gh")
+    let auth_output = background_command("gh")
         .args(["auth", "status"])
         .current_dir(&cwd)
         .output()
         .map_err(|error| format!("Failed to check GitHub CLI authentication: {}", error))?;
 
     if !auth_output.status.success() {
-        let detail = String::from_utf8_lossy(&auth_output.stderr).trim().to_string();
+        let detail = String::from_utf8_lossy(&auth_output.stderr)
+            .trim()
+            .to_string();
         return Err(if detail.is_empty() {
             "GitHub CLI is not signed in. Run gh auth login, then try again.".to_string()
         } else {
-            format!("GitHub CLI is not signed in. Run gh auth login, then try again. {}", detail)
+            format!(
+                "GitHub CLI is not signed in. Run gh auth login, then try again. {}",
+                detail
+            )
         });
     }
 
-    let output = Command::new("gh")
+    let output = background_command("gh")
         .args([
             "repo",
             "list",
@@ -2234,8 +2254,6 @@ pub fn github_clone_repo(
     parent_dir: String,
     folder_name: String,
 ) -> Result<String, String> {
-    use std::process::Command;
-
     if repo_url.trim().is_empty() {
         return Err("Repository URL is required".into());
     }
@@ -2256,7 +2274,7 @@ pub fn github_clone_repo(
 
     let target_path = Path::new(&parent_dir).join(&repo_name);
 
-    let output = Command::new("git")
+    let output = background_command("git")
         .arg("clone")
         .arg(repo_url.trim())
         .arg(&target_path)

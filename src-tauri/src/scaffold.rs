@@ -7,12 +7,27 @@ use std::{
     thread,
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use serde::Serialize;
 use serde_json::Value;
 use tauri::Emitter;
 
 const PREVIEW_LOG_EVENT: &str = "kforge://preview/log";
 const PREVIEW_STATUS_EVENT: &str = "kforge://preview/status";
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn background_command(program: &str) -> Command {
+    let mut command = Command::new(program);
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    command
+}
 
 #[derive(Serialize, Clone)]
 struct PreviewLogPayload {
@@ -115,7 +130,7 @@ fn run_scaffold_blocking(
     // Windows spawn fix
     let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
 
-    let mut child = Command::new(pnpm)
+    let mut child = background_command(pnpm)
         .current_dir(&parent_path)
         .args(command_args)
         .env("CI", "1")
