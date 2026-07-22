@@ -64,6 +64,25 @@ impl ClaudeProvider {
 
         out
     }
+
+    fn request_temperature(req: &AiRequest) -> Option<f32> {
+        let model = req.model.trim().to_ascii_lowercase();
+        let rejects_sampling_parameters = matches!(
+            model.as_str(),
+            "claude-fable-5"
+                | "claude-mythos-5"
+                | "claude-mythos-preview"
+                | "claude-opus-4-8"
+                | "claude-opus-4-7"
+                | "claude-sonnet-5"
+        );
+
+        if rejects_sampling_parameters {
+            None
+        } else {
+            req.temperature
+        }
+    }
 }
 
 impl super::AiProvider for ClaudeProvider {
@@ -85,7 +104,7 @@ impl super::AiProvider for ClaudeProvider {
         let body = ClaudeMessagesRequest {
             model: req.model.clone(),
             max_tokens,
-            temperature: req.temperature,
+            temperature: Self::request_temperature(req),
             system: req.system.clone(),
             messages: vec![ClaudeMessage {
                 role: "user".to_string(),
@@ -242,4 +261,48 @@ struct ClaudeErrorBody {
     r#type: Option<String>,
 
     message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClaudeProvider;
+    use crate::ai::types::AiRequest;
+
+    fn request(model: &str, temperature: Option<f32>) -> AiRequest {
+        AiRequest {
+            provider_id: "claude".to_string(),
+            model: model.to_string(),
+            input: "test".to_string(),
+            system: None,
+            temperature,
+            max_output_tokens: Some(32),
+            endpoint: None,
+        }
+    }
+
+    #[test]
+    fn omits_temperature_for_current_adaptive_thinking_models() {
+        for model in [
+            "claude-fable-5",
+            "claude-opus-4-8",
+            "claude-sonnet-5",
+        ] {
+            assert_eq!(
+                ClaudeProvider::request_temperature(&request(model, Some(0.2))),
+                None,
+                "temperature should be omitted for {model}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_temperature_for_haiku() {
+        assert_eq!(
+            ClaudeProvider::request_temperature(&request(
+                "claude-haiku-4-5",
+                Some(0.2)
+            )),
+            Some(0.2)
+        );
+    }
 }

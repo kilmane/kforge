@@ -1,20 +1,26 @@
 {
   "version": "1",
-  "updated_at": "2026-05-22",
+  "updated_at": "2026-07-22",
   "notes": "Refreshed from current KForge preset guidance. Labels are advisory only.",
   "providers": {
     "claude": [
       {
-        "id": "claude-opus-4-7",
+        "id": "claude-fable-5",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "High capability option for harder reasoning/coding tasks"
+        "note": "Anthropic's highest-capability widely available model"
       },
       {
-        "id": "claude-sonnet-4-6",
+        "id": "claude-opus-4-8",
+        "cost": "paid_heavy",
+        "usage": "heavy",
+        "note": "High capability option for complex agentic coding and enterprise work"
+      },
+      {
+        "id": "claude-sonnet-5",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Balanced default for dev + writing"
+        "note": "Current balanced option for speed, intelligence, dev, and writing"
       },
       {
         "id": "claude-haiku-4-5",
@@ -31,13 +37,13 @@
         "note": "Free route via OpenRouter; availability may change"
       },
       {
-        "id": "deepseek-chat",
+        "id": "deepseek-v4-flash",
         "cost": "unknown",
         "usage": "sandbox",
         "note": "Endpoint-dependent; paid on DeepSeek API"
       },
       {
-        "id": "llama-3.1-8b-instant",
+        "id": "openai/gpt-oss-20b",
         "cost": "unknown",
         "usage": "sandbox",
         "note": "Endpoint-dependent; availability varies by host"
@@ -49,24 +55,24 @@
         "note": "Endpoint-dependent; starter suitability depends on the host"
       },
       {
-        "id": "codestral-latest",
+        "id": "devstral-small-latest",
         "cost": "unknown",
         "usage": "main",
-        "note": "Endpoint-dependent coding-focused model"
+        "note": "Endpoint-dependent agentic coding model"
       }
     ],
     "deepseek": [
       {
-        "id": "deepseek-reasoner",
+        "id": "deepseek-v4-pro",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Stronger reasoning; slower/costlier"
+        "note": "Stronger DeepSeek V4 option for reasoning and agentic work"
       },
       {
-        "id": "deepseek-chat",
+        "id": "deepseek-v4-flash",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Lightweight general chat"
+        "note": "Fast DeepSeek V4 option for general chat and coding"
       }
     ],
     "gemini": [
@@ -77,50 +83,38 @@
         "note": "High capability preview model; availability may change"
       },
       {
-        "id": "gemini-2.5-pro",
+        "id": "gemini-3.6-flash",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Strong reasoning"
+        "note": "Current stable Flash model for coding and agentic execution"
       },
       {
-        "id": "gemini-3-flash-preview",
-        "cost": "paid_main",
-        "usage": "main",
-        "note": "Preview; may change"
-      },
-      {
-        "id": "gemini-2.5-flash",
+        "id": "gemini-3.5-flash-lite",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Fast"
-      },
-      {
-        "id": "gemini-2.5-flash-lite",
-        "cost": "paid_sandbox",
-        "usage": "sandbox",
-        "note": "Fast lightweight option"
+        "note": "Current low-latency option for quick guarded iterations"
       }
     ],
     "groq": [
       {
-        "id": "llama-3.3-70b-versatile",
+        "id": "openai/gpt-oss-120b",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Large Groq-hosted option; designed for fast inference"
+        "note": "Larger Groq production option for stronger reasoning and coding"
       },
       {
-        "id": "llama-3.1-8b-instant",
+        "id": "openai/gpt-oss-20b",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Very fast"
+        "note": "Fast lower-cost Groq production option for quick loops"
       }
     ],
     "mistral": [
       {
-        "id": "codestral-latest",
+        "id": "devstral-small-latest",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Coding-focused"
+        "note": "Agentic coding-focused model"
       },
       {
         "id": "mistral-small-latest",
@@ -131,33 +125,21 @@
     ],
     "ollama": [
       {
-        "id": "codellama:13b",
+        "id": "gpt-oss:20b",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "Local compute cost (hardware/energy), not API billing"
+        "note": "Local compute cost (hardware/energy), not API billing; substantial memory required"
       },
       {
-        "id": "deepseek-coder:6.7b",
+        "id": "devstral-small-2",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Local compute cost (hardware/energy), not API billing"
-      },
-      {
-        "id": "llama3.1:8b",
-        "cost": "paid_main",
-        "usage": "main",
-        "note": "Local compute cost (hardware/energy), not API billing"
+        "note": "Local compute cost; requires Ollama 0.13.3 or later"
       },
       {
         "id": "qwen2.5-coder:7b",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Local compute cost (hardware/energy), not API billing"
-      },
-      {
-        "id": "mistral:7b",
-        "cost": "paid_sandbox",
-        "usage": "sandbox",
         "note": "Local compute cost (hardware/energy), not API billing"
       },
       {
@@ -169,22 +151,22 @@
     ],
     "openai": [
       {
-        "id": "gpt-5.4",
+        "id": "gpt-5.6-sol",
         "cost": "paid_heavy",
         "usage": "heavy",
-        "note": "Frontier model for complex coding and reasoning"
+        "note": "Frontier GPT-5.6 option for complex professional and coding work"
       },
       {
-        "id": "gpt-5.4-mini",
+        "id": "gpt-5.6-terra",
         "cost": "paid_main",
         "usage": "main",
-        "note": "Balanced default for day-to-day dev + general work"
+        "note": "Balanced GPT-5.6 default for day-to-day dev and general work"
       },
       {
-        "id": "gpt-5.4-nano",
+        "id": "gpt-5.6-luna",
         "cost": "paid_sandbox",
         "usage": "sandbox",
-        "note": "Lightweight GPT-5.4-class option"
+        "note": "Cost-sensitive GPT-5.6 option for guarded quick checks"
       }
     ],
     "openrouter": [

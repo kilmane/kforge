@@ -50,8 +50,8 @@ These labels are designed for human decision-making, not billing precision.
 - Guarded use only
 
 **Examples:**
-- `gpt-5.4-nano`
-- `gpt-4.1-nano`
+- `gpt-5.6-luna`
+- `claude-haiku-4-5`
 
 **Tooltip:**
 Lower-cost or limited model. Suitable for light work and careful edits.
@@ -71,8 +71,8 @@ Lower-cost or limited model. Suitable for light work and careful edits.
 - Be mindful, not paranoid
 
 **Examples:**
-- `gpt-5.4-mini``
-- strong gateway / general-purpose models
+- `gpt-5.6-terra`
+- `claude-sonnet-5`
 
 **Tooltip:**
 Balanced paid model for daily development.
@@ -92,8 +92,8 @@ Balanced paid model for daily development.
 - Think before spamming
 
 **Examples:**
-- high-end models
-- advanced reasoning models
+- `gpt-5.6-sol`
+- `claude-opus-4-8`
 
 **Tooltip:**
 Higher-capability model. Use for complex or accuracy-sensitive tasks.

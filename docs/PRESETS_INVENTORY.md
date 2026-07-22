@@ -4,7 +4,7 @@
 
 # Presets Inventory
 
-_Last reviewed: 22/05/2026_
+_Last reviewed: 22/07/2026_
 
 This document is a snapshot of the current recommended model presets in KForge.
 It is intended as a readable maintenance reference.
@@ -13,6 +13,15 @@ Important:
 - this file is documentation
 - it is not, by itself, proof of the current machine source
 - when presets change materially, the actual machine source should be checked and updated in the same pass
+
+Review basis for this snapshot:
+- [OpenAI models](https://developers.openai.com/api/docs/models)
+- [Claude models](https://platform.claude.com/docs/en/about-claude/models/overview)
+- [Gemini models](https://ai.google.dev/gemini-api/docs/models) and [deprecations](https://ai.google.dev/gemini-api/docs/deprecations)
+- [DeepSeek API models](https://api-docs.deepseek.com/)
+- [Groq supported models](https://console.groq.com/docs/models) and [deprecations](https://console.groq.com/docs/deprecations)
+- [Mistral models](https://docs.mistral.ai/models/overview)
+- [Ollama model library](https://ollama.com/library)
 
 Cost is represented by color labels, and usage is represented separately.
 
@@ -34,8 +43,9 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| claude-opus-4-7 | 🔴 Paid | High capability | High capability option for harder reasoning/coding tasks |
-| claude-sonnet-4-6 | 🟡 Paid | Recommended builder | Balanced default for dev + writing |
+| claude-fable-5 | 🔴 Paid | High capability | Anthropic's highest-capability widely available model |
+| claude-opus-4-8 | 🔴 Paid | High capability | Complex agentic coding and enterprise work |
+| claude-sonnet-5 | 🟡 Paid | Recommended builder | Current balanced option for speed and intelligence |
 | claude-haiku-4-5 | 🟢 Paid | Light / Everyday | Fast lightweight option for small guarded tasks |
 
 ✅ No free Claude — consistent with provider pricing.
@@ -47,10 +57,10 @@ Usage:
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
 | openrouter/free | 🔵 Free | Weak / test only | Router that selects currently available OpenRouter free models |
-| deepseek-chat | ⚪ Unknown | Custom / unverified | Endpoint-dependent; paid on DeepSeek API |
-| llama-3.1-8b-instant | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
+| deepseek-v4-flash | ⚪ Unknown | Custom / unverified | Endpoint-dependent; paid on DeepSeek API |
+| openai/gpt-oss-20b | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
 | mistral-small-latest | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
-| codestral-latest | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
+| devstral-small-latest | ⚪ Unknown | Custom / unverified | Endpoint-dependent agentic coding model |
 
 ⚪ Custom pricing depends on the exact endpoint you connect, not on KForge itself.
 
@@ -60,8 +70,10 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| deepseek-reasoner | 🟡 Paid | Recommended builder | Stronger reasoning; slower/costlier |
-| deepseek-chat | 🟢 Paid | Light / Everyday | Lightweight general chat |
+| deepseek-v4-pro | 🟡 Paid | Recommended builder | Stronger DeepSeek V4 option for reasoning and agentic work |
+| deepseek-v4-flash | 🟢 Paid | Light / Everyday | Fast DeepSeek V4 option for general chat and coding |
+
+⚠ The legacy `deepseek-chat` and `deepseek-reasoner` aliases retire on 24 July 2026 and are no longer KForge presets.
 
 ---
 
@@ -70,10 +82,8 @@ Usage:
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
 | gemini-3.1-pro-preview | 🔴 Paid | High capability | High capability preview model; availability may change |
-| gemini-2.5-pro | 🟡 Paid | Recommended builder | Strong reasoning; older than Gemini 3.1 Pro Preview |
-| gemini-3-flash-preview | 🟡 Paid | Recommended builder | Preview; may change quickly |
-| gemini-2.5-flash | 🟢 Paid | Light / Everyday | Fast |
-| gemini-2.5-flash-lite | 🟢 Paid | Light / Everyday | Fast lightweight option |
+| gemini-3.6-flash | 🟡 Paid | Recommended builder | Current stable Flash model for coding and agentic execution |
+| gemini-3.5-flash-lite | 🟢 Paid | Light / Everyday | Current low-latency option for guarded iterations |
 
 ⚠ Google currently offers free-tier access for several Gemini API models, but labels here remain conservative KForge guidance rather than an exhaustive pricing promise for every account tier.
 
@@ -83,8 +93,10 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| llama-3.3-70b-versatile | 🟡 Paid | Recommended builder | Large Groq-hosted option; designed for fast inference |
-| llama-3.1-8b-instant | 🟢 Paid | Light / Everyday | Very fast |
+| openai/gpt-oss-120b | 🟡 Paid | Recommended builder | Larger Groq production option for stronger reasoning and coding |
+| openai/gpt-oss-20b | 🟢 Paid | Light / Everyday | Fast lower-cost Groq production option |
+
+⚠ Groq announced the previous Llama 3.1 8B and Llama 3.3 70B presets as deprecated in June 2026.
 
 ---
 
@@ -92,7 +104,7 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| codestral-latest | 🟡 Paid | Recommended builder | Coding-focused |
+| devstral-small-latest | 🟡 Paid | Recommended builder | Agentic coding-focused model |
 | mistral-small-latest | 🟢 Paid | Light / Everyday | General starter |
 
 ⚠ Exact hosted model aliases can evolve. Re-check provider docs when updating presets.
@@ -103,11 +115,9 @@ Usage:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| codellama:13b | 🔴 Paid* | High capability | Local compute cost |
-| deepseek-coder:6.7b | 🟡 Paid* | Recommended builder | Local |
-| llama3.1:8b | 🟡 Paid* | Recommended builder | Local default |
+| gpt-oss:20b | 🔴 Paid* | High capability | Local reasoning and agentic model; substantial memory required |
+| devstral-small-2 | 🟡 Paid* | Recommended builder | Agentic coding; requires Ollama 0.13.3 or later |
 | qwen2.5-coder:7b | 🟡 Paid* | Recommended builder | Local |
-| mistral:7b | 🟢 Paid* | Light / Everyday | Fast |
 | qwen2.5-coder:1.5b | 🟢 Paid* | Light / Everyday | Very fast |
 
 \* Paid refers to local hardware / energy cost, not API billing.
@@ -134,9 +144,9 @@ Example starter model ID:
 
 | Model | Cost | Usage | Notes |
 |---|---|---|---|
-| gpt-5.4 | 🔴 Paid | High capability | Frontier model for complex coding and reasoning |
-| gpt-5.4-mini | 🟡 Paid | Recommended builder | Balanced default for day-to-day dev + general work |
-| gpt-5.4-nano | 🟢 Paid | Light / Everyday | Lightweight GPT-5.4-class option |
+| gpt-5.6-sol | 🔴 Paid | High capability | Frontier model for complex professional and coding work |
+| gpt-5.6-terra | 🟡 Paid | Recommended builder | Balanced GPT-5.6 default for day-to-day development |
+| gpt-5.6-luna | 🟢 Paid | Light / Everyday | Cost-sensitive GPT-5.6 option for guarded quick checks |
 
 ---
 
@@ -154,9 +164,10 @@ Example starter model ID:
 
 | Model | Providers |
 |---|---|
-| deepseek-chat | Custom, DeepSeek |
-| llama-3.1-8b-instant | Custom, Groq |
+| deepseek-v4-flash | Custom, DeepSeek |
+| openai/gpt-oss-20b | Custom, Groq |
 | mistral-small-latest | Custom, Mistral |
+| devstral-small-latest | Custom, Mistral |
 
 Overlaps are intentional and reflect different tradeoffs (cost, routing, availability, privacy).
 
@@ -169,12 +180,12 @@ High risk:
 - Gemini `*-preview` models
 
 Medium risk:
-- OpenAI naming shifts
-- Groq model family refreshes
+- OpenAI and Claude family refreshes
+- Groq and DeepSeek model family refreshes
 
 Low risk:
-- Claude current family
-- Hosted Mistral stable aliases
+- Current stable OpenAI, Gemini, and Ollama IDs
+- Hosted Mistral `*-latest` aliases
 - Local Ollama models
 ---
 

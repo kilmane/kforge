@@ -7,19 +7,19 @@ export const MODEL_PRESETS = {
   // ------------------------
   openai: [
     {
-      id: "gpt-5.4-nano",
+      id: "gpt-5.6-luna",
       tier: "sandbox",
-      note: "Lightweight GPT-5.4-class option; suitable for guarded quick checks.",
+      note: "Cost-sensitive GPT-5.6 option for guarded quick checks.",
     },
     {
-      id: "gpt-5.4-mini",
+      id: "gpt-5.6-terra",
       tier: "main",
-      note: "Balanced default for day-to-day dev + general work.",
+      note: "Balanced GPT-5.6 default for day-to-day dev + general work.",
     },
     {
-      id: "gpt-5.4",
+      id: "gpt-5.6-sol",
       tier: "heavy",
-      note: "High capability option for harder reasoning/coding tasks.",
+      note: "Frontier GPT-5.6 option for complex professional and coding work.",
     },
   ],
 
@@ -28,24 +28,14 @@ export const MODEL_PRESETS = {
   // ------------------------
   gemini: [
     {
-      id: "gemini-2.5-flash-lite",
+      id: "gemini-3.5-flash-lite",
       tier: "sandbox",
-      note: "Fast lightweight option for quick guarded iterations.",
+      note: "Current low-latency option for quick guarded iterations.",
     },
     {
-      id: "gemini-2.5-flash",
-      tier: "sandbox",
-      note: "Fast; solid for routine tasks.",
-    },
-    {
-      id: "gemini-3-flash-preview",
+      id: "gemini-3.6-flash",
       tier: "main",
-      note: "Preview; balanced. Expect occasional changes.",
-    },
-    {
-      id: "gemini-2.5-pro",
-      tier: "main",
-      note: "Stronger reasoning; good default when Flash isn’t enough.",
+      note: "Current stable Flash model for coding and agentic execution.",
     },
     {
       id: "gemini-3.1-pro-preview",
@@ -64,14 +54,19 @@ export const MODEL_PRESETS = {
       note: "Fast lightweight option for small guarded tasks.",
     },
     {
-      id: "claude-sonnet-4-6",
+      id: "claude-sonnet-5",
       tier: "main",
-      note: "Balanced default for dev + writing.",
+      note: "Current balanced option for speed, intelligence, dev, and writing.",
     },
     {
-      id: "claude-opus-4-7",
+      id: "claude-opus-4-8",
       tier: "heavy",
-      note: "High capability option for harder reasoning/coding tasks.",
+      note: "High capability option for complex agentic coding and enterprise work.",
+    },
+    {
+      id: "claude-fable-5",
+      tier: "heavy",
+      note: "Anthropic's highest-capability widely available model.",
     },
   ],
 
@@ -80,14 +75,14 @@ export const MODEL_PRESETS = {
   // ------------------------
   deepseek: [
     {
-      id: "deepseek-chat",
+      id: "deepseek-v4-flash",
       tier: "sandbox",
-      note: "Lightweight general chat + coding option.",
+      note: "Fast DeepSeek V4 option for general chat + coding.",
     },
     {
-      id: "deepseek-reasoner",
+      id: "deepseek-v4-pro",
       tier: "main",
-      note: "Stronger reasoning; slower/costlier than chat.",
+      note: "Stronger DeepSeek V4 option for reasoning and agentic work.",
     },
   ],
 
@@ -96,14 +91,14 @@ export const MODEL_PRESETS = {
   // ------------------------
   groq: [
     {
-      id: "llama-3.1-8b-instant",
+      id: "openai/gpt-oss-20b",
       tier: "sandbox",
-      note: "Very fast; great for quick loops.",
+      note: "Fast lower-cost Groq production option for quick loops.",
     },
     {
-      id: "llama-3.3-70b-versatile",
+      id: "openai/gpt-oss-120b",
       tier: "main",
-      note: "Larger Groq-hosted option; still designed for fast inference.",
+      note: "Larger Groq production option for stronger reasoning and coding.",
     },
   ],
 
@@ -134,17 +129,17 @@ export const MODEL_PRESETS = {
       note: "Endpoint-dependent; starter suitability depends on the host.",
     },
     {
-      id: "codestral-latest",
+      id: "devstral-small-latest",
       tier: "unknown",
-      note: "Endpoint-dependent coding-focused model.",
+      note: "Endpoint-dependent agentic coding model.",
     },
     {
-      id: "deepseek-chat",
+      id: "deepseek-v4-flash",
       tier: "unknown",
       note: "Endpoint-dependent; paid on DeepSeek API.",
     },
     {
-      id: "llama-3.1-8b-instant",
+      id: "openai/gpt-oss-20b",
       tier: "unknown",
       note: "Endpoint-dependent; availability varies by host.",
     },
@@ -160,26 +155,20 @@ export const MODEL_PRESETS = {
       tier: "sandbox",
       note: "Local small coder; fast.",
     },
-    { id: "mistral:7b", tier: "sandbox", note: "Local 7B; quick general use." },
-    {
-      id: "llama3.1:8b",
-      tier: "main",
-      note: "Local default; more capable than tiny local models, depending on hardware.",
-    },
     {
       id: "qwen2.5-coder:7b",
       tier: "main",
       note: "Local coder default; good balance.",
     },
     {
-      id: "deepseek-coder:6.7b",
+      id: "devstral-small-2",
       tier: "main",
-      note: "Local coder; solid mid-size.",
+      note: "Current agentic coding model; requires Ollama 0.13.3 or later.",
     },
     {
-      id: "codellama:13b",
+      id: "gpt-oss:20b",
       tier: "heavy",
-      note: "Larger local model; may be slower depending on hardware.",
+      note: "Powerful local reasoning and agentic model; requires substantial memory.",
     },
   ],
 
@@ -203,6 +192,10 @@ export const MODEL_PRESETS = {
       tier: "sandbox",
       note: "Good starter model (general).",
     },
-    { id: "codestral-latest", tier: "main", note: "Coding-focused." },
+    {
+      id: "devstral-small-latest",
+      tier: "main",
+      note: "Agentic coding-focused model.",
+    },
   ],
 };

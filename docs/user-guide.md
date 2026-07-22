@@ -874,6 +874,8 @@ Higher temperature usually means:
 
 For implementation work, low or moderate values are usually the best starting point.
 
+Some current models do not accept a custom temperature. KForge omits this setting for current Claude adaptive-thinking models so those presets do not fail with an invalid-parameter response.
+
 ### Max tokens
 
 Max tokens limits the approximate maximum length of the model’s generated response.

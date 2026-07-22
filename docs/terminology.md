@@ -40,9 +40,9 @@ A **model** is the specific AI model you choose inside a provider.
 
 Examples:
 
-* `gpt-5.4-mini`
-* `claude-sonnet-4-6`
-* `mistral-small-latest`
+* `gpt-5.6-terra`
+* `claude-sonnet-5`
+* `devstral-small-latest`
 * `gpt-oss:120b`
 * `kimi-k2.6`
 
@@ -63,9 +63,9 @@ That means model IDs should be entered exactly as the provider documents them.
 Examples:
 
 * `gpt-oss:120b`
-* `deepseek-chat`
+* `deepseek-v4-flash`
 * `mistral-small-latest`
-* `openai/gpt-4o-mini`
+* `openai/gpt-oss-20b`
 
 KForge does not invent or rewrite provider model IDs.
 
