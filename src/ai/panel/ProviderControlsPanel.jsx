@@ -467,7 +467,7 @@ export default function ProviderControlsPanel({
       out.push(r);
     }
     return out;
-  }, [aiProvider, modelSuggestions]);
+  }, [aiProvider, modelSuggestions, remotePresets]);
 
   // Suggestions shown in dropdown = presets + user saved
   const presetsWhen =
