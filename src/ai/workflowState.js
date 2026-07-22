@@ -490,8 +490,26 @@ export function createBugfixWorkflowContext(
 export function createBlockedProjectEditWorkflowContext(
   lastUserGoal = "",
   modelWorkflowPolicy = null,
+  recovery = null,
 ) {
+  const previousWorkflowContext =
+    recovery?.previousWorkflowContext || null;
+  const pendingProjectEditRequest =
+    recovery?.pendingProjectEditRequest || null;
+  const isPendingAppBuildRecovery =
+    pendingProjectEditRequest?.options?.forceAppBuildImplementation === true;
+  const preservedGoal = isPendingAppBuildRecovery
+    ? String(
+        pendingProjectEditRequest?.options?.modelToolOriginalGoal ||
+          pendingProjectEditRequest?.options?.lastUserGoal ||
+          previousWorkflowContext?.lastUserGoal ||
+          lastUserGoal ||
+          "",
+      ).trim()
+    : lastUserGoal;
+
   return {
+    ...(isPendingAppBuildRecovery ? previousWorkflowContext || {} : {}),
     taskKind: WORKFLOW_TASK_KIND.PROJECT_EDIT,
     status: WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY,
     nextStep: WORKFLOW_NEXT_STEP.SWITCH_MODEL_OR_PLAN,
@@ -499,12 +517,26 @@ export function createBlockedProjectEditWorkflowContext(
     modelPolicyMode: modelWorkflowPolicy?.mode || "unknown",
     modelPolicyTier: modelWorkflowPolicy?.tier || "unknown",
     modelPolicyReason: modelWorkflowPolicy?.reason || "unknown",
-    lastUserGoal,
+    lastUserGoal: preservedGoal,
+    ...(isPendingAppBuildRecovery ? { pendingProjectEditRequest } : {}),
     updatedAt: Date.now(),
     source: "model_capability_gate",
   };
 }
 
+export function resolvePendingProjectEditRequest(context = null) {
+  const pendingRequest = context?.pendingProjectEditRequest;
+  const prompt = String(pendingRequest?.prompt || "").trim();
+
+  if (!prompt) return null;
+
+  return {
+    prompt,
+    options: {
+      ...(pendingRequest?.options || {}),
+    },
+  };
+}
 export function createCompletedFeatureBlueprintWorkflowContext({
   lastUserGoal = "",
   blueprintSummary = "",

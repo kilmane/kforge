@@ -33,6 +33,7 @@ import {
   createDirectHandoffWorkflowContext,
   createImplementationInProgressWorkflowContext,
   mergeWorkflowPathLists,
+  resolvePendingProjectEditRequest,
   resolveWorkflowLikelyAppInspectPath,
   resolveProjectEditGoal,
   SUGGESTED_ACTION_LABEL,
@@ -5515,6 +5516,44 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
       });
 
       if (blockedModelPolicyRoute?.action === "blocked_model_policy_followup") {
+        const pendingProjectEditRequest =
+          resolvePendingProjectEditRequest(workflowContext);
+        const hasPendingAppBuildStep =
+          pendingProjectEditRequest?.options?.forceAppBuildImplementation ===
+          true;
+
+        const resumePendingAppBuildStep = () => {
+          const resumeRequest =
+            resolvePendingProjectEditRequest(workflowContext);
+          const runPrompt = sendWithPromptRef.current;
+
+          if (!resumeRequest) {
+            appendMessage(
+              "assistant",
+              "The pending app-build request is no longer available. Please resend the original request.",
+            );
+            return;
+          }
+
+          if (typeof runPrompt !== "function") {
+            appendMessage(
+              "assistant",
+              "I could not resume the pending app-build step automatically. Please try again.",
+            );
+            return;
+          }
+
+          appendMessage("user", "Choice: Resume pending app-build step");
+          runPrompt(resumeRequest.prompt, {
+            ...resumeRequest.options,
+          });
+        };
+
+        const resumeAction = {
+          label: "Resume pending app-build step",
+          onClick: resumePendingAppBuildStep,
+        };
+
         if (!opts.silentUserAppend) appendMessage("user", draft);
         appendMessage(
           "assistant",
@@ -5525,22 +5564,45 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
           {
             actions: [
               {
-                label: "Switch model first",
+                label: hasPendingAppBuildStep
+                  ? "Switch model, then resume"
+                  : "Switch model first",
                 onClick: () => {
-                  appendMessage("user", "Choice: Switch model first");
-                  setWorkflowContext(null);
+                  appendMessage(
+                    "user",
+                    hasPendingAppBuildStep
+                      ? "Choice: Switch model, then resume"
+                      : "Choice: Switch model first",
+                  );
+
                   appendMessage(
                     "assistant",
-                    "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                    hasPendingAppBuildStep
+                      ? "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
+                      : "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                    hasPendingAppBuildStep
+                      ? { actions: [resumeAction] }
+                      : undefined,
                   );
                 },
               },
               {
                 label: "Continue in test mode",
                 onClick: () => {
+                  const resumeRequest =
+                    resolvePendingProjectEditRequest(workflowContext);
                   const goal = String(
                     workflowContext?.lastUserGoal || draft,
                   ).trim();
+                  const runPrompt = sendWithPromptRef.current;
+
+                  if (typeof runPrompt !== "function") {
+                    appendMessage(
+                      "assistant",
+                      "I could not continue the pending app-build step automatically. Please try again.",
+                    );
+                    return;
+                  }
 
                   appendMessage("user", "Choice: Continue in test mode");
                   appendMessage(
@@ -5548,20 +5610,43 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                     "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
                   );
 
-                  sendWithPrompt(goal || draft, {
-                    silentUserAppend: true,
-                    forceModelCapabilityTestOverride: true,
-                  });
+                  runPrompt(
+                    resumeRequest?.prompt || goal || draft,
+                    resumeRequest
+                      ? {
+                          ...resumeRequest.options,
+                          forceModelCapabilityTestOverride: true,
+                        }
+                      : {
+                          silentUserAppend: true,
+                          forceModelCapabilityTestOverride: true,
+                        },
+                  );
                 },
               },
               {
                 label: "Back to chat",
                 onClick: () => {
                   appendMessage("user", "Choice: Back to chat");
-                  setWorkflowContext(null);
+
+                  if (hasPendingAppBuildStep) {
+                    setWorkflowContext({
+                      ...workflowContext,
+                      status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                      nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+                    });
+                  } else {
+                    setWorkflowContext(null);
+                  }
+
                   appendMessage(
                     "assistant",
-                    "Back to chat — no project editing started. No files were changed.",
+                    hasPendingAppBuildStep
+                      ? "Back to chat — the pending app-build step is paused, not lost. Previously written files remain in the project, and you can resume the saved step below when ready."
+                      : "Back to chat — no project editing started. No files were changed.",
+                    hasPendingAppBuildStep
+                      ? { actions: [resumeAction] }
+                      : undefined,
                   );
                 },
               },
@@ -5569,8 +5654,22 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                 label: "Stop",
                 onClick: () => {
                   appendMessage("user", "Choice: Stop");
+
+                  const previousChangeSummary = hasPendingAppBuildStep
+                    ? buildCompletedWorkflowChangeSummary(workflowContext, {
+                        fallbackLine:
+                          "These files were written before the remaining app-build step was stopped.",
+                      })
+                    : "";
+
                   setWorkflowContext(null);
-                  appendMessage("assistant", "Okay — stopping here. No files were changed.");
+                  appendMessage(
+                    "assistant",
+                    hasPendingAppBuildStep
+                      ? "Stopped the pending app-build step. Previously written files remain in the project.\n\n" +
+                          previousChangeSummary
+                      : "Okay — stopping here. No files were changed.",
+                  );
                 },
               },
             ],
@@ -8321,58 +8420,178 @@ setWorkflowContext({
       });
 
       if (projectEditRoute.action === "gate_model_capability_project_edit") {
-        setWorkflowContext(createBlockedProjectEditWorkflowContext(draft, modelWorkflowPolicy));
+        const blockedProjectEditContext =
+          createBlockedProjectEditWorkflowContext(draft, modelWorkflowPolicy, {
+            previousWorkflowContext: workflowContext,
+            pendingProjectEditRequest: {
+              prompt: draft,
+              options: { ...opts },
+            },
+          });
+        const pendingProjectEditRequest =
+          resolvePendingProjectEditRequest(blockedProjectEditContext);
+        const hasPendingAppBuildStep =
+          pendingProjectEditRequest?.options?.forceAppBuildImplementation ===
+          true;
+
+        const resumePendingAppBuildStep = () => {
+          const resumeRequest =
+            resolvePendingProjectEditRequest(blockedProjectEditContext);
+          const runPrompt = sendWithPromptRef.current;
+
+          if (!resumeRequest) {
+            appendMessage(
+              "assistant",
+              "The pending app-build request is no longer available. Please resend the original request.",
+            );
+            return;
+          }
+
+          if (typeof runPrompt !== "function") {
+            appendMessage(
+              "assistant",
+              "I could not resume the pending app-build step automatically. Please try again.",
+            );
+            return;
+          }
+
+          appendMessage("user", "Choice: Resume pending app-build step");
+          runPrompt(resumeRequest.prompt, {
+            ...resumeRequest.options,
+          });
+        };
+
+        const resumeAction = {
+          label: "Resume pending app-build step",
+          onClick: resumePendingAppBuildStep,
+        };
+
+        setWorkflowContext(blockedProjectEditContext);
 
         if (!opts.silentUserAppend) appendMessage("user", draft);
-        appendMessage("assistant", buildModelCapabilityGateMessage(modelWorkflowPolicy), {
-          actions: [
-            {
-              label: "Switch model first",
-              onClick: () => {
-                appendMessage("user", "Choice: Switch model first");
-                setWorkflowContext(null);
-                appendMessage(
-                  "assistant",
-                  "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
-                );
-              },
-            },
-            {
-              label: "Continue in test mode",
-              onClick: () => {
-                appendMessage("user", "Choice: Continue in test mode");
-                appendMessage(
-                  "assistant",
-                  "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
-                );
+        appendMessage(
+          "assistant",
+          buildModelCapabilityGateMessage(modelWorkflowPolicy),
+          {
+            actions: [
+              {
+                label: hasPendingAppBuildStep
+                  ? "Switch model, then resume"
+                  : "Switch model first",
+                onClick: () => {
+                  appendMessage(
+                    "user",
+                    hasPendingAppBuildStep
+                      ? "Choice: Switch model, then resume"
+                      : "Choice: Switch model first",
+                  );
 
-                sendWithPrompt(draft, {
-                  silentUserAppend: true,
-                  forceModelCapabilityTestOverride: true,
-                });
+                  if (!hasPendingAppBuildStep) {
+                    setWorkflowContext(null);
+                  }
+
+                  appendMessage(
+                    "assistant",
+                    hasPendingAppBuildStep
+                      ? "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
+                      : "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                    hasPendingAppBuildStep
+                      ? { actions: [resumeAction] }
+                      : undefined,
+                  );
+                },
               },
-            },
-            {
-              label: "Back to chat",
-              onClick: () => {
-                appendMessage("user", "Choice: Back to chat");
-                setWorkflowContext(null);
-                appendMessage(
-                  "assistant",
-                  "Back to chat — no project editing started. No files were changed.",
-                );
+              {
+                label: "Continue in test mode",
+                onClick: () => {
+                  const resumeRequest =
+                    resolvePendingProjectEditRequest(
+                      blockedProjectEditContext,
+                    );
+                  const runPrompt = sendWithPromptRef.current;
+
+                  if (typeof runPrompt !== "function") {
+                    appendMessage(
+                      "assistant",
+                      "I could not continue the pending app-build step automatically. Please try again.",
+                    );
+                    return;
+                  }
+
+                  appendMessage("user", "Choice: Continue in test mode");
+                  appendMessage(
+                    "assistant",
+                    "Continuing in test mode. You accept the model quality risk for this run. File-write approval, inspect-before-write, path safety, destructive rewrite protection, and Cancel/Stop remain active.",
+                  );
+
+                  runPrompt(
+                    resumeRequest?.prompt || draft,
+                    resumeRequest
+                      ? {
+                          ...resumeRequest.options,
+                          forceModelCapabilityTestOverride: true,
+                        }
+                      : {
+                          silentUserAppend: true,
+                          forceModelCapabilityTestOverride: true,
+                        },
+                  );
+                },
               },
-            },
-            {
-              label: "Stop",
-              onClick: () => {
-                appendMessage("user", "Choice: Stop");
-                setWorkflowContext(null);
-                appendMessage("assistant", "Okay — stopping here. No files were changed.");
+              {
+                label: "Back to chat",
+                onClick: () => {
+                  appendMessage("user", "Choice: Back to chat");
+
+                  if (hasPendingAppBuildStep) {
+                    setWorkflowContext({
+                      ...blockedProjectEditContext,
+                      status: WORKFLOW_STATUS.WAITING_FOR_USER_RESULT,
+                      nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+                    });
+                  } else {
+                    setWorkflowContext(null);
+                  }
+
+                  appendMessage(
+                    "assistant",
+                    hasPendingAppBuildStep
+                      ? "Back to chat — the pending app-build step is paused, not lost. Previously written files remain in the project, and you can resume the saved step below when ready."
+                      : "Back to chat — no project editing started. No files were changed.",
+                    hasPendingAppBuildStep
+                      ? { actions: [resumeAction] }
+                      : undefined,
+                  );
+                },
               },
-            },
-          ],
-        });
+              {
+                label: "Stop",
+                onClick: () => {
+                  appendMessage("user", "Choice: Stop");
+
+                  const previousChangeSummary = hasPendingAppBuildStep
+                    ? buildCompletedWorkflowChangeSummary(
+                        blockedProjectEditContext,
+                        {
+                          fallbackLine:
+                            "These files were written before the remaining app-build step was stopped.",
+                        },
+                      )
+                    : "";
+
+                  setWorkflowContext(null);
+                  appendMessage(
+                    "assistant",
+                    hasPendingAppBuildStep
+                      ? "Stopped the pending app-build step. Previously written files remain in the project.\n\n" +
+                          previousChangeSummary
+                      : "Okay — stopping here. No files were changed.",
+                  );
+                },
+              },
+            ],
+          },
+        );
         return;
       }
 
