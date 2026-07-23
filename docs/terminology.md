@@ -123,30 +123,30 @@ Cost labels are a quick reminder about likely cost.
 Examples:
 
 * 🔵 **Free** — no direct charge expected on that route, but limits may apply
-* 🟢 **Lower-cost paid / light tasks** — lower-cost paid use or safe testing
-* 🟡 **Standard paid / recommended builder** — normal day-to-day paid use
-* 🔴 **Higher-cost paid / high capability** — higher-cost, larger, or high-capability use
-* ⚪ **Unknown** — pricing is unclear, provider-dependent, or account-dependent
+* 🟢 **Lower relative cost** — broadly lower-cost among curated choices
+* 🟡 **Medium relative cost** — broadly mid-range among curated choices
+* 🔴 **Higher relative cost** — broadly higher-cost among curated choices
+* ⚪ **Cost unknown** — pricing is unclear, provider-dependent, or account-dependent
 
-Cost labels are advisory.
+Cost labels are KForge-created relative guidance, not live prices.
 
 Always check the provider’s own pricing page before spending money.
 
 ---
 
-## Usage labels
+## Capability labels
 
-Usage labels describe how a model is intended to be used.
+Capability labels describe what KForge's workflow permits.
 
 Examples:
 
-* **Light / Everyday** — quick checks, low-risk prompts, and careful edits
-* **Recommended builder** — normal day-to-day project work
-* **High capability** — harder, more complex, or critical tasks
+* **Project builder** — approved for normal project implementation
+* **Test-mode editing** — guarded experiments and supervised edits
+* **Chat and planning** — no automatic project editing
+* **Unclassified** — the exact provider/model pair is not approved yet
 
-A High capability label does not block you from using a model.
-
-It is only a reminder that the model is intended for harder work.
+Capability is independent of cost colour. Remote presentation metadata cannot
+grant Project builder permission.
 
 ---
 

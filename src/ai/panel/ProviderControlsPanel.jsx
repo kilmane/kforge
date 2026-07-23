@@ -1,8 +1,14 @@
 // src/ai/panel/ProviderControlsPanel.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { fetchRemotePresetsV0WithCache } from "../remotePresets";
 import { MODEL_PRESETS } from "../modelPresets";
+import {
+  MODEL_RELATIVE_COSTS,
+  getEffectiveModelRecords,
+  getModelRegistryEntry,
+  getRelativeCostLabel,
+  normalizeRelativeCost,
+} from "../modelRegistry";
 
 // GitHub Pages docs (nice reading experience, no repo tree)
 const CUSTOM_PROVIDER_DOCS_URL =
@@ -67,32 +73,27 @@ function normalizeCost(raw) {
 }
 
 function costLabel(cost) {
-  const c = normalizeCost(cost);
-  if (c === "free") return "🔵 Free";
-  if (c === "paid_sandbox") return "🟢 Lower-cost paid";
-  if (c === "paid_main") return "🟡 Standard paid";
-  if (c === "paid_heavy") return "🔴 Higher-cost paid";
-  return "⚪ Unknown cost";
+  return getRelativeCostLabel(normalizeRelativeCost(normalizeCost(cost)));
 }
 
 function CostBadge({ tag }) {
-  const t = normalizeCost(tag);
+  const relativeCost = normalizeRelativeCost(normalizeCost(tag));
 
   const dotClass =
-    t === "free"
+    relativeCost === MODEL_RELATIVE_COSTS.FREE
       ? "bg-sky-400"
-      : t === "paid_sandbox"
+      : relativeCost === MODEL_RELATIVE_COSTS.LOWER
         ? "bg-emerald-400"
-        : t === "paid_main"
+        : relativeCost === MODEL_RELATIVE_COSTS.MEDIUM
           ? "bg-yellow-400"
-          : t === "paid_heavy"
+          : relativeCost === MODEL_RELATIVE_COSTS.HIGHER
             ? "bg-rose-400"
             : "bg-zinc-500";
 
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] uppercase tracking-wide border border-zinc-800 bg-zinc-900/40 text-zinc-200">
       <span className={`inline-block w-2 h-2 rounded-full ${dotClass}`} />
-      <span>{costLabel(t)}</span>
+      <span>{getRelativeCostLabel(relativeCost)}</span>
     </span>
   );
 }
@@ -101,78 +102,37 @@ function normalizeModelId(v) {
   return String(v || "").trim();
 }
 
-// --- Tiered preset support (Sandbox/Main/Heavy) ---
+function RelativeCostPill({ relativeCost }) {
+  const dotClass =
+    relativeCost === MODEL_RELATIVE_COSTS.FREE
+      ? "bg-sky-400"
+      : relativeCost === MODEL_RELATIVE_COSTS.LOWER
+        ? "bg-emerald-400"
+        : relativeCost === MODEL_RELATIVE_COSTS.MEDIUM
+          ? "bg-yellow-400"
+          : relativeCost === MODEL_RELATIVE_COSTS.HIGHER
+            ? "bg-rose-400"
+            : "bg-zinc-500";
 
-const PRESET_TIERS = ["sandbox", "main", "heavy", "free", "unknown"];
-
-function normalizeTier(tier) {
-  const t = String(tier || "")
-    .toLowerCase()
-    .trim();
-  return PRESET_TIERS.includes(t) ? t : "unknown";
-}
-
-function tierLabel(tier) {
-  const t = normalizeTier(tier);
-  if (t === "sandbox") return "Light / Everyday";
-  if (t === "main") return "Recommended builder";
-  if (t === "heavy") return "High capability";
-  if (t === "free") return "Weak / test only";
-  return "Custom / unverified";
-}
-
-function tierDotClass(tier) {
-  const t = normalizeTier(tier);
-  // Using background tones only; no custom colors beyond tailwind defaults.
-  if (t === "sandbox") return "bg-emerald-400";
-  if (t === "main") return "bg-yellow-400";
-  if (t === "heavy") return "bg-rose-400";
-  if (t === "free") return "bg-sky-400";
-  return "bg-zinc-500";
-}
-
-function TierPill({ tier }) {
-  const t = normalizeTier(tier);
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/40 text-[11px] text-zinc-200">
-      <span
-        className={`inline-block w-2 h-2 rounded-full ${tierDotClass(t)}`}
-      />
-      <span className="tracking-wide">{tierLabel(t)}</span>
+      <span className={`inline-block w-2 h-2 rounded-full ${dotClass}`} />
+      <span className="tracking-wide">
+        {getRelativeCostLabel(relativeCost)}
+      </span>
     </span>
   );
 }
-function MetaPill({ children, title }) {
-  if (!children) return null;
+
+function CapabilityPill({ label }) {
   return (
     <span
-      title={title}
+      title="KForge workflow capability"
       className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/20 text-[10px] text-zinc-200/90"
     >
-      {children}
+      {label || "Unclassified"}
     </span>
   );
-}
-// Suggestion item can be:
-// - "model-id"
-// - { id: "model-id", tier: "sandbox|main|heavy|free|unknown", note?: string }
-function suggestionToRecord(item) {
-  if (typeof item === "string") {
-    const id = normalizeModelId(item);
-    return id ? { id, tier: "unknown", note: "" } : null;
-  }
-  if (item && typeof item === "object") {
-    const id = normalizeModelId(item.id);
-    if (!id) return null;
-    return {
-      id,
-      tier: normalizeTier(item.tier),
-      note: String(item.note || "").trim(),
-      usage: typeof item.usage === "string" ? item.usage.trim() : "",
-      cost: typeof item.cost === "string" ? item.cost.trim() : "",
-    };
-  }
-  return null;
 }
 
 // For suggestion dedupe (and nicer UX), normalize provider-specific variants.
@@ -236,8 +196,10 @@ function isManualModelRestoreProvider(providerId) {
   );
 }
 
-function presetModelIdsForProvider(providerId) {
-  const presets = MODEL_PRESETS?.[providerId] || [];
+function presetModelIdsForProvider(providerId, remoteRecords = null) {
+  const presets = Array.isArray(remoteRecords)
+    ? remoteRecords
+    : MODEL_PRESETS?.[providerId] || [];
   return presets
     .map((preset) =>
       normalizeModelId(typeof preset === "string" ? preset : preset?.id),
@@ -251,13 +213,17 @@ function userModelIdsForProvider(providerId) {
     .filter(Boolean);
 }
 
-function shouldRestoreLastSelectedModel(providerId, modelId) {
+function shouldRestoreLastSelectedModel(
+  providerId,
+  modelId,
+  remoteRecords = null,
+) {
   const id = normalizeModelId(modelId);
   if (!id) return false;
   if (isManualModelRestoreProvider(providerId)) return true;
 
   const knownIds = new Set([
-    ...presetModelIdsForProvider(providerId),
+    ...presetModelIdsForProvider(providerId, remoteRecords),
     ...userModelIdsForProvider(providerId),
   ]);
 
@@ -303,6 +269,8 @@ export default function ProviderControlsPanel({
   setAiModel,
   modelPlaceholder,
   modelSuggestions, // can now be string[] or {id,tier,note}[]
+  remotePresets,
+  remotePresetsStatus = "fallback",
   showModelHelper,
   modelHelperText,
 
@@ -337,6 +305,7 @@ export default function ProviderControlsPanel({
   // Track user editing to prevent any auto-restore/persist fighting
   const isEditingModelInputRef = useRef(false);
   const restoredForProviderRef = useRef(null);
+  const pendingRestoredModelRef = useRef(null);
 
   // Dropdown for suggestions
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -345,38 +314,6 @@ export default function ProviderControlsPanel({
   // LM Studio list models state
   const [lmListBusy, setLmListBusy] = useState(false);
   const [lmListError, setLmListError] = useState("");
-  const [remotePresets, setRemotePresets] = useState(null);
-  const [remotePresetsStatus, setRemotePresetsStatus] = useState("loading"); // loading | ready | fallback
-
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      const loaded = await fetchRemotePresetsV0WithCache();
-      if (!alive) return;
-      setRemotePresets(loaded); // may be null; that's fine
-      setRemotePresetsStatus(loaded ? "ready" : "fallback");
-
-      // Dev-only: keep until we have a dedicated diagnostics/debug panel.
-
-      if (process.env.NODE_ENV === "development" && loaded) {
-        const source = loaded.cached_at ? "cache" : "remote";
-        const when = loaded.updated_at || loaded.cached_at || "unknown time";
-        console.info(
-          `[kforge] presets loaded (${source}) — updated_at: ${when}`,
-        );
-      }
-      if (process.env.NODE_ENV === "development" && !loaded) {
-        console.info(
-          "[kforge] presets: remote not available (using built-in or cache)",
-        );
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
   // Load when provider changes
   useEffect(() => {
     const records = loadUserModelRecords(aiProvider);
@@ -390,6 +327,7 @@ export default function ProviderControlsPanel({
 
     isEditingModelInputRef.current = false;
     restoredForProviderRef.current = null;
+    pendingRestoredModelRef.current = null;
 
     setSuggestionsOpen(false);
 
@@ -397,8 +335,10 @@ export default function ProviderControlsPanel({
     setLmListError("");
   }, [aiProvider]);
 
-  // One-time restore only when provider changes
+  // Restore after remote preset loading settles so a valid remote-only saved
+  // model is not discarded during the initial loading window.
   useEffect(() => {
+    if (remotePresetsStatus === "loading") return;
     if (restoredForProviderRef.current === aiProvider) return;
     restoredForProviderRef.current = aiProvider;
 
@@ -407,7 +347,14 @@ export default function ProviderControlsPanel({
       const last = normalizeModelId(localStorage.getItem(key));
       if (!last) return;
 
-      if (shouldRestoreLastSelectedModel(aiProvider, last)) {
+      if (
+        shouldRestoreLastSelectedModel(
+          aiProvider,
+          last,
+          remotePresets?.providers?.[aiProvider] || null,
+        )
+      ) {
+        pendingRestoredModelRef.current = last;
         setAiModel(last);
         return;
       }
@@ -416,8 +363,7 @@ export default function ProviderControlsPanel({
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiProvider]);
+  }, [aiProvider, remotePresets, remotePresetsStatus, setAiModel]);
 
   // Persist saved models list.
   // Guard against provider-switch races where the new provider briefly renders
@@ -430,44 +376,36 @@ export default function ProviderControlsPanel({
   // Persist last selected model, but never while user is editing, and never persist empty
   useEffect(() => {
     if (isEditingModelInputRef.current) return;
+    if (remotePresetsStatus === "loading") return;
+    if (restoredForProviderRef.current !== aiProvider) return;
 
     const cur = normalizeModelId(aiModelStr);
     if (!cur) return;
+
+    const pendingRestore = pendingRestoredModelRef.current;
+    if (pendingRestore) {
+      if (cur !== pendingRestore) return;
+      pendingRestoredModelRef.current = null;
+    }
 
     try {
       localStorage.setItem(lastSelectedKey(aiProvider), cur);
     } catch {
       // ignore
     }
-  }, [aiProvider, aiModelStr]);
+  }, [aiProvider, aiModelStr, remotePresetsStatus]);
 
   const userModelIds = useMemo(() => userModels.map((r) => r.id), [userModels]);
 
   // Build preset records (tiered)
   const presetRecords = useMemo(() => {
     const remote = remotePresets?.providers?.[aiProvider];
-    const local = MODEL_PRESETS?.[aiProvider];
-    const recs = (remote ?? local ?? [])
-      .map(suggestionToRecord)
-      .filter(Boolean);
-
-    // Provider normalization (Gemini variants etc.) applied to the id
-    const normalized = recs.map((r) => ({
-      ...r,
-      id: normalizeSuggestionForProvider(aiProvider, r.id),
-    }));
-
-    // Dedupe by id (keep the first occurrence, preserves order)
-    const seen = new Set();
-    const out = [];
-    for (const r of normalized) {
-      if (!r?.id) continue;
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      out.push(r);
-    }
-    return out;
-  }, [aiProvider, modelSuggestions, remotePresets]);
+    return getEffectiveModelRecords({
+      providerId: aiProvider,
+      remoteRecords: remote ?? null,
+      normalizeId: (id) => normalizeSuggestionForProvider(aiProvider, id),
+    });
+  }, [aiProvider, remotePresets]);
 
   // Suggestions shown in dropdown = presets + user saved
   const presetsWhen =
@@ -480,11 +418,24 @@ export default function ProviderControlsPanel({
         : "Using built-in presets";
 
   const suggestionRecords = useMemo(() => {
-    // Convert user models to “unknown tier” suggestion records
+    // Convert user models to registry records without allowing user cost tags
+    // or remote presentation metadata to change workflow capability.
     const userAsRecords = userModelIds
       .map((id) => normalizeSuggestionForProvider(aiProvider, id))
       .filter(Boolean)
-      .map((id) => ({ id, tier: "unknown", note: "" }));
+      .map((id) => {
+        const saved = userModels.find((record) => record.id === id);
+        return getModelRegistryEntry({
+          providerId: aiProvider,
+          modelId: id,
+          presetRecord: {
+            id,
+            tier: "unknown",
+            cost: saved?.cost || "unknown",
+          },
+          metadataSource: "user",
+        });
+      });
 
     // Merge + dedupe by id (presets first)
     const merged = [...presetRecords, ...userAsRecords];
@@ -497,7 +448,7 @@ export default function ProviderControlsPanel({
       out.push(r);
     }
     return out;
-  }, [aiProvider, presetRecords, userModelIds]);
+  }, [aiProvider, presetRecords, userModelIds, userModels]);
 
   const filteredUserModels = useMemo(() => {
     if (filter === "All") return userModels;
@@ -1012,7 +963,9 @@ export default function ProviderControlsPanel({
               <div className="flex flex-col">
                 {suggestionRecords.map((r) => {
                   const isActive = normalizeModelId(aiModelStr) === r.id;
-                  const title = r.note ? r.note : "Use this model";
+                  const title = r.description
+                    ? r.description
+                    : "Use this model";
 
                   return (
                     <button
@@ -1031,15 +984,15 @@ export default function ProviderControlsPanel({
                         <span className="truncate">{r.id}</span>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <TierPill tier={r.tier} />
-                          <MetaPill title="Cost">
-                            {r.cost ? costLabel(r.cost) : ""}
-                          </MetaPill>
+                          <RelativeCostPill
+                            relativeCost={r.relativeCost}
+                          />
+                          <CapabilityPill label={r.capabilityLabel} />
                         </div>
                       </div>
-                      {r.note ? (
+                      {r.description ? (
                         <div className="mt-0.5 text-[11px] opacity-60">
-                          {r.note}
+                          {r.description}
                         </div>
                       ) : null}
                     </button>

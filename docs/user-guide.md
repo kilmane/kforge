@@ -618,7 +618,17 @@ KForge may show two planning paths:
 * **Free starter plan** — uses built-in starter guidance. No AI model call or AI credits are used. This is the default beginner path.
 * **AI-assisted app plan** — optional. Uses the current configured AI model and provider for a more detailed plan. Provider/API costs may apply, and quality depends on the selected model.
 
-For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, prefer **Recommended builder** or **High capability** presets from the Provider/Model list. **Light / Everyday**, **Weak / test only**, and **Custom / unverified** models are better for chat, planning, manual guidance, testing, or very small low-risk edits, and may produce malformed tools, poor code, loops, or incomplete edits.
+For normal app building, serious implementation, complex changes, multi-step
+logic, or work where correctness matters, choose a model labelled **Project
+builder**. Models labelled **Test-mode editing** can continue only through the
+guarded test-mode choice. **Chat and planning** models do not automatically edit
+projects, and **Unclassified** models cannot silently enter the normal builder
+route.
+
+The prompt area keeps **Working mode** visible. **Test mode** starts with a
+lower-cost approved test model where available. **Project builder** suggests an
+approved builder. You may choose a different model at any time; the working mode
+does not change that model's approved capability.
 
 The AI-assisted path is still planning-only. It should not edit files, request tools, preview, deploy, or claim anything was created.
 

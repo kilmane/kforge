@@ -25,4 +25,26 @@ describe("ProviderControlsPanel remote presets", () => {
       expect.arrayContaining(["aiProvider", "remotePresets"]),
     );
   });
+
+  test("waits for remote presets before validating a saved model", () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, "ProviderControlsPanel.jsx"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      'if (remotePresetsStatus === "loading") return;',
+    );
+    expect(source).toContain(
+      "remotePresets?.providers?.[aiProvider] || null",
+    );
+    expect(source).toContain(
+      "[aiProvider, remotePresets, remotePresetsStatus, setAiModel]",
+    );
+    expect(source).toContain("pendingRestoredModelRef.current = last");
+    expect(source).toContain("if (cur !== pendingRestore) return;");
+    expect(source).toContain(
+      "if (restoredForProviderRef.current !== aiProvider) return;",
+    );
+  });
 });

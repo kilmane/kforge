@@ -62,6 +62,15 @@ impl OpenAIProvider {
             _ => AiError::provider(format!("OpenAI HTTP {}: {}", status.as_u16(), msg)),
         }
     }
+    fn request_temperature<T>(model: &str, temperature: Option<T>) -> Option<T> {
+        let normalized_model = model.trim().to_ascii_lowercase();
+
+        if normalized_model == "gpt-5.6" || normalized_model.starts_with("gpt-5.6-") {
+            None
+        } else {
+            temperature
+        }
+    }
 }
 
 impl super::AiProvider for OpenAIProvider {
@@ -80,7 +89,7 @@ impl super::AiProvider for OpenAIProvider {
             input: Some(req.input.clone()),
             instructions: req.system.clone(),
             store: Some(false),
-            temperature: req.temperature,
+            temperature: Self::request_temperature(&req.model, req.temperature),
             top_p: None,
             max_output_tokens: req.max_output_tokens,
             // Tools are disabled for Phase 3.1.1 (text-only)
@@ -129,5 +138,34 @@ impl super::AiProvider for OpenAIProvider {
             output_text,
             usage,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OpenAIProvider;
+
+    #[test]
+    fn omits_temperature_for_gpt_5_6_models() {
+        for model in [
+            "gpt-5.6",
+            "gpt-5.6-luna",
+            "gpt-5.6-terra",
+            "gpt-5.6-sol",
+        ] {
+            assert_eq!(
+                OpenAIProvider::request_temperature(model, Some(0.2_f32)),
+                None,
+                "temperature should be omitted for {model}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_temperature_for_other_openai_models() {
+        assert_eq!(
+            OpenAIProvider::request_temperature("gpt-5.5", Some(0.2_f32)),
+            Some(0.2_f32)
+        );
     }
 }

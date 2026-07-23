@@ -2,126 +2,66 @@
 
 ---
 
-# Model Colour + Label System
+# Model Cost Colours and Capability Labels
 
-KForge uses a simple colour-based labelling system to help users quickly understand
-the expected cost, risk, and usage profile of a model.
+KForge shows two separate facts about a model:
 
-These labels are designed for human decision-making, not billing precision.
+1. **Relative cost**, shown by colour.
+2. **KForge workflow capability**, shown by a separate text label.
 
----
+A colour never grants or removes project-editing permission.
 
-## Label Overview
+## Relative cost colours
 
-| Label | Cost Meaning | Typical Use |
+| Colour | Label | Meaning |
 |---|---|---|
-| 🔵 Weak / test only | Free or rotating models | Testing / experimentation only |
-| 🟢 Light / Everyday | Low-cost or limited paid models | Light work / careful edits |
-| 🟡 Recommended builder | Builder-capable paid models | Default project work |
-| 🔴 High capability | Higher-capability models | Complex / critical tasks |
-| ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully |
+| 🔵 | Free | The route is known to have no direct model charge; provider limits may still apply |
+| 🟢 | Lower relative cost | Broadly lower-cost than the other curated choices |
+| 🟡 | Medium relative cost | Broadly mid-range among the curated choices |
+| 🔴 | Higher relative cost | Broadly higher-cost among the curated choices |
+| ⚪ | Cost unknown | KForge does not have enough trusted cost information |
 
----
+These are KForge-created relative categories, not live provider prices. Check the
+provider dashboard for actual charges, limits, and free-tier rules.
 
-## 🔵 Weak / test only
+## Workflow capability labels
 
-### Meaning
-- No billing required
-- Provider-controlled limits
-- Often rate-limited or capability-capped
+| Label | Meaning |
+|---|---|
+| **Project builder** | Approved for KForge's normal app-building and project-editing route |
+| **Test-mode editing** | May edit only through KForge's existing guarded/test-mode choice |
+| **Chat and planning** | Intended for questions, plans, explanations, and manual guidance; no automatic project editing |
+| **Unclassified** | KForge has not approved this exact provider/model pair for a workflow capability |
 
-### Usage
-- Suitable for low-risk testing
-- Useful for quick checks, learning, and non-critical prompts
-- Not reliable for real project builds
+Cost and capability can be combined in different ways:
 
----
+- `gpt-5.6-luna` — 🟢 Lower relative cost · Test-mode editing
+- `gpt-5.6-terra` — 🟡 Medium relative cost · Project builder
+- `gpt-5.6-sol` — 🔴 Higher relative cost · Project builder
+- an unknown manual model — ⚪ Cost unknown · Unclassified
 
-## 🟢 Light / Everyday
+## New and replacement models
 
-### Meaning
-- Lower-cost paid route
-- Low per-request cost
-- Limited capability compared with builder-focused models
+Remote presets may supply a new model's exact ID, description, relative cost,
+and menu order. They do not automatically grant Project builder permission.
 
-### Usage
-- Suitable for light work and careful iteration
-- Not recommended for important project edits
-- Guarded use only
+Until KForge contains an approved capability entry for the exact provider/model
+pair, the model is shown as **Unclassified** and cannot silently enter the
+normal builder route. A replacement model does not inherit capability or cost
+from a retired model merely because its name looks related.
 
-**Examples:**
-- `gpt-5.6-luna`
-- `claude-haiku-4-5`
+## Working mode
 
-**Tooltip:**
-Lower-cost or limited model. Suitable for light work and careful edits.
+The prompt area shows a separate **Working mode** control:
 
----
+- **Test mode** suggests the provider's approved Test-mode model.
+- **Project builder** suggests an approved Project builder where the provider
+  has one.
 
-## 🟡 Recommended builder
+The user may still choose a different model. Selecting a Project builder in Test
+mode is allowed and produces a cost reminder. Selecting a guarded or
+Unclassified model in Project builder mode does not upgrade it; the normal
+capability gate remains active.
 
-### Meaning
-- Paid
-- Reasonably priced
-- Balanced capability vs cost
-
-### Usage
-- Default development work
-- Your normal project-work option
-- Be mindful, not paranoid
-
-**Examples:**
-- `gpt-5.6-terra`
-- `claude-sonnet-5`
-
-**Tooltip:**
-Balanced paid model for daily development.
-
----
-
-## 🔴 High capability
-
-### Meaning
-- Higher-cost or higher-capability route
-- Stronger reasoning and coding capability
-- Optimised for quality, not volume
-
-### Usage
-- Complex reasoning
-- Accuracy-critical tasks
-- Think before spamming
-
-**Examples:**
-- `gpt-5.6-sol`
-- `claude-opus-4-8`
-
-**Tooltip:**
-Higher-capability model. Use for complex or accuracy-sensitive tasks.
-
----
-
-## ⚪ Custom / unverified
-
-### Meaning
-- Provider-dependent or unclear model quality
-- Custom endpoints
-- Gateway- or provider-dependent
-
-### Usage
-- Review carefully before use
-- Treat as user-managed and unverified unless KForge explicitly curates it
-
----
-
-## Important Notes
-
-- These labels are **informational only**
-- Billing, limits, and availability are determined by the provider
-- Users assign labels manually per model
-- Labels describe expected usage patterns, not guarantees
-
-KForge does not enforce cost or block usage.
-The goal is clarity, not restriction.
----
-
-[← Docs home](index.md)
+KForge does not rewrite provider model IDs, determine provider billing, or
+weaken write approval and path-safety safeguards based on these labels.

@@ -23,6 +23,13 @@ import { buildAppBuildDesignDnaPrompt } from "./ai/appBuild/appBuildDesignDna";
 
 
 import { MODEL_PRESETS } from "./ai/modelPresets";
+import {
+  KFORGE_WORKING_MODES,
+  NEW_USER_MODEL_SELECTION,
+  getProviderFallbackModelId,
+  getWorkingModeDefaultModelId,
+} from "./ai/modelRegistry";
+import { fetchRemotePresetsV0WithCache } from "./ai/remotePresets";
 import { getModelWorkflowPolicy } from "./ai/modelWorkflowPolicy";
 import {
   buildCompletedWorkflowChangeSummary,
@@ -403,6 +410,46 @@ const ALL_PROVIDERS = [
 
 // Phase 3.4.4 context window
 const CHAT_CONTEXT_TURNS = 8;
+const LAST_PROVIDER_STORAGE_KEY = "kforge.lastProvider.v1";
+const WORKING_MODE_STORAGE_KEY = "kforge.workingMode.v1";
+
+function loadLastProvider() {
+  try {
+    const saved = String(
+      window.localStorage.getItem(LAST_PROVIDER_STORAGE_KEY) || "",
+    )
+      .trim()
+      .toLowerCase();
+    return ALL_PROVIDERS.some((provider) => provider.id === saved)
+      ? saved
+      : NEW_USER_MODEL_SELECTION.providerId;
+  } catch {
+    return NEW_USER_MODEL_SELECTION.providerId;
+  }
+}
+
+function loadWorkingMode() {
+  try {
+    const saved = String(
+      window.localStorage.getItem(WORKING_MODE_STORAGE_KEY) || "",
+    ).trim();
+    return Object.values(KFORGE_WORKING_MODES).includes(saved)
+      ? saved
+      : NEW_USER_MODEL_SELECTION.workingMode;
+  } catch {
+    return NEW_USER_MODEL_SELECTION.workingMode;
+  }
+}
+
+function loadLastModel(providerId) {
+  try {
+    return String(
+      window.localStorage.getItem(`kforge.lastModel.${providerId}`) || "",
+    ).trim();
+  } catch {
+    return "";
+  }
+}
 
 function buttonClass(variant = "primary", disabled = false) {
   const base =
@@ -472,15 +519,7 @@ function modelPlaceholder(providerId) {
 }
 
 function defaultModelIdForProvider(providerId) {
-  const presets = MODEL_PRESETS?.[providerId] || [];
-  const selected =
-    presets.find((preset) => preset && typeof preset === "object" && preset.tier === "main") ||
-    presets.find((preset) => preset && typeof preset === "object" && preset.tier === "heavy") ||
-    presets[0];
-
-  if (!selected) return "";
-  if (typeof selected === "string") return selected;
-  return selected.id || "";
+  return getProviderFallbackModelId(providerId);
 }
 
 function modelHelperText(providerId) {
@@ -488,12 +527,12 @@ function modelHelperText(providerId) {
 
   const legend =
     "\n\n" +
-    "Model quality guide:\n" +
-    "Light / Everyday — chat, planning, quick checks, and very small low-risk edits\n" +
-    "Weak / test only — demos, safety testing, and non-critical experiments only\n" +
-    "Recommended builder — default for normal project work\n" +
-    "High capability — serious or important implementation, complex changes, and correctness-sensitive work\n" +
-    "Custom / unverified — user-managed model; KForge cannot verify reliability";
+    "Model guide:\n" +
+    "Cost colours — green lower, amber medium, red higher, neutral unknown\n" +
+    "Project builder — approved for normal project implementation\n" +
+    "Test-mode editing — guarded experiments and carefully supervised edits\n" +
+    "Chat and planning — no automatic project editing\n" +
+    "Unclassified — exact model capability has not been approved by KForge";
 
   if (providerId === "openrouter") {
     return (
@@ -1162,22 +1201,7 @@ function isModelCapabilityGatePolicy(modelWorkflowPolicy = null) {
 }
 
 function getModelCapabilityGateLabel(modelWorkflowPolicy = null) {
-  const mode = modelWorkflowPolicy?.mode || "unknown";
-  const tier = modelWorkflowPolicy?.tier || "unknown";
-
-  if (mode === "advisory_only" || tier === "free") {
-    return "Weak / test only";
-  }
-
-  if (tier === "sandbox") {
-    return "Light / Everyday";
-  }
-
-  if (tier === "unknown") {
-    return "Custom / unverified";
-  }
-
-  return "guarded or tool-unverified";
+  return modelWorkflowPolicy?.capabilityLabel || "Unclassified";
 }
 
 function buildModelCapabilityGateMessage(modelWorkflowPolicy = null) {
@@ -1187,8 +1211,8 @@ function buildModelCapabilityGateMessage(modelWorkflowPolicy = null) {
     "Model Reminder\n\n" +
     "!! Check/use a capable model now !!\n\n" +
     "You are about to start automatic project editing.\n\n" +
-    `The selected model is treated as ${label} for KForge project editing. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.\n\n` +
-    "Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits. They may produce poor code, malformed tool calls, incomplete edits, loops, or broken app logic.\n\n" +
+    `The selected model is classified as ${label}. For normal app building, important implementation, complex changes, multi-step logic, or correctness-sensitive work, use a model labelled Project builder.\n\n` +
+    "Test-mode editing, Chat and planning, and Unclassified models do not silently enter the normal builder route. They may produce poor code, malformed tool calls, incomplete edits, loops, or broken app logic.\n\n" +
     "Choose:\n" +
     "- Switch model first\n" +
     "- Continue in test mode\n" +
@@ -1666,10 +1690,44 @@ export default function App() {
   const [aiPanelWide, setAiPanelWide] = useState(false);
 
   // AI state
-  const [aiProvider, setAiProvider] = useState("openai");
-  const [aiModel, setAiModel] = useState("");
+  const [aiProvider, setAiProvider] = useState(loadLastProvider);
+  const [aiModel, setAiModel] = useState(() => loadLastModel(aiProvider));
+  const [workingMode, setWorkingMode] = useState(loadWorkingMode);
+  const [remotePresets, setRemotePresets] = useState(null);
+  const [remotePresetsStatus, setRemotePresetsStatus] = useState("loading");
 
   const [endpoints, setEndpoints] = useState({}); // providerId -> string
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAST_PROVIDER_STORAGE_KEY, aiProvider);
+    } catch {
+      // Keep provider selection usable when storage is unavailable.
+    }
+  }, [aiProvider]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WORKING_MODE_STORAGE_KEY, workingMode);
+    } catch {
+      // Keep working-mode selection usable when storage is unavailable.
+    }
+  }, [workingMode]);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const loaded = await fetchRemotePresetsV0WithCache();
+      if (!alive) return;
+      setRemotePresets(loaded);
+      setRemotePresetsStatus(loaded ? "ready" : "fallback");
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [aiSystem, setAiSystem] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1834,13 +1892,24 @@ export default function App() {
   );
 
 
+  const activeRemotePreset = useMemo(() => {
+    const records = remotePresets?.providers?.[aiProvider];
+    if (!Array.isArray(records)) return null;
+    const model = String(aiModel || "").trim();
+    return (
+      records.find((record) => String(record?.id || "").trim() === model) ||
+      null
+    );
+  }, [aiModel, aiProvider, remotePresets]);
+
   const displayModelWorkflowPolicy = useMemo(
     () =>
       getModelWorkflowPolicy({
         providerId: aiProvider,
         modelId: aiModel,
+        presetRecord: activeRemotePreset,
       }),
-    [aiProvider, aiModel],
+    [activeRemotePreset, aiProvider, aiModel],
   );
   const openSettings = useCallback((focusProviderId = null, msg = "") => {
     setSettingsFocusProviderId(focusProviderId);
@@ -1870,7 +1939,9 @@ export default function App() {
     refreshHasKeys();
   }, [refreshHasKeys]);
 
-  // Auto-fill model if empty (only for preset-driven providers)
+  // Auto-fill only when no valid saved/current model is present. The new-user
+  // Test mode starts economically; provider switching still has its own
+  // provider fallback and returning users are restored by the model panel.
   useEffect(() => {
     if (manualModelProviders(aiProvider)) return;
 
@@ -1881,11 +1952,13 @@ export default function App() {
     setAiModel((cur) => {
       const trimmed = String(cur || "").trim();
       if (trimmed) return cur;
-      return defaultModelIdForProvider(aiProvider);
+      return (
+        getWorkingModeDefaultModelId(aiProvider, workingMode) ||
+        defaultModelIdForProvider(aiProvider)
+      );
     });
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiProvider]);
+  }, [aiProvider, workingMode]);
   const handleRefreshTree = useCallback(async () => {
     if (!projectPath) {
       setAiTestOutput("No folder open.");
@@ -2641,6 +2714,46 @@ export default function App() {
       }
     },
     [aiProvider, isProviderEnabled, openSettings, hasKey, endpoints],
+  );
+
+  const handleWorkingModeChange = useCallback(
+    (nextMode) => {
+      if (!Object.values(KFORGE_WORKING_MODES).includes(nextMode)) return;
+
+      setWorkingMode(nextMode);
+      const suggestedModel = getWorkingModeDefaultModelId(
+        aiProvider,
+        nextMode,
+      );
+      const providerLabel =
+        ALL_PROVIDERS.find((provider) => provider.id === aiProvider)?.label ||
+        aiProvider;
+
+      if (suggestedModel) {
+        setAiModel(suggestedModel);
+        try {
+          window.localStorage.setItem(
+            `kforge.lastModel.${aiProvider}`,
+            suggestedModel,
+          );
+        } catch {
+          // Keep working-mode selection usable when storage is unavailable.
+        }
+        setProviderSwitchNote(
+          nextMode === KFORGE_WORKING_MODES.TEST
+            ? `Test mode selected — ${providerLabel} / ${suggestedModel} is ready for lower-cost experiments.`
+            : `Project builder mode selected — ${providerLabel} / ${suggestedModel} is ready for normal app building.`,
+        );
+        return;
+      }
+
+      setProviderSwitchNote(
+        nextMode === KFORGE_WORKING_MODES.PROJECT_BUILDER
+          ? `${providerLabel} has no KForge-approved Project builder preset. Your current model was kept; choose an approved Project builder before normal implementation.`
+          : `${providerLabel} has no curated Test mode preset. Your current model was kept.`,
+      );
+    },
+    [aiProvider],
   );
 
   const providerStatus = useMemo(
@@ -3677,7 +3790,7 @@ export default function App() {
 
     return (
       "This current model is being used in a safer chat mode to keep KForge reliable.\n\n" +
-      "For direct project edits, switch to a curated Recommended builder or High capability preset first.\n\n" +
+      "For direct project edits, switch to an approved Project builder preset first.\n\n" +
       "I can still explain the plan or give manual steps in chat instead."
     );
   }, []);
@@ -3717,7 +3830,7 @@ export default function App() {
         buildSmartProviderSwitchMessage(promptTask, modelWorkflowPolicy) +
         "\n\n" +
         "Your previous project-edit request is still blocked by the selected model safety mode. " +
-        "You can switch to a curated Recommended builder or High capability preset, or ask for a plan/manual steps instead."
+        "You can switch to an approved Project builder preset, or ask for a plan/manual steps instead."
       );
     },
     [buildSmartProviderSwitchMessage],
@@ -5578,8 +5691,8 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                   appendMessage(
                     "assistant",
                     hasPendingAppBuildStep
-                      ? "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
-                      : "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                      ? "Switch to a Project builder model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
+                      : "Switch to a Project builder model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
                     hasPendingAppBuildStep
                       ? { actions: [resumeAction] }
                       : undefined,
@@ -7756,8 +7869,8 @@ setWorkflowContext({
                       "Model Reminder\n\n" +
                         "!! Check/use a capable model now !!\n\n" +
                         "You are about to start serious app implementation in the current project.\n\n" +
-                        "For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list. If you are already using one, you can continue.\n\n" +
-                        "Light / Everyday, Weak / test only, and Custom / unverified models are better for chat, planning, manual guidance, testing, or very small low-risk edits.",
+                        "For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list. If you are already using one, you can continue.\n\n" +
+                        "Test-mode editing, Chat and planning, and Unclassified models are better for chat, planning, manual guidance, testing, or very small low-risk edits.",
                       {
                         actions: [
                           {
@@ -7766,7 +7879,7 @@ setWorkflowContext({
                               appendMessage("user", "Choice: Switch model first");
                               appendMessage(
                                 "assistant",
-                                "Choose a Recommended builder or High capability model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
+                                "Choose a Project builder model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
                               );
                             },
                           },
@@ -8493,8 +8606,8 @@ setWorkflowContext({
                   appendMessage(
                     "assistant",
                     hasPendingAppBuildStep
-                      ? "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
-                      : "Switch to a Recommended builder or High capability model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                      ? "Switch to a Project builder model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
+                      : "Switch to a Project builder model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
                     hasPendingAppBuildStep
                       ? { actions: [resumeAction] }
                       : undefined,
@@ -8983,7 +9096,7 @@ setWorkflowContext({
               "No files were changed." +
               malformedToolNote +
               "\n\nThis often happens with weak, custom, unverified, or tool-unreliable models.\n\n" +
-              "Recommended: switch to a Recommended builder or High capability model from the Provider/Model preset list."
+              "Recommended: switch to a Project builder model from the Provider/Model preset list."
             : "The model did not produce a usable KForge tool request.\n\n" +
               "No files were changed." +
               malformedToolNote +
@@ -9178,7 +9291,7 @@ setWorkflowContext({
                 appendMessage(
                   "assistant",
                   `The likely app file (${likelyAppInspectPath}) was already inspected, but the model still did not produce a usable file-change request.\n\n` +
-                    "Switch to a Recommended builder or High capability model, then retry the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
+                    "Switch to a Project builder model, then retry the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
                     "No files were changed.",
                 );
               },
@@ -9194,7 +9307,7 @@ setWorkflowContext({
                 appendMessage(
                   "assistant",
                   "Switch model first.\n\n" +
-                    "Use a Recommended builder or High capability model from the Provider/Model preset list, then resend the request.\n\n" +
+                    "Use a Project builder model from the Provider/Model preset list, then resend the request.\n\n" +
                     "No files were changed.",
                 );
               },
@@ -9334,7 +9447,7 @@ setWorkflowContext({
                     if (shouldUseControlledAppBuildFromBlueprint) {
                       appendMessage(
                         "assistant",
-                        "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.",
+                        "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list.",
                         {
                           actions: [
                             {
@@ -9343,7 +9456,7 @@ setWorkflowContext({
                                 appendMessage("user", "Choice: Switch model first");
                                 appendMessage(
                                   "assistant",
-                                  "Choose a Recommended builder or High capability model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
+                                  "Choose a Project builder model from the Provider/Model preset list, then click Continue implementation here. If you were already using one, you can simply continue. No files have been changed.",
                                 );
                               },
                             },
@@ -9466,7 +9579,7 @@ setWorkflowContext({
                       return;
                     }
 
-                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Start implementation from the approved plan.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -9487,7 +9600,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.REFINE_BLUEPRINT,
                   onClick: () => {
                     appendMessage("user", "Choice: Refine blueprint");
-                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Refine the previous feature blueprint for better app-building reliability.\n\n" +
                         `Original feature request: ${draft}\n\n` +
@@ -9509,7 +9622,7 @@ setWorkflowContext({
                   label: SUGGESTED_ACTION_LABEL.INSPECT_FIRST,
                   onClick: () => {
                     appendMessage("user", "Choice: Inspect first");
-                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.");
+                    appendMessage("assistant", "Model reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list.");
                     sendWithPrompt(
                       "Controlled project inspection pass.\n\n" +
                         `Original user request: ${draft}\n\n` +
@@ -9829,8 +9942,12 @@ setWorkflowContext({
       disabledProviderMessage={disabledProviderMessage}
       aiModel={aiModel}
       setAiModel={setAiModel}
+      workingMode={workingMode}
+      onWorkingModeChange={handleWorkingModeChange}
       modelPlaceholder={modelPlaceholder}
       modelSuggestions={modelSuggestions}
+      remotePresets={remotePresets}
+      remotePresetsStatus={remotePresetsStatus}
       showModelHelper={showModelHelper}
       modelHelperText={modelHelperText}
       messages={messages}

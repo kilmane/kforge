@@ -23,30 +23,32 @@ Review basis for this snapshot:
 - [Mistral models](https://docs.mistral.ai/models/overview)
 - [Ollama model library](https://ollama.com/library)
 
-Cost is represented by color labels, and usage is represented separately.
+Relative cost is represented by colour, and KForge workflow capability is
+represented separately.
 
 Legend:
 - 🔵 Free
-- 🟢 Paid
-- 🟡 Paid
-- 🔴 Paid
-- ⚪ Unknown
+- 🟢 Lower relative cost
+- 🟡 Medium relative cost
+- 🔴 Higher relative cost
+- ⚪ Cost unknown
 
-Usage:
-- Light / Everyday — light work, careful edits, quick iterations
-- Recommended builder — default day-to-day project work
-- High capability — stronger option for complex or critical tasks; use carefully
+Capability:
+- Project builder — approved for normal app building and project editing
+- Test-mode editing — guarded experiments and supervised edits
+- Chat and planning — no automatic project editing
+- Unclassified — no approved capability for the exact provider/model pair
 
 ---
 
 ## Claude
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| claude-fable-5 | 🔴 Paid | High capability | Anthropic's highest-capability widely available model |
-| claude-opus-4-8 | 🔴 Paid | High capability | Complex agentic coding and enterprise work |
-| claude-sonnet-5 | 🟡 Paid | Recommended builder | Current balanced option for speed and intelligence |
-| claude-haiku-4-5 | 🟢 Paid | Light / Everyday | Fast lightweight option for small guarded tasks |
+| claude-fable-5 | 🔴 Higher | Project builder | Anthropic's highest-capability widely available model |
+| claude-opus-4-8 | 🔴 Higher | Project builder | Complex agentic coding and enterprise work |
+| claude-sonnet-5 | 🟡 Medium | Project builder | Current balanced option for speed and intelligence |
+| claude-haiku-4-5 | 🟢 Lower | Test-mode editing | Fast lightweight option for small guarded tasks |
 
 ✅ No free Claude — consistent with provider pricing.
 
@@ -54,13 +56,13 @@ Usage:
 
 ## Custom (OpenAI-compatible endpoints)
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| openrouter/free | 🔵 Free | Weak / test only | Router that selects currently available OpenRouter free models |
-| deepseek-v4-flash | ⚪ Unknown | Custom / unverified | Endpoint-dependent; paid on DeepSeek API |
-| openai/gpt-oss-20b | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
-| mistral-small-latest | ⚪ Unknown | Custom / unverified | Endpoint-dependent |
-| devstral-small-latest | ⚪ Unknown | Custom / unverified | Endpoint-dependent agentic coding model |
+| openrouter/free | 🔵 Free | Chat and planning | Router that selects currently available OpenRouter free models |
+| deepseek-v4-flash | ⚪ Unknown | Test-mode editing | Endpoint-dependent; paid on DeepSeek API |
+| openai/gpt-oss-20b | ⚪ Unknown | Test-mode editing | Endpoint-dependent |
+| mistral-small-latest | ⚪ Unknown | Test-mode editing | Endpoint-dependent |
+| devstral-small-latest | ⚪ Unknown | Test-mode editing | Endpoint-dependent agentic coding model |
 
 ⚪ Custom pricing depends on the exact endpoint you connect, not on KForge itself.
 
@@ -68,10 +70,10 @@ Usage:
 
 ## DeepSeek
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| deepseek-v4-pro | 🟡 Paid | Recommended builder | Stronger DeepSeek V4 option for reasoning and agentic work |
-| deepseek-v4-flash | 🟢 Paid | Light / Everyday | Fast DeepSeek V4 option for general chat and coding |
+| deepseek-v4-pro | 🟡 Medium | Test-mode editing | Stronger DeepSeek V4 option for reasoning and agentic work |
+| deepseek-v4-flash | 🟢 Lower | Test-mode editing | Fast DeepSeek V4 option for general chat and coding |
 
 ⚠ The legacy `deepseek-chat` and `deepseek-reasoner` aliases retire on 24 July 2026 and are no longer KForge presets.
 
@@ -79,11 +81,11 @@ Usage:
 
 ## Gemini (active + preview mix)
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| gemini-3.1-pro-preview | 🔴 Paid | High capability | High capability preview model; availability may change |
-| gemini-3.6-flash | 🟡 Paid | Recommended builder | Current stable Flash model for coding and agentic execution |
-| gemini-3.5-flash-lite | 🟢 Paid | Light / Everyday | Current low-latency option for guarded iterations |
+| gemini-3.1-pro-preview | 🔴 Higher | Project builder | High-capability preview model; availability may change |
+| gemini-3.6-flash | 🟡 Medium | Project builder | Current stable Flash model for coding and agentic execution |
+| gemini-3.5-flash-lite | 🟢 Lower | Test-mode editing | Current low-latency option for guarded iterations |
 
 ⚠ Google currently offers free-tier access for several Gemini API models, but labels here remain conservative KForge guidance rather than an exhaustive pricing promise for every account tier.
 
@@ -91,10 +93,10 @@ Usage:
 
 ## Groq
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| openai/gpt-oss-120b | 🟡 Paid | Recommended builder | Larger Groq production option for stronger reasoning and coding |
-| openai/gpt-oss-20b | 🟢 Paid | Light / Everyday | Fast lower-cost Groq production option |
+| openai/gpt-oss-120b | 🟡 Medium | Test-mode editing | Larger Groq production option for stronger reasoning and coding |
+| openai/gpt-oss-20b | 🟢 Lower | Test-mode editing | Fast lower-cost Groq production option |
 
 ⚠ Groq announced the previous Llama 3.1 8B and Llama 3.3 70B presets as deprecated in June 2026.
 
@@ -102,10 +104,10 @@ Usage:
 
 ## Mistral (Hosted)
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| devstral-small-latest | 🟡 Paid | Recommended builder | Agentic coding-focused model |
-| mistral-small-latest | 🟢 Paid | Light / Everyday | General starter |
+| devstral-small-latest | 🟡 Medium | Test-mode editing | Agentic coding-focused model |
+| mistral-small-latest | 🟢 Lower | Test-mode editing | General starter |
 
 ⚠ Exact hosted model aliases can evolve. Re-check provider docs when updating presets.
 
@@ -113,14 +115,14 @@ Usage:
 
 ## Ollama (Local)
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| gpt-oss:20b | 🔴 Paid* | High capability | Local reasoning and agentic model; substantial memory required |
-| devstral-small-2 | 🟡 Paid* | Recommended builder | Agentic coding; requires Ollama 0.13.3 or later |
-| qwen2.5-coder:7b | 🟡 Paid* | Recommended builder | Local |
-| qwen2.5-coder:1.5b | 🟢 Paid* | Light / Everyday | Very fast |
+| gpt-oss:20b | 🔴 Higher* | Test-mode editing | Local reasoning and agentic model; substantial memory required |
+| devstral-small-2 | 🟡 Medium* | Test-mode editing | Agentic coding; requires Ollama 0.13.3 or later |
+| qwen2.5-coder:7b | 🟡 Medium* | Test-mode editing | Local |
+| qwen2.5-coder:1.5b | 🟢 Lower* | Test-mode editing | Very fast |
 
-\* Paid refers to local hardware / energy cost, not API billing.
+\* Local relative cost refers to hardware and energy demand, not API billing.
 
 ---
 
@@ -132,9 +134,9 @@ In the current app, Ollama Cloud should be treated as a manual model-ID provider
 
 Example starter model ID:
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| gpt-oss:120b | ⚪ Unknown | Custom / unverified | Direct Ollama Cloud model ID example; verify availability in Ollama Cloud |
+| gpt-oss:120b | ⚪ Unknown | Unclassified | Direct Ollama Cloud model ID example; verify availability in Ollama Cloud |
 
 ⚠ Ollama Cloud availability, pricing, and model IDs may change. Re-check Ollama's current cloud model list before adding compiled presets.
 
@@ -142,19 +144,19 @@ Example starter model ID:
 
 ## OpenAI
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| gpt-5.6-sol | 🔴 Paid | High capability | Frontier model for complex professional and coding work |
-| gpt-5.6-terra | 🟡 Paid | Recommended builder | Balanced GPT-5.6 default for day-to-day development |
-| gpt-5.6-luna | 🟢 Paid | Light / Everyday | Cost-sensitive GPT-5.6 option for guarded quick checks |
+| gpt-5.6-sol | 🔴 Higher | Project builder | Frontier model for complex professional and coding work |
+| gpt-5.6-terra | 🟡 Medium | Project builder | Balanced GPT-5.6 option for day-to-day development |
+| gpt-5.6-luna | 🟢 Lower | Test-mode editing | New-user Test mode default for guarded quick checks |
 
 ---
 
 ## OpenRouter (highly volatile)
 
-| Model | Cost | Usage | Notes |
+| Model | Relative cost | Capability | Notes |
 |---|---|---|---|
-| openrouter/free | 🔵 Free | Weak / test only | Router that selects from currently available free models |
+| openrouter/free | 🔵 Free | Chat and planning | Router that selects from currently available free models |
 
 ⚠ OpenRouter free availability is not guaranteed and may change without notice.
 

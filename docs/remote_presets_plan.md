@@ -95,7 +95,11 @@ Call this schema **v0**.
 Once remote fetching is implemented and stable, KForge can migrate to schema **v1**, which separates:
 
 - `cost` (drives color label)
-- `usage` (internal values: `sandbox`, `main`, `heavy`; UI labels: Light / Everyday, Recommended builder, High capability)
+- `usage` (legacy remote ordering/presentation values: `sandbox`, `main`, `heavy`)
+
+The effective model registry now treats `usage` as presentation metadata only.
+It does not grant workflow capability. Project builder, Test-mode editing, Chat
+and planning, and Unclassified are decided by KForge's reviewed internal policy.
 
 Recommended rollout:
 1. Publish `presets.json` in v0 format (matches current code)
@@ -127,22 +131,22 @@ Recommended rollout:
 | cost value | UI meaning |
 |---|---|
 | free | 🔵 Free |
-| paid_sandbox | 🟢 Lower-cost paid |
-| paid_main | 🟡 Standard paid |
-| paid_heavy | 🔴 Higher-cost paid |
-| unknown | ⚪ Unknown |
+| paid_sandbox | 🟢 Lower relative cost |
+| paid_main | 🟡 Medium relative cost |
+| paid_heavy | 🔴 Higher relative cost |
+| unknown | ⚪ Cost unknown |
 
-### Usage enum (drives usage mode)
+### Usage enum (legacy ordering/presentation only)
 
 | usage value | UI meaning |
 |---|---|
-| sandbox | Light / Everyday |
-| main | Recommended builder |
-| heavy | High capability |
+| sandbox | lower-cost/light presentation slot |
+| main | middle presentation/default-order slot |
+| heavy | higher-cost/heavier presentation slot |
 
 Constraint:
 - `cost` and `usage` are separate on purpose.
-- Free routes should not be marketed as reliable builders; if kept, they should map to Weak / test only or guarded guidance.
+- Neither field may grant Project builder capability.
 
 ---
 
@@ -154,7 +158,7 @@ Constraint:
       "providers": {
         "openai": [
           { "id": "gpt-5.4-mini", "cost": "paid_main", "usage": "main", "note": "Day-to-day" },
-          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Light / Everyday / careful testing" }
+          { "id": "gpt-5.4-nano", "cost": "paid_sandbox", "usage": "sandbox", "note": "Lower-cost option for careful testing" }
         ],
         "openrouter": [
           {

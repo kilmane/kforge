@@ -143,12 +143,11 @@ Example:
 
 `gpt-oss:20b`
 
-### Standard paid / recommended builder
+### Medium relative cost
 
 Choose this for:
 
 * regular daily use
-* serious coding or writing tasks
 * models you expect to use often
 * cloud usage under a paid Ollama plan
 
@@ -160,7 +159,7 @@ Examples:
 
 `kimi-k2.6`
 
-### Higher-cost paid / high capability
+### Higher relative cost
 
 Choose this for:
 

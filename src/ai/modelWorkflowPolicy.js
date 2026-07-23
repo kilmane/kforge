@@ -1,5 +1,8 @@
 // src/ai/modelWorkflowPolicy.js
-import { MODEL_PRESETS } from "./modelPresets";
+import {
+  MODEL_CAPABILITIES,
+  getModelRegistryEntry,
+} from "./modelRegistry";
 
 /**
  * Phase 6.5 — Smart Provider Switching
@@ -43,6 +46,7 @@ export const MODEL_TASK_KINDS = Object.freeze({
 const MODE = MODEL_WORKFLOW_PERMISSION_MODES;
 const BAND = MODEL_WORKFLOW_CAPABILITY_BANDS;
 const TASK = MODEL_TASK_KINDS;
+const CAPABILITY = MODEL_CAPABILITIES;
 
 function normalize(value) {
   return String(value || "")
@@ -69,79 +73,10 @@ function uniqueList(values = []) {
   return out;
 }
 
-function presetToRecord(item) {
-  if (typeof item === "string") {
-    const id = String(item || "").trim();
-    return id ? { id, tier: "unknown" } : null;
-  }
-
-  if (!item || typeof item !== "object") return null;
-
-  const id = String(item.id || "").trim();
-  if (!id) return null;
-
-  return {
-    id,
-    tier: normalizeTier(item.tier),
-    usage: typeof item.usage === "string" ? item.usage.trim() : "",
-    cost: typeof item.cost === "string" ? item.cost.trim() : "",
-  };
-}
-
-function findPresetRecord(providerId, modelId) {
-  const provider = normalize(providerId);
-  const model = String(modelId || "").trim();
-  const presets = Array.isArray(MODEL_PRESETS?.[provider])
-    ? MODEL_PRESETS[provider]
-    : [];
-
-  for (const item of presets) {
-    const record = presetToRecord(item);
-    if (!record) continue;
-    if (record.id === model) return record;
-  }
-
-  return null;
-}
-
-function isKnownFreeRoute(providerId, modelId) {
-  const provider = normalize(providerId);
-  const model = normalize(modelId);
-
-  return (
-    model === "openrouter/free" ||
-    (provider === "openrouter" && model.endsWith(":free"))
-  );
-}
-
-function inferTier(providerId, modelId) {
-  const record = findPresetRecord(providerId, modelId);
-  if (record?.tier) return normalizeTier(record.tier);
-
-  if (isKnownFreeRoute(providerId, modelId)) return "free";
-
-  return "unknown";
-}
-
 function isStableFirstPartyProvider(providerId) {
   const provider = normalize(providerId);
 
   return provider === "openai" || provider === "claude" || provider === "gemini";
-}
-
-function isGuardedRuntimeProvider(providerId) {
-  const provider = normalize(providerId);
-
-  return (
-    provider === "openrouter" ||
-    provider === "custom" ||
-    provider === "groq" ||
-    provider === "deepseek" ||
-    provider === "mistral" ||
-    provider === "ollama" ||
-    provider === "lmstudio" ||
-    provider === "ollama_cloud"
-  );
 }
 
 function isLocalExperimentalProvider(providerId) {
@@ -178,6 +113,7 @@ function buildPolicy({
   reason,
   tier,
   providerId,
+  registryEntry = null,
   recommendedTaskKinds = [],
   notRecommendedTaskKinds = [],
   userHint = "",
@@ -193,6 +129,10 @@ function buildPolicy({
     forcePatchPreview,
     reason,
     tier,
+    capability: registryEntry?.capability || CAPABILITY.UNCLASSIFIED,
+    capabilityLabel: registryEntry?.capabilityLabel || "Unclassified",
+    relativeCost: registryEntry?.relativeCost || "unknown",
+    relativeCostLabel: registryEntry?.relativeCostLabel || "Cost unknown",
 
     // Phase 6.5 additive fields for later UI/routing.
     allowDirectFileWrites: allowToolCalls,
@@ -207,17 +147,28 @@ function buildPolicy({
   };
 }
 
-export function getModelWorkflowPolicy({ providerId, modelId }) {
+export function getModelWorkflowPolicy({
+  providerId,
+  modelId,
+  presetRecord = null,
+}) {
   const provider = normalize(providerId);
-  const model = normalize(modelId);
-  const tier = inferTier(provider, modelId);
+  const registryEntry = getModelRegistryEntry({
+    providerId,
+    modelId,
+    presetRecord,
+    metadataSource: presetRecord ? "remote" : "",
+  });
+  const tier = normalizeTier(registryEntry.tier);
+  const capability = registryEntry.capability;
 
-  if (provider === "mock" || isKnownFreeRoute(provider, model) || tier === "free") {
+  if (capability === CAPABILITY.CHAT_AND_PLANNING) {
     return buildPolicy({
       mode: MODE.ADVISORY_ONLY,
       reason: "low_reliability_route",
       tier,
       providerId: provider,
+      registryEntry,
       recommendedTaskKinds: [
         TASK.SIMPLE_QA,
         TASK.MANUAL_STEPS,
@@ -230,58 +181,17 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Weak / test only: useful for chat, planning, manual guidance, demos, and safety testing. Not reliable for serious or important implementation, complex changes, multi-step logic, or work where correctness matters; switch to a Recommended builder or High capability preset.",
+        "Chat and planning: useful for questions, plans, manual guidance, demos, and safety testing. This model is not approved for automatic project editing; switch to a Project builder for normal implementation.",
     });
   }
 
-  if (isStableFirstPartyProvider(provider)) {
-    if (tier === "sandbox") {
-      return buildPolicy({
-        mode: MODE.GUARDED_EDIT,
-        reason: "guarded_runtime",
-        tier,
-        providerId: provider,
-        recommendedTaskKinds: [
-          TASK.SIMPLE_QA,
-          TASK.MANUAL_STEPS,
-          TASK.PLANNING,
-        ],
-        notRecommendedTaskKinds: [
-          TASK.PROJECT_EDIT,
-          TASK.BROKEN_PREVIEW_DEBUG,
-          TASK.MULTI_FILE_REFACTOR,
-        ],
-        userHint:
-          "Light / Everyday: usable for chat, planning, explanations, quick checks, and very small low-risk edits. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability preset.",
-      });
-    }
-
-    if (tier === "unknown") {
-      return buildPolicy({
-        mode: MODE.GUARDED_EDIT,
-        reason: "unverified_model_id",
-        tier,
-        providerId: provider,
-        recommendedTaskKinds: [
-          TASK.SIMPLE_QA,
-          TASK.MANUAL_STEPS,
-          TASK.PLANNING,
-        ],
-        notRecommendedTaskKinds: [
-          TASK.PROJECT_EDIT,
-          TASK.BROKEN_PREVIEW_DEBUG,
-          TASK.MULTI_FILE_REFACTOR,
-        ],
-        userHint:
-          "Custom / unverified: this model is not in the curated Provider/Model preset list, so KForge cannot verify its coding or tool-call reliability. Treat it cautiously; for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability preset.",
-      });
-    }
-
+  if (capability === CAPABILITY.PROJECT_BUILDER) {
     return buildPolicy({
       mode: MODE.FULL_AGENT,
       reason: "trusted_runtime",
       tier,
       providerId: provider,
+      registryEntry,
       recommendedTaskKinds: [
         TASK.SIMPLE_QA,
         TASK.MANUAL_STEPS,
@@ -291,20 +201,17 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
       ],
       notRecommendedTaskKinds: [],
       userHint:
-        "Recommended builder / High capability route: suitable for normal project work, while KForge write approval, path safety, and recovery guards still apply.",
+        "Project builder: approved for normal project work. KForge write approval, path safety, and recovery safeguards still apply.",
     });
   }
 
-  if (
-    isGuardedRuntimeProvider(provider) ||
-    tier === "sandbox" ||
-    tier === "unknown"
-  ) {
+  if (capability === CAPABILITY.TEST_MODE_EDITING) {
     return buildPolicy({
       mode: MODE.GUARDED_EDIT,
       reason: "guarded_runtime",
       tier,
       providerId: provider,
+      registryEntry,
       recommendedTaskKinds: [
         TASK.SIMPLE_QA,
         TASK.MANUAL_STEPS,
@@ -314,24 +221,29 @@ export function getModelWorkflowPolicy({ providerId, modelId }) {
         TASK.MULTI_FILE_REFACTOR,
       ],
       userHint:
-        "Caution: this provider/model should use Patch Preview or guidance before direct writes. For serious or important implementation, complex changes, multi-step logic, or work where correctness matters, switch to a Recommended builder or High capability preset.",
+        "Test-mode editing: suitable for lower-cost experiments, quick checks, and carefully supervised edits. For normal app building or important implementation, switch to a Project builder.",
     });
   }
 
   return buildPolicy({
-    mode: MODE.FULL_AGENT,
-    reason: "trusted_runtime",
+    mode: MODE.GUARDED_EDIT,
+    reason: isStableFirstPartyProvider(provider)
+      ? "unverified_model_id"
+      : "guarded_runtime",
     tier,
     providerId: provider,
+    registryEntry,
     recommendedTaskKinds: [
       TASK.SIMPLE_QA,
       TASK.MANUAL_STEPS,
+      TASK.PLANNING,
+    ],
+    notRecommendedTaskKinds: [
       TASK.PROJECT_EDIT,
       TASK.BROKEN_PREVIEW_DEBUG,
       TASK.MULTI_FILE_REFACTOR,
     ],
-    notRecommendedTaskKinds: [],
     userHint:
-      "This model is suitable for direct project edits, with KForge write guards still active.",
+      "Unclassified: KForge has no approved capability record for this exact provider/model ID. It cannot silently use the normal Project builder route; continue only through the guarded test-mode choice.",
   });
 }

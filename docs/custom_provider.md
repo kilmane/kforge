@@ -241,7 +241,7 @@ Before using it, check the provider’s own documentation for:
 If that provider later becomes first-class in KForge, prefer the built-in provider unless you specifically need custom routing.
 
 ---
-## Cost labels and usage modes (important)
+## Relative cost and workflow capability (important)
 
 KForge uses two separate ideas:
 
@@ -249,26 +249,28 @@ KForge uses two separate ideas:
 
 - **Free**
   - no billing required on that route / tier
-- **Lower-cost paid**
-  - lower-cost paid usage
-- **Standard paid**
-  - standard paid usage
-- **Higher-cost paid**
-  - higher-cost paid usage
-- **Unknown**
+- **Lower relative cost**
+  - broad KForge-created lower-cost category
+- **Medium relative cost**
+  - broad KForge-created medium-cost category
+- **Higher relative cost**
+  - broad KForge-created higher-cost category
+- **Cost unknown**
   - pricing unclear or provider-dependent
 
-### Usage modes
+### Workflow capability
 
-- **Light / Everyday**
-  - chat, planning, quick checks, or very small low-risk edits
-- **Recommended builder**
-  - recommended default models for normal project work
-- **High capability**
-  - higher-capability models for serious or important implementation, complex changes, multi-step logic, or work where correctness matters
+- **Project builder**
+  - exact provider/model pair approved for normal project work
+- **Test-mode editing**
+  - guarded experiments and supervised edits
+- **Chat and planning**
+  - no automatic project editing
+- **Unclassified**
+  - the exact provider/model pair has no approved capability entry
 
-For Custom endpoints, **you are the source of truth**.
-KForge provides organisational hints, not guarantees.
+For Custom endpoints, you remain the source of truth for cost and availability.
+KForge does not infer builder permission from a model name, price, or endpoint.
 
 ---
 

@@ -339,17 +339,21 @@ For local providers, make sure the local app or server is running before testing
 
 ---
 
-## KForge model label reminder
+## KForge model-label reminder
 
-KForge model labels are guidance, not enforcement.
+Colour shows relative cost only:
 
-| Label             | Meaning                       | Typical use                 |
-| ----------------- | ----------------------------- | --------------------------- |
-| 🔵 Weak / test only | Free or no-billing route      | Testing and experimentation only |
-| 🟢 Light / Everyday | Low-cost or limited paid model | Light work and careful edits |
-| 🟡 Recommended builder | Builder-capable paid model | Default project work |
-| 🔴 High capability | Higher-capability model       | Complex or critical tasks   |
-| ⚪ Custom / unverified | Provider-dependent or unclear | Review carefully before use |
+| Colour | Cost guidance |
+|---|---|
+| 🔵 | Free route where genuinely known |
+| 🟢 | Lower relative cost |
+| 🟡 | Medium relative cost |
+| 🔴 | Higher relative cost |
+| ⚪ | Cost unknown |
+
+Capability is shown separately as **Project builder**, **Test-mode editing**,
+**Chat and planning**, or **Unclassified**. Cost never determines whether a
+model can use KForge's normal builder route.
 
 ---
 

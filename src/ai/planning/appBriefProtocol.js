@@ -158,7 +158,7 @@ function buildModelAdviceForBrief(folderState = {}) {
     "Some models are better at harder coding tasks than others.\n\n" +
     "Use a stronger model for login, accounts, databases, mobile apps, full-stack apps, or complex builds.\n" +
     "Use a smaller model only for planning, simple questions, or light help.\n\n" +
-    "Models marked as Weak / test only, or models you added yourself, are not recommended for automatic building because they may produce poor code.\n\n" +
+    "Models labelled Chat and planning or Unclassified, are not recommended for automatic building because they may produce poor code.\n\n" +
     "KForge can help you get started for free by creating the right project template. No AI credits will be used.\n\n" +
     "For other app types, KForge may recommend:\n" +
     "- Static HTML/CSS/JS for simple websites and landing pages.\n" +

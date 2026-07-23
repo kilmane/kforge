@@ -13,6 +13,7 @@ import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import PromptPanel from "./PromptPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
+import { KFORGE_WORKING_MODES } from "../modelRegistry.js";
 
 import { runToolCall } from "../tools/toolRuntime.js";
 import {
@@ -2123,6 +2124,90 @@ function HelpMenuPlaceholder({ invoke }) {
     </div>
   );
 }
+
+function WorkingModeControl({
+  workingMode,
+  onWorkingModeChange,
+  aiModel,
+  modelWorkflowPolicy,
+}) {
+  const capability = modelWorkflowPolicy?.capability || "unclassified";
+  const capabilityLabel =
+    modelWorkflowPolicy?.capabilityLabel || "Unclassified";
+  const relativeCost = modelWorkflowPolicy?.relativeCost || "unknown";
+  const relativeCostLabel =
+    modelWorkflowPolicy?.relativeCostLabel || "Cost unknown";
+  const modelId = String(aiModel || "").trim() || "No model selected";
+  const costDotClass =
+    relativeCost === "free"
+      ? "bg-sky-400"
+      : relativeCost === "lower"
+        ? "bg-emerald-400"
+        : relativeCost === "medium"
+          ? "bg-yellow-400"
+          : relativeCost === "higher"
+            ? "bg-rose-400"
+            : "bg-zinc-500";
+  const mismatchMessage =
+    workingMode === KFORGE_WORKING_MODES.TEST &&
+    capability === "project_builder"
+      ? "A Project builder is selected in Test mode. That is allowed, but repeated testing may cost more."
+      : workingMode === KFORGE_WORKING_MODES.PROJECT_BUILDER &&
+          capability !== "project_builder"
+        ? `The selected model is ${capabilityLabel}. KForge's existing capability gate remains active.`
+        : "";
+
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs font-bold uppercase tracking-wide text-emerald-400">
+            Work Mode
+          </div>
+          <select
+            value={workingMode}
+            onChange={(event) => onWorkingModeChange(event.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100"
+            aria-label="KForge working mode"
+          >
+            <option value={KFORGE_WORKING_MODES.TEST}>Test mode</option>
+            <option value={KFORGE_WORKING_MODES.PROJECT_BUILDER}>
+              Project builder
+            </option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
+          <span className="max-w-[260px] truncate" title={modelId}>
+            {modelId}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-0.5">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${costDotClass}`}
+            />
+            {relativeCostLabel}
+          </span>
+          <span className="rounded border border-zinc-700 px-2 py-0.5">
+            {capabilityLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-1 text-[11px] leading-snug text-zinc-400">
+        {workingMode === KFORGE_WORKING_MODES.TEST
+          ? "Test mode — Try prompts and smaller tasks using a lower-cost model."
+          : "Project builder — Use a model intended for complete builds and project edits."}
+      </div>
+
+      {mismatchMessage ? (
+        <div className="mt-1 text-[11px] leading-snug text-amber-300">
+          {mismatchMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AiPanel({
   // layout / open state
   projectPath,
@@ -2159,8 +2244,12 @@ export default function AiPanel({
 
   aiModel,
   setAiModel,
+  workingMode,
+  onWorkingModeChange,
   modelPlaceholder,
   modelSuggestions,
+  remotePresets,
+  remotePresetsStatus,
   showModelHelper,
   modelHelperText,
 
@@ -3304,7 +3393,7 @@ export default function AiPanel({
                     appendMessage("user", "Choice: Continue inspection");
                     appendMessage(
                       "assistant",
-                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Recommended builder or High capability model from the Provider/Model preset list.`,
+                      `Working… reading ${nextReadPath}.\n\nModel reminder: for serious or important implementation, complex changes, multi-step logic, or work where correctness matters, use a Project builder model from the Provider/Model preset list.`,
                     );
 
                     const result = await runTool({
@@ -3462,7 +3551,7 @@ export default function AiPanel({
                 appendMessage(
                   "assistant",
                   "Switch model first.\n\n" +
-                    "Use a Recommended builder or High capability model from the Provider/Model preset list. After switching, resend the last request.\n\n" +
+                    "Use a Project builder model from the Provider/Model preset list. After switching, resend the last request.\n\n" +
                     "No files were written by the blocked edit.",
                 );
               },
@@ -3545,7 +3634,7 @@ export default function AiPanel({
                   appendMessage(
                     "assistant",
                     `KForge already inspected ${failedWriteTargetPath}, but the model still attempted a destructive rewrite that would shrink the file by more than 80%.\n\n` +
-                      "Retrying with the same model would likely repeat the loop. Switch to a Recommended builder or High capability model, or stop here.\n\n" +
+                      "Retrying with the same model would likely repeat the loop. Switch to a Project builder model, or stop here.\n\n" +
                       "No files were changed.",
                   );
                 },
@@ -4453,7 +4542,7 @@ export default function AiPanel({
                               appendMessage(
                                 "assistant",
                                 "The likely app file was already inspected, but the model did not produce a concrete file-change request for this simple form/control edit.\n\n" +
-                                  "Switch to a Recommended builder or High capability model, then resend the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
+                                  "Switch to a Project builder model, then resend the edit. KForge will keep inspect-before-write, path safety, destructive rewrite protection, and write approval active.\n\n" +
                                   "No files were changed.",
                               );
                             },
@@ -5168,6 +5257,13 @@ export default function AiPanel({
 
           {/* Prompt pinned (BIG GUNS): sticky bottom to survive parent scroll/overflow quirks */}
           <div className="sticky bottom-0 z-20 shrink-0 border-t border-zinc-800 p-3 space-y-3 bg-zinc-950">
+            <WorkingModeControl
+              workingMode={workingMode}
+              onWorkingModeChange={onWorkingModeChange}
+              aiModel={aiModelStr}
+              modelWorkflowPolicy={modelWorkflowPolicy}
+            />
+
             <PromptPanel
               activeTab={activeTab}
               includeActiveFile={includeActiveFile}
@@ -5211,6 +5307,8 @@ export default function AiPanel({
             setAiModel={setAiModel}
             modelPlaceholder={modelPlaceholder}
             modelSuggestions={modelSuggestions}
+            remotePresets={remotePresets}
+            remotePresetsStatus={remotePresetsStatus}
             showModelHelper={showModelHelper}
             modelHelperText={modelHelperText}
             aiEndpoint={aiEndpoint}
@@ -5227,6 +5325,13 @@ export default function AiPanel({
             aiRunning={aiRunning}
             pendingLabel={pendingAssistantText}
             handleRetryLast={handleRetryLast}
+          />
+
+          <WorkingModeControl
+            workingMode={workingMode}
+            onWorkingModeChange={onWorkingModeChange}
+            aiModel={aiModelStr}
+            modelWorkflowPolicy={modelWorkflowPolicy}
           />
 
           <PromptPanel
@@ -5404,6 +5509,8 @@ export default function AiPanel({
                 setAiModel={setAiModel}
                 modelPlaceholder={modelPlaceholder}
                 modelSuggestions={modelSuggestions}
+                remotePresets={remotePresets}
+                remotePresetsStatus={remotePresetsStatus}
                 showModelHelper={showModelHelper}
                 modelHelperText={modelHelperText}
                 aiEndpoint={aiEndpoint}
@@ -5416,4 +5523,3 @@ export default function AiPanel({
     </div>
   );
 }
-

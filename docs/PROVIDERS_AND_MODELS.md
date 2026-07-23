@@ -130,33 +130,35 @@ For this reason, KForge treats all cost information as **advisory only**.
 
 ---
 
-## 4. Model labels and usage modes in KForge
+## 4. Relative cost and workflow capability in KForge
 
-KForge may display model labels using **color and usage mode**.
-
-These labels are **guidance**, not enforcement.
+KForge displays relative cost and workflow capability separately.
 
 ### Cost (color labels)
 
 - 🔵 Free — no billing required on that route / tier
-- 🟢 Lower-cost paid
-- 🟡 Standard paid
-- 🔴 Higher-cost paid
-- ⚪ Unknown — provider-dependent or unclear
+- 🟢 Lower relative cost
+- 🟡 Medium relative cost
+- 🔴 Higher relative cost
+- ⚪ Cost unknown
 
-### Usage modes
+These are broad KForge-created categories, not live provider prices.
 
-- **Light / Everyday** — quick checks, low-risk prompts, and careful edits
-- **Recommended builder** — default project work
-- **High capability** — harder, more complex, or critical work
+### Workflow capability
 
-A model’s color indicates **expected cost guidance**.
-Its usage mode indicates **when it is intended to be used**.
+- **Project builder** — approved for normal app building and project editing
+- **Test-mode editing** — guarded experiments and supervised edits
+- **Chat and planning** — no automatic project editing
+- **Unclassified** — the exact provider/model pair has not been approved
 
 KForge never:
 - modifies model IDs
 - enforces pricing
 - blocks usage based on cost
+- grants builder permission from a colour, price, name, or remote menu label
+
+The prompt area's **Working mode** control can suggest an appropriate model, but
+it does not override the selected model's approved capability.
 
 ---
 
