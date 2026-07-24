@@ -596,7 +596,55 @@ fn ensure_stripe_env_example(project_dir: &PathBuf) -> Result<bool, String> {
     Ok(true)
 }
 
+fn ensure_env_gitignore_rules(project_dir: &Path) -> Result<(), String> {
+    let gitignore_path = project_dir.join(".gitignore");
+    let mut content = match fs::read_to_string(&gitignore_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(format!("Failed to read .gitignore: {}", error));
+        }
+    };
+
+    let newline = if content.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let missing_rules: Vec<&str> = [".env", ".env.*", "!.env.example"]
+        .into_iter()
+        .filter(|rule| !content.lines().any(|line| line.trim() == *rule))
+        .collect();
+
+    if missing_rules.is_empty() {
+        return Ok(());
+    }
+
+    if !content.is_empty() {
+        if !content.ends_with('\n') {
+            content.push_str(newline);
+        }
+        content.push_str(newline);
+    }
+
+    for rule in missing_rules {
+        content.push_str(rule);
+        content.push_str(newline);
+    }
+
+    fs::write(&gitignore_path, content).map_err(|error| {
+        format!(
+            "Failed to protect environment files in .gitignore: {}",
+            error
+        )
+    })?;
+
+    Ok(())
+}
+
 fn ensure_stripe_env_file_from_example(project_dir: &PathBuf) -> Result<bool, String> {
+    ensure_env_gitignore_rules(project_dir)?;
+
     let env_path = project_dir.join(".env");
     let env_example_path = project_dir.join(".env.example");
 
@@ -613,7 +661,10 @@ fn ensure_stripe_env_file_from_example(project_dir: &PathBuf) -> Result<bool, St
 
     Ok(true)
 }
+
 fn ensure_env_file_from_example(project_dir: &PathBuf) -> Result<bool, String> {
+    ensure_env_gitignore_rules(project_dir)?;
+
     let env_path = project_dir.join(".env");
     let env_example_path = project_dir.join(".env.example");
 
@@ -2344,4 +2395,80 @@ pub fn service_setup(
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod environment_file_tests {
+    use super::{
+        ensure_env_file_from_example, ensure_env_gitignore_rules,
+        ensure_stripe_env_file_from_example,
+    };
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn creates_gitignore_with_environment_rules() {
+        let project = tempdir().expect("temporary project");
+
+        ensure_env_gitignore_rules(project.path()).expect("protect environment files");
+
+        let content =
+            fs::read_to_string(project.path().join(".gitignore")).expect("read .gitignore");
+
+        assert_eq!(content, ".env\n.env.*\n!.env.example\n");
+    }
+
+    #[test]
+    fn repairs_gitignore_without_removing_existing_content() {
+        let project = tempdir().expect("temporary project");
+        let gitignore_path = project.path().join(".gitignore");
+        fs::write(&gitignore_path, "dist/\r\n.env\r\n").expect("write initial .gitignore");
+
+        ensure_env_gitignore_rules(project.path()).expect("repair .gitignore");
+
+        let content = fs::read_to_string(&gitignore_path).expect("read .gitignore");
+
+        assert_eq!(content, "dist/\r\n.env\r\n\r\n.env.*\r\n!.env.example\r\n");
+    }
+
+    #[test]
+    fn repeated_gitignore_protection_is_idempotent() {
+        let project = tempdir().expect("temporary project");
+        let gitignore_path = project.path().join(".gitignore");
+        fs::write(&gitignore_path, "dist/\n").expect("write initial .gitignore");
+
+        ensure_env_gitignore_rules(project.path()).expect("first protection");
+        let first = fs::read(&gitignore_path).expect("read first result");
+
+        ensure_env_gitignore_rules(project.path()).expect("second protection");
+        let second = fs::read(&gitignore_path).expect("read second result");
+
+        assert_eq!(second, first);
+    }
+
+    #[test]
+    fn existing_env_files_are_protected_for_supabase_and_stripe() {
+        let supabase_project = tempdir().expect("temporary Supabase project");
+        let supabase_path = supabase_project.path().to_path_buf();
+        fs::write(supabase_path.join(".env"), "EXISTING=true\n").expect("write Supabase .env");
+
+        assert!(
+            !ensure_env_file_from_example(&supabase_path).expect("protect existing Supabase .env")
+        );
+
+        let supabase_gitignore =
+            fs::read_to_string(supabase_path.join(".gitignore")).expect("read Supabase .gitignore");
+        assert_eq!(supabase_gitignore, ".env\n.env.*\n!.env.example\n");
+
+        let stripe_project = tempdir().expect("temporary Stripe project");
+        let stripe_path = stripe_project.path().to_path_buf();
+        fs::write(stripe_path.join(".env"), "EXISTING=true\n").expect("write Stripe .env");
+
+        assert!(!ensure_stripe_env_file_from_example(&stripe_path)
+            .expect("protect existing Stripe .env"));
+
+        let stripe_gitignore =
+            fs::read_to_string(stripe_path.join(".gitignore")).expect("read Stripe .gitignore");
+        assert_eq!(stripe_gitignore, ".env\n.env.*\n!.env.example\n");
+    }
 }
