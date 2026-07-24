@@ -9,6 +9,7 @@ import React, {
 import PreviewPanel from "../../runtime/PreviewPanel.jsx";
 import CommandRunnerPanel from "../../runtime/CommandRunnerPanel.jsx";
 import ServicePanel from "../../runtime/ServicePanel.jsx";
+import PersistentWorkspaceToolbar from "../../components/PersistentWorkspaceToolbar.jsx";
 import ProviderControlsPanel from "./ProviderControlsPanel.jsx";
 import TranscriptPanel from "./TranscriptPanel.jsx";
 import PromptPanel from "./PromptPanel.jsx";
@@ -2327,6 +2328,9 @@ export default function AiPanel({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
+  const [previewCopyText, setPreviewCopyText] = useState("");
+  const [terminalCopyText, setTerminalCopyText] = useState("");
+  const [servicesCopyText, setServicesCopyText] = useState("");
   const servicesSectionRef = useRef(null);
   const servicesPanelScrollRef = useRef(null);
 
@@ -5375,8 +5379,8 @@ export default function AiPanel({
             className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-              <div>
+            <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/95 px-3 py-3 backdrop-blur">
+              <div className="min-w-0">
                 <div className="text-sm font-semibold text-zinc-100">
                   Preview workspace
                 </div>
@@ -5384,16 +5388,18 @@ export default function AiPanel({
                   Generate, install, run, and inspect the current project here.
                 </div>
               </div>
-              <button
-                type="button"
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-                onClick={() => setPreviewOpen(false)}
-              >
-                Close
-              </button>
+
+              <PersistentWorkspaceToolbar
+                copyText={previewCopyText}
+                onClose={() => setPreviewOpen(false)}
+                ariaLabel="Preview workspace controls"
+              />
             </div>
 
-            <PreviewPanel projectPath={projectPath} />
+            <PreviewPanel
+              projectPath={projectPath}
+              onCopyTextChange={setPreviewCopyText}
+            />
           </div>
         </div>
       ) : null}
@@ -5410,8 +5416,8 @@ export default function AiPanel({
             className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-              <div>
+            <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/95 px-3 py-3 backdrop-blur">
+              <div className="min-w-0">
                 <div className="text-sm font-semibold text-zinc-100">
                   Terminal workspace
                 </div>
@@ -5419,16 +5425,18 @@ export default function AiPanel({
                   Run commands and inspect their output for the current project.
                 </div>
               </div>
-              <button
-                type="button"
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-                onClick={() => setTerminalOpen(false)}
-              >
-                Close
-              </button>
+
+              <PersistentWorkspaceToolbar
+                copyText={terminalCopyText}
+                onClose={() => setTerminalOpen(false)}
+                ariaLabel="Terminal workspace controls"
+              />
             </div>
 
-            <CommandRunnerPanel projectPath={projectPath} />
+            <CommandRunnerPanel
+              projectPath={projectPath}
+              onCopyTextChange={setTerminalCopyText}
+            />
           </div>
         </div>
       ) : null}
@@ -5447,8 +5455,8 @@ export default function AiPanel({
             className="max-h-full w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-              <div>
+            <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/95 px-3 py-3 backdrop-blur">
+              <div className="min-w-0">
                 <div className="text-sm font-semibold text-zinc-100">
                   Services workspace
                 </div>
@@ -5456,16 +5464,18 @@ export default function AiPanel({
                   Connect and manage external tools for the current project.
                 </div>
               </div>
-              <button
-                type="button"
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-                onClick={() => setServicesOpen(false)}
-              >
-                Close
-              </button>
+
+              <PersistentWorkspaceToolbar
+                copyText={servicesCopyText}
+                onClose={() => setServicesOpen(false)}
+                ariaLabel="Services workspace controls"
+              />
             </div>
 
-            <ServicePanel projectPath={projectPath} />
+            <ServicePanel
+              projectPath={projectPath}
+              onCopyTextChange={setServicesCopyText}
+            />
           </div>
         </div>
       ) : null}

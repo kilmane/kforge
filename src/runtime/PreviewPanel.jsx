@@ -25,6 +25,7 @@ import {
   listScaffoldTemplates,
   templateInstallsDuringScaffold,
 } from "./templateRegistry";
+import { formatLogEntriesForClipboard } from "../utils/clipboardText.js";
 
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+(?:\/\S*)?)/i;
 const CLI_HINT_RE = [/press h to show help/i, /use --host to expose/i];
@@ -126,7 +127,7 @@ function formatPreviewLogForDisplay(entry) {
   return { ...entry, kind, line };
 }
 
-export default function PreviewPanel({ projectPath }) {
+export default function PreviewPanel({ projectPath, onCopyTextChange }) {
   const [status, setStatus] = useState(getPreviewStatusValue());
   const [logs, setLogs] = useState(() => getPreviewLogBuffer());
 
@@ -364,6 +365,16 @@ export default function PreviewPanel({ projectPath }) {
   const displayLogs = useMemo(() => {
     return logs.map(formatPreviewLogForDisplay).filter(Boolean);
   }, [logs]);
+  const copyText = useMemo(
+    () => formatLogEntriesForClipboard(displayLogs),
+    [displayLogs],
+  );
+
+  useEffect(() => {
+    if (typeof onCopyTextChange !== "function") return undefined;
+
+    onCopyTextChange(copyText);
+  }, [copyText, onCopyTextChange]);
 
   async function handleOpen() {
     if (!previewUrl || isExpoProject) return;

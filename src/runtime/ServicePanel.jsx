@@ -23,6 +23,7 @@ import {
   supabaseQuickConnect,
   openaiCreateExample,
 } from "./serviceRunner";
+import { formatLogEntriesForClipboard } from "../utils/clipboardText.js";
 
 const DEFAULT_TASK_ID = "code";
 const DEFAULT_PROVIDER_ID = "github";
@@ -275,7 +276,7 @@ function formatLogTimestamp(value) {
 
   return `${hh}:${mm}:${ss}`;
 }
-export default function ServicePanel({ projectPath }) {
+export default function ServicePanel({ projectPath, onCopyTextChange }) {
   const [logsByService, setLogsByService] = useState(
     persistedServicePanelState.logsByService,
   );
@@ -321,7 +322,14 @@ export default function ServicePanel({ projectPath }) {
     TASK_GROUPS.find((task) => task.id === activeTaskId) || TASK_GROUPS[0];
   const activeProvider =
     providerMap.get(activeProviderId) || providerMap.get(DEFAULT_PROVIDER_ID);
-  const activeLogs = logsByService[activeProviderId] || [];
+  const activeLogs = useMemo(
+    () => logsByService[activeProviderId] || [],
+    [activeProviderId, logsByService],
+  );
+  const copyText = useMemo(
+    () => formatLogEntriesForClipboard(activeLogs),
+    [activeLogs],
+  );
 
   const deployProjectIdentity = useMemo(() => {
     return getDeployProjectIdentity(
@@ -333,6 +341,12 @@ export default function ServicePanel({ projectPath }) {
   useEffect(() => {
     persistedServicePanelState.logsByService = logsByService;
   }, [logsByService]);
+
+  useEffect(() => {
+    if (typeof onCopyTextChange !== "function") return undefined;
+
+    onCopyTextChange(copyText);
+  }, [copyText, onCopyTextChange]);
 
   useEffect(() => {
     persistedServicePanelState.activeServiceId = activeServiceId;

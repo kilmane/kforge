@@ -1,4 +1,6 @@
 import React, { useMemo, useEffect } from "react";
+import PersistentWorkspaceToolbar from "../../components/PersistentWorkspaceToolbar.jsx";
+import { formatTranscriptForClipboard } from "../../utils/clipboardText.js";
 
 function parseToolIdFromLine(text) {
   const s = String(text || "");
@@ -45,6 +47,10 @@ export default function TranscriptPanel({
     () => (Array.isArray(messages) ? messages.filter(Boolean) : []),
     [messages],
   );
+  const copyText = useMemo(
+    () => formatTranscriptForClipboard(safeMessages),
+    [safeMessages],
+  );
 
   const canRetry =
     !!lastSend && typeof handleRetryLast === "function" && !aiRunning;
@@ -66,12 +72,12 @@ export default function TranscriptPanel({
     <div className="flex-1 min-h-0 flex flex-col gap-2">
       {!hideChrome ? (
         <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 pb-2 backdrop-blur">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0 text-xs uppercase tracking-wide opacity-70 truncate">
               Transcript
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               {showReqButtons ? (
                 <>
                   <span className="text-[11px] opacity-70 border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 rounded">
@@ -101,6 +107,11 @@ export default function TranscriptPanel({
                   <span className="mx-1 h-5 w-px bg-zinc-800" />
                 </>
               ) : null}
+
+              <PersistentWorkspaceToolbar
+                copyText={copyText}
+                ariaLabel="Transcript controls"
+              />
 
               {typeof handleRetryLast === "function" ? (
                 <button

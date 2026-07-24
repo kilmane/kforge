@@ -10,6 +10,7 @@ import {
   onCommandStatus,
   setCommandStatusValue,
 } from "./commandRunner";
+import { formatLogEntriesForClipboard } from "../utils/clipboardText.js";
 
 const COMMAND_GROUPS = [
   {
@@ -150,7 +151,10 @@ function getStatusLabel(status) {
   return "Ready";
 }
 
-export default function CommandRunnerPanel({ projectPath }) {
+export default function CommandRunnerPanel({
+  projectPath,
+  onCopyTextChange,
+}) {
   const [status, setStatus] = useState(getCommandStatusValue());
   const [logs, setLogs] = useState(() => getCommandLogBuffer());
   const [command, setCommand] = useState("");
@@ -243,6 +247,16 @@ export default function CommandRunnerPanel({ projectPath }) {
 
   const disabled = !projectPath;
   const isRunning = useMemo(() => status === "running", [status]);
+  const copyText = useMemo(
+    () => formatLogEntriesForClipboard(logs),
+    [logs],
+  );
+
+  useEffect(() => {
+    if (typeof onCopyTextChange !== "function") return undefined;
+
+    onCopyTextChange(copyText);
+  }, [copyText, onCopyTextChange]);
 
   function insertSuggestedCommand(item) {
     setCommand(item.command);
