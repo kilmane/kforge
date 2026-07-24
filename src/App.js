@@ -80,6 +80,11 @@ import DockShell from "./layout/DockShell";
 import { previewDetectTemplates } from "./runtime/previewRunner";
 import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
 import { getCapabilityRouteDecision } from "./ai/capabilities/capabilityRouter";
+import { getDirectWorkflowHandoffRouteDecision } from "./ai/capabilities/directWorkflowHandoff";
+import {
+  isProjectInspectionTaskKind,
+  shouldRequireProjectInspectionEvidence,
+} from "./ai/capabilities/projectInspectionPolicy";
 import { isVisualUiProjectEditIntent } from "./ai/visualEditIntent";
 function basename(p) {
   if (!p) return "";
@@ -1265,82 +1270,6 @@ function getProjectEditRouteDecision({
     shouldShowGuardedEditNote: false,
     shouldClearProviderSwitchNote: true,
   };
-}
-function getDirectWorkflowHandoffRouteDecision({ promptTask = null } = {}) {
-  const kind = promptTask?.kind || "";
-
-  if (kind === "expo_terminal_choice") {
-    return { action: "expo_terminal_choice" };
-  }
-
-  if (kind === "no_project_implementation") {
-    return { action: "no_project_implementation" };
-  }
-
-  if (kind === "no_project_performance") {
-    return { action: "no_project_performance" };
-  }
-
-  if (kind === "empty_folder_implementation") {
-    return { action: "empty_folder_implementation" };
-  }
-
-  if (kind === "empty_folder_performance") {
-    return { action: "empty_folder_performance" };
-  }
-
-  if (kind === "manual_performance") {
-    return { action: "manual_performance" };
-  }
-
-  if (kind === "empty_folder_plan") {
-    return { action: "empty_folder_plan" };
-  }
-
-  if (kind === "open_project_build_app_clarifier") {
-    return { action: "open_project_build_app_clarifier" };
-  }
-
-  if (kind === "provider_setup") {
-    return { action: "provider_setup" };
-  }
-
-  if (kind === "openai_service") {
-    return { action: "openai_service" };
-  }
-
-  if (kind === "stripe_service") {
-    return { action: "stripe_service" };
-  }
-
-  if (kind === "supabase_service") {
-    return { action: "supabase_service" };
-  }
-
-  if (kind === "deploy_service") {
-    return { action: "deploy_service" };
-  }
-
-  if (kind === "ambiguous_service_trigger") {
-    return {
-      action: "ambiguous_service_trigger",
-      serviceTrigger: promptTask?.serviceTrigger || null,
-    };
-  }
-
-  if (kind === "preview_followup") {
-    return { action: "preview_followup" };
-  }
-
-  if (kind === "dependency_install") {
-    return { action: "dependency_install" };
-  }
-
-  if (kind === "expo_phone_preview") {
-    return { action: "expo_phone_preview" };
-  }
-
-  return null;
 }
 function getBlockedModelPolicyRouteDecision({
   workflowContext = null,
@@ -8810,11 +8739,13 @@ setWorkflowContext({
         : "";
       const isFeatureBlueprintTask =
         promptTask.kind === WORKFLOW_TASK_KIND.FEATURE_BLUEPRINT;
+      const isProjectInspectionTask =
+        isProjectInspectionTaskKind(promptTask.kind);
 
       const shouldSuppressToolsForPrompt =
         opts.suppressToolsForPrompt === true ||
         isFeatureBlueprintTask ||
-        hasManualOrAdvisoryIntent(draft) ||
+        (hasManualOrAdvisoryIntent(draft) && !isProjectInspectionTask) ||
         (!modelWorkflowPolicy.allowToolCalls && !isModelCapabilityTestOverride);
 
       const advisoryOverrideInstruction = isModelCapabilityTestOverride
@@ -8851,6 +8782,17 @@ setWorkflowContext({
           "- If enough evidence is already available, either request one smallest safe write_file change or explain clearly that no safe code edit is justified.\n" +
           "- Do not blindly add React.memo, useMemo, or useCallback everywhere. Use them only when inspected code shows repeated unnecessary renders, expensive calculations, unstable props, or a specific measurable bottleneck.\n" +
           "- Prefer the smallest evidence-based performance fix, such as removing unused work/assets, simplifying render paths, reducing oversized media, or tightening an obviously inefficient loop.\n"
+        : "";
+
+      const readOnlyInspectionToolInstruction = isProjectInspectionTask
+        ? "\n\nRead-only project inspection guidance:\n" +
+          "- Inspect the existing project and answer the user's requested questions from file evidence.\n" +
+          "- You may use only read_file, list_dir, and search_in_file.\n" +
+          "- Do not request write_file or mkdir. Do not edit, create, or delete anything.\n" +
+          "- If the requested evidence is not already in chat, begin with exactly one relevant read-only tool call.\n" +
+          "- Inspect only the files needed to answer the request, then provide the final report in chat.\n" +
+          "- Distinguish current implementation facts from recommended future data structures.\n" +
+          "- Do not open or suggest Services unless the user directly asks for service navigation.\n"
         : "";
 
       const appBuildImplementationToolInstruction = isAppBuildImplementationTask
@@ -8898,7 +8840,7 @@ setWorkflowContext({
 
       const toolInstruction =
         !effectiveAskForPatch && !shouldSuppressToolsForPrompt
-          ? advisoryOverrideInstruction + performanceToolInstruction + appBuildImplementationToolInstruction + "\n\nIMPORTANT:\n" +
+          ? advisoryOverrideInstruction + performanceToolInstruction + readOnlyInspectionToolInstruction + appBuildImplementationToolInstruction + "\n\nIMPORTANT:\n" +
             "When the user asks to create, modify, or implement project files, you MUST emit tool calls.\n" +
             "Prefer modifying existing files instead of creating new ones when a suitable file already exists.\n" +
             "For multi-file implementation requests, inspect each likely existing target file before writing it unless that exact file was already read in this conversation.\n" +
@@ -9040,6 +8982,7 @@ setWorkflowContext({
           (
             promptTask.kind === WORKFLOW_TASK_KIND.PROJECT_EDIT ||
             promptTask.kind === "broken_preview_debug" ||
+            isProjectInspectionTask ||
             !!opts.skipCompletedWorkflowRoute ||
             !!isAdvisoryTestOverride
           );
@@ -9058,6 +9001,13 @@ setWorkflowContext({
           toolBlocks.length === 0 &&
           !askForPatch;
 
+        const shouldShowProjectInspectionNoToolRecovery =
+          shouldRequireProjectInspectionEvidence({
+            taskKind: promptTask.kind,
+            toolBlockCount: toolBlocks.length,
+            askForPatch,
+          });
+
         const isFixNoToolRecovery =
           promptTask.kind === "broken_preview_debug";
         const isPartialImplementationNoToolRecovery =
@@ -9065,6 +9015,60 @@ setWorkflowContext({
         const isAppBuildImplementationNoToolRecovery =
           promptTask.source === "app_build_implementation" ||
           opts.forceAppBuildImplementation === true;
+
+        if (shouldShowProjectInspectionNoToolRecovery) {
+          appendMessage(
+            "assistant",
+            "The model did not request a read-only inspection tool, so KForge did not accept its reply as an evidence-based project report.\n\nNo files were changed.",
+            {
+              actions: [
+                {
+                  label: "Retry read-only inspection",
+                  onClick: () => {
+                    appendMessage(
+                      "user",
+                      "Choice: Retry read-only inspection",
+                    );
+                    sendWithPrompt(
+                      "Retry this read-only project inspection.\n\n" +
+                        `Original request:\n${draft}\n\n` +
+                        "Do not answer from assumptions. Request exactly one relevant read_file, list_dir, or search_in_file tool call first. Do not request write_file or mkdir.",
+                      {
+                        silentUserAppend: true,
+                        skipCompletedWorkflowRoute: true,
+                        skipDirectWorkflowHandoffRoute: true,
+                      },
+                    );
+                  },
+                },
+                {
+                  label: "Back to chat",
+                  onClick: () => {
+                    appendMessage("user", "Choice: Back to chat");
+                    appendMessage(
+                      "assistant",
+                      "Okay — back to normal chat. No files were changed.",
+                    );
+                  },
+                },
+                {
+                  label: SUGGESTED_ACTION_LABEL.STOP,
+                  onClick: () => {
+                    appendMessage(
+                      "user",
+                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
+                    );
+                    appendMessage(
+                      "assistant",
+                      "Stopped. No files were changed.",
+                    );
+                  },
+                },
+              ],
+            },
+          );
+          return;
+        }
 
         // Append cleaned assistant output (keeps transcript readable)
         if (shouldShowAdvisoryNoActionRecovery || shouldShowProjectEditNoToolRecovery) {

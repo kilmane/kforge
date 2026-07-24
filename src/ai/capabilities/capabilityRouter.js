@@ -1,4 +1,5 @@
 import { KFORGE_SERVICE_WORKFLOWS } from "./kforgeServiceWorkflows";
+import { PROJECT_INSPECTION_TASK_KIND } from "./projectInspectionPolicy";
 
 function normalizeText(value = "") {
   return String(value || "")
@@ -140,6 +141,74 @@ function hasServiceActionShape(text) {
     /\bis\s+it\s+possible\s+to\s+have\b/.test(text) ||
     /\bhow\s+do\s+i\s+(connect|add|use|set\s+up|configure|integrate)\b/.test(text)
   );
+}
+
+function getExplicitProjectIntentDecision(text) {
+  const hasInspectionAction =
+    /\b(inspect|explain|report|review|analyse|analyze|audit|identify|locate|trace|summarize|summarise|describe)\b/.test(
+      text,
+    );
+
+  if (!hasInspectionAction) return null;
+
+  const textWithoutNegativeClauses = text.replace(
+    /\b(without|do not|don't|dont|never|no)\b[^.?!;\n]*/g,
+    " ",
+  );
+  const asksDirectServiceAction =
+    /^(please\s+)?(open|show|launch|connect|configure|setup|set\s+up|enable|integrate|install|check|debug|fix|troubleshoot)\b/.test(
+      text,
+    ) ||
+    /\b(can|could|would|will)\s+you\s+(please\s+)?(open|show|launch|connect|configure|setup|set\s+up|enable|integrate|install|check|debug|fix|troubleshoot)\b/.test(
+      text,
+    ) ||
+    /\b(open|show|launch)\s+(the\s+)?services?\b/.test(text);
+  const hasSequencedServiceAction =
+    /\b(and|then|also|afterwards?)\s+(please\s+)?(connect|configure|setup|set\s+up|enable|integrate|install|deploy|publish|host)\b/.test(
+      textWithoutNegativeClauses,
+    );
+  const mentionsService =
+    /\b(services?|supabase|backend|database|db|auth|authentication|login|accounts?|stripe|payments?|checkout|billing|subscriptions?|deployment|deploy|hosting|host|vercel|netlify|github|openai|ai)\b/.test(
+      text,
+    );
+
+  if (
+    (asksDirectServiceAction || hasSequencedServiceAction) &&
+    mentionsService
+  ) {
+    return null;
+  }
+
+  const hasProjectInspectionTarget =
+    /\b(project|workspace|code|source|files?|implementation|client|components?|pages?|structure|state|storage|progress|checklist|stages?|data|schema|configuration|config|setup|integration|publishing)\b/.test(
+      text,
+    );
+  const hasReadOnlyRestriction =
+    /\b(without|do not|don't|dont|never|no)\b[^.?!\n]*\b(change|changing|edit|editing|create|creating|delete|deleting|modify|modifying|write|writing|open services)\b/.test(
+      text,
+    ) ||
+    /\b(read[\s-]?only|no file changes)\b/.test(text);
+
+  if (!hasProjectInspectionTarget && !hasReadOnlyRestriction) return null;
+
+  const hasAffirmativeProjectMutation =
+    /\b(change|edit|create|delete|fix|implement|modify|remove|rename|replace|update|write)\b/.test(
+      textWithoutNegativeClauses,
+    );
+
+  if (hasAffirmativeProjectMutation && hasProjectInspectionTarget) {
+    return {
+      kind: "project_edit",
+      confidence: "high",
+      source: "capability_router_explicit_project_edit",
+    };
+  }
+
+  return {
+    kind: PROJECT_INSPECTION_TASK_KIND,
+    confidence: "high",
+    source: "capability_router_explicit_project_inspection",
+  };
 }
 
 function getMentionedServiceCapabilities(text) {
@@ -503,6 +572,9 @@ export function getCapabilityRouteDecision(text = "", options = {}) {
   const emptyProjectFolder = Boolean(options.emptyProjectFolder);
 
   if (!projectOpen || emptyProjectFolder) return null;
+
+  const explicitProjectIntentDecision = getExplicitProjectIntentDecision(s);
+  if (explicitProjectIntentDecision) return explicitProjectIntentDecision;
 
   if (hasExplicitServiceExclusionIntent(s) && hasBroaderAppPlanningShape(s)) {
     return null;

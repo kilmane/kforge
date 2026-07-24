@@ -15,6 +15,12 @@ import TranscriptPanel from "./TranscriptPanel.jsx";
 import PromptPanel from "./PromptPanel.jsx";
 import ActionsPanel from "./ActionsPanel.jsx";
 import { KFORGE_WORKING_MODES } from "../modelRegistry.js";
+import {
+  buildProjectInspectionContinuationTools,
+  getProjectInspectionMaxSteps,
+  isProjectInspectionTaskKind,
+  isProjectInspectionToolAllowed,
+} from "../capabilities/projectInspectionPolicy.js";
 
 import { runToolCall } from "../tools/toolRuntime.js";
 import {
@@ -3093,6 +3099,8 @@ export default function AiPanel({
             triggerToolTaskKind === "broken_preview_debug";
           const isControlledReadOnlyToolExecution =
             triggerToolMessage?.meta?.controlledReadOnlyToolExecution === true;
+          const isProjectInspectionToolExecution =
+            isProjectInspectionTaskKind(triggerToolTaskKind);
           const triggerToolOriginalGoal = String(
             triggerToolMessage?.meta?.modelToolOriginalGoal || latestUserText || "",
           ).trim();
@@ -3135,6 +3143,21 @@ export default function AiPanel({
             triggerToolMessage?.meta?.modelToolBlockedWriteReason || "",
           ).trim();
 
+
+          if (isProjectInspectionToolExecution) {
+            const nonInspectionCalls = batchCalls.filter(
+              (call) =>
+                !isProjectInspectionToolAllowed(call?.toolName),
+            );
+
+            if (nonInspectionCalls.length > 0) {
+              appendMessage(
+                "assistant",
+                "KForge blocked a non-read tool during this read-only project inspection.\n\nNo files were changed.",
+              );
+              return;
+            }
+          }
 
           if (isControlledReadOnlyToolExecution) {
             const readCalls = batchCalls.filter(
@@ -3988,7 +4011,9 @@ export default function AiPanel({
             });
           } else if (typeof runAi === "function") {
             try {
-              const continuationTools = [
+              const readOnlyContinuationTools =
+                buildProjectInspectionContinuationTools();
+              const normalContinuationTools = [
                 {
                   name: "list_dir",
                   description: "List files and directories for a given path.",
@@ -4003,13 +4028,18 @@ export default function AiPanel({
                 },
                 {
                   name: "write_file",
-                  description: "Write or replace a file when an edit is required.",
+                  description:
+                    "Write or replace a file when an edit is required.",
                 },
                 {
                   name: "mkdir",
-                  description: "Create a directory when a new folder is required.",
+                  description:
+                    "Create a directory when a new folder is required.",
                 },
               ];
+              const continuationTools = isProjectInspectionToolExecution
+                ? readOnlyContinuationTools
+                : normalContinuationTools;
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
@@ -4034,7 +4064,9 @@ export default function AiPanel({
               const isPerformanceContinuation =
                 isPerformanceProjectRequest(latestUserText);
               const shouldUseImplementationJobController =
-                !isPerformanceContinuation && !isFixToolExecution;
+                !isPerformanceContinuation &&
+                !isFixToolExecution &&
+                !isProjectInspectionToolExecution;
               let implementationJob = createImplementationJob({
                 originalGoal: triggerToolOriginalGoal || latestUserText,
                 taskKind: triggerToolTaskKind,
@@ -4125,6 +4157,17 @@ export default function AiPanel({
                   const toolName = String(toolCall?.name || "").trim();
                   const args = toolCall?.args || {};
                   const requestedPath = String(args?.path || "").trim();
+
+                  if (
+                    isProjectInspectionToolExecution &&
+                    !isProjectInspectionToolAllowed(toolName)
+                  ) {
+                    return {
+                      ok: false,
+                      error:
+                        "KForge blocked a non-read tool during this read-only project inspection.",
+                    };
+                  }
 
                   if (
                     isAppBuildToolExecution &&
@@ -4240,7 +4283,9 @@ export default function AiPanel({
                 },
                 appendTranscript: () => {},
                 appendToolResult: () => {},
-                maxSteps: 6,
+                maxSteps: isProjectInspectionToolExecution
+                  ? getProjectInspectionMaxSteps()
+                  : 6,
               });
 
               const latestAgentWrittenPath =
@@ -4290,6 +4335,11 @@ export default function AiPanel({
                     "Preview-error triage stopped after inspection.\n\n" +
                       "No files were changed.\n\n" +
                       "I do not have concrete Preview logs or a browser console error, so no safe code change is justified yet. Paste the exact Preview logs or browser console error and I will use that evidence before making the smallest safe fix.",
+                  );
+                } else if (isProjectInspectionToolExecution) {
+                  appendMessage(
+                    "assistant",
+                    `${finalText}\n\nNo files were changed by this read-only inspection.`,
                   );
                 } else if (isPerformanceToolExecution) {
                   appendMessage(
@@ -4702,6 +4752,11 @@ export default function AiPanel({
                 );
               } else if (finalText) {
                 appendMessage("assistant", finalText);
+              } else if (isProjectInspectionToolExecution) {
+                appendMessage(
+                  "assistant",
+                  "The read-only inspection stopped before producing a final report.\n\nNo files were changed. Please retry the inspection or narrow the requested evidence.",
+                );
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&
                 agentSuccessfulWritePaths.length > 0
