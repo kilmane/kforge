@@ -44,16 +44,34 @@ describe("read-only project inspection integration", () => {
     );
   });
 
-  test("does not accept a tool-less reply as an evidence report", () => {
+  test("starts a deterministic safe inspection after a tool-less reply", () => {
     expect(appSource).toContain(
       "shouldRequireProjectInspectionEvidence({",
     );
-    expect(appSource).toContain(
-      "KForge did not accept its reply as an evidence-based project report.",
+
+    const recoveryStart = appSource.indexOf(
+      "if (shouldShowProjectInspectionNoToolRecovery)",
     );
-    expect(appSource).toContain(
-      "Retry read-only inspection",
+    const recoveryEnd = appSource.indexOf(
+      "// Append cleaned assistant output",
+      recoveryStart,
     );
+    const recoverySection = appSource.slice(recoveryStart, recoveryEnd);
+
+    expect(recoveryStart).toBeGreaterThan(-1);
+    expect(recoveryEnd).toBeGreaterThan(recoveryStart);
+    expect(recoverySection).toContain(
+      "buildProjectInspectionRecoveryToolCall()",
+    );
+    expect(recoverySection).toContain(
+      "project_inspection_no_tool_recovery",
+    );
+    expect(recoverySection).toContain("modelToolOriginalGoal: draft");
+    expect(recoverySection).toContain(
+      "controlledReadOnlyToolExecution: false",
+    );
+    expect(recoverySection).not.toContain("Retry read-only inspection");
+    expect(recoverySection).not.toContain("sendWithPrompt(");
   });
 
   test("keeps step-limit failure out of implementation recovery", () => {

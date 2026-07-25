@@ -33,6 +33,13 @@ export function buildProjectInspectionContinuationTools() {
   return PROJECT_INSPECTION_CONTINUATION_TOOLS.map((tool) => ({ ...tool }));
 }
 
+export function buildProjectInspectionRecoveryToolCall() {
+  return {
+    name: "list_dir",
+    args: { path: "." },
+  };
+}
+
 export function getProjectInspectionMaxSteps() {
   return 12;
 }

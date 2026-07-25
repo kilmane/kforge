@@ -1,6 +1,7 @@
 import {
   PROJECT_INSPECTION_TASK_KIND,
   buildProjectInspectionContinuationTools,
+  buildProjectInspectionRecoveryToolCall,
   getProjectInspectionMaxSteps,
   isProjectInspectionTaskKind,
   isProjectInspectionToolAllowed,
@@ -20,6 +21,15 @@ describe("project inspection policy", () => {
     expect(
       buildProjectInspectionContinuationTools().map((tool) => tool.name),
     ).toEqual(["list_dir", "read_file", "search_in_file"]);
+  });
+
+  test("builds a deterministic safe recovery tool call", () => {
+    expect(buildProjectInspectionRecoveryToolCall()).toEqual({
+      name: "list_dir",
+      args: {
+        path: ".",
+      },
+    });
   });
 
   test("uses a larger read-only step budget without entering edit recovery", () => {

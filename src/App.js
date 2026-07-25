@@ -82,6 +82,7 @@ import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabiliti
 import { getCapabilityRouteDecision } from "./ai/capabilities/capabilityRouter";
 import { getDirectWorkflowHandoffRouteDecision } from "./ai/capabilities/directWorkflowHandoff";
 import {
+  buildProjectInspectionRecoveryToolCall,
   isProjectInspectionTaskKind,
   shouldRequireProjectInspectionEvidence,
 } from "./ai/capabilities/projectInspectionPolicy";
@@ -9017,54 +9018,29 @@ setWorkflowContext({
           opts.forceAppBuildImplementation === true;
 
         if (shouldShowProjectInspectionNoToolRecovery) {
+          const recoveryToolCall =
+            buildProjectInspectionRecoveryToolCall();
+
           appendMessage(
             "assistant",
-            "The model did not request a read-only inspection tool, so KForge did not accept its reply as an evidence-based project report.\n\nNo files were changed.",
+            "The model did not begin the requested read-only inspection, so KForge is starting a safe project-root inspection automatically.\n\nNo files will be changed.",
+          );
+          appendMessage(
+            "assistant",
+            "```tool\n" +
+              JSON.stringify(recoveryToolCall, null, 2) +
+              "\n```",
             {
-              actions: [
-                {
-                  label: "Retry read-only inspection",
-                  onClick: () => {
-                    appendMessage(
-                      "user",
-                      "Choice: Retry read-only inspection",
-                    );
-                    sendWithPrompt(
-                      "Retry this read-only project inspection.\n\n" +
-                        `Original request:\n${draft}\n\n` +
-                        "Do not answer from assumptions. Request exactly one relevant read_file, list_dir, or search_in_file tool call first. Do not request write_file or mkdir.",
-                      {
-                        silentUserAppend: true,
-                        skipCompletedWorkflowRoute: true,
-                        skipDirectWorkflowHandoffRoute: true,
-                      },
-                    );
-                  },
-                },
-                {
-                  label: "Back to chat",
-                  onClick: () => {
-                    appendMessage("user", "Choice: Back to chat");
-                    appendMessage(
-                      "assistant",
-                      "Okay — back to normal chat. No files were changed.",
-                    );
-                  },
-                },
-                {
-                  label: SUGGESTED_ACTION_LABEL.STOP,
-                  onClick: () => {
-                    appendMessage(
-                      "user",
-                      `Choice: ${SUGGESTED_ACTION_LABEL.STOP}`,
-                    );
-                    appendMessage(
-                      "assistant",
-                      "Stopped. No files were changed.",
-                    );
-                  },
-                },
-              ],
+              meta: {
+                allowModelToolExecution: true,
+                modelToolExecutionKind: String(promptTask.kind),
+                modelToolExecutionSource:
+                  "project_inspection_no_tool_recovery",
+                previewErrorEvidenceGate: false,
+                controlledReadOnlyToolExecution: false,
+                modelToolOriginalGoal: draft,
+                modelToolInspectedPaths: [],
+              },
             },
           );
           return;
