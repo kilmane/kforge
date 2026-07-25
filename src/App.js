@@ -9018,12 +9018,34 @@ setWorkflowContext({
           opts.forceAppBuildImplementation === true;
 
         if (shouldShowProjectInspectionNoToolRecovery) {
+          const recoveryTemplateHint = String(
+            detectedTemplateName || detectedKind || "",
+          ).toLowerCase();
+          const recoveryFallbackPath = recoveryTemplateHint.includes("next")
+            ? "app/page.jsx"
+            : "src/App.jsx";
+          const recoveryCarryoverInspectedPaths = (
+            Array.isArray(opts.modelToolInspectedPaths)
+              ? opts.modelToolInspectedPaths
+              : Array.isArray(opts.inspectedPaths)
+                ? opts.inspectedPaths
+                : Array.isArray(workflowContext?.inspectedPaths)
+                  ? workflowContext.inspectedPaths
+                  : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+          const recoveryInspectPath = resolveWorkflowLikelyAppInspectPath({
+            activePath: String(activeTab?.path || "").trim(),
+            inspectedPaths: recoveryCarryoverInspectedPaths,
+            fallbackPath: recoveryFallbackPath,
+          });
           const recoveryToolCall =
-            buildProjectInspectionRecoveryToolCall();
+            buildProjectInspectionRecoveryToolCall(recoveryInspectPath);
 
           appendMessage(
             "assistant",
-            "The model did not begin the requested read-only inspection, so KForge is starting a safe project-root inspection automatically.\n\nNo files will be changed.",
+            `The model did not begin the requested read-only inspection, so KForge is starting a safe read-only inspection of ${recoveryInspectPath} automatically.\n\nNo files will be changed.`,
           );
           appendMessage(
             "assistant",

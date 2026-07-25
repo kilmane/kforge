@@ -44,7 +44,7 @@ describe("read-only project inspection integration", () => {
     );
   });
 
-  test("starts a deterministic safe inspection after a tool-less reply", () => {
+  test("starts a deterministic safe likely-file inspection after a tool-less reply", () => {
     expect(appSource).toContain(
       "shouldRequireProjectInspectionEvidence({",
     );
@@ -61,7 +61,10 @@ describe("read-only project inspection integration", () => {
     expect(recoveryStart).toBeGreaterThan(-1);
     expect(recoveryEnd).toBeGreaterThan(recoveryStart);
     expect(recoverySection).toContain(
-      "buildProjectInspectionRecoveryToolCall()",
+      "resolveWorkflowLikelyAppInspectPath({",
+    );
+    expect(recoverySection).toContain(
+      "buildProjectInspectionRecoveryToolCall(recoveryInspectPath)",
     );
     expect(recoverySection).toContain(
       "project_inspection_no_tool_recovery",
@@ -74,9 +77,24 @@ describe("read-only project inspection integration", () => {
     expect(recoverySection).not.toContain("sendWithPrompt(");
   });
 
-  test("keeps step-limit failure out of implementation recovery", () => {
+  test("does not seed continuation prompts with an executable repeated tool call", () => {
     expect(panelSource).toContain(
-      "The read-only inspection stopped before producing a final report.",
+      "Choose the next tool and path from the current conversation evidence.",
+    );
+    expect(panelSource).toContain(
+      "Never repeat an executed call.",
+    );
+    expect(panelSource).not.toContain(
+      '{ "name": "list_dir", "args": { "path": "." } }',
+    );
+  });
+
+  test("reports the project inspection step limit accurately", () => {
+    expect(panelSource).toContain(
+      "projectInspectionStoppedAtStepLimit",
+    );
+    expect(panelSource).toContain(
+      "The read-only inspection reached the safe",
     );
     expect(panelSource).toContain(
       "getProjectInspectionMaxSteps()",

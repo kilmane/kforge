@@ -1728,8 +1728,8 @@ function buildAgentConversationInput(messages, tools, maxTurns = 20) {
     `- If you need a tool, output ONLY exactly one fenced \`\`\`tool block containing JSON.\n` +
     `- Output no prose before or after the tool block.\n` +
     `- Do NOT use XML tool tags, bare JSON, \`\`\`json fences, or function-like shorthand such as list_dir(path) or read_file(path).\n` +
-    `- Return only this single fenced JSON tool block shape:\n` +
-    `\`\`\`tool\n{ "name": "list_dir", "args": { "path": "." } }\n\`\`\`\n\n` +
+    `- The JSON object must contain exactly "name" and "args". Choose the next tool and path from the current conversation evidence.\n` +
+    `- Before requesting a tool, check the conversation for already executed tool calls and results. Never repeat an executed call.\n\n` +
     `Conversation so far:\n${transcriptLines.join("\n")}\n\n` +
     `Continue from the latest state.`
   );
@@ -4753,9 +4753,13 @@ export default function AiPanel({
               } else if (finalText) {
                 appendMessage("assistant", finalText);
               } else if (isProjectInspectionToolExecution) {
+                const projectInspectionStoppedAtStepLimit =
+                  agentResult?.stopReason === "max_steps_reached";
                 appendMessage(
                   "assistant",
-                  "The read-only inspection stopped before producing a final report.\n\nNo files were changed. Please retry the inspection or narrow the requested evidence.",
+                  projectInspectionStoppedAtStepLimit
+                    ? `The read-only inspection reached the safe ${getProjectInspectionMaxSteps()}-step limit before producing a final report.\n\nNo files were changed. Narrow the requested evidence or use a stronger inspection model.`
+                    : "The read-only inspection stopped before producing a final report.\n\nNo files were changed. Narrow the requested evidence or use a stronger inspection model.",
                 );
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&

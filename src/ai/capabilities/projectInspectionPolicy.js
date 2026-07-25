@@ -33,10 +33,12 @@ export function buildProjectInspectionContinuationTools() {
   return PROJECT_INSPECTION_CONTINUATION_TOOLS.map((tool) => ({ ...tool }));
 }
 
-export function buildProjectInspectionRecoveryToolCall() {
+export function buildProjectInspectionRecoveryToolCall(path = "") {
+  const recoveryPath = String(path || "").trim() || "src/App.jsx";
+
   return {
-    name: "list_dir",
-    args: { path: "." },
+    name: "read_file",
+    args: { path: recoveryPath },
   };
 }
 

@@ -23,11 +23,18 @@ describe("project inspection policy", () => {
     ).toEqual(["list_dir", "read_file", "search_in_file"]);
   });
 
-  test("builds a deterministic safe recovery tool call", () => {
-    expect(buildProjectInspectionRecoveryToolCall()).toEqual({
-      name: "list_dir",
+  test("builds a deterministic safe recovery read for the likely app file", () => {
+    expect(buildProjectInspectionRecoveryToolCall("src/App.jsx")).toEqual({
+      name: "read_file",
       args: {
-        path: ".",
+        path: "src/App.jsx",
+      },
+    });
+
+    expect(buildProjectInspectionRecoveryToolCall("   ")).toEqual({
+      name: "read_file",
+      args: {
+        path: "src/App.jsx",
       },
     });
   });
