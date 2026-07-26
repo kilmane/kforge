@@ -147,12 +147,7 @@ mod tests {
 
     #[test]
     fn omits_temperature_for_gpt_5_6_models() {
-        for model in [
-            "gpt-5.6",
-            "gpt-5.6-luna",
-            "gpt-5.6-terra",
-            "gpt-5.6-sol",
-        ] {
+        for model in ["gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"] {
             assert_eq!(
                 OpenAIProvider::request_temperature(model, Some(0.2_f32)),
                 None,

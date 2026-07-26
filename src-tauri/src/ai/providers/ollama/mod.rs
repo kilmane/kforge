@@ -72,7 +72,6 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
-
     pub fn new_endpoint() -> Self {
         Self {
             provider_id: "ollama",
@@ -253,7 +252,10 @@ impl super::AiProvider for OllamaProvider {
         };
 
         Ok(AiResponse {
-            id: parsed.id.clone().unwrap_or_else(|| self.provider_id().to_string()),
+            id: parsed
+                .id
+                .clone()
+                .unwrap_or_else(|| self.provider_id().to_string()),
             provider_id: self.provider_id().to_string(),
             model: parsed.model.clone().unwrap_or_else(|| req.model.clone()),
             output_text,

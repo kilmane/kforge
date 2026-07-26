@@ -282,11 +282,7 @@ mod tests {
 
     #[test]
     fn omits_temperature_for_current_adaptive_thinking_models() {
-        for model in [
-            "claude-fable-5",
-            "claude-opus-4-8",
-            "claude-sonnet-5",
-        ] {
+        for model in ["claude-fable-5", "claude-opus-4-8", "claude-sonnet-5"] {
             assert_eq!(
                 ClaudeProvider::request_temperature(&request(model, Some(0.2))),
                 None,
@@ -298,10 +294,7 @@ mod tests {
     #[test]
     fn preserves_temperature_for_haiku() {
         assert_eq!(
-            ClaudeProvider::request_temperature(&request(
-                "claude-haiku-4-5",
-                Some(0.2)
-            )),
+            ClaudeProvider::request_temperature(&request("claude-haiku-4-5", Some(0.2))),
             Some(0.2)
         );
     }
