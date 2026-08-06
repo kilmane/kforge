@@ -86,6 +86,27 @@ export async function supabaseQuickConnect(projectPath) {
   });
 }
 
+export async function supabaseAutopilotStatus() {
+  return invoke("supabase_autopilot_status");
+}
+
+export async function supabaseAutopilotConnect() {
+  return invoke("supabase_autopilot_connect");
+}
+
+export async function supabaseAutopilotSelectProject(projectRef) {
+  if (!projectRef || !String(projectRef).trim()) {
+    throw new Error("Supabase project reference is required");
+  }
+  return invoke("supabase_autopilot_select_project", {
+    projectRef: String(projectRef).trim(),
+  });
+}
+
+export async function supabaseAutopilotDisconnect() {
+  return invoke("supabase_autopilot_disconnect");
+}
+
 export async function stripeCreateEnvFile(projectPath) {
   return invoke("stripe_create_env_file", {
     projectPath: requireProjectPath(projectPath),

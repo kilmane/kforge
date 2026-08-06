@@ -26,11 +26,21 @@ keyring = "3"
 # Error handling
 thiserror = "2"
 
-# HTTP client
-# - blocking: enables reqwest::blocking module
-# - json: enables .json() helpers
-# - rustls-tls: TLS without native OpenSSL headaches on Windows
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+# HTTP clients
+# - blocking preserves the existing AI-provider clients
+# - rustls keeps Windows builds independent from a system OpenSSL install
+reqwest = { version = "0.13.2", default-features = false, features = ["blocking", "json", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+# Official Model Context Protocol Rust SDK. The Supabase Autopilot adapter uses
+# only its OAuth and Streamable HTTP client surfaces.
+rmcp = { version = "3.1.0", default-features = false, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
+
+# Temporary loopback OAuth callback listener.
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query"] }
+async-trait = "0.1"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+url = "2"
 
 # Tauri v2 plugins
 tauri-plugin-dialog = "2"

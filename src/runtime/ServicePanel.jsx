@@ -24,6 +24,7 @@ import {
   openaiCreateExample,
 } from "./serviceRunner";
 import { formatLogEntriesForClipboard } from "../utils/clipboardText.js";
+import SupabaseConnectionPanel from "./supabaseAutopilot/SupabaseConnectionPanel.jsx";
 
 const DEFAULT_TASK_ID = "code";
 const DEFAULT_PROVIDER_ID = "github";
@@ -1223,19 +1224,21 @@ export default function ServicePanel({ projectPath, onCopyTextChange }) {
           }}
         >
           {isSupabase ? (
-            <div
-              className="command-runner-item__meta"
-              style={{
-                display: "grid",
-                gap: "8px",
-                padding: "10px 12px",
-                border: "1px solid #27272a",
-                borderRadius: "8px",
-                background: "rgba(24, 24, 27, 0.35)",
-                fontSize: "13px",
-                color: "#d4d4d8",
-              }}
-            >
+            <>
+              <SupabaseConnectionPanel />
+              <div
+                className="command-runner-item__meta"
+                style={{
+                  display: "grid",
+                  gap: "8px",
+                  padding: "10px 12px",
+                  border: "1px solid #27272a",
+                  borderRadius: "8px",
+                  background: "rgba(24, 24, 27, 0.35)",
+                  fontSize: "13px",
+                  color: "#d4d4d8",
+                }}
+              >
               <div>Connect this project to a Supabase database.</div>
 
               <div style={{ color: "#a1a1aa" }}>
@@ -1304,7 +1307,8 @@ export default function ServicePanel({ projectPath, onCopyTextChange }) {
                   </div>
                 </div>
               ) : null}
-            </div>
+              </div>
+            </>
           ) : isOpenAI ? (
             <div
               className="command-runner-item__meta"

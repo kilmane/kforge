@@ -10,6 +10,7 @@ mod command_runner;
 mod preview;
 mod scaffold;
 mod service;
+mod supabase_autopilot;
 
 /// Allow a user-selected directory to be used by the FS plugin.
 /// This updates the runtime FS scope (safer than broad wildcards).
@@ -27,14 +28,20 @@ fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
 }
 
 pub fn run() {
+    // reqwest 0.13 leaves the rustls provider configurable. Ring avoids an
+    // external OpenSSL install and the AWS-LC C build on packaged Windows.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(preview::PreviewState::default())
         .manage(Arc::new(Mutex::new(
             command_runner::CommandRunnerState::default(),
         )))
         .manage(Arc::new(Mutex::new(service::ServiceRunnerState::default())))
+        .manage(supabase_autopilot::SupabaseAutopilotState::default())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             fs_allow_directory,
@@ -73,6 +80,10 @@ pub fn run() {
             service::github_clone_repo,
             service::deploy_open_vercel,
             service::deploy_open_netlify,
+            supabase_autopilot::supabase_autopilot_status,
+            supabase_autopilot::supabase_autopilot_connect,
+            supabase_autopilot::supabase_autopilot_select_project,
+            supabase_autopilot::supabase_autopilot_disconnect,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,
             scaffold::scaffold_expo_react_native,
