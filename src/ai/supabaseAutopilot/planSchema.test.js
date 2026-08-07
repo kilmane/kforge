@@ -4,6 +4,7 @@ import {
   createSupabaseAutopilotPlan,
   detectFramework,
   detectPackageManager,
+  fingerprintPlan,
   validateSupabaseAutopilotPlan,
 } from "./planSchema";
 
@@ -46,10 +47,29 @@ describe("Supabase Autopilot plan schema", () => {
 
     expect(plan.schemaVersion).toBe(SUPABASE_AUTOPILOT_PLAN_VERSION);
     expect(plan.executionStatus).toBe("planning-only");
+    expect(plan.implementationEligibility).toBe("eligible");
     expect(plan.mutationRequired).toBe(true);
     expect(plan.fingerprint).toMatch(/^fnv1a64-[a-f0-9]{16}$/);
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.remoteSupabaseFindings.tables)).toBe(true);
+    expect(plan.proposedDatabaseObjects[0]).toEqual(
+      expect.objectContaining({
+        columns: expect.arrayContaining([
+          expect.objectContaining({
+            name: "id",
+            dataType: "uuid",
+            safeToAddToExisting: false,
+          }),
+          expect.objectContaining({
+            name: "user_id",
+            dataType: "uuid",
+            safeToAddToExisting: false,
+          }),
+        ]),
+        primaryKeys: ["id"],
+        rlsRequired: true,
+      }),
+    );
     expect(validateSupabaseAutopilotPlan(plan)).toEqual({
       valid: true,
       errors: [],
@@ -139,6 +159,7 @@ describe("Supabase Autopilot plan schema", () => {
     });
 
     expect(plan.riskClassification).toBe("unsupported");
+    expect(plan.implementationEligibility).toBe("blocked");
     expect(plan.unsupportedConditions).not.toHaveLength(0);
     expect(plan.proposedApplicationFileOperations).toEqual([]);
   });
@@ -181,6 +202,18 @@ describe("Supabase Autopilot plan schema", () => {
         expect.stringMatching(/outside the safe boundary/),
         "Application operations must remain proposed.",
       ]),
+    );
+  });
+
+  test("rejects malformed or falsely safe database structure", () => {
+    const plan = createPlan();
+    const unsafe = JSON.parse(JSON.stringify(plan));
+    unsafe.proposedDatabaseObjects[0].columns[0].safeToAddToExisting = true;
+    delete unsafe.fingerprint;
+    unsafe.fingerprint = fingerprintPlan(unsafe);
+
+    expect(validateSupabaseAutopilotPlan(unsafe).errors).toContain(
+      "A proposed database column is malformed or not safely bounded.",
     );
   });
 

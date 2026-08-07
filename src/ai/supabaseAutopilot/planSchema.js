@@ -25,6 +25,17 @@ const SECRET_KEY_PATTERN =
 const ROW_CONTENT_KEY_PATTERN =
   /^(?:row|rows|rowData|rowContents|records|recordContents)$/i;
 const PROPOSED_STATUSES = new Set(["proposed", "planning-only"]);
+const PROPOSED_DATABASE_TYPES = new Set([
+  "bigint",
+  "boolean",
+  "date",
+  "integer",
+  "jsonb",
+  "text",
+  "timestamptz",
+  "uuid",
+  "varchar",
+]);
 
 export function detectFramework(application = {}) {
   const dependencies = dependencyNames(application);
@@ -197,6 +208,9 @@ export function createSupabaseAutopilotPlan({
     proposedVerificationSteps: verificationSteps,
     warnings,
     unsupportedConditions,
+    implementationEligibility: canProposeImplementation
+      ? "eligible"
+      : "blocked",
     riskClassification,
     mutationRequired:
       proposedDatabaseObjects.length > 0 ||
@@ -273,6 +287,19 @@ export function validateSupabaseAutopilotPlan(plan) {
     if (!PROPOSED_STATUSES.has(operation.status)) {
       errors.push("Database and policy operations must remain proposed.");
     }
+  }
+  for (const databaseObject of plan.proposedDatabaseObjects || []) {
+    const objectError = validateProposedDatabaseObject(databaseObject);
+    if (objectError) errors.push(objectError);
+  }
+  const expectedEligibility = plan.unsupportedConditions?.length
+    ? "blocked"
+    : "eligible";
+  if (
+    !["eligible", "blocked"].includes(plan.implementationEligibility) ||
+    plan.implementationEligibility !== expectedEligibility
+  ) {
+    errors.push("Implementation eligibility is missing or inconsistent.");
   }
   if (
     plan.riskClassification === "authentication/user-data change" &&
@@ -448,6 +475,14 @@ function buildDatabaseObjects(objective, existingTables, userOwnedData) {
       : userOwnedData
         ? "public.user_records"
         : "public.feature_records";
+  const tableName = baseName.split(".")[1];
+  const columns = [
+    proposedColumn("id", "uuid", false),
+    ...(userOwnedData
+      ? [proposedColumn("user_id", "uuid", false)]
+      : []),
+    proposedColumn("data", "jsonb", false),
+  ];
   return [
     {
       operation: existingNames.has(baseName) ? "review-table" : "create-table",
@@ -457,9 +492,32 @@ function buildDatabaseObjects(objective, existingTables, userOwnedData) {
         500,
       ),
       ownership: userOwnedData ? "authenticated-user-owned" : "application",
+      columns,
+      primaryKeys: ["id"],
+      foreignKeys: userOwnedData
+        ? [
+            {
+              name: `${tableName}_user_id_fkey`,
+              sourceColumns: ["user_id"],
+              targetTable: "auth.users",
+              targetColumns: ["id"],
+            },
+          ]
+        : [],
+      rlsRequired: userOwnedData,
       status: "proposed",
     },
   ];
+}
+
+function proposedColumn(name, dataType, nullable) {
+  return {
+    name,
+    dataType,
+    nullable,
+    unique: false,
+    safeToAddToExisting: nullable,
+  };
 }
 
 function buildFileOperations(local, userOwnedData) {
@@ -610,6 +668,100 @@ function findUnsafeField(value, path = []) {
   return "";
 }
 
+function validateProposedDatabaseObject(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !["create-table", "review-table"].includes(value.operation) ||
+    !boundedDatabaseName(value.name) ||
+    !isBoundedNormalizedText(value.purpose, 500) ||
+    !["authenticated-user-owned", "application"].includes(value.ownership) ||
+    !Array.isArray(value.columns) ||
+    !value.columns.length ||
+    value.columns.length > 80 ||
+    !Array.isArray(value.primaryKeys) ||
+    value.primaryKeys.length > 20 ||
+    !Array.isArray(value.foreignKeys) ||
+    value.foreignKeys.length > 40 ||
+    typeof value.rlsRequired !== "boolean"
+  ) {
+    return "A proposed database object is malformed.";
+  }
+
+  const columnNames = new Set();
+  for (const column of value.columns) {
+    if (
+      !column ||
+      typeof column !== "object" ||
+      !boundedIdentifier(column.name, 63) ||
+      column.name.includes(".") ||
+      !PROPOSED_DATABASE_TYPES.has(column.dataType) ||
+      typeof column.nullable !== "boolean" ||
+      typeof column.unique !== "boolean" ||
+      typeof column.safeToAddToExisting !== "boolean" ||
+      (column.safeToAddToExisting &&
+        (!column.nullable || column.unique))
+    ) {
+      return "A proposed database column is malformed or not safely bounded.";
+    }
+    columnNames.add(column.name);
+  }
+  if (columnNames.size !== value.columns.length) {
+    return "A proposed database object contains duplicate columns.";
+  }
+
+  if (
+    value.primaryKeys.some(
+      (column) =>
+        !boundedIdentifier(column, 63) ||
+        column.includes(".") ||
+        !columnNames.has(column),
+    )
+  ) {
+    return "A proposed primary key is malformed.";
+  }
+
+  for (const foreignKey of value.foreignKeys) {
+    if (
+      !foreignKey ||
+      typeof foreignKey !== "object" ||
+      !boundedIdentifier(foreignKey.name, 63) ||
+      foreignKey.name.includes(".") ||
+      !boundedDatabaseName(foreignKey.targetTable) ||
+      !Array.isArray(foreignKey.sourceColumns) ||
+      !foreignKey.sourceColumns.length ||
+      !Array.isArray(foreignKey.targetColumns) ||
+      foreignKey.sourceColumns.length !== foreignKey.targetColumns.length ||
+      foreignKey.sourceColumns.some(
+        (column) =>
+          !boundedIdentifier(column, 63) ||
+          column.includes(".") ||
+          !columnNames.has(column),
+      ) ||
+      foreignKey.targetColumns.some(
+        (column) =>
+          !boundedIdentifier(column, 63) || column.includes("."),
+      )
+    ) {
+      return "A proposed foreign key is malformed.";
+    }
+  }
+
+  const constrainedColumns = new Set([
+    ...value.primaryKeys,
+    ...value.foreignKeys.flatMap((foreignKey) => foreignKey.sourceColumns),
+  ]);
+  if (
+    value.columns.some(
+      (column) =>
+        column.safeToAddToExisting && constrainedColumns.has(column.name),
+    )
+  ) {
+    return "A constrained column cannot be marked safe to add to an existing table.";
+  }
+  return "";
+}
+
 function rejectSecretText(value) {
   if (SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
     throw new Error("Remove credentials or secret values from the planning request.");
@@ -653,6 +805,20 @@ function boundedStrings(values, limit, maxLength) {
 
 function boundedText(value, maxLength) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function isBoundedNormalizedText(
+  value,
+  maxLength,
+  { allowEmpty = false } = {},
+) {
+  if (typeof value !== "string") return false;
+  const normalized = boundedText(value, maxLength);
+  return (
+    value === normalized &&
+    value.length <= maxLength &&
+    (allowEmpty || Boolean(value))
+  );
 }
 
 function boundedIdentifier(value, maxLength) {

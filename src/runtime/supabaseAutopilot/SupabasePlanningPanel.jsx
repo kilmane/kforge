@@ -1,4 +1,8 @@
-import React, { useReducer, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
+import {
+  createSupabaseAutopilotReconciliation,
+  validateSupabaseAutopilotReconciliation,
+} from "../../ai/supabaseAutopilot/reconciliationSchema";
 import {
   createSupabaseAutopilotPlan,
   validateSupabaseAutopilotPlan,
@@ -25,8 +29,10 @@ export default function SupabasePlanningPanel({
   verifiedProject,
   projectPath,
   inspectPlanning = supabaseAutopilotPlanInspection,
+  reconcilePlan = createSupabaseAutopilotReconciliation,
 }) {
   const [objective, setObjective] = useState("");
+  const requestGenerationRef = useRef(0);
   const [state, dispatch] = useReducer(
     supabasePlanningReducer,
     initialSupabasePlanningState,
@@ -36,37 +42,72 @@ export default function SupabasePlanningPanel({
     projectPath,
     objective,
   });
+  const verifiedProjectReference = String(
+    verifiedProject?.reference || "",
+  ).trim();
+  const boundedProjectPath = String(projectPath || "").trim();
+
+  useEffect(() => {
+    requestGenerationRef.current += 1;
+    dispatch({ type: "reset" });
+  }, [verifiedProjectReference, boundedProjectPath]);
+
+  useEffect(
+    () => () => {
+      requestGenerationRef.current += 1;
+    },
+    [],
+  );
 
   async function createPlan(event) {
     event.preventDefault();
     if (!canStart || state.phase === "loading") return;
 
+    const requestGeneration = requestGenerationRef.current + 1;
+    requestGenerationRef.current = requestGeneration;
+    const requestedObjective = objective;
+    const requestedProjectReference = verifiedProjectReference;
+    const requestedProjectPath = boundedProjectPath;
     dispatch({ type: "begin" });
     try {
       const inspection = await inspectPlanning(
-        verifiedProject.reference,
-        projectPath,
+        requestedProjectReference,
+        requestedProjectPath,
       );
+      if (requestGeneration !== requestGenerationRef.current) return;
       const plan = createSupabaseAutopilotPlan({
-        objective,
-        selectedProjectReference: verifiedProject.reference,
+        objective: requestedObjective,
+        selectedProjectReference: requestedProjectReference,
         inspection,
       });
       const validation = validateSupabaseAutopilotPlan(plan);
       if (!validation.valid) {
         throw new Error(`Plan validation failed: ${validation.errors[0]}`);
       }
+      const reconciliation = reconcilePlan(plan);
+      const reconciliationValidation =
+        validateSupabaseAutopilotReconciliation(reconciliation);
+      if (!reconciliationValidation.valid) {
+        throw new Error(
+          `Reconciliation validation failed: ${reconciliationValidation.errors[0]}`,
+        );
+      }
+      if (requestGeneration !== requestGenerationRef.current) return;
       dispatch({
         type: "success",
         plan,
+        reconciliation,
         presentation: presentSupabaseAutopilotPlan(plan),
       });
     } catch (error) {
-      dispatch({ type: "error", error });
+      if (requestGeneration === requestGenerationRef.current) {
+        dispatch({ type: "error", error });
+      }
     }
   }
 
   const presentation = state.presentation;
+  const reconciliation = state.reconciliation;
 
   return (
     <section
@@ -105,6 +146,7 @@ export default function SupabasePlanningPanel({
             aria-label="Supabase feature objective"
             value={objective}
             onChange={(event) => {
+              requestGenerationRef.current += 1;
               setObjective(event.target.value.slice(0, 1200));
               if (state.phase !== "idle") dispatch({ type: "reset" });
             }}
@@ -202,6 +244,9 @@ export default function SupabasePlanningPanel({
           >
             No database or application changes were made.
           </div>
+          {reconciliation ? (
+            <ReconciliationReview reconciliation={reconciliation} />
+          ) : null}
           <details>
             <summary style={{ cursor: "pointer", fontWeight: 700 }}>
               Technical details
@@ -220,7 +265,14 @@ export default function SupabasePlanningPanel({
                 fontSize: "11px",
               }}
             >
-              {JSON.stringify(state.plan, null, 2)}
+              {JSON.stringify(
+                {
+                  plan: state.plan,
+                  reconciliation,
+                },
+                null,
+                2,
+              )}
             </pre>
           </details>
           <button type="button" style={{ ...actionStyle, opacity: 0.55 }} disabled>
@@ -230,4 +282,124 @@ export default function SupabasePlanningPanel({
       ) : null}
     </section>
   );
+}
+
+function ReconciliationReview({ reconciliation }) {
+  const alreadySatisfied = reconciliation.findings.filter(
+    (item) => item.classification === "already-satisfied",
+  );
+  const additive = reconciliation.findings.filter(
+    (item) => item.classification === "additive-proposal",
+  );
+  const review = reconciliation.findings.filter((item) =>
+    [
+      "manual-verification-required",
+      "conflict",
+      "blocked",
+    ].includes(item.classification),
+  );
+
+  return (
+    <section
+      aria-label="Migration reconciliation planning only"
+      style={{
+        display: "grid",
+        gap: "8px",
+        padding: "10px",
+        border: "1px solid rgba(96, 165, 250, 0.38)",
+        borderRadius: "8px",
+        background: "rgba(30, 64, 175, 0.1)",
+      }}
+    >
+      <div style={{ color: "#93c5fd", fontWeight: 800 }}>
+        Migration reconciliation — planning only
+      </div>
+      <div style={{ color: "#bfdbfe", fontWeight: 700 }}>
+        SQL has not been executed. No database or application changes were
+        made. Migration application is unavailable until a later milestone.
+      </div>
+      <div>
+        Status: {displayStatus(reconciliation.status)} · Migration ID:{" "}
+        <code>{reconciliation.proposedMigration.identity}</code>
+      </div>
+      <FindingList title="Already satisfied or retained" items={alreadySatisfied} />
+      <FindingList title="Proposed additive changes" items={additive} />
+      <FindingList title="Manual review, conflicts, or blocks" items={review} />
+      {reconciliation.warnings.length ? (
+        <FindingTextList
+          title="Reconciliation warnings"
+          items={reconciliation.warnings}
+        />
+      ) : null}
+      {reconciliation.limitations.length ? (
+        <FindingTextList
+          title="Inspection limitations"
+          items={reconciliation.limitations}
+        />
+      ) : null}
+      {reconciliation.sqlDraft ? (
+        <div>
+          <strong>Review-only SQL draft</strong>
+          <pre
+            aria-label="Review-only SQL draft"
+            style={{
+              maxHeight: "320px",
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              margin: "6px 0 0",
+              padding: "8px",
+              borderRadius: "6px",
+              background: "#09090b",
+              color: "#d4d4d8",
+              fontSize: "11px",
+            }}
+          >
+            {reconciliation.sqlDraft}
+          </pre>
+        </div>
+      ) : null}
+      <div style={{ color: "#a7f3d0", fontWeight: 800 }}>
+        {reconciliation.nothingAppliedStatement}
+      </div>
+    </section>
+  );
+}
+
+function FindingList({ title, items }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <strong>{title}</strong>
+      <ul style={{ margin: "6px 0 0", paddingLeft: "20px" }}>
+        {items.map((item) => (
+          <li
+            key={`${item.classification}:${item.objectType}:${item.objectName}:${item.summary}`}
+          >
+            <code>{item.objectName}</code>: {item.summary}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FindingTextList({ title, items }) {
+  return (
+    <div>
+      <strong>{title}</strong>
+      <ul style={{ margin: "6px 0 0", paddingLeft: "20px" }}>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function displayStatus(value) {
+  return String(value || "")
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

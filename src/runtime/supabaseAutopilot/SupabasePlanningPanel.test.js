@@ -112,12 +112,31 @@ describe("SupabasePlanningPanel", () => {
     expect(
       container.querySelector('[aria-label="Supabase implementation plan"]'),
     ).toBeTruthy();
+    expect(
+      container.querySelector(
+        '[aria-label="Migration reconciliation planning only"]',
+      ),
+    ).toBeTruthy();
     expect(container.textContent).toMatch(/No database or application changes were made/);
+    expect(container.textContent).toMatch(/SQL has not been executed/);
+    expect(container.textContent).toMatch(/Review-only SQL draft/);
+    expect(container.textContent).toMatch(
+      /Migration application is unavailable until a later milestone/,
+    );
     expect(container.textContent).toMatch(/Technical details/);
     expect(container.textContent).toMatch(/Plan ID/);
     expect(container.textContent).not.toMatch(/\bApprove\b/);
     expect(container.textContent).not.toMatch(/\bApply\b/);
     expect(container.textContent).not.toMatch(/Run migration/);
+    expect(
+      Array.from(container.querySelectorAll("button")).map(
+        (button) => button.textContent,
+      ),
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/\b(?:apply|run|execute)\b/i),
+      ]),
+    );
     expect(
       findButton("Implementation is not available in this milestone").disabled,
     ).toBe(true);
@@ -151,6 +170,137 @@ describe("SupabasePlanningPanel", () => {
     );
     expect(
       container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeNull();
+  });
+
+  test("clears stale reconciliation when the objective or project changes", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+
+    await act(async () => {
+      findButton("Create read-only plan").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(
+      container.querySelector(
+        '[aria-label="Migration reconciliation planning only"]',
+      ),
+    ).toBeTruthy();
+
+    setObjective("Add a different notes table.");
+    expect(
+      container.querySelector(
+        '[aria-label="Migration reconciliation planning only"]',
+      ),
+    ).toBeNull();
+
+    await act(async () => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={null}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeNull();
+  });
+
+  test("ignores a late inspection result after the selected project changes", async () => {
+    let resolveInspection;
+    const inspectPlanning = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveInspection = resolve;
+        }),
+    );
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+    await act(async () => {
+      findButton("Create read-only plan").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={{
+            name: "Other Development",
+            reference: "zyxwvutsrqponmlkjihg",
+          }}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+        />,
+      );
+      await Promise.resolve();
+      resolveInspection(inspection);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeNull();
+  });
+
+  test("rejects malformed reconciliation output rather than rendering it", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+    const reconcilePlan = jest.fn(() => ({
+      canApply: true,
+      executionStatus: "applied",
+    }));
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          reconcilePlan={reconcilePlan}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+
+    await act(async () => {
+      findButton("Create read-only plan").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[role="alert"]').textContent).toMatch(
+      /Reconciliation validation failed/i,
+    );
+    expect(
+      container.querySelector(
+        '[aria-label="Migration reconciliation planning only"]',
+      ),
     ).toBeNull();
   });
 

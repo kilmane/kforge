@@ -1,9 +1,41 @@
+import { fingerprintPlan } from "../../ai/supabaseAutopilot/planSchema";
 import {
   canStartSupabasePlanning,
   initialSupabasePlanningState,
   safePlanningError,
   supabasePlanningReducer,
 } from "./planningState";
+
+function createReconciliation() {
+  const value = {
+    schemaVersion: "supabase-autopilot-reconciliation/v1",
+    sourcePlanFingerprint: "fnv1a64-1111111122222222",
+    selectedProject: {
+      name: "Development",
+      reference: "dev-ref",
+    },
+    proposedMigration: {
+      version: "31234567890123",
+      name: "supabase_autopilot_111122222222",
+      identity:
+        "31234567890123_supabase_autopilot_111122222222",
+      status: "unused",
+    },
+    status: "already-satisfied",
+    findings: [],
+    proposedAdditiveChanges: [],
+    manualReview: [],
+    conflicts: [],
+    warnings: [],
+    limitations: [],
+    sqlDraft: "",
+    canApply: false,
+    executionStatus: "not-applied",
+    nothingAppliedStatement:
+      "Planning only: nothing was applied. SQL was not executed and no database or application changes were made.",
+  };
+  return { ...value, fingerprint: fingerprintPlan(value) };
+}
 
 describe("Supabase planning state", () => {
   test("starts idle and enters a loading state without stale output", () => {
@@ -13,6 +45,7 @@ describe("Supabase planning state", () => {
         {
           phase: "success",
           plan: { old: true },
+          reconciliation: { old: true },
           presentation: { old: true },
           error: "",
         },
@@ -21,6 +54,7 @@ describe("Supabase planning state", () => {
     ).toEqual({
       phase: "loading",
       plan: null,
+      reconciliation: null,
       presentation: null,
       error: "",
     });
@@ -29,18 +63,38 @@ describe("Supabase planning state", () => {
   test("accepts a validated plan and its presentation", () => {
     const plan = { schemaVersion: "supabase-autopilot-plan/v1" };
     const presentation = { title: "Plan" };
+    const reconciliation = createReconciliation();
 
     expect(
       supabasePlanningReducer(initialSupabasePlanningState, {
         type: "success",
         plan,
+        reconciliation,
         presentation,
       }),
     ).toEqual({
       phase: "success",
       plan,
+      reconciliation,
       presentation,
       error: "",
+    });
+  });
+
+  test("rejects malformed reconciliation output instead of retaining it", () => {
+    expect(
+      supabasePlanningReducer(initialSupabasePlanningState, {
+        type: "success",
+        plan: { schemaVersion: "supabase-autopilot-plan/v1" },
+        reconciliation: { canApply: true },
+        presentation: { title: "Plan" },
+      }),
+    ).toEqual({
+      phase: "error",
+      plan: null,
+      reconciliation: null,
+      presentation: null,
+      error: "The planning result was malformed.",
     });
   });
 
