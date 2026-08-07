@@ -120,6 +120,7 @@ describe("SupabasePlanningPanel", () => {
     expect(container.textContent).toMatch(/No database or application changes were made/);
     expect(container.textContent).toMatch(/SQL has not been executed/);
     expect(container.textContent).toMatch(/Review-only SQL draft/);
+    expect(container.textContent).toMatch(/Managed migration name/);
     expect(container.textContent).toMatch(
       /Migration application is unavailable until a later milestone/,
     );

@@ -148,10 +148,7 @@ export function createSupabaseAutopilotReconciliation(plan) {
     }
   }
   for (const remoteMigration of plan.remoteSupabaseFindings.migrations) {
-    if (
-      remoteMigration.version !== proposedMigration.version ||
-      remoteMigration.name !== proposedMigration.name
-    ) {
+    if (remoteMigration.name !== proposedMigration.name) {
       findings.push(
         finding(
           "already-satisfied",
@@ -450,10 +447,12 @@ export function validateSupabaseAutopilotReconciliation(result) {
   }
   if (!collectionsAreMalformed) {
     try {
-      const expectedSql = buildReviewOnlySql(
-        result.proposedAdditiveChanges,
-        [],
-      );
+      const suppressSqlDraft =
+        result.proposedMigration?.status === "collision" ||
+        result.conflicts.some((item) => item.objectType === "migration");
+      const expectedSql = suppressSqlDraft
+        ? ""
+        : buildReviewOnlySql(result.proposedAdditiveChanges, []);
       if (sqlStatementsOnly(sqlDraft) !== sqlStatementsOnly(expectedSql)) {
         errors.push(
           "The SQL draft does not match the validated additive changes.",
@@ -709,37 +708,31 @@ function reconcileForeignKeys(
 }
 
 function reconcileMigrationHistory(proposedMigration, migrations) {
-  const exact = migrations.find(
-    (migration) =>
-      migration.version === proposedMigration.version &&
-      migration.name === proposedMigration.name,
+  const managedNameMatches = migrations.filter(
+    (migration) => migration.name === proposedMigration.name,
   );
-  if (exact) {
-    return finding(
-      "already-satisfied",
-      "migration",
-      proposedMigration.identity,
-      "The deterministic migration identity is already recorded in read-only migration metadata.",
-    );
-  }
-  const collision = migrations.find(
-    (migration) =>
-      migration.version === proposedMigration.version ||
-      migration.name === proposedMigration.name,
-  );
-  if (collision) {
+  if (managedNameMatches.length > 1) {
     return finding(
       "conflict",
       "migration",
       proposedMigration.identity,
-      `The proposed migration identity collides with recorded migration ${collision.version}_${collision.name || "unnamed"} and equivalence cannot be proven.`,
+      "The deterministic managed migration name appears more than once in bounded read-only migration metadata. Provider identity is ambiguous and reconciliation is blocked.",
+    );
+  }
+  if (managedNameMatches.length === 1) {
+    const [recorded] = managedNameMatches;
+    return finding(
+      "already-satisfied",
+      "migration",
+      proposedMigration.identity,
+      `The deterministic managed migration name is recorded under Supabase-assigned version ${recorded.version}. Schema structure must still reconcile before the plan can be considered satisfied.`,
     );
   }
   return finding(
     "additive-proposal",
     "migration",
     proposedMigration.identity,
-    "The deterministic migration identity is unused in the bounded read-only migration list.",
+    "The deterministic managed migration name is unused in the bounded read-only migration list.",
   );
 }
 
@@ -864,9 +857,11 @@ function buildMigrationIdentity(plan) {
   const version = `3${numeric.slice(0, 13).padEnd(13, "0")}`;
   const name = `supabase_autopilot_${hexadecimal.slice(-12)}`;
   return {
+    // Supabase assigns the remote migration version. This deterministic value
+    // remains planning metadata and is not used to match remote migrations.
     version,
     name,
-    identity: `${version}_${name}`,
+    identity: name,
   };
 }
 
@@ -1195,7 +1190,7 @@ function validMigrationIdentity(value) {
       typeof value === "object" &&
       /^[0-9]{14}$/.test(value.version) &&
       /^[a-z0-9_]{1,120}$/.test(value.name) &&
-      value.identity === `${value.version}_${value.name}` &&
+      value.identity === value.name &&
       ["unused", "already-recorded", "collision", "blocked"].includes(
         value.status,
       ),

@@ -319,7 +319,7 @@ function ReconciliationReview({ reconciliation }) {
         made. Migration application is unavailable until a later milestone.
       </div>
       <div>
-        Status: {displayStatus(reconciliation.status)} · Migration ID:{" "}
+        Status: {displayStatus(reconciliation.status)} · Managed migration name:{" "}
         <code>{reconciliation.proposedMigration.identity}</code>
       </div>
       <FindingList title="Already satisfied or retained" items={alreadySatisfied} />

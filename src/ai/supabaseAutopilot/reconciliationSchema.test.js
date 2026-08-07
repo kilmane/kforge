@@ -89,6 +89,12 @@ describe("Supabase Autopilot migration reconciliation", () => {
     );
     expect(first.fingerprint).toBe(second.fingerprint);
     expect(first.proposedMigration).toEqual(second.proposedMigration);
+    expect(first.proposedMigration.identity).toBe(
+      first.proposedMigration.name,
+    );
+    expect(first.proposedMigration.name).toMatch(
+      /^supabase_autopilot_[a-f0-9]{12}$/,
+    );
     expect(first.fingerprint).toMatch(/^fnv1a64-[a-f0-9]{16}$/);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.findings)).toBe(true);
@@ -292,7 +298,7 @@ describe("Supabase Autopilot migration reconciliation", () => {
     );
   });
 
-  test("migration identity collisions block reconciliation", () => {
+  test("a coincidental provider version match with another name is retained, not treated as the managed migration", () => {
     const identity =
       createSupabaseAutopilotReconciliation(
         createPlan(),
@@ -308,13 +314,20 @@ describe("Supabase Autopilot migration reconciliation", () => {
       }),
     );
 
-    expect(result.status).toBe("blocked");
-    expect(result.proposedMigration.status).toBe("collision");
-    expect(result.conflicts[0].objectType).toBe("migration");
-    expect(result.sqlDraft).toBe("");
+    expect(result.status).toBe("additive-proposal");
+    expect(result.proposedMigration.status).toBe("unused");
+    expect(result.conflicts).toEqual([]);
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objectType: "retained-migration",
+          objectName: identity.version,
+        }),
+      ]),
+    );
   });
 
-  test("an already-recorded matching migration identity is recognized without claiming mutation", () => {
+  test("a managed migration name under a Supabase-assigned version reconciles only with satisfied schema", () => {
     const identity =
       createSupabaseAutopilotReconciliation(
         createPlan({ tables: [compatibleFeatureTable()] }),
@@ -324,7 +337,7 @@ describe("Supabase Autopilot migration reconciliation", () => {
         tables: [compatibleFeatureTable()],
         migrations: [
           {
-            version: identity.version,
+            version: "20260807123456",
             name: identity.name,
           },
         ],
@@ -334,6 +347,138 @@ describe("Supabase Autopilot migration reconciliation", () => {
     expect(result.status).toBe("already-satisfied");
     expect(result.proposedMigration.status).toBe("already-recorded");
     expect(result.executionStatus).toBe("not-applied");
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objectType: "migration",
+          summary: expect.stringMatching(
+            /Supabase-assigned version 20260807123456/,
+          ),
+        }),
+      ]),
+    );
+  });
+
+  test("a managed migration name with missing expected schema fails closed", () => {
+    const identity =
+      createSupabaseAutopilotReconciliation(
+        createPlan(),
+      ).proposedMigration;
+    const result = createSupabaseAutopilotReconciliation(
+      createPlan({
+        migrations: [
+          {
+            version: "20260807123456",
+            name: identity.name,
+          },
+        ],
+      }),
+    );
+
+    expect(result.status).toBe("conflict");
+    expect(result.proposedMigration.status).toBe("already-recorded");
+    expect(result.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ objectType: "migration" }),
+      ]),
+    );
+    expect(result.sqlDraft).toBe("");
+  });
+
+  test("a managed migration name with incompatible expected schema is not satisfied", () => {
+    const identity =
+      createSupabaseAutopilotReconciliation(
+        createPlan(),
+      ).proposedMigration;
+    const incompatible = compatibleFeatureTable({
+      columns: [
+        {
+          name: "id",
+          dataType: "text",
+          nullable: false,
+          unique: false,
+        },
+        compatibleFeatureTable().columns[1],
+      ],
+    });
+    const result = createSupabaseAutopilotReconciliation(
+      createPlan({
+        tables: [incompatible],
+        migrations: [
+          {
+            version: "20260807123456",
+            name: identity.name,
+          },
+        ],
+      }),
+    );
+
+    expect(result.status).toBe("conflict");
+    expect(result.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ objectType: "column" }),
+      ]),
+    );
+  });
+
+  test("duplicate managed migration name metadata is ambiguous and blocks reconciliation", () => {
+    const identity =
+      createSupabaseAutopilotReconciliation(
+        createPlan({ tables: [compatibleFeatureTable()] }),
+      ).proposedMigration;
+    const result = createSupabaseAutopilotReconciliation(
+      createPlan({
+        tables: [compatibleFeatureTable()],
+        migrations: [
+          {
+            version: "20260807123456",
+            name: identity.name,
+          },
+          {
+            version: "20260807123457",
+            name: identity.name,
+          },
+        ],
+      }),
+    );
+
+    expect(result.status).toBe("blocked");
+    expect(result.proposedMigration.status).toBe("collision");
+    expect(result.conflicts[0]).toEqual(
+      expect.objectContaining({
+        objectType: "migration",
+        summary: expect.stringMatching(/appears more than once/i),
+      }),
+    );
+    expect(result.sqlDraft).toBe("");
+  });
+
+  test("provider-assigned version changes do not change the deterministic managed identity", () => {
+    const identity =
+      createSupabaseAutopilotReconciliation(
+        createPlan({ tables: [compatibleFeatureTable()] }),
+      ).proposedMigration;
+    const first = createSupabaseAutopilotReconciliation(
+      createPlan({
+        tables: [compatibleFeatureTable()],
+        migrations: [{ version: "20260807123456", name: identity.name }],
+      }),
+    );
+    const second = createSupabaseAutopilotReconciliation(
+      createPlan({
+        tables: [compatibleFeatureTable()],
+        migrations: [{ version: "20260807123457", name: identity.name }],
+      }),
+    );
+
+    expect(first.proposedMigration.name).toBe(second.proposedMigration.name);
+    expect(first.proposedMigration.identity).toBe(
+      second.proposedMigration.identity,
+    );
+    expect(first.proposedMigration.version).toBe(
+      second.proposedMigration.version,
+    );
+    expect(first.fingerprint).not.toBe(second.fingerprint);
   });
 
   test("destructive operations never appear in SQL", () => {

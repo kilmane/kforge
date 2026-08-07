@@ -17,8 +17,7 @@ function createReconciliation() {
     proposedMigration: {
       version: "31234567890123",
       name: "supabase_autopilot_111122222222",
-      identity:
-        "31234567890123_supabase_autopilot_111122222222",
+      identity: "supabase_autopilot_111122222222",
       status: "unused",
     },
     status: "already-satisfied",
