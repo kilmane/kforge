@@ -8,12 +8,25 @@ import {
   validateSupabaseAutopilotPlan,
 } from "../../ai/supabaseAutopilot/planSchema";
 import { presentSupabaseAutopilotPlan } from "../../ai/supabaseAutopilot/planPresentation";
-import { supabaseAutopilotPlanInspection } from "../serviceRunner";
+import {
+  supabaseAutopilotApplyApprovedMigration,
+  supabaseAutopilotPlanInspection,
+  supabaseAutopilotPrepareMigrationApproval,
+} from "../serviceRunner";
 import {
   canStartSupabasePlanning,
   initialSupabasePlanningState,
   supabasePlanningReducer,
 } from "./planningState";
+import {
+  canApplyPreparedSupabaseApproval,
+  createSupabaseMutationApprovalRequest,
+  getSupabaseMutationEligibility,
+  initialSupabaseMutationState,
+  supabaseMutationReducer,
+  validatePreparedSupabaseApproval,
+  verifySupabaseMutationResult,
+} from "./mutationState";
 
 const actionStyle = {
   border: "1px solid rgba(244, 185, 66, 0.45)",
@@ -30,18 +43,33 @@ export default function SupabasePlanningPanel({
   projectPath,
   inspectPlanning = supabaseAutopilotPlanInspection,
   reconcilePlan = createSupabaseAutopilotReconciliation,
+  prepareMigrationApproval = supabaseAutopilotPrepareMigrationApproval,
+  applyApprovedMigration = supabaseAutopilotApplyApprovedMigration,
 }) {
   const [objective, setObjective] = useState("");
+  const [developmentConfirmed, setDevelopmentConfirmed] = useState(false);
   const requestGenerationRef = useRef(0);
+  const approvalInFlightRef = useRef(false);
+  const applyInFlightRef = useRef(false);
   const [state, dispatch] = useReducer(
     supabasePlanningReducer,
     initialSupabasePlanningState,
   );
+  const [mutationState, mutationDispatch] = useReducer(
+    supabaseMutationReducer,
+    initialSupabaseMutationState,
+  );
+  const mutationLocked = [
+    "applying",
+    "applied-awaiting-verification",
+  ].includes(mutationState.phase);
   const canStart = canStartSupabasePlanning({
     verifiedProject,
     projectPath,
     objective,
   });
+  const canCreatePlan =
+    canStart && state.phase !== "loading" && !mutationLocked;
   const verifiedProjectReference = String(
     verifiedProject?.reference || "",
   ).trim();
@@ -50,6 +78,10 @@ export default function SupabasePlanningPanel({
   useEffect(() => {
     requestGenerationRef.current += 1;
     dispatch({ type: "reset" });
+    mutationDispatch({ type: "reset" });
+    setDevelopmentConfirmed(false);
+    approvalInFlightRef.current = false;
+    applyInFlightRef.current = false;
   }, [verifiedProjectReference, boundedProjectPath]);
 
   useEffect(
@@ -61,7 +93,7 @@ export default function SupabasePlanningPanel({
 
   async function createPlan(event) {
     event.preventDefault();
-    if (!canStart || state.phase === "loading") return;
+    if (!canCreatePlan) return;
 
     const requestGeneration = requestGenerationRef.current + 1;
     requestGenerationRef.current = requestGeneration;
@@ -69,6 +101,10 @@ export default function SupabasePlanningPanel({
     const requestedProjectReference = verifiedProjectReference;
     const requestedProjectPath = boundedProjectPath;
     dispatch({ type: "begin" });
+    mutationDispatch({ type: "reset" });
+    setDevelopmentConfirmed(false);
+    approvalInFlightRef.current = false;
+    applyInFlightRef.current = false;
     try {
       const inspection = await inspectPlanning(
         requestedProjectReference,
@@ -99,6 +135,16 @@ export default function SupabasePlanningPanel({
         reconciliation,
         presentation: presentSupabaseAutopilotPlan(plan),
       });
+      const mutationEligibility = getSupabaseMutationEligibility({
+        reconciliation,
+        verifiedProject,
+      });
+      mutationDispatch({
+        type: mutationEligibility.eligible
+          ? "reconciliation_available"
+          : "blocked",
+        error: mutationEligibility.reason,
+      });
     } catch (error) {
       if (requestGeneration === requestGenerationRef.current) {
         dispatch({ type: "error", error });
@@ -108,6 +154,126 @@ export default function SupabasePlanningPanel({
 
   const presentation = state.presentation;
   const reconciliation = state.reconciliation;
+  const mutationEligibility = getSupabaseMutationEligibility({
+    reconciliation,
+    verifiedProject,
+  });
+
+  async function approveMigration() {
+    if (
+      approvalInFlightRef.current ||
+      mutationState.phase !== "awaiting-approval"
+    ) {
+      return;
+    }
+    approvalInFlightRef.current = true;
+    const approvalGeneration = requestGenerationRef.current;
+    try {
+      const request = createSupabaseMutationApprovalRequest({
+        reconciliation,
+        verifiedProject,
+        confirmedDevelopmentProjectReference: developmentConfirmed
+          ? verifiedProjectReference
+          : "",
+      });
+      mutationDispatch({ type: "approval_begin" });
+      const approval = await prepareMigrationApproval(request);
+      if (approvalGeneration !== requestGenerationRef.current) return;
+      if (
+        !validatePreparedSupabaseApproval(
+          approval,
+          reconciliation,
+          verifiedProject,
+        )
+      ) {
+        throw new Error(
+          "Prepared approval did not match the current reconciliation.",
+        );
+      }
+      mutationDispatch({ type: "approved", approval });
+    } catch (error) {
+      if (approvalGeneration === requestGenerationRef.current) {
+        mutationDispatch({ type: "approval_error", error });
+      }
+    } finally {
+      approvalInFlightRef.current = false;
+    }
+  }
+
+  async function applyMigration() {
+    if (
+      applyInFlightRef.current ||
+      !canApplyPreparedSupabaseApproval(
+        mutationState,
+        reconciliation,
+        verifiedProject,
+      )
+    ) {
+      return;
+    }
+    applyInFlightRef.current = true;
+    const approval = mutationState.approval;
+    const approvedObjective = state.plan.requestedObjective;
+    const approvedProjectReference = verifiedProjectReference;
+    const approvedProjectPath = boundedProjectPath;
+    const expectedMigrationName = reconciliation.proposedMigration.name;
+    const approvalGeneration = requestGenerationRef.current;
+    mutationDispatch({ type: "applying" });
+    try {
+      const result = await applyApprovedMigration(approval.approvalToken);
+      if (approvalGeneration !== requestGenerationRef.current) return;
+      if (result?.status !== "applied-awaiting-verification") {
+        throw new Error("Supabase did not confirm the mutation attempt.");
+      }
+      mutationDispatch({ type: "applied" });
+    } catch (error) {
+      if (approvalGeneration === requestGenerationRef.current) {
+        mutationDispatch({ type: "failed", error });
+      }
+      return;
+    } finally {
+      applyInFlightRef.current = false;
+    }
+
+    try {
+      const inspection = await inspectPlanning(
+        approvedProjectReference,
+        approvedProjectPath,
+      );
+      if (approvalGeneration !== requestGenerationRef.current) return;
+      const freshPlan = createSupabaseAutopilotPlan({
+        objective: approvedObjective,
+        selectedProjectReference: approvedProjectReference,
+        inspection,
+      });
+      const planValidation = validateSupabaseAutopilotPlan(freshPlan);
+      if (!planValidation.valid) {
+        throw new Error(
+          `Fresh plan validation failed: ${planValidation.errors[0]}`,
+        );
+      }
+      const freshReconciliation = reconcilePlan(freshPlan);
+      if (approvalGeneration !== requestGenerationRef.current) return;
+      const verification = verifySupabaseMutationResult({
+        plan: freshPlan,
+        reconciliation: freshReconciliation,
+        expectedProjectReference: approvedProjectReference,
+        expectedMigrationName,
+      });
+      if (!verification.eligible) throw new Error(verification.reason);
+      dispatch({
+        type: "success",
+        plan: freshPlan,
+        reconciliation: freshReconciliation,
+        presentation: presentSupabaseAutopilotPlan(freshPlan),
+      });
+      mutationDispatch({ type: "verified", providerVersion: verification.providerVersion });
+    } catch (error) {
+      if (approvalGeneration === requestGenerationRef.current) {
+        mutationDispatch({ type: "verification_failed", error });
+      }
+    }
+  }
 
   return (
     <section
@@ -149,8 +315,12 @@ export default function SupabasePlanningPanel({
               requestGenerationRef.current += 1;
               setObjective(event.target.value.slice(0, 1200));
               if (state.phase !== "idle") dispatch({ type: "reset" });
+              mutationDispatch({ type: "reset" });
+              setDevelopmentConfirmed(false);
+              approvalInFlightRef.current = false;
+              applyInFlightRef.current = false;
             }}
-            disabled={state.phase === "loading"}
+            disabled={state.phase === "loading" || mutationLocked}
             placeholder="For example: Add sign-in and save each user’s Hajj progress."
             rows={3}
             style={{
@@ -169,10 +339,10 @@ export default function SupabasePlanningPanel({
           type="submit"
           style={{
             ...actionStyle,
-            cursor: canStart ? "pointer" : "not-allowed",
-            opacity: canStart ? 1 : 0.55,
+            cursor: canCreatePlan ? "pointer" : "not-allowed",
+            opacity: canCreatePlan ? 1 : 0.55,
           }}
-          disabled={!canStart || state.phase === "loading"}
+          disabled={!canCreatePlan}
         >
           {state.phase === "loading"
             ? "Inspecting read-only…"
@@ -275,10 +445,167 @@ export default function SupabasePlanningPanel({
               )}
             </pre>
           </details>
-          <button type="button" style={{ ...actionStyle, opacity: 0.55 }} disabled>
-            Implementation is not available in this milestone
-          </button>
+          <MigrationMutationReview
+            reconciliation={reconciliation}
+            verifiedProject={verifiedProject}
+            eligibility={mutationEligibility}
+            mutationState={mutationState}
+            developmentConfirmed={developmentConfirmed}
+            onDevelopmentConfirmation={setDevelopmentConfirmed}
+            onApprove={approveMigration}
+            onApply={applyMigration}
+          />
         </article>
+      ) : null}
+    </section>
+  );
+}
+
+function MigrationMutationReview({
+  reconciliation,
+  verifiedProject,
+  eligibility,
+  mutationState,
+  developmentConfirmed,
+  onDevelopmentConfirmation,
+  onApprove,
+  onApply,
+}) {
+  const canApprove =
+    eligibility.eligible &&
+    developmentConfirmed &&
+    mutationState.phase === "awaiting-approval";
+  const canApply =
+    eligibility.eligible && mutationState.phase === "approved";
+
+  return (
+    <section
+      aria-label="Approved development migration"
+      style={{
+        display: "grid",
+        gap: "8px",
+        padding: "10px",
+        border: "1px solid rgba(248, 113, 113, 0.5)",
+        borderRadius: "8px",
+        background: "rgba(127, 29, 29, 0.12)",
+      }}
+    >
+      <div style={{ color: "#fca5a5", fontWeight: 800 }}>
+        Development database mutation
+      </div>
+      {!eligibility.eligible ? (
+        mutationState.phase === "verified" ? null : (
+          <div style={{ color: "#fca5a5" }}>
+            Mutation unavailable: {eligibility.reason}
+          </div>
+        )
+      ) : (
+        <>
+          <div>
+            Project: <strong>{verifiedProject.name}</strong>
+          </div>
+          <div>
+            Reference: <code>{verifiedProject.reference}</code>
+          </div>
+          <div>
+            Managed migration name:{" "}
+            <code>{reconciliation.proposedMigration.name}</code>
+          </div>
+          <div>
+            Reconciliation status: {displayStatus(reconciliation.status)}
+          </div>
+          <div>
+            <strong>Proposed additive changes</strong>
+            <ul style={{ margin: "6px 0 0", paddingLeft: "20px" }}>
+              {reconciliation.proposedAdditiveChanges.map((change, index) => (
+                <li key={`${change.operation}:${change.table}:${index}`}>
+                  <code>{change.operation}</code> on{" "}
+                  <code>{change.table}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <strong>Exact approved SQL</strong>
+            <pre
+              aria-label="Exact approved migration SQL"
+              style={{
+                maxHeight: "320px",
+                overflow: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                margin: "6px 0 0",
+                padding: "8px",
+                borderRadius: "6px",
+                background: "#09090b",
+                color: "#d4d4d8",
+                fontSize: "11px",
+              }}
+            >
+              {reconciliation.sqlDraft}
+            </pre>
+          </div>
+          <div role="alert" style={{ color: "#fecaca", fontWeight: 800 }}>
+            Warning: approval and Apply WILL modify the selected Supabase
+            database. No automatic retry or rollback will occur.
+          </div>
+          {mutationState.phase === "awaiting-approval" ? (
+            <>
+              <label style={{ display: "flex", gap: "8px", alignItems: "start" }}>
+                <input
+                  aria-label="Confirm development-only Supabase project"
+                  type="checkbox"
+                  checked={developmentConfirmed}
+                  onChange={(event) =>
+                    onDevelopmentConfirmation(event.target.checked)
+                  }
+                />
+                <span>
+                  I explicitly confirm that project{" "}
+                  <code>{verifiedProject.reference}</code> is development-only
+                  and safe to modify.
+                </span>
+              </label>
+              <button
+                type="button"
+                style={{
+                  ...actionStyle,
+                  cursor: canApprove ? "pointer" : "not-allowed",
+                  opacity: canApprove ? 1 : 0.55,
+                }}
+                disabled={!canApprove}
+                onClick={onApprove}
+              >
+                Approve this exact migration
+              </button>
+            </>
+          ) : null}
+          {mutationState.phase === "approved" ? (
+            <button
+              type="button"
+              style={{
+                ...actionStyle,
+                borderColor: "rgba(248, 113, 113, 0.75)",
+                color: "#fecaca",
+                cursor: canApply ? "pointer" : "not-allowed",
+              }}
+              disabled={!canApply}
+              onClick={onApply}
+            >
+              Apply approved migration
+            </button>
+          ) : null}
+        </>
+      )}
+      {mutationState.message ? (
+        <div role="status" style={{ color: "#fde68a", fontWeight: 700 }}>
+          {mutationState.message}
+        </div>
+      ) : null}
+      {mutationState.error ? (
+        <div role="alert" style={{ color: "#fca5a5" }}>
+          {mutationState.error}
+        </div>
       ) : null}
     </section>
   );
@@ -316,7 +643,8 @@ function ReconciliationReview({ reconciliation }) {
       </div>
       <div style={{ color: "#bfdbfe", fontWeight: 700 }}>
         SQL has not been executed. No database or application changes were
-        made. Migration application is unavailable until a later milestone.
+        made by reconciliation. Any eligible development mutation requires a
+        separate exact approval below.
       </div>
       <div>
         Status: {displayStatus(reconciliation.status)} · Managed migration name:{" "}

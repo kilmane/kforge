@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 
 jest.mock("../serviceRunner", () => ({
   supabaseAutopilotPlanInspection: jest.fn(),
+  supabaseAutopilotPrepareMigrationApproval: jest.fn(),
+  supabaseAutopilotApplyApprovedMigration: jest.fn(),
 }));
 
 import SupabasePlanningPanel from "./SupabasePlanningPanel.jsx";
@@ -72,7 +74,7 @@ describe("SupabasePlanningPanel", () => {
     expect(inspectPlanning).not.toHaveBeenCalled();
   });
 
-  test("shows loading, a validated plan, details, and no mutation action", async () => {
+  test("shows loading, a validated plan, and keeps ineligible planning read-only", async () => {
     let resolveInspection;
     const inspectPlanning = jest.fn(
       () =>
@@ -121,9 +123,7 @@ describe("SupabasePlanningPanel", () => {
     expect(container.textContent).toMatch(/SQL has not been executed/);
     expect(container.textContent).toMatch(/Review-only SQL draft/);
     expect(container.textContent).toMatch(/Managed migration name/);
-    expect(container.textContent).toMatch(
-      /Migration application is unavailable until a later milestone/,
-    );
+    expect(container.textContent).toMatch(/Mutation unavailable/i);
     expect(container.textContent).toMatch(/Technical details/);
     expect(container.textContent).toMatch(/Plan ID/);
     expect(container.textContent).not.toMatch(/\bApprove\b/);
@@ -138,9 +138,210 @@ describe("SupabasePlanningPanel", () => {
         expect.stringMatching(/\b(?:apply|run|execute)\b/i),
       ]),
     );
+  });
+
+  test("requires exact approval and invokes mutation at most once", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+    const prepareMigrationApproval = jest.fn((request) => ({
+      approvalToken: "approval-1-1111111122222222",
+      projectReference: project.reference,
+      migrationName: request.reconciliation.proposedMigration.name,
+      reconciliationFingerprint: request.reconciliation.fingerprint,
+    }));
+    let rejectApply;
+    const applyApprovedMigration = jest.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          rejectApply = reject;
+        }),
+    );
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          prepareMigrationApproval={prepareMigrationApproval}
+          applyApprovedMigration={applyApprovedMigration}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+    await clickButton("Create read-only plan");
+
+    expect(findButton("Approve this exact migration").disabled).toBe(true);
+    act(() => {
+      container
+        .querySelector(
+          '[aria-label="Confirm development-only Supabase project"]',
+        )
+        .click();
+    });
+    await clickButton("Approve this exact migration");
+    expect(prepareMigrationApproval).toHaveBeenCalledTimes(1);
+    expect(prepareMigrationApproval.mock.calls[0][0]).not.toHaveProperty(
+      "sql",
+    );
+
+    await act(async () => {
+      const apply = findButton("Apply approved migration");
+      apply.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      apply.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(applyApprovedMigration).toHaveBeenCalledTimes(1);
+    expect(applyApprovedMigration).toHaveBeenCalledWith(
+      "approval-1-1111111122222222",
+    );
+
+    await act(async () => {
+      rejectApply(new Error("provider rejected request"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toMatch(/Database state may be uncertain/i);
+    expect(findButton("Apply approved migration")).toBeUndefined();
+    expect(applyApprovedMigration).toHaveBeenCalledTimes(1);
+  });
+
+  test("uses fresh read-only inspection and verifies name plus structure", async () => {
+    let managedMigrationName = "";
+    const inspectPlanning = jest
+      .fn()
+      .mockResolvedValueOnce(inspection)
+      .mockImplementationOnce(() => ({
+        ...inspection,
+        remote: {
+          ...inspection.remote,
+          tables: [
+            {
+              name: "public.feature_records",
+              rlsEnabled: false,
+              columns: [
+                {
+                  name: "id",
+                  dataType: "uuid",
+                  nullable: false,
+                  unique: false,
+                },
+                {
+                  name: "data",
+                  dataType: "jsonb",
+                  nullable: false,
+                  unique: false,
+                },
+              ],
+              primaryKeys: ["id"],
+              foreignKeys: [],
+            },
+          ],
+          migrations: [
+            {
+              version: "20991231235959",
+              name: managedMigrationName,
+            },
+          ],
+        },
+      }));
+    const prepareMigrationApproval = jest.fn((request) => {
+      managedMigrationName =
+        request.reconciliation.proposedMigration.name;
+      return {
+        approvalToken: "approval-2-3333333344444444",
+        projectReference: project.reference,
+        migrationName: managedMigrationName,
+        reconciliationFingerprint: request.reconciliation.fingerprint,
+      };
+    });
+    const applyApprovedMigration = jest.fn().mockResolvedValue({
+      status: "applied-awaiting-verification",
+    });
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          prepareMigrationApproval={prepareMigrationApproval}
+          applyApprovedMigration={applyApprovedMigration}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+    await clickButton("Create read-only plan");
+    act(() => {
+      container
+        .querySelector(
+          '[aria-label="Confirm development-only Supabase project"]',
+        )
+        .click();
+    });
+    await clickButton("Approve this exact migration");
+    await clickButton("Apply approved migration");
+
+    expect(inspectPlanning).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toMatch(
+      /Verified by fresh read-only migration metadata/i,
+    );
+    expect(container.textContent).toMatch(
+      /Supabase-assigned version 20991231235959/i,
+    );
+    expect(applyApprovedMigration).toHaveBeenCalledTimes(1);
+  });
+
+  test("project switch invalidates a prepared approval", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+    const prepareMigrationApproval = jest.fn((request) => ({
+      approvalToken: "approval-3-5555555566666666",
+      projectReference: project.reference,
+      migrationName: request.reconciliation.proposedMigration.name,
+      reconciliationFingerprint: request.reconciliation.fingerprint,
+    }));
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          prepareMigrationApproval={prepareMigrationApproval}
+        />,
+      );
+    });
+    setObjective("Add a notes table.");
+    await clickButton("Create read-only plan");
+    act(() => {
+      container
+        .querySelector(
+          '[aria-label="Confirm development-only Supabase project"]',
+        )
+        .click();
+    });
+    await clickButton("Approve this exact migration");
+    expect(findButton("Apply approved migration")).toBeTruthy();
+
+    await act(async () => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={{
+            name: "Other Development",
+            reference: "zyxwvutsrqponmlkjihg",
+          }}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          prepareMigrationApproval={prepareMigrationApproval}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(findButton("Apply approved migration")).toBeUndefined();
     expect(
-      findButton("Implementation is not available in this milestone").disabled,
-    ).toBe(true);
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeNull();
   });
 
   test("shows a bounded safe error and no stale plan", async () => {
@@ -309,6 +510,16 @@ describe("SupabasePlanningPanel", () => {
     return Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === text,
     );
+  }
+
+  async function clickButton(text) {
+    await act(async () => {
+      findButton(text).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   }
 
   function setObjective(value) {

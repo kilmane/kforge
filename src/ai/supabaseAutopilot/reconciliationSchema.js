@@ -72,7 +72,7 @@ export function createSupabaseAutopilotReconciliation(plan) {
   const warnings = uniqueStrings([
     ...(plan.warnings || []),
     NOTHING_APPLIED_STATEMENT,
-    "Migration application is unavailable until a later milestone.",
+    "Migration application requires separate development-only review and explicit approval.",
   ]);
   const limitations = [
     "Database row state was not inspected. Required additions to existing tables cannot be assumed safe.",

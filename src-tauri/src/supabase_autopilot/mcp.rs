@@ -56,6 +56,12 @@ struct ProjectUrl {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ApplyMigrationResult {
+    success: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TableList {
     tables: Vec<RawTable>,
     #[serde(default)]
@@ -122,14 +128,18 @@ struct RawMigration {
 }
 
 pub fn account_url() -> Result<String, String> {
-    build_url(None, "account")
+    build_url(None, "account", true)
 }
 
 pub fn project_url(project_ref: &str) -> Result<String, String> {
-    build_url(Some(project_ref), "development,database")
+    build_url(Some(project_ref), "development,database", true)
 }
 
-fn build_url(project_ref: Option<&str>, features: &str) -> Result<String, String> {
+fn project_mutation_url(project_ref: &str) -> Result<String, String> {
+    build_url(Some(project_ref), "development,database", false)
+}
+
+fn build_url(project_ref: Option<&str>, features: &str, read_only: bool) -> Result<String, String> {
     let mut url = Url::parse(HOSTED_MCP_ENDPOINT)
         .map_err(|_| "the hosted Supabase MCP endpoint is invalid".to_string())?;
     {
@@ -141,7 +151,9 @@ fn build_url(project_ref: Option<&str>, features: &str) -> Result<String, String
             }
             query.append_pair("project_ref", trimmed);
         }
-        query.append_pair("read_only", "true");
+        if read_only {
+            query.append_pair("read_only", "true");
+        }
         query.append_pair("features", features);
     }
     Ok(url.into())
@@ -235,6 +247,48 @@ pub async fn inspect_project_for_planning(
         .map_err(RestoreError::Failed)
 }
 
+pub async fn apply_approved_migration(
+    project: &SelectedProject,
+    migration_name: &str,
+    sql: &str,
+    store: WindowsCredentialStore,
+) -> Result<(), RestoreError> {
+    let server_url = project_mutation_url(&project.reference).map_err(RestoreError::Failed)?;
+    let client = connect_from_store(&server_url, store).await?;
+    ensure_required_mutation_tools(&client)
+        .await
+        .map_err(RestoreError::Failed)?;
+
+    let project_url: ProjectUrl = call_validated_tool(&client, "get_project_url")
+        .await
+        .map_err(RestoreError::Failed)?;
+    verify_project_identity(&project.reference, &project_url.url).map_err(RestoreError::Failed)?;
+
+    let arguments = approved_migration_arguments(migration_name, sql);
+    let request =
+        CallToolRequestParams::new("apply_migration".to_string()).with_arguments(arguments);
+    let result = client
+        .peer()
+        .call_tool(request)
+        .await
+        .map_err(|error| format!("Supabase approved migration failed: {error}"))
+        .and_then(|result| decode_tool_result::<ApplyMigrationResult>(result, "apply_migration"))
+        .map_err(RestoreError::Failed)?;
+    if !result.success {
+        return Err(RestoreError::Failed(
+            "Supabase did not confirm the approved migration".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn approved_migration_arguments(migration_name: &str, sql: &str) -> Map<String, Value> {
+    let mut arguments = Map::new();
+    arguments.insert("name".into(), Value::String(migration_name.to_string()));
+    arguments.insert("query".into(), Value::String(sql.to_string()));
+    arguments
+}
+
 async fn connect_from_store(
     server_url: &str,
     store: WindowsCredentialStore,
@@ -309,6 +363,20 @@ async fn ensure_required_read_only_tools(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| "MCP tool metadata could not be validated".to_string())?;
     validate_required_tool_advertisements(&advertised, required)
+}
+
+async fn ensure_required_mutation_tools(client: &McpClient) -> Result<(), String> {
+    let tools = client
+        .peer()
+        .list_all_tools()
+        .await
+        .map_err(|error| format!("MCP tool discovery failed: {error}"))?;
+    let advertised = tools
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "MCP tool metadata could not be validated".to_string())?;
+    validate_mutation_tool_advertisements(&advertised)
 }
 
 async fn call_validated_tool<T>(client: &McpClient, name: &str) -> Result<T, String>
@@ -389,6 +457,26 @@ fn validate_required_tool_advertisements(
                 "required MCP tool '{required_name}' was not marked read-only"
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_mutation_tool_advertisements(advertised: &[Value]) -> Result<(), String> {
+    validate_required_tool_advertisements(advertised, PROJECT_IDENTITY_TOOLS)?;
+    let tool = advertised
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("apply_migration"))
+        .ok_or_else(|| "required approved migration tool is unavailable".to_string())?;
+    if tool
+        .pointer("/annotations/readOnlyHint")
+        .and_then(Value::as_bool)
+        != Some(false)
+        || tool
+            .pointer("/annotations/destructiveHint")
+            .and_then(Value::as_bool)
+            != Some(true)
+    {
+        return Err("approved migration tool metadata was unsafe or ambiguous".into());
     }
     Ok(())
 }
@@ -647,9 +735,11 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        account_url, decode_tool_result, ensure_approved_tool_call, normalize_project_metadata,
-        project_url, validate_required_tool_advertisements, verify_project_identity, MigrationList,
-        OrganizationList, ProjectList, TableList, ACCOUNT_TOOLS,
+        account_url, approved_migration_arguments, decode_tool_result, ensure_approved_tool_call,
+        normalize_project_metadata, project_mutation_url, project_url,
+        validate_mutation_tool_advertisements, validate_required_tool_advertisements,
+        verify_project_identity, MigrationList, OrganizationList, ProjectList, TableList,
+        ACCOUNT_TOOLS,
     };
     use crate::supabase_autopilot::SelectedProject;
 
@@ -677,6 +767,87 @@ mod tests {
             query.get("features").map(String::as_str),
             Some("development,database")
         );
+    }
+
+    #[test]
+    fn approved_mutation_url_is_project_scoped_without_weakening_read_only_urls() {
+        let mutation =
+            url::Url::parse(&project_mutation_url("abcdefghijklmnopqrst").unwrap()).unwrap();
+        let mutation_query: std::collections::HashMap<_, _> =
+            mutation.query_pairs().into_owned().collect();
+        let inspection = url::Url::parse(&project_url("abcdefghijklmnopqrst").unwrap()).unwrap();
+        let inspection_query: std::collections::HashMap<_, _> =
+            inspection.query_pairs().into_owned().collect();
+
+        assert_eq!(
+            mutation_query.get("project_ref").map(String::as_str),
+            Some("abcdefghijklmnopqrst")
+        );
+        assert_eq!(
+            mutation_query.get("features").map(String::as_str),
+            Some("development,database")
+        );
+        assert!(!mutation_query.contains_key("read_only"));
+        assert_eq!(
+            inspection_query.get("read_only").map(String::as_str),
+            Some("true")
+        );
+    }
+
+    #[test]
+    fn narrow_mutation_discovery_requires_exact_safe_tool_annotations() {
+        let safe = vec![
+            json!({
+                "name": "get_project_url",
+                "annotations": { "readOnlyHint": true }
+            }),
+            json!({
+                "name": "apply_migration",
+                "annotations": {
+                    "readOnlyHint": false,
+                    "destructiveHint": true
+                }
+            }),
+            json!({
+                "name": "execute_sql",
+                "annotations": {
+                    "readOnlyHint": false,
+                    "destructiveHint": true
+                }
+            }),
+        ];
+        let ambiguous = vec![
+            safe[0].clone(),
+            json!({
+                "name": "apply_migration",
+                "annotations": { "readOnlyHint": false }
+            }),
+        ];
+
+        assert!(validate_mutation_tool_advertisements(&safe).is_ok());
+        assert!(validate_mutation_tool_advertisements(&ambiguous).is_err());
+        assert!(ensure_approved_tool_call("apply_migration").is_err());
+        assert!(ensure_approved_tool_call("execute_sql").is_err());
+    }
+
+    #[test]
+    fn approved_mutation_arguments_send_managed_name_and_query_without_planning_version() {
+        let arguments = approved_migration_arguments(
+            "supabase_autopilot_111122222222",
+            "CREATE TABLE approved();",
+        );
+
+        assert_eq!(arguments.len(), 2);
+        assert_eq!(
+            arguments.get("name").and_then(serde_json::Value::as_str),
+            Some("supabase_autopilot_111122222222")
+        );
+        assert_eq!(
+            arguments.get("query").and_then(serde_json::Value::as_str),
+            Some("CREATE TABLE approved();")
+        );
+        assert!(!arguments.contains_key("version"));
+        assert!(!arguments.contains_key("project_id"));
     }
 
     #[test]

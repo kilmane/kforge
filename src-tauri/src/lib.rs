@@ -84,6 +84,8 @@ pub fn run() {
             supabase_autopilot::supabase_autopilot_connect,
             supabase_autopilot::supabase_autopilot_select_project,
             supabase_autopilot::supabase_autopilot_plan_inspection,
+            supabase_autopilot::mutation::supabase_autopilot_prepare_migration_approval,
+            supabase_autopilot::mutation::supabase_autopilot_apply_approved_migration,
             supabase_autopilot::supabase_autopilot_disconnect,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,

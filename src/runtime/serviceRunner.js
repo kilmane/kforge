@@ -116,6 +116,23 @@ export async function supabaseAutopilotPlanInspection(
   });
 }
 
+export async function supabaseAutopilotPrepareMigrationApproval(request) {
+  if (!request || typeof request !== "object") {
+    throw new Error("Approved Supabase reconciliation is required");
+  }
+  return invoke("supabase_autopilot_prepare_migration_approval", {
+    request,
+  });
+}
+
+export async function supabaseAutopilotApplyApprovedMigration(approvalToken) {
+  const token = String(approvalToken || "").trim();
+  if (!token) throw new Error("Supabase migration approval token is required");
+  return invoke("supabase_autopilot_apply_approved_migration", {
+    approvalToken: token,
+  });
+}
+
 export async function supabaseAutopilotDisconnect() {
   return invoke("supabase_autopilot_disconnect");
 }

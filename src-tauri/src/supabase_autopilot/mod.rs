@@ -1,5 +1,6 @@
 mod inspection;
 mod mcp;
+pub(crate) mod mutation;
 mod oauth;
 mod token_store;
 
@@ -53,6 +54,7 @@ pub struct SupabaseAutopilotState {
     organizations: RwLock<Vec<OrganizationSummary>>,
     projects: RwLock<Vec<ProjectSummary>>,
     selected: RwLock<Option<SelectedProject>>,
+    mutation: mutation::MutationApprovalState,
 }
 
 impl ConnectionSnapshot {
@@ -129,6 +131,8 @@ pub async fn supabase_autopilot_status(
 
     match mcp::restore_account(store).await {
         Ok((organizations, projects)) => {
+            state.mutation.clear_pending().await;
+            *state.selected.write().await = None;
             remember_projects(&state, &organizations, &projects).await;
             Ok(ConnectionSnapshot::choose_project(
                 organizations,
@@ -162,6 +166,8 @@ pub async fn supabase_autopilot_connect(
     {
         match mcp::restore_account(store.clone()).await {
             Ok((organizations, projects)) => {
+                state.mutation.clear_pending().await;
+                *state.selected.write().await = None;
                 remember_projects(&state, &organizations, &projects).await;
                 return Ok(ConnectionSnapshot::choose_project(
                     organizations,
@@ -184,6 +190,7 @@ pub async fn supabase_autopilot_connect(
     let server_url = mcp::account_url()?;
     let manager = oauth::authorize(&app, &server_url, store.clone()).await?;
     let (organizations, projects) = mcp::inspect_account_with_manager(&server_url, manager).await?;
+    state.mutation.clear_pending().await;
     remember_projects(&state, &organizations, &projects).await;
     *state.selected.write().await = None;
 
@@ -213,6 +220,7 @@ pub async fn supabase_autopilot_select_project(
 
     match mcp::verify_project(&project, WindowsCredentialStore).await {
         Ok(selected) => {
+            state.mutation.clear_pending().await;
             *state.selected.write().await = Some(selected.clone());
             Ok(ConnectionSnapshot::connected_read_only(selected))
         }
@@ -232,6 +240,7 @@ pub async fn supabase_autopilot_plan_inspection(
     state: tauri::State<'_, SupabaseAutopilotState>,
 ) -> Result<PlanningInspectionSnapshot, String> {
     let _operation = state.operation.lock().await;
+    state.mutation.clear_pending().await;
     let selected = state.selected.read().await.clone().ok_or_else(|| {
         "Connect and verify a development Supabase project before planning".to_string()
     })?;
@@ -276,6 +285,7 @@ pub async fn supabase_autopilot_disconnect(
         .map_err(|error| oauth::redact_sensitive(&error.to_string()))?;
     state.organizations.write().await.clear();
     state.projects.write().await.clear();
+    state.mutation.clear_pending().await;
     *state.selected.write().await = None;
     Ok(ConnectionSnapshot::disconnected())
 }
