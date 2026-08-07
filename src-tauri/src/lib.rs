@@ -83,6 +83,7 @@ pub fn run() {
             supabase_autopilot::supabase_autopilot_status,
             supabase_autopilot::supabase_autopilot_connect,
             supabase_autopilot::supabase_autopilot_select_project,
+            supabase_autopilot::supabase_autopilot_plan_inspection,
             supabase_autopilot::supabase_autopilot_disconnect,
             scaffold::scaffold_static_html,
             scaffold::scaffold_vite_react,

@@ -1,12 +1,16 @@
+mod inspection;
 mod mcp;
 mod oauth;
 mod token_store;
 
 use rmcp::transport::auth::CredentialStore;
 use serde::{Deserialize, Serialize};
+use tauri_plugin_fs::FsExt;
 use tokio::sync::{Mutex, RwLock};
 
-use self::{mcp::RestoreError, token_store::WindowsCredentialStore};
+use self::{
+    inspection::PlanningInspectionSnapshot, mcp::RestoreError, token_store::WindowsCredentialStore,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OrganizationSummary {
@@ -221,6 +225,47 @@ pub async fn supabase_autopilot_select_project(
 }
 
 #[tauri::command]
+pub async fn supabase_autopilot_plan_inspection(
+    app: tauri::AppHandle,
+    project_ref: String,
+    project_path: String,
+    state: tauri::State<'_, SupabaseAutopilotState>,
+) -> Result<PlanningInspectionSnapshot, String> {
+    let _operation = state.operation.lock().await;
+    let selected = state.selected.read().await.clone().ok_or_else(|| {
+        "Connect and verify a development Supabase project before planning".to_string()
+    })?;
+    let requested_ref = project_ref.trim();
+    if requested_ref.is_empty() || selected.reference != requested_ref {
+        return Err("The planning request does not match the verified Supabase project".into());
+    }
+    if looks_like_production_project(&selected.name) {
+        return Err(
+            "Planning is blocked for projects named as production or live environments".into(),
+        );
+    }
+
+    let canonical_path = std::fs::canonicalize(project_path.trim())
+        .map_err(|_| "The open application path could not be inspected".to_string())?;
+    if !app.fs_scope().is_allowed(&canonical_path) {
+        return Err("The planning path is outside the user-approved open application scope".into());
+    }
+    let local = inspection::inspect_local_application(canonical_path.to_string_lossy().as_ref())?;
+    let remote = match mcp::inspect_project_for_planning(&selected, WindowsCredentialStore).await {
+        Ok(remote) => remote,
+        Err(RestoreError::AuthorizationRequired) => return Err(
+            "The Supabase session expired and could not be refreshed. Disconnect, then reconnect."
+                .into(),
+        ),
+        Err(RestoreError::Failed(error)) => {
+            return Err(oauth::redact_sensitive(&error));
+        }
+    };
+
+    Ok(PlanningInspectionSnapshot { local, remote })
+}
+
+#[tauri::command]
 pub async fn supabase_autopilot_disconnect(
     state: tauri::State<'_, SupabaseAutopilotState>,
 ) -> Result<ConnectionSnapshot, String> {
@@ -242,4 +287,28 @@ async fn remember_projects(
 ) {
     *state.organizations.write().await = organizations.to_vec();
     *state.projects.write().await = projects.to_vec();
+}
+
+fn looks_like_production_project(name: &str) -> bool {
+    name.split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|part| {
+            matches!(
+                part.to_ascii_lowercase().as_str(),
+                "prod" | "production" | "live"
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::looks_like_production_project;
+
+    #[test]
+    fn planning_blocks_explicit_production_project_names() {
+        assert!(looks_like_production_project("Hajj Production"));
+        assert!(looks_like_production_project("hajj-prod"));
+        assert!(looks_like_production_project("LIVE"));
+        assert!(!looks_like_production_project("Hajj Development"));
+        assert!(!looks_like_production_project("Product Prototype"));
+    }
 }

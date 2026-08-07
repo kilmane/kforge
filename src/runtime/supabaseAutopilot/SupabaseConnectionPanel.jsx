@@ -9,6 +9,7 @@ import {
   initialSupabaseConnectionState,
   supabaseConnectionReducer,
 } from "./connectionState";
+import SupabasePlanningPanel from "./SupabasePlanningPanel";
 
 const actionStyle = {
   border: "1px solid rgba(244, 185, 66, 0.45)",
@@ -28,7 +29,7 @@ const secondaryActionStyle = {
   color: "#d4d4d8",
 };
 
-export default function SupabaseConnectionPanel() {
+export default function SupabaseConnectionPanel({ projectPath }) {
   const [state, dispatch] = useReducer(
     supabaseConnectionReducer,
     initialSupabaseConnectionState,
@@ -267,8 +268,16 @@ export default function SupabaseConnectionPanel() {
       ) : null}
 
       <div style={{ color: "#a1a1aa", fontSize: "11px", lineHeight: 1.45 }}>
-        This feasibility milestone does not modify the database or application.
+        This planning milestone does not modify the database or application.
       </div>
+
+      <SupabasePlanningPanel
+        key={`${project?.reference || "unverified"}:${projectPath || ""}`}
+        verifiedProject={
+          state.phase === "connected_read_only" ? project : null
+        }
+        projectPath={projectPath}
+      />
     </section>
   );
 }

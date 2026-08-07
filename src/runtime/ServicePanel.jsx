@@ -1225,7 +1225,7 @@ export default function ServicePanel({ projectPath, onCopyTextChange }) {
         >
           {isSupabase ? (
             <>
-              <SupabaseConnectionPanel />
+              <SupabaseConnectionPanel projectPath={projectPath} />
               <div
                 className="command-runner-item__meta"
                 style={{

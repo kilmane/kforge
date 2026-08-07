@@ -9,15 +9,27 @@ use rmcp::{
     RoleClient, ServiceExt,
 };
 use serde::{de::DeserializeOwned, Deserialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use url::Url;
 
-use super::{OrganizationSummary, ProjectSummary, SelectedProject};
+use super::{
+    inspection::{
+        PlanningColumn, PlanningForeignKey, PlanningMigration, PlanningRemoteInspection,
+        PlanningTable,
+    },
+    OrganizationSummary, ProjectSummary, SelectedProject,
+};
 use crate::supabase_autopilot::token_store::WindowsCredentialStore;
 
 const HOSTED_MCP_ENDPOINT: &str = "https://mcp.supabase.com/mcp";
 const ACCOUNT_TOOLS: &[&str] = &["list_organizations", "list_projects"];
-const PROJECT_TOOLS: &[&str] = &["get_project_url"];
+const PROJECT_IDENTITY_TOOLS: &[&str] = &["get_project_url"];
+const PROJECT_PLANNING_TOOLS: &[&str] = &["get_project_url", "list_tables", "list_migrations"];
+const MAX_TABLES: usize = 120;
+const MAX_COLUMNS_PER_TABLE: usize = 120;
+const MAX_FOREIGN_KEYS_PER_TABLE: usize = 40;
+const MAX_MIGRATIONS: usize = 200;
+const MAX_TOOL_JSON_BYTES: usize = 1_000_000;
 
 type McpClient = RunningService<RoleClient, ClientInfo>;
 
@@ -42,12 +54,79 @@ struct ProjectUrl {
     url: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TableList {
+    tables: Vec<RawTable>,
+    #[serde(default)]
+    advisory: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTable {
+    name: String,
+    rls_enabled: bool,
+    rows: Option<f64>,
+    #[serde(default)]
+    comment: Option<String>,
+    #[serde(default)]
+    columns: Option<Vec<RawColumn>>,
+    #[serde(default)]
+    primary_keys: Option<Vec<String>>,
+    #[serde(default)]
+    foreign_key_constraints: Vec<RawForeignKey>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawColumn {
+    name: String,
+    data_type: String,
+    format: String,
+    options: Vec<String>,
+    #[serde(default)]
+    default_value: Option<Value>,
+    #[serde(default)]
+    identity_generation: Option<String>,
+    #[serde(default)]
+    enums: Vec<String>,
+    #[serde(default)]
+    check: Option<String>,
+    #[serde(default)]
+    comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawForeignKey {
+    name: String,
+    source_table: String,
+    source_columns: Vec<String>,
+    target_table: String,
+    target_columns: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationList {
+    migrations: Vec<RawMigration>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMigration {
+    version: String,
+    #[serde(default)]
+    name: Option<String>,
+}
+
 pub fn account_url() -> Result<String, String> {
     build_url(None, "account")
 }
 
 pub fn project_url(project_ref: &str) -> Result<String, String> {
-    build_url(Some(project_ref), "development")
+    build_url(Some(project_ref), "development,database")
 }
 
 fn build_url(project_ref: Option<&str>, features: &str) -> Result<String, String> {
@@ -107,7 +186,7 @@ pub async fn verify_project(
 ) -> Result<SelectedProject, RestoreError> {
     let server_url = project_url(&project.reference).map_err(RestoreError::Failed)?;
     let client = connect_from_store(&server_url, store).await?;
-    ensure_required_read_only_tools(&client, PROJECT_TOOLS)
+    ensure_required_read_only_tools(&client, PROJECT_IDENTITY_TOOLS)
         .await
         .map_err(RestoreError::Failed)?;
 
@@ -121,6 +200,39 @@ pub async fn verify_project(
         reference: project.reference.clone(),
         api_url: project_url.url,
     })
+}
+
+pub async fn inspect_project_for_planning(
+    project: &SelectedProject,
+    store: WindowsCredentialStore,
+) -> Result<PlanningRemoteInspection, RestoreError> {
+    let server_url = project_url(&project.reference).map_err(RestoreError::Failed)?;
+    let client = connect_from_store(&server_url, store).await?;
+    ensure_required_read_only_tools(&client, PROJECT_PLANNING_TOOLS)
+        .await
+        .map_err(RestoreError::Failed)?;
+
+    let project_url: ProjectUrl = call_validated_tool(&client, "get_project_url")
+        .await
+        .map_err(RestoreError::Failed)?;
+    verify_project_identity(&project.reference, &project_url.url).map_err(RestoreError::Failed)?;
+
+    let mut table_arguments = Map::new();
+    table_arguments.insert(
+        "schemas".into(),
+        Value::Array(vec![Value::String("public".into())]),
+    );
+    table_arguments.insert("verbose".into(), Value::Bool(true));
+    let tables: TableList =
+        call_validated_tool_with_arguments(&client, "list_tables", Some(table_arguments))
+            .await
+            .map_err(RestoreError::Failed)?;
+    let migrations: MigrationList = call_validated_tool(&client, "list_migrations")
+        .await
+        .map_err(RestoreError::Failed)?;
+
+    normalize_project_metadata(project, &project_url.url, tables, migrations)
+        .map_err(RestoreError::Failed)
 }
 
 async fn connect_from_store(
@@ -203,10 +315,25 @@ async fn call_validated_tool<T>(client: &McpClient, name: &str) -> Result<T, Str
 where
     T: DeserializeOwned,
 {
+    call_validated_tool_with_arguments(client, name, None).await
+}
+
+async fn call_validated_tool_with_arguments<T>(
+    client: &McpClient,
+    name: &str,
+    arguments: Option<Map<String, Value>>,
+) -> Result<T, String>
+where
+    T: DeserializeOwned,
+{
     ensure_approved_tool_call(name)?;
+    let mut request = CallToolRequestParams::new(name.to_string());
+    if let Some(arguments) = arguments {
+        request = request.with_arguments(arguments);
+    }
     let result = client
         .peer()
-        .call_tool(CallToolRequestParams::new(name.to_string()))
+        .call_tool(request)
         .await
         .map_err(|error| format!("Supabase MCP tool '{name}' failed: {error}"))?;
 
@@ -229,14 +356,15 @@ where
                     "Supabase MCP tool '{name}' returned no unambiguous JSON result"
                 ));
             };
-            let text = content.as_text().ok_or_else(|| {
-                format!("Supabase MCP tool '{name}' returned a non-text result")
-            })?;
+            let text = content
+                .as_text()
+                .ok_or_else(|| format!("Supabase MCP tool '{name}' returned a non-text result"))?;
             serde_json::from_str(&text.text)
                 .map_err(|_| format!("Supabase MCP tool '{name}' returned malformed JSON"))?
         }
     };
 
+    validate_tool_value(&value)?;
     serde_json::from_value(value)
         .map_err(|_| format!("Supabase MCP tool '{name}' returned an invalid result schema"))
 }
@@ -266,13 +394,232 @@ fn validate_required_tool_advertisements(
 }
 
 fn ensure_approved_tool_call(name: &str) -> Result<(), String> {
-    if ACCOUNT_TOOLS.contains(&name) || PROJECT_TOOLS.contains(&name) {
+    if ACCOUNT_TOOLS.contains(&name) || PROJECT_PLANNING_TOOLS.contains(&name) {
         Ok(())
     } else {
         Err(format!(
             "KForge blocked unapproved Supabase MCP tool invocation '{name}'"
         ))
     }
+}
+
+fn normalize_project_metadata(
+    project: &SelectedProject,
+    api_url: &str,
+    raw_tables: TableList,
+    raw_migrations: MigrationList,
+) -> Result<PlanningRemoteInspection, String> {
+    verify_project_identity(&project.reference, api_url)?;
+    if raw_tables.tables.len() > MAX_TABLES {
+        return Err("Supabase returned too many tables for a bounded planning snapshot".into());
+    }
+    if raw_migrations.migrations.len() > MAX_MIGRATIONS {
+        return Err("Supabase returned too many migrations for a bounded planning snapshot".into());
+    }
+
+    let mut tables = Vec::with_capacity(raw_tables.tables.len());
+    for table in raw_tables.tables {
+        let columns = table.columns.unwrap_or_default();
+        if columns.len() > MAX_COLUMNS_PER_TABLE {
+            return Err(format!(
+                "Supabase table '{}' returned too many columns",
+                bounded_database_name(&table.name)?
+            ));
+        }
+        if table.foreign_key_constraints.len() > MAX_FOREIGN_KEYS_PER_TABLE {
+            return Err(format!(
+                "Supabase table '{}' returned too many foreign keys",
+                bounded_database_name(&table.name)?
+            ));
+        }
+
+        tables.push(PlanningTable {
+            name: bounded_database_name(&table.name)?,
+            rls_enabled: table.rls_enabled,
+            columns: columns
+                .into_iter()
+                .map(|column| {
+                    let _discarded_metadata = (
+                        column.format,
+                        column.default_value,
+                        column.identity_generation,
+                        column.enums,
+                        column.check,
+                        column.comment,
+                    );
+                    Ok(PlanningColumn {
+                        name: bounded_identifier(&column.name, 100)?,
+                        data_type: bounded_text(&column.data_type, 120)?,
+                        nullable: column.options.iter().any(|value| value == "nullable"),
+                        unique: column.options.iter().any(|value| value == "unique"),
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+            primary_keys: table
+                .primary_keys
+                .unwrap_or_default()
+                .into_iter()
+                .map(|value| bounded_identifier(&value, 100))
+                .collect::<Result<Vec<_>, _>>()?,
+            foreign_keys: table
+                .foreign_key_constraints
+                .into_iter()
+                .map(|foreign_key| {
+                    let _source_table = bounded_database_name(&foreign_key.source_table)?;
+                    Ok(PlanningForeignKey {
+                        name: bounded_identifier(&foreign_key.name, 120)?,
+                        source_columns: foreign_key
+                            .source_columns
+                            .into_iter()
+                            .map(|value| bounded_identifier(&value, 100))
+                            .collect::<Result<Vec<_>, _>>()?,
+                        target_table: bounded_database_name(&foreign_key.target_table)?,
+                        target_columns: foreign_key
+                            .target_columns
+                            .into_iter()
+                            .map(|value| bounded_identifier(&value, 100))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+        });
+        let _discarded_table_metadata = (table.rows, table.comment);
+    }
+
+    let migrations = raw_migrations
+        .migrations
+        .into_iter()
+        .map(|migration| {
+            Ok(PlanningMigration {
+                version: bounded_identifier(&migration.version, 120)?,
+                name: migration
+                    .name
+                    .map(|value| bounded_text(&value, 160))
+                    .transpose()?
+                    .unwrap_or_default(),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let _discarded_advisory = raw_tables.advisory;
+
+    Ok(PlanningRemoteInspection {
+        project_name: bounded_text(&project.name, 160)?,
+        project_reference: bounded_identifier(&project.reference, 80)?,
+        project_api_url: api_url.to_string(),
+        tables,
+        migrations,
+        warnings: Vec::new(),
+    })
+}
+
+fn validate_tool_value(value: &Value) -> Result<(), String> {
+    let encoded = serde_json::to_vec(value)
+        .map_err(|_| "Supabase MCP result could not be bounded".to_string())?;
+    if encoded.len() > MAX_TOOL_JSON_BYTES {
+        return Err("Supabase MCP result exceeded the planning size limit".into());
+    }
+    inspect_tool_value(value, 0)
+}
+
+fn inspect_tool_value(value: &Value, depth: usize) -> Result<(), String> {
+    if depth > 14 {
+        return Err("Supabase MCP result exceeded the nesting limit".into());
+    }
+    match value {
+        Value::Object(object) => {
+            if object.len() > 300 {
+                return Err("Supabase MCP result contained an unbounded object".into());
+            }
+            for (key, nested) in object {
+                if is_secret_field_name(key) {
+                    return Err(format!(
+                        "Supabase MCP result contained blocked secret-bearing field '{key}'"
+                    ));
+                }
+                inspect_tool_value(nested, depth + 1)?;
+            }
+        }
+        Value::Array(items) => {
+            if items.len() > 500 {
+                return Err("Supabase MCP result contained an unbounded array".into());
+            }
+            for item in items {
+                inspect_tool_value(item, depth + 1)?;
+            }
+        }
+        Value::String(text) if looks_like_secret(text) => {
+            return Err("Supabase MCP result contained a secret-like value".into());
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn is_secret_field_name(value: &str) -> bool {
+    let normalized = value.to_ascii_lowercase().replace('-', "_");
+    matches!(
+        normalized.as_str(),
+        "access_token"
+            | "refresh_token"
+            | "password"
+            | "secret"
+            | "service_role"
+            | "service_role_key"
+            | "database_url"
+            | "private_key"
+            | "api_key"
+    )
+}
+
+fn looks_like_secret(value: &str) -> bool {
+    let text = value.trim();
+    if text.starts_with("sb_secret_") {
+        return true;
+    }
+    let jwt_parts = text.split('.').collect::<Vec<_>>();
+    if jwt_parts.len() == 3 && jwt_parts.iter().all(|part| part.len() >= 12) {
+        return true;
+    }
+    let lower = text.to_ascii_lowercase();
+    (lower.starts_with("postgres://") || lower.starts_with("postgresql://"))
+        && lower
+            .split_once("://")
+            .map(|(_, authority)| authority.contains('@') && authority.contains(':'))
+            .unwrap_or(false)
+}
+
+fn bounded_identifier(value: &str, max_length: usize) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > max_length
+        || !trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "_.-$".contains(character))
+    {
+        return Err("Supabase returned invalid identifier metadata".into());
+    }
+    Ok(trimmed.to_string())
+}
+
+fn bounded_database_name(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > 180
+        || !trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "_.$-".contains(character))
+    {
+        return Err("Supabase returned an invalid database object name".into());
+    }
+    Ok(trimmed.to_string())
+}
+
+fn bounded_text(value: &str, max_length: usize) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > max_length || trimmed.contains('\0') {
+        return Err("Supabase returned invalid bounded text metadata".into());
+    }
+    Ok(trimmed.to_string())
 }
 
 fn classify_auth_error(error: AuthError) -> RestoreError {
@@ -300,10 +647,11 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        account_url, decode_tool_result, ensure_approved_tool_call, project_url,
-        validate_required_tool_advertisements, verify_project_identity, OrganizationList,
-        ProjectList, ACCOUNT_TOOLS,
+        account_url, decode_tool_result, ensure_approved_tool_call, normalize_project_metadata,
+        project_url, validate_required_tool_advertisements, verify_project_identity, MigrationList,
+        OrganizationList, ProjectList, TableList, ACCOUNT_TOOLS,
     };
+    use crate::supabase_autopilot::SelectedProject;
 
     #[test]
     fn account_url_is_read_only_and_account_only() {
@@ -327,7 +675,7 @@ mod tests {
         assert_eq!(query.get("read_only").map(String::as_str), Some("true"));
         assert_eq!(
             query.get("features").map(String::as_str),
-            Some("development")
+            Some("development,database")
         );
     }
 
@@ -373,6 +721,9 @@ mod tests {
     fn local_invocation_allowlist_blocks_advertised_mutation_tools() {
         assert!(ensure_approved_tool_call("list_projects").is_ok());
         assert!(ensure_approved_tool_call("get_project_url").is_ok());
+        assert!(ensure_approved_tool_call("list_tables").is_ok());
+        assert!(ensure_approved_tool_call("list_migrations").is_ok());
+        assert!(ensure_approved_tool_call("execute_sql").is_err());
         assert!(ensure_approved_tool_call("create_project").is_err());
         assert!(ensure_approved_tool_call("apply_migration").is_err());
     }
@@ -387,8 +738,7 @@ mod tests {
             }]
         }));
 
-        let decoded: OrganizationList =
-            decode_tool_result(result, "list_organizations").unwrap();
+        let decoded: OrganizationList = decode_tool_result(result, "list_organizations").unwrap();
 
         assert_eq!(decoded.organizations.len(), 1);
         assert_eq!(decoded.organizations[0].id, "org-id");
@@ -400,8 +750,7 @@ mod tests {
             r#"{"organizations":[{"id":"org-id","slug":"org-slug","name":"Organization"}]}"#,
         )]);
 
-        let decoded: OrganizationList =
-            decode_tool_result(result, "list_organizations").unwrap();
+        let decoded: OrganizationList = decode_tool_result(result, "list_organizations").unwrap();
 
         assert_eq!(decoded.organizations.len(), 1);
         assert_eq!(decoded.organizations[0].slug, "org-slug");
@@ -418,7 +767,9 @@ mod tests {
 
         assert_eq!(decoded.projects[0].reference, "project-ref");
         assert_eq!(
-            frontend.get("reference").and_then(serde_json::Value::as_str),
+            frontend
+                .get("reference")
+                .and_then(serde_json::Value::as_str),
             Some("project-ref")
         );
         assert!(frontend.get("ref").is_none());
@@ -452,5 +803,112 @@ mod tests {
         })];
 
         assert!(validate_required_tool_advertisements(&advertised, &["list_projects"]).is_err());
+    }
+
+    #[test]
+    fn secret_bearing_fields_are_rejected_before_schema_decoding() {
+        let result = CallToolResult::structured(json!({
+            "organizations": [],
+            "access_token": "must-not-cross"
+        }));
+
+        let error =
+            decode_tool_result::<OrganizationList>(result, "list_organizations").unwrap_err();
+        assert!(error.contains("secret-bearing field"));
+    }
+
+    #[test]
+    fn table_row_content_is_rejected_as_an_invalid_metadata_shape() {
+        let result = CallToolResult::structured(json!({
+            "tables": [{
+                "name": "public.progress",
+                "rls_enabled": true,
+                "rows": [{"private_note": "must-not-cross"}]
+            }]
+        }));
+
+        assert!(decode_tool_result::<TableList>(result, "list_tables").is_err());
+    }
+
+    #[test]
+    fn normalized_project_metadata_discards_row_counts_defaults_and_comments() {
+        let tables: TableList = decode_tool_result(
+            CallToolResult::structured(json!({
+                "tables": [{
+                    "name": "public.progress",
+                    "rls_enabled": true,
+                    "rows": 14,
+                    "comment": "metadata only",
+                    "columns": [{
+                        "name": "user_id",
+                        "data_type": "uuid",
+                        "format": "uuid",
+                        "options": ["nullable", "unique"],
+                        "default_value": "auth.uid()"
+                    }],
+                    "primary_keys": ["user_id"],
+                    "foreign_key_constraints": []
+                }]
+            })),
+            "list_tables",
+        )
+        .unwrap();
+        let migrations: MigrationList = decode_tool_result(
+            CallToolResult::structured(json!({
+                "migrations": [{"version": "20260806000000", "name": "progress"}]
+            })),
+            "list_migrations",
+        )
+        .unwrap();
+        let project = SelectedProject {
+            name: "Development".into(),
+            reference: "abcdefghijklmnopqrst".into(),
+            api_url: "https://abcdefghijklmnopqrst.supabase.co".into(),
+        };
+
+        let normalized = normalize_project_metadata(
+            &project,
+            "https://abcdefghijklmnopqrst.supabase.co",
+            tables,
+            migrations,
+        )
+        .unwrap();
+        let frontend = serde_json::to_value(normalized).unwrap();
+
+        assert_eq!(frontend["tables"][0]["rlsEnabled"], true);
+        assert_eq!(frontend["tables"][0]["columns"][0]["nullable"], true);
+        assert_eq!(frontend["tables"][0]["columns"][0]["unique"], true);
+        assert!(frontend["tables"][0].get("rows").is_none());
+        assert!(frontend["tables"][0]["columns"][0]
+            .get("defaultValue")
+            .is_none());
+        assert!(frontend["tables"][0].get("comment").is_none());
+    }
+
+    #[test]
+    fn normalized_project_metadata_rechecks_selected_project_identity() {
+        let tables: TableList = decode_tool_result(
+            CallToolResult::structured(json!({"tables": []})),
+            "list_tables",
+        )
+        .unwrap();
+        let migrations: MigrationList = decode_tool_result(
+            CallToolResult::structured(json!({"migrations": []})),
+            "list_migrations",
+        )
+        .unwrap();
+        let project = SelectedProject {
+            name: "Development".into(),
+            reference: "abcdefghijklmnopqrst".into(),
+            api_url: "https://abcdefghijklmnopqrst.supabase.co".into(),
+        };
+
+        assert!(normalize_project_metadata(
+            &project,
+            "https://different.supabase.co",
+            tables,
+            migrations,
+        )
+        .is_err());
     }
 }

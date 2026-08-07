@@ -103,6 +103,19 @@ export async function supabaseAutopilotSelectProject(projectRef) {
   });
 }
 
+export async function supabaseAutopilotPlanInspection(
+  projectRef,
+  projectPath,
+) {
+  if (!projectRef || !String(projectRef).trim()) {
+    throw new Error("Supabase project reference is required");
+  }
+  return invoke("supabase_autopilot_plan_inspection", {
+    projectRef: String(projectRef).trim(),
+    projectPath: requireProjectPath(projectPath),
+  });
+}
+
 export async function supabaseAutopilotDisconnect() {
   return invoke("supabase_autopilot_disconnect");
 }
