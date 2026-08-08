@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 
 use super::{
     inspection::PlanningRemoteInspection, looks_like_production_project, mcp, oauth,
-    token_store::WindowsCredentialStore, SelectedProject, SupabaseAutopilotState,
+    token_store::{DatabaseWriteCredentialStore, WindowsCredentialStore}, SelectedProject, SupabaseAutopilotState,
 };
 
 const RECONCILIATION_VERSION: &str = "supabase-autopilot-reconciliation/v1";
@@ -198,7 +198,7 @@ pub async fn supabase_autopilot_apply_approved_migration(
 
     let mutation_url =
         mcp::project_mutation_url(&selected.reference).map_err(|error| oauth::redact_sensitive(&error))?;
-    oauth::authorize_database_write(&app, &mutation_url, WindowsCredentialStore)
+    oauth::authorize_database_write(&app, &mutation_url, DatabaseWriteCredentialStore)
         .await
         .map_err(|error| oauth::redact_sensitive(&error))?;
 
@@ -211,7 +211,7 @@ pub async fn supabase_autopilot_apply_approved_migration(
         &selected,
         &approval.migration_name,
         &approval.sql,
-        WindowsCredentialStore,
+        DatabaseWriteCredentialStore,
     )
     .await
     .map_err(redact_restore_error)?;

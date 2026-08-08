@@ -13,7 +13,10 @@ use tauri_plugin_opener::OpenerExt;
 use tokio::sync::{oneshot, Mutex};
 use url::Url;
 
-use super::{mcp, token_store::WindowsCredentialStore};
+use super::{
+    mcp,
+    token_store::{DatabaseWriteCredentialStore, WindowsCredentialStore},
+};
 
 const CALLBACK_PATH: &str = "/callback";
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
@@ -76,51 +79,48 @@ pub async fn authorize(
 pub async fn authorize_database_write(
     app: &tauri::AppHandle,
     server_url: &str,
-    store: WindowsCredentialStore,
+    store: DatabaseWriteCredentialStore,
 ) -> Result<(), String> {
     const REQUIRED_SCOPE: &str = "database:write";
 
     let (listener, redirect_uri) = bind_callback_listener().await?;
-
     let challenge = mcp::capture_auth_challenge(server_url).await?;
+
     let mut manager = AuthorizationManager::new(server_url)
         .await
         .map_err(|error| safe_oauth_error("OAuth mutation discovery", error))?;
     manager.set_credential_store(store);
 
-    let resolution = manager
-        .resolve_metadata_from_challenge(Some(&challenge))
+    let mut oauth_state = OAuthState::Unauthorized(manager);
+    oauth_state
+        .start_authorization(
+            AuthorizationRequest::new(&redirect_uri)
+                .with_client_name("KForge Supabase Autopilot Database Write")
+                .with_application_type("native")
+                .with_scopes([REQUIRED_SCOPE])
+                .with_challenge(challenge),
+        )
         .await
-        .map_err(|error| safe_oauth_error("OAuth mutation metadata discovery", error))?;
-    manager.set_metadata(resolution.metadata);
+        .map_err(|error| {
+            safe_oauth_error("OAuth database-write dynamic client registration", error)
+        })?;
 
-    let restored = manager
-        .initialize_from_store()
+    let authorization_url = oauth_state
+        .get_authorization_url()
         .await
-        .map_err(|error| safe_oauth_error("OAuth mutation session restore", error))?;
-    if !restored {
+        .map_err(|error| safe_oauth_error("OAuth database-write authorization URL", error))?;
+
+    let manager =
+        complete_browser_authorization(app, listener, authorization_url, oauth_state).await?;
+
+    let granted_scopes = manager.get_current_scopes().await;
+    if !granted_scopes.iter().any(|scope| scope == REQUIRED_SCOPE) {
         return Err(
-            "The Supabase session must be reauthorized before approving a database change".into(),
+            "Supabase authorization completed without the required database:write permission"
+                .into(),
         );
     }
 
-    manager
-        .get_access_token()
-        .await
-        .map_err(|error| safe_oauth_error("OAuth mutation token restore", error))?;
-
-    let current_scopes = manager.get_current_scopes().await;
-    if current_scopes.iter().any(|scope| scope == REQUIRED_SCOPE) {
-        return Ok(());
-    }
-
-    let mut oauth_state = OAuthState::Authorized(manager);
-    let authorization_url = oauth_state
-        .request_scope_upgrade(REQUIRED_SCOPE, &redirect_uri)
-        .await
-        .map_err(|error| safe_oauth_error("OAuth database-write permission upgrade", error))?;
-
-    complete_browser_authorization(app, listener, authorization_url, oauth_state).await?;
     Ok(())
 }
 async fn bind_callback_listener() -> Result<(tokio::net::TcpListener, String), String> {

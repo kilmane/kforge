@@ -2,7 +2,7 @@ use rmcp::{
     model::{CallToolRequestParams, CallToolResult, ClientInfo},
     service::RunningService,
     transport::{
-        auth::{AuthClient, AuthError, AuthorizationManager},
+        auth::{AuthClient, AuthError, AuthorizationManager, CredentialStore},
         streamable_http_client::StreamableHttpClientTransportConfig,
         StreamableHttpClientTransport,
     },
@@ -19,7 +19,9 @@ use super::{
     },
     OrganizationSummary, ProjectSummary, SelectedProject,
 };
-use crate::supabase_autopilot::token_store::WindowsCredentialStore;
+use crate::supabase_autopilot::token_store::{
+    DatabaseWriteCredentialStore, WindowsCredentialStore,
+};
 
 const HOSTED_MCP_ENDPOINT: &str = "https://mcp.supabase.com/mcp";
 const ACCOUNT_TOOLS: &[&str] = &["list_organizations", "list_projects"];
@@ -251,7 +253,7 @@ pub async fn apply_approved_migration(
     project: &SelectedProject,
     migration_name: &str,
     sql: &str,
-    store: WindowsCredentialStore,
+    store: DatabaseWriteCredentialStore,
 ) -> Result<(), RestoreError> {
     let server_url = project_mutation_url(&project.reference).map_err(RestoreError::Failed)?;
     let client = connect_from_store(&server_url, store).await?;
@@ -289,10 +291,13 @@ fn approved_migration_arguments(migration_name: &str, sql: &str) -> Map<String, 
     arguments
 }
 
-async fn connect_from_store(
+async fn connect_from_store<S>(
     server_url: &str,
-    store: WindowsCredentialStore,
-) -> Result<McpClient, RestoreError> {
+    store: S,
+) -> Result<McpClient, RestoreError>
+where
+    S: CredentialStore + 'static,
+{
     let mut manager = AuthorizationManager::new(server_url)
         .await
         .map_err(|error| RestoreError::Failed(format!("OAuth discovery failed: {error}")))?;

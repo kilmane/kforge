@@ -10,7 +10,9 @@ use tauri_plugin_fs::FsExt;
 use tokio::sync::{Mutex, RwLock};
 
 use self::{
-    inspection::PlanningInspectionSnapshot, mcp::RestoreError, token_store::WindowsCredentialStore,
+    inspection::PlanningInspectionSnapshot,
+    mcp::RestoreError,
+    token_store::{DatabaseWriteCredentialStore, WindowsCredentialStore},
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -280,6 +282,10 @@ pub async fn supabase_autopilot_disconnect(
 ) -> Result<ConnectionSnapshot, String> {
     let _operation = state.operation.lock().await;
     WindowsCredentialStore
+        .clear()
+        .await
+        .map_err(|error| oauth::redact_sensitive(&error.to_string()))?;
+    DatabaseWriteCredentialStore
         .clear()
         .await
         .map_err(|error| oauth::redact_sensitive(&error.to_string()))?;
