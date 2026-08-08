@@ -503,6 +503,17 @@ function MigrationMutationReview({
       <div style={{ color: "#fca5a5", fontWeight: 800 }}>
         Development database mutation
       </div>
+      <details style={{ color: "#d4d4d8", fontSize: "12px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          ? Beginner help
+        </summary>
+        <div style={{ marginTop: "6px" }}>
+          This section is where KForge can actually change Supabase, but only
+          when its safety checks say the proposal is eligible. A migration is
+          simply a saved set of database changes. KForge checks the database
+          again afterwards to confirm an applied change worked.
+        </div>
+      </details>
       {!eligibility.eligible ? (
         mutationState.phase === "verified" ? null : (
           <div style={{ color: "#fca5a5" }}>
@@ -555,18 +566,7 @@ function MigrationMutationReview({
               {reconciliation.sqlDraft}
             </pre>
           </div>
-          <details style={{ color: "#d4d4d8", fontSize: "12px" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 700 }}>
-              ? Beginner help
-            </summary>
-            <div style={{ marginTop: "6px" }}>
-              This is the first step that can actually change Supabase. A
-              migration is simply a saved set of database changes. Only
-              continue with a development/test project you are happy to
-              modify. KForge will check the database again afterwards to
-              confirm the change worked.
-            </div>
-          </details>
+
           <div role="alert" style={{ color: "#fecaca", fontWeight: 800 }}>
             Warning: approval and Apply WILL modify the selected Supabase
             database. No automatic retry or rollback will occur.
