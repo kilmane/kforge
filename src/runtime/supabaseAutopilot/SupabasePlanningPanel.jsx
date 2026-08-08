@@ -335,6 +335,16 @@ export default function SupabasePlanningPanel({
             }}
           />
         </label>
+        <details style={{ color: "#a1a1aa", fontSize: "12px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+            ? Beginner help
+          </summary>
+          <div style={{ marginTop: "6px" }}>
+            KForge is only checking your app and database and drafting what
+            would need to change. Nothing is changed yet.
+          </div>
+        </details>
+
         <button
           type="submit"
           style={{
@@ -545,6 +555,18 @@ function MigrationMutationReview({
               {reconciliation.sqlDraft}
             </pre>
           </div>
+          <details style={{ color: "#d4d4d8", fontSize: "12px" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+              ? Beginner help
+            </summary>
+            <div style={{ marginTop: "6px" }}>
+              This is the first step that can actually change Supabase. A
+              migration is simply a saved set of database changes. Only
+              continue with a development/test project you are happy to
+              modify. KForge will check the database again afterwards to
+              confirm the change worked.
+            </div>
+          </details>
           <div role="alert" style={{ color: "#fecaca", fontWeight: 800 }}>
             Warning: approval and Apply WILL modify the selected Supabase
             database. No automatic retry or rollback will occur.
@@ -646,6 +668,16 @@ function ReconciliationReview({ reconciliation }) {
         made by reconciliation. Any eligible development mutation requires a
         separate exact approval below.
       </div>
+      <details style={{ color: "#bfdbfe", fontSize: "12px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          ? Beginner help
+        </summary>
+        <div style={{ marginTop: "6px" }}>
+          KForge is comparing the draft with your real Supabase structure so
+          it can avoid creating something that already exists or conflicts
+          with it. A migration is simply a saved set of database changes.
+        </div>
+      </details>
       <div>
         Status: {displayStatus(reconciliation.status)} · Managed migration name:{" "}
         <code>{reconciliation.proposedMigration.identity}</code>
