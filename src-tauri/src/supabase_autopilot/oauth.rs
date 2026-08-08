@@ -81,7 +81,8 @@ pub async fn authorize_database_write(
     server_url: &str,
     store: DatabaseWriteCredentialStore,
 ) -> Result<(), String> {
-    const REQUIRED_SCOPE: &str = "database:write";
+    const PROJECT_READ_SCOPE: &str = "projects:read";
+    const DATABASE_WRITE_SCOPE: &str = "database:write";
 
     let (listener, redirect_uri) = bind_callback_listener().await?;
     let challenge = mcp::capture_auth_challenge(server_url).await?;
@@ -97,7 +98,7 @@ pub async fn authorize_database_write(
             AuthorizationRequest::new(&redirect_uri)
                 .with_client_name("KForge Supabase Autopilot Database Write")
                 .with_application_type("native")
-                .with_scopes([REQUIRED_SCOPE])
+                .with_scopes([PROJECT_READ_SCOPE, DATABASE_WRITE_SCOPE])
                 .with_challenge(challenge),
         )
         .await
@@ -114,9 +115,16 @@ pub async fn authorize_database_write(
         complete_browser_authorization(app, listener, authorization_url, oauth_state).await?;
 
     let granted_scopes = manager.get_current_scopes().await;
-    if !granted_scopes.iter().any(|scope| scope == REQUIRED_SCOPE) {
+    let has_project_read = granted_scopes
+        .iter()
+        .any(|scope| scope == PROJECT_READ_SCOPE);
+    let has_database_write = granted_scopes
+        .iter()
+        .any(|scope| scope == DATABASE_WRITE_SCOPE);
+
+    if !has_project_read || !has_database_write {
         return Err(
-            "Supabase authorization completed without the required database:write permission"
+            "Supabase authorization completed without the required projects:read and database:write permissions"
                 .into(),
         );
     }
