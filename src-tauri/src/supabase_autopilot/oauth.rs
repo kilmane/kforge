@@ -46,20 +46,14 @@ pub async fn authorize(
     server_url: &str,
     store: WindowsCredentialStore,
 ) -> Result<AuthorizationManager, String> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-        .await
-        .map_err(|error| format!("loopback callback listener failed: {error}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|error| format!("loopback callback address failed: {error}"))?
-        .port();
-    let redirect_uri = format!("http://127.0.0.1:{port}{CALLBACK_PATH}");
+    let (listener, redirect_uri) = bind_callback_listener().await?;
 
     let challenge = mcp::capture_auth_challenge(server_url).await?;
     let mut manager = AuthorizationManager::new(server_url)
         .await
         .map_err(|error| safe_oauth_error("OAuth discovery", error))?;
     manager.set_credential_store(store);
+
     let mut oauth_state = OAuthState::Unauthorized(manager);
     oauth_state
         .start_authorization(
@@ -75,6 +69,81 @@ pub async fn authorize(
         .get_authorization_url()
         .await
         .map_err(|error| safe_oauth_error("OAuth authorization URL", error))?;
+
+    complete_browser_authorization(app, listener, authorization_url, oauth_state).await
+}
+
+pub async fn authorize_database_write(
+    app: &tauri::AppHandle,
+    server_url: &str,
+    store: WindowsCredentialStore,
+) -> Result<(), String> {
+    const REQUIRED_SCOPE: &str = "database:write";
+
+    let (listener, redirect_uri) = bind_callback_listener().await?;
+
+    let challenge = mcp::capture_auth_challenge(server_url).await?;
+    let mut manager = AuthorizationManager::new(server_url)
+        .await
+        .map_err(|error| safe_oauth_error("OAuth mutation discovery", error))?;
+    manager.set_credential_store(store);
+
+    let resolution = manager
+        .resolve_metadata_from_challenge(Some(&challenge))
+        .await
+        .map_err(|error| safe_oauth_error("OAuth mutation metadata discovery", error))?;
+    manager.set_metadata(resolution.metadata);
+
+    let restored = manager
+        .initialize_from_store()
+        .await
+        .map_err(|error| safe_oauth_error("OAuth mutation session restore", error))?;
+    if !restored {
+        return Err(
+            "The Supabase session must be reauthorized before approving a database change".into(),
+        );
+    }
+
+    manager
+        .get_access_token()
+        .await
+        .map_err(|error| safe_oauth_error("OAuth mutation token restore", error))?;
+
+    let current_scopes = manager.get_current_scopes().await;
+    if current_scopes.iter().any(|scope| scope == REQUIRED_SCOPE) {
+        return Ok(());
+    }
+
+    let mut oauth_state = OAuthState::Authorized(manager);
+    let authorization_url = oauth_state
+        .request_scope_upgrade(REQUIRED_SCOPE, &redirect_uri)
+        .await
+        .map_err(|error| safe_oauth_error("OAuth database-write permission upgrade", error))?;
+
+    complete_browser_authorization(app, listener, authorization_url, oauth_state).await?;
+    Ok(())
+}
+async fn bind_callback_listener() -> Result<(tokio::net::TcpListener, String), String> {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(|error| format!("loopback callback listener failed: {error}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| format!("loopback callback address failed: {error}"))?
+        .port();
+
+    Ok((
+        listener,
+        format!("http://127.0.0.1:{port}{CALLBACK_PATH}"),
+    ))
+}
+
+async fn complete_browser_authorization(
+    app: &tauri::AppHandle,
+    listener: tokio::net::TcpListener,
+    authorization_url: String,
+    mut oauth_state: OAuthState,
+) -> Result<AuthorizationManager, String> {
     let expected_state = validate_authorization_url(&authorization_url)?;
 
     let (callback_sender, callback_receiver) = oneshot::channel();
@@ -85,6 +154,7 @@ pub async fn authorize(
     let router = Router::new()
         .route(CALLBACK_PATH, get(callback_handler))
         .with_state(callback_state);
+
     let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
     let server_task = tokio::spawn(async move {
         let _ = axum::serve(listener, router)

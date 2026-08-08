@@ -135,7 +135,7 @@ pub fn project_url(project_ref: &str) -> Result<String, String> {
     build_url(Some(project_ref), "development,database", true)
 }
 
-fn project_mutation_url(project_ref: &str) -> Result<String, String> {
+pub(super) fn project_mutation_url(project_ref: &str) -> Result<String, String> {
     build_url(Some(project_ref), "development,database", false)
 }
 

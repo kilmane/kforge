@@ -106,6 +106,15 @@ impl MutationApprovalState {
         self.pending.write().await.clear();
     }
 
+    async fn peek(&self, token: &str) -> Result<PendingApproval, String> {
+        self.pending
+            .read()
+            .await
+            .get(token)
+            .cloned()
+            .ok_or_else(|| "The migration approval is missing, stale, or already consumed".into())
+    }
+
     async fn consume(&self, token: &str) -> Result<PendingApproval, String> {
         self.pending
             .write()
@@ -167,6 +176,7 @@ pub async fn supabase_autopilot_prepare_migration_approval(
 
 #[tauri::command]
 pub async fn supabase_autopilot_apply_approved_migration(
+    app: tauri::AppHandle,
     approval_token: String,
     state: tauri::State<'_, SupabaseAutopilotState>,
 ) -> Result<ApplyMigrationResponse, String> {
@@ -175,14 +185,27 @@ pub async fn supabase_autopilot_apply_approved_migration(
     if token.is_empty() || token.len() > 160 {
         return Err("A valid approved migration token is required".into());
     }
-    let approval = state.mutation.consume(token).await?;
+
+    let approval = state.mutation.peek(token).await?;
 
     let selected = selected_development_project(&state).await?;
     if selected.reference != approval.project_reference || selected.name != approval.project_name {
         return Err("The selected project changed after migration approval".into());
     }
+
     let remote = inspect_read_only(&selected).await?;
     ensure_pending_approval_is_fresh(&approval, &remote)?;
+
+    let mutation_url =
+        mcp::project_mutation_url(&selected.reference).map_err(|error| oauth::redact_sensitive(&error))?;
+    oauth::authorize_database_write(&app, &mutation_url, WindowsCredentialStore)
+        .await
+        .map_err(|error| oauth::redact_sensitive(&error))?;
+
+    let remote = inspect_read_only(&selected).await?;
+    ensure_pending_approval_is_fresh(&approval, &remote)?;
+
+    let approval = state.mutation.consume(token).await?;
 
     mcp::apply_approved_migration(
         &selected,
@@ -886,7 +909,10 @@ mod tests {
             },
         );
 
+        assert!(state.peek(token).await.is_ok());
+        assert!(state.peek(token).await.is_ok());
         assert!(state.consume(token).await.is_ok());
+        assert!(state.peek(token).await.is_err());
         assert!(state.consume(token).await.is_err());
     }
 
