@@ -268,6 +268,7 @@ describe("SupabasePlanningPanel", () => {
           inspectPlanning={inspectPlanning}
           prepareMigrationApproval={prepareMigrationApproval}
           applyApprovedMigration={applyApprovedMigration}
+          onStartAppWiring={jest.fn()}
         />,
       );
     });
@@ -281,6 +282,7 @@ describe("SupabasePlanningPanel", () => {
         .click();
     });
     await clickButton("Approve this exact migration");
+    expect(findButton("Start controlled app wiring")).toBeUndefined();
     await clickButton("Apply approved migration");
 
     expect(inspectPlanning).toHaveBeenCalledTimes(2);
@@ -290,6 +292,7 @@ describe("SupabasePlanningPanel", () => {
     expect(container.textContent).toMatch(
       /Supabase-assigned version 20991231235959/i,
     );
+    expect(findButton("Start controlled app wiring")).toBeTruthy();
     expect(applyApprovedMigration).toHaveBeenCalledTimes(1);
   });
 

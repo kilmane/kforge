@@ -31,6 +31,7 @@ export const IMPLEMENTATION_JOB_TOOL_DECISION = Object.freeze({
   ALLOW: "allow",
   BLOCK_REPEATED_READ: "block_repeated_read",
   BLOCK_UNSAFE_WRITE_WITHOUT_INSPECTION: "block_unsafe_write_without_inspection",
+  BLOCK_UNPLANNED_WRITE_PATH: "block_unplanned_write_path",
 });
 
 export function normalizeImplementationPath(path = "") {
@@ -104,6 +105,9 @@ export function createImplementationJob(seed = {}) {
   const now = Date.now();
   const createdAt = Number.isFinite(seed.createdAt) ? seed.createdAt : now;
   const inspectedPaths = normalizeImplementationPathList(seed.inspectedPaths);
+  const allowedWritePaths = Array.isArray(seed.allowedWritePaths)
+    ? normalizeImplementationPathList(seed.allowedWritePaths)
+    : null;
   const defaultAllowedNextActions =
     inspectedPaths.length > 0
       ? [
@@ -124,6 +128,7 @@ export function createImplementationJob(seed = {}) {
     createdAt,
     updatedAt: Number.isFinite(seed.updatedAt) ? seed.updatedAt : now,
     inspectedPaths,
+    allowedWritePaths,
     attemptedWrites: normalizeImplementationPathList(seed.attemptedWrites),
     successfulWrites: normalizeImplementationPathList(seed.successfulWrites),
     blockedWrites: normalizeImplementationPathList(seed.blockedWrites),
@@ -302,6 +307,24 @@ export function evaluateImplementationToolRequest(job, toolCall = {}, options = 
     };
   }
 
+  if (
+    Array.isArray(current.allowedWritePaths) &&
+    isImplementationWriteTool(toolName) &&
+    path &&
+    !hasImplementationPath(current.allowedWritePaths, path)
+  ) {
+    return {
+      decision: IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNPLANNED_WRITE_PATH,
+      ok: false,
+      path,
+      toolName,
+      allowedNextActions: [
+        IMPLEMENTATION_JOB_ACTION.STOP,
+      ],
+      error:
+        "KForge blocked a write request outside the approved implementation paths.",
+    };
+  }
   if (
     requireInspectionBeforeWrite &&
     isImplementationWriteTool(toolName) &&

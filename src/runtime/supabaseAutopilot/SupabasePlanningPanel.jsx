@@ -45,6 +45,7 @@ export default function SupabasePlanningPanel({
   reconcilePlan = createSupabaseAutopilotReconciliation,
   prepareMigrationApproval = supabaseAutopilotPrepareMigrationApproval,
   applyApprovedMigration = supabaseAutopilotApplyApprovedMigration,
+  onStartAppWiring = null,
 }) {
   const [objective, setObjective] = useState("");
   const [developmentConfirmed, setDevelopmentConfirmed] = useState(false);
@@ -158,6 +159,22 @@ export default function SupabasePlanningPanel({
     reconciliation,
     verifiedProject,
   });
+  const canStartAppWiring =
+    typeof onStartAppWiring === "function" &&
+    !!state.plan &&
+    !!reconciliation &&
+    (mutationState.phase === "verified" ||
+      reconciliation.status === "already-satisfied");
+
+  function startAppWiring() {
+    if (!canStartAppWiring) return;
+    onStartAppWiring({
+      plan: state.plan,
+      reconciliation,
+      verifiedProject,
+      projectPath: boundedProjectPath,
+    });
+  }
 
   async function approveMigration() {
     if (
@@ -465,6 +482,15 @@ export default function SupabasePlanningPanel({
             onApprove={approveMigration}
             onApply={applyMigration}
           />
+          {canStartAppWiring ? (
+            <button
+              type="button"
+              style={actionStyle}
+              onClick={startAppWiring}
+            >
+              Start controlled app wiring
+            </button>
+          ) : null}
         </article>
       ) : null}
     </section>

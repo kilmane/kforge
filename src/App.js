@@ -9696,6 +9696,14 @@ setWorkflowContext({
           )
             .map((item) => String(item || "").trim())
             .filter(Boolean);
+          const modelToolAllowedWritePaths = (
+            Array.isArray(opts.modelToolAllowedWritePaths)
+              ? opts.modelToolAllowedWritePaths
+              : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+
           const modelToolAppBuildBaselineSnapshots = Array.isArray(
             opts.appBuildBaselineSnapshots,
           )
@@ -9726,6 +9734,7 @@ setWorkflowContext({
                   opts.controlledReadOnlyToolExecution === true,
                 modelToolOriginalGoal,
                 modelToolInspectedPaths,
+                modelToolAllowedWritePaths,
                 modelToolAppBuildBaselineSnapshots,
                 modelToolAppBuildEditedPaths,
               },

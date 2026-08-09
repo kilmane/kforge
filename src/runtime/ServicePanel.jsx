@@ -277,7 +277,7 @@ function formatLogTimestamp(value) {
 
   return `${hh}:${mm}:${ss}`;
 }
-export default function ServicePanel({ projectPath, onCopyTextChange }) {
+export default function ServicePanel({ projectPath, onCopyTextChange, onStartAppWiring }) {
   const [logsByService, setLogsByService] = useState(
     persistedServicePanelState.logsByService,
   );
@@ -1225,7 +1225,10 @@ export default function ServicePanel({ projectPath, onCopyTextChange }) {
         >
           {isSupabase ? (
             <>
-              <SupabaseConnectionPanel projectPath={projectPath} />
+              <SupabaseConnectionPanel
+                projectPath={projectPath}
+                onStartAppWiring={onStartAppWiring}
+              />
               <div
                 className="command-runner-item__meta"
                 style={{

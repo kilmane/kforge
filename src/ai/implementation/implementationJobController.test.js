@@ -45,6 +45,46 @@ test("createImplementationJob normalizes inspected paths and allows a write prop
   ]);
 });
 
+test("implementation job blocks writes outside its explicit allowed paths", () => {
+  const job = createImplementationJob({
+    inspectedPaths: ["src/App.jsx"],
+    allowedWritePaths: [
+      " src\\App.jsx ",
+      "./src/lib/data.js",
+      "src/App.jsx",
+    ],
+  });
+
+  expect(job.allowedWritePaths).toEqual([
+    "src/App.jsx",
+    "src/lib/data.js",
+  ]);
+
+  const allowed = evaluateImplementationToolRequest(
+    job,
+    {
+      name: "write_file",
+      args: { path: "src/App.jsx", content: "complete file text" },
+    },
+    { requireInspectionBeforeWrite: true },
+  );
+
+  const blocked = evaluateImplementationToolRequest(
+    job,
+    {
+      name: "write_file",
+      args: { path: "src/Other.jsx", content: "complete file text" },
+    },
+    { requireInspectionBeforeWrite: true },
+  );
+
+  expect(allowed.ok).toBe(true);
+  expect(blocked.ok).toBe(false);
+  expect(blocked.decision).toBe(
+    IMPLEMENTATION_JOB_TOOL_DECISION.BLOCK_UNPLANNED_WRITE_PATH,
+  );
+  expect(blocked.error).toMatch(/outside the approved implementation paths/i);
+});
 test("rememberImplementationInspection records one normalized path without duplicates", () => {
   const initialJob = createImplementationJob({
     originalGoal: "Change the heading",

@@ -3127,6 +3127,13 @@ export default function AiPanel({
             metaToolInspectedPaths.length > 0
               ? metaToolInspectedPaths
               : recoveredProjectEditInspectedPaths;
+          const triggerToolAllowedWritePaths = Array.isArray(
+            triggerToolMessage?.meta?.modelToolAllowedWritePaths,
+          )
+            ? triggerToolMessage.meta.modelToolAllowedWritePaths
+                .map((item) => String(item || "").trim())
+                .filter(Boolean)
+            : null;
           const triggerToolAppBuildBaselineSnapshots =
             normalizeAppBuildBaselineSnapshotList(
               triggerToolMessage?.meta?.modelToolAppBuildBaselineSnapshots,
@@ -4071,6 +4078,7 @@ export default function AiPanel({
                 originalGoal: triggerToolOriginalGoal || latestUserText,
                 taskKind: triggerToolTaskKind,
                 inspectedPaths: agentSuccessfulReadPaths,
+                allowedWritePaths: triggerToolAllowedWritePaths,
               });
               const performanceDiagnosticReadKeys = new Set();
 
@@ -5033,6 +5041,92 @@ export default function AiPanel({
     runAppBuildJobStartupInspection,
   ]);
 
+  const handleStartSupabaseAppWiring = useCallback(
+    (payload = {}) => {
+      const plannedOperations = Array.isArray(
+        payload?.plan?.proposedApplicationFileOperations,
+      )
+        ? payload.plan.proposedApplicationFileOperations
+        : [];
+      const allowedWritePaths = Array.from(
+        new Set(
+          plannedOperations
+            .map((operation) => String(operation?.path || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const requestedObjective = String(
+        payload?.plan?.requestedObjective || "",
+      ).trim();
+      const payloadProjectPath = String(payload?.projectPath || "").trim();
+      const currentProjectPath = String(projectPath || "").trim();
+
+      if (
+        !currentProjectPath ||
+        !payloadProjectPath ||
+        payloadProjectPath !== currentProjectPath ||
+        allowedWritePaths.length === 0 ||
+        allowedWritePaths.length !== plannedOperations.length
+      ) {
+        appendMessage(
+          "assistant",
+          "KForge blocked Supabase app wiring because the approved application plan no longer matches the current project or contains an invalid file boundary.\n\nNo files were changed.",
+        );
+        return;
+      }
+
+      const operationLines = plannedOperations
+        .map((operation) => {
+          const role = String(operation?.role || "application").trim();
+          const path = String(operation?.path || "").trim();
+          return `- ${role}: ${path}`;
+        })
+        .join("\n");
+      const originalGoal =
+        requestedObjective || "Wire the approved Supabase plan into the application.";
+
+      appendMessage("user", "Choice: Start controlled app wiring");
+      appendMessage(
+        "assistant",
+        "Starting controlled Supabase app wiring.\n\n" +
+          "KForge will use the approved application plan and may write only its exact planned file paths. Normal inspect-before-write, project-boundary checks, pre-write snapshots, and per-write approval remain active.",
+      );
+
+      if (typeof sendWithPrompt !== "function") {
+        appendMessage(
+          "assistant",
+          "KForge could not start the controlled app-wiring handoff. No files were changed.",
+        );
+        return;
+      }
+
+      setServicesOpen(false);
+
+      sendWithPrompt(
+        "Implement the approved Supabase application wiring plan for this existing project.\n\n" +
+          `Original objective: ${originalGoal}\n\n` +
+          `Approved application file operations:\n${operationLines}\n\n` +
+          "Safety rules:\n" +
+          "- Stay strictly within the approved application file paths listed above.\n" +
+          "- Inspect relevant existing target files before replacing them.\n" +
+          "- Preserve unrelated application behavior and existing project structure.\n" +
+          "- Do not modify Supabase database schema, migrations, RLS, project identity, or credentials in this application-wiring pass.\n" +
+          "- Do not run package managers or installation commands.\n" +
+          "- Never expose environment-variable values or secrets.\n" +
+          "- Request exactly one concrete tool call next. If more evidence is required, request one read_file call. If evidence is sufficient, request one smallest safe write_file call for an approved path.",
+        {
+          silentUserAppend: true,
+          skipCompletedWorkflowRoute: true,
+          skipDirectWorkflowHandoffRoute: true,
+          forceProjectEdit: true,
+          modelToolAllowedWritePaths: allowedWritePaths,
+          modelToolOriginalGoal: originalGoal,
+          lastUserGoal: originalGoal,
+        },
+      );
+    },
+    [appendMessage, projectPath, sendWithPrompt],
+  );
   const handleRequestToolOk = useCallback(() => {
     if (!activeTab?.path) {
       appendMessage(
@@ -5534,6 +5628,7 @@ export default function AiPanel({
             <ServicePanel
               projectPath={projectPath}
               onCopyTextChange={setServicesCopyText}
+              onStartAppWiring={handleStartSupabaseAppWiring}
             />
           </div>
         </div>
