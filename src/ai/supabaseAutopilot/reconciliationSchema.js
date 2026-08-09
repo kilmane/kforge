@@ -291,7 +291,13 @@ function validateReconciliationPlanInput(plan) {
         typeof operation !== "object" ||
         !isBoundedApplicationPath(operation.path) ||
         !boundedIdentifier(operation.operation, 80) ||
-        !isBoundedTextExact(operation.purpose, 500),
+        !isBoundedTextExact(operation.purpose, 500) ||
+        ![
+          "supabase-client",
+          "auth-session",
+          "data-access",
+          "react-integration",
+        ].includes(operation.role),
     ) ||
     plan.proposedPackageOperations.some(
       (operation) =>

@@ -176,6 +176,100 @@ describe("Supabase Autopilot plan schema", () => {
       errors: [],
     });
   });
+  test("uses specific generic wiring evidence to choose deterministic integration targets", () => {
+    const plan = createPlan({
+      objective: "Add sign-in and save each user's dashboard settings.",
+      inspection: {
+        ...inspection,
+        local: {
+          ...inspection.local,
+          applicationName: "Example Dashboard",
+          applicationRootName: "example-dashboard",
+          sourceFiles: [
+            "src/main.jsx",
+            "src/App.jsx",
+            "src/lib/supabase.js",
+            "src/lib/broadStore.js",
+            "src/lib/data.js",
+            "src/auth/broadAuth.js",
+            "src/auth/session.js",
+          ],
+          existingSupabaseClientFiles: ["src/lib/supabase.js"],
+          authenticationFiles: [
+            "src/auth/broadAuth.js",
+            "src/auth/session.js",
+          ],
+          persistenceFiles: [
+            "src/lib/broadStore.js",
+            "src/lib/data.js",
+          ],
+          wiringFindings: {
+            entryFiles: ["src/main.jsx"],
+            reactStateFiles: ["src/App.jsx"],
+            effectFiles: ["src/App.jsx"],
+            supabaseCallFiles: ["src/lib/data.js"],
+            authSessionFiles: ["src/auth/session.js"],
+          },
+        },
+      },
+    });
+
+    const operationsByRole = Object.fromEntries(
+      plan.proposedApplicationFileOperations.map((operation) => [
+        operation.role,
+        operation,
+      ]),
+    );
+
+    expect(operationsByRole["supabase-client"].path).toBe(
+      "src/lib/supabase.js",
+    );
+    expect(operationsByRole["auth-session"].path).toBe(
+      "src/auth/session.js",
+    );
+    expect(operationsByRole["data-access"].path).toBe("src/lib/data.js");
+    expect(operationsByRole["react-integration"].path).toBe("src/App.jsx");
+
+    const paths = plan.proposedApplicationFileOperations.map(
+      (operation) => operation.path,
+    );
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(
+      plan.proposedApplicationFileOperations.every(
+        (operation) => operation.status === "proposed",
+      ),
+    ).toBe(true);
+    expect(validateSupabaseAutopilotPlan(plan)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+  test("fails closed when distinct wiring roles collapse onto the same application path", () => {
+    expect(() =>
+      createPlan({
+        objective: "Add sign-in and save each user's dashboard settings.",
+        inspection: {
+          ...inspection,
+          local: {
+            ...inspection.local,
+            applicationName: "Compact Dashboard",
+            applicationRootName: "compact-dashboard",
+            sourceFiles: ["src/App.jsx", "src/lib/supabase.js"],
+            existingSupabaseClientFiles: ["src/lib/supabase.js"],
+            authenticationFiles: ["src/App.jsx"],
+            persistenceFiles: ["src/App.jsx"],
+            wiringFindings: {
+              entryFiles: [],
+              reactStateFiles: ["src/App.jsx"],
+              effectFiles: ["src/App.jsx"],
+              supabaseCallFiles: ["src/App.jsx"],
+              authSessionFiles: ["src/App.jsx"],
+            },
+          },
+        },
+      }),
+    ).toThrow(/must not target the same path more than once/i);
+  });
   test("flags unsupported frameworks without proposing implementation files", () => {
     const plan = createPlan({
       inspection: {

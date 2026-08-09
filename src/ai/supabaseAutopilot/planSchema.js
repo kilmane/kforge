@@ -275,6 +275,19 @@ export function validateSupabaseAutopilotPlan(plan) {
     if (!PROPOSED_STATUSES.has(operation.status)) {
       errors.push("Application operations must remain proposed.");
     }
+    if (
+      !["supabase-client", "auth-session", "data-access", "react-integration"].includes(
+        operation.role,
+      )
+    ) {
+      errors.push("Application wiring role is missing or unsupported.");
+    }
+  }
+  const applicationPaths = (plan.proposedApplicationFileOperations || []).map(
+    (operation) => operation.path,
+  );
+  if (new Set(applicationPaths).size !== applicationPaths.length) {
+    errors.push("Application operations must not target the same path more than once.");
   }
   for (const operation of plan.proposedPackageOperations || []) {
     if (!PROPOSED_STATUSES.has(operation.status)) {
@@ -573,6 +586,9 @@ function buildFileOperations(local, userOwnedData) {
     return candidates[0] || fallback;
   };
 
+  const preferredEvidencePath = (specificPaths, broadPaths, fallback) =>
+    preferredPath(specificPaths, "") || preferredPath(broadPaths, fallback);
+
   const clientPath = preferredPath(
     local.existingSupabaseClientFiles,
     "src/lib/supabaseClient.js",
@@ -583,13 +599,15 @@ function buildFileOperations(local, userOwnedData) {
       ? "review-and-update"
       : "create",
     path: clientPath,
+    role: "supabase-client",
     purpose:
       "Configure the browser-safe Supabase client using environment-variable names only.",
     status: "proposed",
   });
 
   if (userOwnedData) {
-    const authenticationPath = preferredPath(
+    const authenticationPath = preferredEvidencePath(
+      local.wiringFindings.authSessionFiles,
       local.authenticationFiles,
       "src/features/auth/AuthProvider.jsx",
     );
@@ -597,12 +615,14 @@ function buildFileOperations(local, userOwnedData) {
     operations.push({
       operation: "create-or-update",
       path: authenticationPath,
+      role: "auth-session",
       purpose: "Provide sign-in state and session-aware UI behavior.",
       status: "proposed",
     });
   }
 
-  const persistencePath = preferredPath(
+  const persistencePath = preferredEvidencePath(
+    local.wiringFindings.supabaseCallFiles,
     local.persistenceFiles,
     "src/features/supabase/FeatureData.jsx",
   );
@@ -610,8 +630,29 @@ function buildFileOperations(local, userOwnedData) {
   operations.push({
     operation: "create-or-update",
     path: persistencePath,
+    role: "data-access",
     purpose:
       "Connect the requested feature to the proposed Supabase data model.",
+    status: "proposed",
+  });
+
+  const reactIntegrationPath = preferredEvidencePath(
+    local.wiringFindings.effectFiles,
+    [
+      ...local.wiringFindings.reactStateFiles,
+      ...local.wiringFindings.entryFiles,
+    ],
+    "src/App.jsx",
+  );
+  usedPaths.add(reactIntegrationPath);
+  operations.push({
+    operation: local.sourceFiles.includes(reactIntegrationPath)
+      ? "review-and-update"
+      : "create",
+    path: reactIntegrationPath,
+    role: "react-integration",
+    purpose:
+      "Connect the React application lifecycle and state to the planned Supabase auth and data-access boundaries.",
     status: "proposed",
   });
 
