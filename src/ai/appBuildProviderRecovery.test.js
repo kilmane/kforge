@@ -175,6 +175,51 @@ describe("app-build provider recovery", () => {
     expectRecoveryActions(initialGateSection);
   });
 
+  test("generic project edits survive a model switch and auto-resume with a Project builder", () => {
+    const pendingProjectEditRequest = {
+      prompt: "Implement the approved Supabase application wiring plan.",
+      options: {
+        forceProjectEdit: true,
+        modelToolOriginalGoal: "Show existing feature records in the app.",
+        modelToolAllowedWritePaths: [
+          "src/lib/supabase.js",
+          "src/lib/supabaseQueries.js",
+          "src/App.jsx",
+        ],
+      },
+    };
+
+    const blockedContext = createBlockedProjectEditWorkflowContext(
+      pendingProjectEditRequest.prompt,
+      {
+        mode: "guarded_edit",
+        tier: "sandbox",
+      },
+      {
+        pendingProjectEditRequest,
+      },
+    );
+
+    expect(resolvePendingProjectEditRequest(blockedContext)).toEqual(
+      pendingProjectEditRequest,
+    );
+
+    const initialGateSection = getAppSourceSection(
+      'if (projectEditRoute.action === "gate_model_capability_project_edit")',
+      'if (projectEditRoute.action === "project_edit")',
+    );
+
+    expect(initialGateSection).not.toMatch(
+      /if \(!hasPendingAppBuildStep\) \{[\s\S]*?setWorkflowContext\(null\)/,
+    );
+    expect(initialGateSection).toContain(
+      "KForge will automatically resume the preserved project-edit request",
+    );
+
+    expect(appSource).toMatch(
+      /displayModelWorkflowPolicy\?\.capability !==[\s\S]*?MODEL_CAPABILITIES\.PROJECT_BUILDER[\s\S]*?resolvePendingProjectEditRequest\(workflowContext\)[\s\S]*?forceAppBuildImplementation === true[\s\S]*?const runPrompt = sendWithPromptRef\.current;[\s\S]*?runPrompt\(resumeRequest\.prompt, \{[\s\S]*?\.\.\.resumeRequest\.options,[\s\S]*?silentUserAppend: true/,
+    );
+  });
   test("Back to chat pauses pending recovery without discarding its context", () => {
     const followupSection = getAppSourceSection(
       'if (blockedModelPolicyRoute?.action === "blocked_model_policy_followup")',

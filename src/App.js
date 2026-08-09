@@ -25,6 +25,7 @@ import { buildAppBuildDesignDnaPrompt } from "./ai/appBuild/appBuildDesignDna";
 import { MODEL_PRESETS } from "./ai/modelPresets";
 import {
   KFORGE_WORKING_MODES,
+  MODEL_CAPABILITIES,
   NEW_USER_MODEL_SELECTION,
   getProviderFallbackModelId,
   getWorkingModeDefaultModelId,
@@ -5622,7 +5623,7 @@ if (!projectOpen && (isNoProjectImplementationIntent(text) || hasFreeAppBriefSta
                     "assistant",
                     hasPendingAppBuildStep
                       ? "Switch to a Project builder model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
-                      : "Switch to a Project builder model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                      : "Switch to a Project builder model from the Provider/Model preset list. KForge will automatically resume the preserved project-edit request when the capable model becomes active. No files have been changed.",
                     hasPendingAppBuildStep
                       ? { actions: [resumeAction] }
                       : undefined,
@@ -8529,15 +8530,12 @@ setWorkflowContext({
                       : "Choice: Switch model first",
                   );
 
-                  if (!hasPendingAppBuildStep) {
-                    setWorkflowContext(null);
-                  }
 
                   appendMessage(
                     "assistant",
                     hasPendingAppBuildStep
                       ? "Switch to a Project builder model from the Provider/Model preset list, then resume the preserved app-build step below. Previously written files and the pending styling pass remain recorded."
-                      : "Switch to a Project builder model from the Provider/Model preset list, then send the project-edit request again. No project editing has started and no files were changed.",
+                      : "Switch to a Project builder model from the Provider/Model preset list. KForge will automatically resume the preserved project-edit request when the capable model becomes active. No files have been changed.",
                     hasPendingAppBuildStep
                       ? { actions: [resumeAction] }
                       : undefined,
@@ -9792,6 +9790,45 @@ setWorkflowContext({
   useEffect(() => {
     sendWithPromptRef.current = sendWithPrompt;
   }, [sendWithPrompt]);
+
+  useEffect(() => {
+    if (
+      displayModelWorkflowPolicy?.capability !==
+        MODEL_CAPABILITIES.PROJECT_BUILDER ||
+      workflowContext?.status !== WORKFLOW_STATUS.BLOCKED_BY_MODEL_POLICY ||
+      workflowContext?.taskKind !== WORKFLOW_TASK_KIND.PROJECT_EDIT
+    ) {
+      return;
+    }
+
+    const resumeRequest =
+      resolvePendingProjectEditRequest(workflowContext);
+
+    if (
+      !resumeRequest ||
+      resumeRequest.options?.forceAppBuildImplementation === true
+    ) {
+      return;
+    }
+
+    const runPrompt = sendWithPromptRef.current;
+    if (typeof runPrompt !== "function") return;
+
+    appendMessage(
+      "assistant",
+      "Project builder detected. Resuming the preserved project-edit request automatically.",
+    );
+
+    runPrompt(resumeRequest.prompt, {
+      ...resumeRequest.options,
+      silentUserAppend: true,
+    });
+  }, [
+    appendMessage,
+    displayModelWorkflowPolicy?.capability,
+    workflowContext,
+  ]);
+
   const handleSendChat = useCallback(async () => {
     const text = String(aiPrompt || "").trim();
     if (!text) return;

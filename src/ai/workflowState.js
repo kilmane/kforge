@@ -496,9 +496,12 @@ export function createBlockedProjectEditWorkflowContext(
     recovery?.previousWorkflowContext || null;
   const pendingProjectEditRequest =
     recovery?.pendingProjectEditRequest || null;
+  const hasPendingProjectEditRecovery =
+    !!String(pendingProjectEditRequest?.prompt || "").trim();
   const isPendingAppBuildRecovery =
+    hasPendingProjectEditRecovery &&
     pendingProjectEditRequest?.options?.forceAppBuildImplementation === true;
-  const preservedGoal = isPendingAppBuildRecovery
+  const preservedGoal = hasPendingProjectEditRecovery
     ? String(
         pendingProjectEditRequest?.options?.modelToolOriginalGoal ||
           pendingProjectEditRequest?.options?.lastUserGoal ||
@@ -518,7 +521,7 @@ export function createBlockedProjectEditWorkflowContext(
     modelPolicyTier: modelWorkflowPolicy?.tier || "unknown",
     modelPolicyReason: modelWorkflowPolicy?.reason || "unknown",
     lastUserGoal: preservedGoal,
-    ...(isPendingAppBuildRecovery ? { pendingProjectEditRequest } : {}),
+    ...(hasPendingProjectEditRecovery ? { pendingProjectEditRequest } : {}),
     updatedAt: Date.now(),
     source: "model_capability_gate",
   };
