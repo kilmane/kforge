@@ -32,7 +32,18 @@ pub struct PlanningLocalInspection {
     pub existing_supabase_client_files: Vec<String>,
     pub authentication_files: Vec<String>,
     pub persistence_files: Vec<String>,
+    pub wiring_findings: PlanningWiringFindings,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanningWiringFindings {
+    pub entry_files: Vec<String>,
+    pub react_state_files: Vec<String>,
+    pub effect_files: Vec<String>,
+    pub supabase_call_files: Vec<String>,
+    pub auth_session_files: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -130,6 +141,11 @@ pub fn inspect_local_application(project_path: &str) -> Result<PlanningLocalInsp
     let mut supabase_files = BTreeSet::new();
     let mut authentication_files = BTreeSet::new();
     let mut persistence_files = BTreeSet::new();
+    let mut entry_files = BTreeSet::new();
+    let mut react_state_files = BTreeSet::new();
+    let mut effect_files = BTreeSet::new();
+    let mut supabase_call_files = BTreeSet::new();
+    let mut auth_session_files = BTreeSet::new();
     for relative in &source_paths {
         let absolute = root.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
         let content = match read_bounded_text(&absolute, MAX_SOURCE_FILE_BYTES) {
@@ -145,6 +161,11 @@ pub fn inspect_local_application(project_path: &str) -> Result<PlanningLocalInsp
             &mut supabase_files,
             &mut authentication_files,
             &mut persistence_files,
+            &mut entry_files,
+            &mut react_state_files,
+            &mut effect_files,
+            &mut supabase_call_files,
+            &mut auth_session_files,
         );
     }
 
@@ -174,6 +195,13 @@ pub fn inspect_local_application(project_path: &str) -> Result<PlanningLocalInsp
         existing_supabase_client_files: supabase_files.into_iter().collect(),
         authentication_files: authentication_files.into_iter().collect(),
         persistence_files: persistence_files.into_iter().collect(),
+        wiring_findings: PlanningWiringFindings {
+            entry_files: entry_files.into_iter().collect(),
+            react_state_files: react_state_files.into_iter().collect(),
+            effect_files: effect_files.into_iter().collect(),
+            supabase_call_files: supabase_call_files.into_iter().collect(),
+            auth_session_files: auth_session_files.into_iter().collect(),
+        },
         warnings,
     })
 }
@@ -406,9 +434,35 @@ fn classify_source_file(
     supabase_files: &mut BTreeSet<String>,
     authentication_files: &mut BTreeSet<String>,
     persistence_files: &mut BTreeSet<String>,
+    entry_files: &mut BTreeSet<String>,
+    react_state_files: &mut BTreeSet<String>,
+    effect_files: &mut BTreeSet<String>,
+    supabase_call_files: &mut BTreeSet<String>,
+    auth_session_files: &mut BTreeSet<String>,
 ) {
     let path_lower = relative.to_ascii_lowercase();
     let content_lower = content.to_ascii_lowercase();
+
+    if matches!(
+        path_lower.as_str(),
+        "src/main.js"
+            | "src/main.jsx"
+            | "src/main.ts"
+            | "src/main.tsx"
+            | "src/index.js"
+            | "src/index.jsx"
+            | "src/index.ts"
+            | "src/index.tsx"
+    ) {
+        entry_files.insert(relative.to_string());
+    }
+    if content_lower.contains("usestate(") || content_lower.contains("usereducer(") {
+        react_state_files.insert(relative.to_string());
+    }
+    if content_lower.contains("useeffect(") {
+        effect_files.insert(relative.to_string());
+    }
+
     if path_lower.contains("supabase")
         || content_lower.contains("@supabase/supabase-js")
         || content_lower.contains("createclient(")
@@ -432,6 +486,21 @@ fn classify_source_file(
         || content_lower.contains(".from(")
     {
         persistence_files.insert(relative.to_string());
+    }
+    if content_lower.contains(".from(")
+        || content_lower.contains(".rpc(")
+        || content_lower.contains(".storage.")
+        || content_lower.contains(".functions.")
+    {
+        supabase_call_files.insert(relative.to_string());
+    }
+    if content_lower.contains(".auth.")
+        || content_lower.contains("getsession(")
+        || content_lower.contains("onauthstatechange(")
+        || content_lower.contains("signin")
+        || content_lower.contains("signout")
+    {
+        auth_session_files.insert(relative.to_string());
     }
 }
 
@@ -483,6 +552,7 @@ mod tests {
     fn inspects_vite_react_without_exposing_environment_values_or_writing() {
         let project = tempdir().unwrap();
         fs::create_dir_all(project.path().join("src/lib")).unwrap();
+        fs::create_dir_all(project.path().join("src/auth")).unwrap();
         fs::write(
             project.path().join("package.json"),
             r#"{
@@ -502,6 +572,26 @@ mod tests {
             "import { createClient } from '@supabase/supabase-js';",
         )
         .unwrap();
+        fs::write(
+            project.path().join("src/main.jsx"),
+            "import { createRoot } from 'react-dom/client';",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/App.jsx"),
+            "import { useEffect, useState } from 'react'; export function App() { const [items, setItems] = useState([]); useEffect(() => { setItems([]); }, []); return items.length; }",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/lib/data.js"),
+            "export async function loadRows(supabase) { return supabase.from('items').select('*'); }",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/auth/session.js"),
+            "export async function readSession(supabase) { const { data } = await supabase.auth.getSession(); return data; } export function watchSession(supabase) { return supabase.auth.onAuthStateChange(() => {}); }",
+        )
+        .unwrap();
         let env_contents =
             "VITE_SUPABASE_URL=https://example.supabase.co\nSUPABASE_PASSWORD=never-return-this\n";
         fs::write(project.path().join(".env.local"), env_contents).unwrap();
@@ -519,6 +609,22 @@ mod tests {
         assert_eq!(
             inspection.existing_supabase_client_files,
             vec!["src/lib/supabaseClient.js"]
+        );
+        assert_eq!(inspection.authentication_files, vec!["src/auth/session.js"]);
+        assert_eq!(inspection.persistence_files, vec!["src/lib/data.js"]);
+        assert_eq!(inspection.wiring_findings.entry_files, vec!["src/main.jsx"]);
+        assert_eq!(
+            inspection.wiring_findings.react_state_files,
+            vec!["src/App.jsx"]
+        );
+        assert_eq!(inspection.wiring_findings.effect_files, vec!["src/App.jsx"]);
+        assert_eq!(
+            inspection.wiring_findings.supabase_call_files,
+            vec!["src/lib/data.js"]
+        );
+        assert_eq!(
+            inspection.wiring_findings.auth_session_files,
+            vec!["src/auth/session.js"]
         );
         assert_eq!(
             inspection.environment_variable_names,

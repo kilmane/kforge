@@ -1029,7 +1029,27 @@ function validLocalFindings(value) {
       value.existingSupabaseDependencies.length <= 20 &&
       value.existingSupabaseDependencies.every((item) =>
         isBoundedTextExact(item, 120),
-      )
+      ) &&
+      validWiringFindings(value.wiringFindings)
+  );
+}
+
+function validWiringFindings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const pathCollections = [
+    [value.entryFiles, 20],
+    [value.reactStateFiles, 80],
+    [value.effectFiles, 80],
+    [value.supabaseCallFiles, 80],
+    [value.authSessionFiles, 80],
+  ];
+  return pathCollections.every(
+    ([paths, limit]) =>
+      Array.isArray(paths) &&
+      paths.length <= limit &&
+      paths.every(isBoundedApplicationPath),
   );
 }
 

@@ -147,6 +147,35 @@ describe("Supabase Autopilot plan schema", () => {
     ).toBe("production-prohibited");
   });
 
+  test("preserves bounded generic Vite React wiring findings", () => {
+    const plan = createPlan({
+      inspection: {
+        ...inspection,
+        local: {
+          ...inspection.local,
+          wiringFindings: {
+            entryFiles: ["src/main.jsx", "../outside.jsx"],
+            reactStateFiles: ["src/App.jsx"],
+            effectFiles: ["src/App.jsx"],
+            supabaseCallFiles: ["src/lib/data.js"],
+            authSessionFiles: ["src/auth/session.js"],
+          },
+        },
+      },
+    });
+
+    expect(plan.localApplicationFindings.wiringFindings).toEqual({
+      entryFiles: ["src/main.jsx"],
+      reactStateFiles: ["src/App.jsx"],
+      effectFiles: ["src/App.jsx"],
+      supabaseCallFiles: ["src/lib/data.js"],
+      authSessionFiles: ["src/auth/session.js"],
+    });
+    expect(validateSupabaseAutopilotPlan(plan)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
   test("flags unsupported frameworks without proposing implementation files", () => {
     const plan = createPlan({
       inspection: {

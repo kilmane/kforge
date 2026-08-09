@@ -193,6 +193,7 @@ export function createSupabaseAutopilotPlan({
       existingSupabaseClientFiles: local.existingSupabaseClientFiles,
       authenticationFiles: local.authenticationFiles,
       persistenceFiles: local.persistenceFiles,
+      wiringFindings: local.wiringFindings,
     },
     remoteSupabaseFindings: {
       projectReference: remote.projectReference,
@@ -382,11 +383,23 @@ function normalizeLocalInspection(value = {}) {
     ),
     authenticationFiles: boundedPaths(local.authenticationFiles, 40),
     persistenceFiles: boundedPaths(local.persistenceFiles, 40),
+    wiringFindings: normalizeWiringFindings(local.wiringFindings),
     warnings: boundedStrings(local.warnings, 30, 400),
     detectionEvidence:
       local.detectionEvidence && typeof local.detectionEvidence === "object"
         ? local.detectionEvidence
         : {},
+  };
+}
+
+function normalizeWiringFindings(value = {}) {
+  const findings = value && typeof value === "object" ? value : {};
+  return {
+    entryFiles: boundedPaths(findings.entryFiles, 20),
+    reactStateFiles: boundedPaths(findings.reactStateFiles, 80),
+    effectFiles: boundedPaths(findings.effectFiles, 80),
+    supabaseCallFiles: boundedPaths(findings.supabaseCallFiles, 80),
+    authSessionFiles: boundedPaths(findings.authSessionFiles, 80),
   };
 }
 
