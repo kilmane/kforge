@@ -40,6 +40,7 @@ const SAFE_DATA_TYPES = new Map([
   ["uuid", "uuid"],
   ["varchar", "varchar"],
 ]);
+const MANAGED_OWNER_POLICY_NAME = "kforge_owner_all";
 const PRODUCTION_PROJECT_PATTERN =
   /(?:^|[\s._-])(?:prod|production|live)(?:$|[\s._-])/i;
 const SECRET_VALUE_PATTERNS = [
@@ -118,6 +119,7 @@ export function createSupabaseAutopilotReconciliation(plan) {
   const proposedAdditiveChanges = [];
   const manualReview = [];
   const conflicts = [];
+  const unresolvedPolicyIntents = [];
   const remoteTables = new Map(
     plan.remoteSupabaseFindings.tables.map((table) => [table.name, table]),
   );
@@ -161,16 +163,25 @@ export function createSupabaseAutopilotReconciliation(plan) {
   }
 
   for (const policyIntent of plan.proposedRlsPolicyIntent) {
-    const policyFinding = finding(
-      "manual-verification-required",
-      "rls-policy",
-      policyIntent.table,
-      "Remote policy definitions were not available in the bounded inspection. Review the requested policy intent manually; no policy is claimed as reconciled.",
-    );
-    findings.push(policyFinding);
-    manualReview.push(policyFinding);
+    if (
+      reconcileRlsPolicyIntent({
+        policyIntent,
+        remotePolicies: plan.remoteSupabaseFindings.policies,
+        policyInspectionAvailable:
+          plan.remoteSupabaseFindings.policyInspectionAvailable,
+        findings,
+        proposedAdditiveChanges,
+        manualReview,
+        conflicts,
+      })
+    ) {
+      unresolvedPolicyIntents.push(policyIntent);
+    }
   }
-  if (plan.proposedRlsPolicyIntent.length) {
+  if (
+    plan.proposedRlsPolicyIntent.length &&
+    !plan.remoteSupabaseFindings.policyInspectionAvailable
+  ) {
     limitations.push(
       "Remote policy definitions were unavailable, so exact policy existence could not be verified.",
     );
@@ -199,10 +210,7 @@ export function createSupabaseAutopilotReconciliation(plan) {
     migrationFinding.classification === "conflict" ||
     conflicts.some((item) => item.objectType === "migration")
       ? ""
-      : buildReviewOnlySql(
-          proposedAdditiveChanges,
-          plan.proposedRlsPolicyIntent,
-        );
+      : buildReviewOnlySql(proposedAdditiveChanges, unresolvedPolicyIntents);
 
   return finishResult({
     plan,
@@ -333,9 +341,15 @@ function validateReconciliationPlanInput(plan) {
     remote.tables.length > 120 ||
     !Array.isArray(remote.migrations) ||
     remote.migrations.length > 200 ||
+    !Array.isArray(remote.policies) ||
+    remote.policies.length > 240 ||
+    typeof remote.policyInspectionAvailable !== "boolean" ||
     remote.tables.some((table) => !validRemoteTable(table)) ||
     new Set(remote.tables.map((table) => table.name)).size !==
       remote.tables.length ||
+    remote.policies.some((policy) => !validRemotePolicy(policy)) ||
+    new Set(remote.policies.map((policy) => `${policy.table}:${policy.name}`)).size !==
+      remote.policies.length ||
     remote.migrations.some(
       (migration) =>
         !migration ||
@@ -475,6 +489,94 @@ export function validateSupabaseAutopilotReconciliation(result) {
     errors.push("Reconciliation fingerprint does not match its contents.");
   }
   return { valid: errors.length === 0, errors: uniqueStrings(errors) };
+}
+
+function reconcileRlsPolicyIntent({
+  policyIntent,
+  remotePolicies,
+  policyInspectionAvailable,
+  findings,
+  proposedAdditiveChanges,
+  manualReview,
+  conflicts,
+}) {
+  if (!policyInspectionAvailable || policyIntent.ownerColumn !== "user_id") {
+    const policyFinding = finding(
+      "manual-verification-required",
+      "rls-policy",
+      policyIntent.table,
+      "Remote policy definitions were not available in the bounded inspection. Review the requested policy intent manually; no policy is claimed as reconciled.",
+    );
+    findings.push(policyFinding);
+    manualReview.push(policyFinding);
+    return true;
+  }
+
+  const tablePolicies = remotePolicies.filter(
+    (policy) => policy.table === policyIntent.table,
+  );
+  const managedPolicies = tablePolicies.filter(
+    (policy) => policy.name === MANAGED_OWNER_POLICY_NAME,
+  );
+  const extraPolicies = tablePolicies.filter(
+    (policy) => policy.name !== MANAGED_OWNER_POLICY_NAME,
+  );
+  if (extraPolicies.length) {
+    const policyFinding = finding(
+      "manual-verification-required",
+      "rls-policy",
+      policyIntent.table,
+      "Additional remote RLS policies exist on the requested user-owned table. Their combined access semantics require manual review.",
+    );
+    findings.push(policyFinding);
+    manualReview.push(policyFinding);
+    return true;
+  }
+  if (managedPolicies.length === 1) {
+    const policy = managedPolicies[0];
+    if (
+      policy.permissive &&
+      policy.authenticatedOnly &&
+      policy.command === "ALL" &&
+      policy.ownerUsing &&
+      policy.ownerCheck
+    ) {
+      findings.push(
+        finding(
+          "already-satisfied",
+          "rls-policy",
+          policyIntent.table,
+          "The deterministic authenticated-owner RLS policy is already present with the expected bounded semantics.",
+        ),
+      );
+      return false;
+    }
+    const policyFinding = finding(
+      "conflict",
+      "rls-policy",
+      policyIntent.table,
+      "The deterministic RLS policy name already exists with different access semantics. No policy replacement SQL was generated.",
+    );
+    findings.push(policyFinding);
+    conflicts.push(policyFinding);
+    return true;
+  }
+
+  proposedAdditiveChanges.push({
+    operation: "create-policy",
+    table: policyIntent.table,
+    name: MANAGED_OWNER_POLICY_NAME,
+    ownerColumn: policyIntent.ownerColumn,
+  });
+  findings.push(
+    finding(
+      "additive-proposal",
+      "rls-policy",
+      policyIntent.table,
+      "The deterministic authenticated-owner RLS policy is absent and can be created additively.",
+    ),
+  );
+  return false;
 }
 
 function reconcileDatabaseObject({
@@ -761,6 +863,16 @@ function buildReviewOnlySql(changes, policyIntents) {
     } else if (change.operation === "enable-rls") {
       statements.push(
         `ALTER TABLE ${quoteDatabaseName(change.table)} ENABLE ROW LEVEL SECURITY;`,
+      );
+    } else if (change.operation === "create-policy") {
+      statements.push(
+        `CREATE POLICY ${quoteIdentifier(change.name)} ON ${quoteDatabaseName(
+          change.table,
+        )} FOR ALL TO authenticated USING (${quoteIdentifier(
+          change.ownerColumn,
+        )} = auth.uid()) WITH CHECK (${quoteIdentifier(
+          change.ownerColumn,
+        )} = auth.uid());`,
       );
     }
   }
@@ -1059,6 +1171,27 @@ function validWiringFindings(value) {
   );
 }
 
+function validRemotePolicy(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    typeof value.permissive !== "boolean" ||
+    typeof value.authenticatedOnly !== "boolean" ||
+    !["ALL", "SELECT", "INSERT", "UPDATE", "DELETE"].includes(value.command) ||
+    typeof value.ownerUsing !== "boolean" ||
+    typeof value.ownerCheck !== "boolean"
+  ) {
+    return false;
+  }
+  try {
+    quoteDatabaseName(value.table);
+    quoteIdentifier(value.name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function validRemoteTable(value) {
   if (
     !value ||
@@ -1132,13 +1265,23 @@ function validAdditiveChange(value) {
   if (
     !value ||
     typeof value !== "object" ||
-    !["create-table", "add-column", "enable-rls"].includes(value.operation)
+    !["create-table", "add-column", "enable-rls", "create-policy"].includes(
+      value.operation,
+    )
   ) {
     return false;
   }
   try {
     quoteDatabaseName(value.table);
     if (value.operation === "enable-rls") return true;
+    if (value.operation === "create-policy") {
+      return Boolean(
+        value.name === MANAGED_OWNER_POLICY_NAME &&
+          quoteIdentifier(value.name) &&
+          boundedIdentifier(value.ownerColumn, 63) &&
+          !value.ownerColumn.includes("."),
+      );
+    }
     if (value.operation === "add-column") {
       return Boolean(
         validProposedColumn(value.column) &&

@@ -13,6 +13,7 @@ use super::{
 };
 
 const RECONCILIATION_VERSION: &str = "supabase-autopilot-reconciliation/v1";
+const MANAGED_OWNER_POLICY_NAME: &str = "kforge_owner_all";
 const NOTHING_APPLIED_STATEMENT: &str =
     "Planning only: nothing was applied. SQL was not executed and no database or application changes were made.";
 
@@ -70,6 +71,12 @@ enum AdditiveChange {
     },
     EnableRls {
         table: String,
+    },
+    CreatePolicy {
+        table: String,
+        name: String,
+        #[serde(rename = "ownerColumn")]
+        owner_column: String,
     },
 }
 
@@ -405,6 +412,14 @@ fn verify_additive_targets(
     changes: &[AdditiveChange],
     remote: &PlanningRemoteInspection,
 ) -> Result<(), String> {
+    let created_tables = changes
+        .iter()
+        .filter_map(|change| match change {
+            AdditiveChange::CreateTable { table, .. } => Some(table.as_str()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
+
     for change in changes {
         match change {
             AdditiveChange::CreateTable { table, .. } => {
@@ -432,13 +447,27 @@ fn verify_additive_targets(
                 }
             }
             AdditiveChange::EnableRls { table } => {
-                let remote_table = remote
-                    .tables
-                    .iter()
-                    .find(|item| &item.name == table)
-                    .ok_or_else(|| format!("Approved table '{table}' is no longer present"))?;
-                if remote_table.rls_enabled {
-                    return Err(format!("RLS is already enabled on '{table}'"));
+                if let Some(remote_table) = remote.tables.iter().find(|item| &item.name == table) {
+                    if remote_table.rls_enabled {
+                        return Err(format!("RLS is already enabled on '{table}'"));
+                    }
+                } else if !created_tables.contains(table.as_str()) {
+                    return Err(format!("Approved table '{table}' is no longer present"));
+                }
+            }
+            AdditiveChange::CreatePolicy { table, name, .. } => {
+                if !remote.policy_inspection_available {
+                    return Err("Fresh read-only policy inspection is required before creating an RLS policy".into());
+                }
+                if remote.policies.iter().any(|policy| &policy.table == table) {
+                    return Err(format!(
+                        "Approved policy target '{table}.{name}' no longer has the inspected empty policy set"
+                    ));
+                }
+                if !remote.tables.iter().any(|item| &item.name == table)
+                    && !created_tables.contains(table.as_str())
+                {
+                    return Err(format!("Approved policy table '{table}' is no longer present"));
                 }
             }
         }
@@ -502,6 +531,16 @@ fn validate_changes(changes: &[AdditiveChange]) -> Result<(), String> {
             }
             AdditiveChange::EnableRls { table } => {
                 quote_database_name(table)?;
+            }
+            AdditiveChange::CreatePolicy {
+                table,
+                name,
+                owner_column,
+            } => {
+                quote_database_name(table)?;
+                if name != MANAGED_OWNER_POLICY_NAME || quote_identifier(owner_column).is_err() {
+                    return Err("Only the deterministic authenticated-owner RLS policy is allowed".into());
+                }
             }
         }
     }
@@ -583,6 +622,17 @@ fn render_review_sql(changes: &[AdditiveChange]) -> Result<String, String> {
             AdditiveChange::EnableRls { table } => format!(
                 "ALTER TABLE {} ENABLE ROW LEVEL SECURITY;",
                 quote_database_name(table)?
+            ),
+            AdditiveChange::CreatePolicy {
+                table,
+                name,
+                owner_column,
+            } => format!(
+                "CREATE POLICY {} ON {} FOR ALL TO authenticated USING ({} = auth.uid()) WITH CHECK ({} = auth.uid());",
+                quote_identifier(name)?,
+                quote_database_name(table)?,
+                quote_identifier(owner_column)?,
+                quote_identifier(owner_column)?
             ),
         });
     }
@@ -793,9 +843,11 @@ mod tests {
     use serde_json::{json, Value};
 
     use super::{
-        fingerprint_value, render_review_sql, validate_reconciliation, AdditiveChange,
-        MutationApprovalState, PendingApproval, SelectedProject,
+        fingerprint_value, render_review_sql, validate_changes, validate_reconciliation,
+        verify_additive_targets, AdditiveChange, MutationApprovalState, PendingApproval,
+        SelectedProject,
     };
+    use crate::supabase_autopilot::inspection::PlanningRemoteInspection;
 
     fn reconciliation(sql: &str) -> Value {
         let mut value = json!({
@@ -871,6 +923,56 @@ mod tests {
             &selected()
         )
         .is_err());
+    }
+
+    #[test]
+    fn managed_owner_policy_is_deterministic_and_new_table_rls_preflight_is_allowed() {
+        let changes: Vec<AdditiveChange> = serde_json::from_value(json!([
+            {
+                "operation": "create-table",
+                "table": "public.user_progress",
+                "columns": [{
+                    "name": "user_id",
+                    "dataType": "uuid",
+                    "nullable": false,
+                    "unique": false,
+                    "safeToAddToExisting": false
+                }],
+                "primaryKeys": ["user_id"],
+                "foreignKeys": []
+            },
+            { "operation": "enable-rls", "table": "public.user_progress" },
+            {
+                "operation": "create-policy",
+                "table": "public.user_progress",
+                "name": "kforge_owner_all",
+                "ownerColumn": "user_id"
+            }
+        ]))
+        .unwrap();
+        assert!(validate_changes(&changes).is_ok());
+        let sql = render_review_sql(&changes).unwrap();
+        assert!(sql.contains(
+            "CREATE POLICY \"kforge_owner_all\" ON \"public\".\"user_progress\" FOR ALL TO authenticated USING (\"user_id\" = auth.uid()) WITH CHECK (\"user_id\" = auth.uid());"
+        ));
+
+        let remote = PlanningRemoteInspection {
+            project_name: "Hajj Development".into(),
+            project_reference: "abcdefghijklmnopqrst".into(),
+            project_api_url: "https://abcdefghijklmnopqrst.supabase.co".into(),
+            tables: Vec::new(),
+            migrations: Vec::new(),
+            policies: Vec::new(),
+            policy_inspection_available: true,
+            warnings: Vec::new(),
+        };
+        assert!(verify_additive_targets(&changes, &remote).is_ok());
+
+        let unavailable = PlanningRemoteInspection {
+            policy_inspection_available: false,
+            ..remote
+        };
+        assert!(verify_additive_targets(&changes, &unavailable).is_err());
     }
 
     #[test]

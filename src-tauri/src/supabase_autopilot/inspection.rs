@@ -54,7 +54,21 @@ pub struct PlanningRemoteInspection {
     pub project_api_url: String,
     pub tables: Vec<PlanningTable>,
     pub migrations: Vec<PlanningMigration>,
+    pub policies: Vec<PlanningPolicy>,
+    pub policy_inspection_available: bool,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanningPolicy {
+    pub table: String,
+    pub name: String,
+    pub permissive: bool,
+    pub authenticated_only: bool,
+    pub command: String,
+    pub owner_using: bool,
+    pub owner_check: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]

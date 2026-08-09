@@ -200,6 +200,8 @@ export function createSupabaseAutopilotPlan({
       projectApiUrl: remote.projectApiUrl,
       tables: remote.tables,
       migrations: remote.migrations,
+      policies: remote.policies,
+      policyInspectionAvailable: remote.policyInspectionAvailable,
     },
     requestedObjective,
     proposedDatabaseObjects,
@@ -418,6 +420,23 @@ function normalizeWiringFindings(value = {}) {
 
 function normalizeRemoteInspection(value = {}) {
   const remote = value && typeof value === "object" ? value : {};
+  const rawPolicies = Array.isArray(remote.policies) ? remote.policies : [];
+  const normalizedPolicies = rawPolicies.slice(0, 240).map((policy) => ({
+    table: boundedDatabaseName(policy?.table),
+    name: boundedIdentifier(policy?.name, 63),
+    permissive: policy?.permissive === true,
+    authenticatedOnly: policy?.authenticatedOnly === true,
+    command: boundedIdentifier(policy?.command, 16).toUpperCase(),
+    ownerUsing: policy?.ownerUsing === true,
+    ownerCheck: policy?.ownerCheck === true,
+  }));
+  const policyIdentities = normalizedPolicies.map(
+    (policy) => `${policy.table}:${policy.name}`,
+  );
+  const policyInspectionAvailable =
+    remote.policyInspectionAvailable === true &&
+    rawPolicies.length <= 240 &&
+    new Set(policyIdentities).size === policyIdentities.length;
   return {
     projectName: boundedText(remote.projectName, 160) || "Supabase project",
     projectReference: boundedIdentifier(remote.projectReference, 80),
@@ -465,6 +484,8 @@ function normalizeRemoteInspection(value = {}) {
         name: boundedText(migration?.name, 160),
       }))
       .filter((migration) => migration.version),
+    policies: policyInspectionAvailable ? normalizedPolicies : [],
+    policyInspectionAvailable,
     warnings: boundedStrings(remote.warnings, 30, 400),
   };
 }

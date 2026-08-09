@@ -28,6 +28,8 @@ function createPlan({
   projectName = "Hajj Development",
   tables = [],
   migrations = [],
+  policies = [],
+  policyInspectionAvailable = false,
   local = localInspection,
 } = {}) {
   return createSupabaseAutopilotPlan({
@@ -41,6 +43,8 @@ function createPlan({
         projectApiUrl: `https://${projectReference}.supabase.co`,
         tables,
         migrations,
+        policies,
+        policyInspectionAvailable,
         warnings: [],
       },
     },
@@ -296,6 +300,108 @@ describe("Supabase Autopilot migration reconciliation", () => {
     expect(result.sqlDraft).toMatch(
       /requires manual verification; no policy SQL was generated/i,
     );
+  });
+
+  test("available policy metadata produces the deterministic owner policy additively", () => {
+    const result = createSupabaseAutopilotReconciliation(
+      createPlan({
+        objective: "Add sign-in and save each user's Hajj progress.",
+        policyInspectionAvailable: true,
+      }),
+    );
+
+    expect(result.status).toBe("additive-proposal");
+    expect(result.manualReview).toEqual([]);
+    expect(result.proposedAdditiveChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: "create-policy",
+          table: "public.user_progress",
+          name: "kforge_owner_all",
+          ownerColumn: "user_id",
+        }),
+      ]),
+    );
+    expect(result.sqlDraft).toContain(
+      'CREATE POLICY "kforge_owner_all" ON "public"."user_progress" FOR ALL TO authenticated',
+    );
+  });
+
+  test("the exact managed owner policy reconciles as already satisfied", () => {
+    const plan = createPlan({
+      objective: "Add sign-in and save each user's Hajj progress.",
+      tables: [
+        {
+          name: "public.user_progress",
+          rlsEnabled: true,
+          columns: [
+            { name: "id", dataType: "uuid", nullable: false, unique: false },
+            { name: "user_id", dataType: "uuid", nullable: false, unique: false },
+            { name: "data", dataType: "jsonb", nullable: false, unique: false },
+          ],
+          primaryKeys: ["id"],
+          foreignKeys: [
+            {
+              name: "user_progress_user_id_fkey",
+              sourceColumns: ["user_id"],
+              targetTable: "auth.users",
+              targetColumns: ["id"],
+            },
+          ],
+        },
+      ],
+      policies: [
+        {
+          table: "public.user_progress",
+          name: "kforge_owner_all",
+          permissive: true,
+          authenticatedOnly: true,
+          command: "ALL",
+          ownerUsing: true,
+          ownerCheck: true,
+        },
+      ],
+      policyInspectionAvailable: true,
+    });
+    const result = createSupabaseAutopilotReconciliation(plan);
+
+    expect(result.manualReview).toEqual([]);
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objectType: "rls-policy",
+          classification: "already-satisfied",
+        }),
+      ]),
+    );
+  });
+
+  test("additional remote policies keep user-owned access in manual review", () => {
+    const result = createSupabaseAutopilotReconciliation(
+      createPlan({
+        objective: "Add sign-in and save each user's Hajj progress.",
+        policies: [
+          {
+            table: "public.user_progress",
+            name: "other_policy",
+            permissive: true,
+            authenticatedOnly: true,
+            command: "SELECT",
+            ownerUsing: false,
+            ownerCheck: false,
+          },
+        ],
+        policyInspectionAvailable: true,
+      }),
+    );
+
+    expect(result.status).toBe("manual-review-required");
+    expect(result.manualReview).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ objectType: "rls-policy" }),
+      ]),
+    );
+    expect(result.sqlDraft).not.toContain("CREATE POLICY");
   });
 
   test("a coincidental provider version match with another name is retained, not treated as the managed migration", () => {

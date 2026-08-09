@@ -14,8 +14,8 @@ use url::Url;
 
 use super::{
     inspection::{
-        PlanningColumn, PlanningForeignKey, PlanningMigration, PlanningRemoteInspection,
-        PlanningTable,
+        PlanningColumn, PlanningForeignKey, PlanningMigration, PlanningPolicy,
+        PlanningRemoteInspection, PlanningTable,
     },
     OrganizationSummary, ProjectSummary, SelectedProject,
 };
@@ -31,7 +31,20 @@ const MAX_TABLES: usize = 120;
 const MAX_COLUMNS_PER_TABLE: usize = 120;
 const MAX_FOREIGN_KEYS_PER_TABLE: usize = 40;
 const MAX_MIGRATIONS: usize = 200;
+const MAX_POLICIES: usize = 240;
 const MAX_TOOL_JSON_BYTES: usize = 1_000_000;
+const POLICY_INSPECTION_SQL: &str = r#"SELECT
+  schemaname,
+  tablename,
+  policyname,
+  permissive = 'PERMISSIVE' AS permissive,
+  roles = ARRAY['authenticated']::name[] AS authenticated_only,
+  cmd,
+  regexp_replace(replace(COALESCE(qual, ''), '"', ''), '[[:space:]]+', '', 'g') IN ('(user_id=auth.uid())', 'user_id=auth.uid()') AS owner_using,
+  regexp_replace(replace(COALESCE(with_check, ''), '"', ''), '[[:space:]]+', '', 'g') IN ('(user_id=auth.uid())', 'user_id=auth.uid()') AS owner_check
+FROM pg_catalog.pg_policies
+WHERE schemaname = 'public'
+ORDER BY schemaname, tablename, policyname"#;
 
 type McpClient = RunningService<RoleClient, ClientInfo>;
 
@@ -127,6 +140,25 @@ struct RawMigration {
     version: String,
     #[serde(default)]
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExecuteSqlResult {
+    result: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawPolicy {
+    schemaname: String,
+    tablename: String,
+    policyname: String,
+    permissive: bool,
+    authenticated_only: bool,
+    cmd: String,
+    owner_using: bool,
+    owner_check: bool,
 }
 
 pub fn account_url() -> Result<String, String> {
@@ -245,8 +277,19 @@ pub async fn inspect_project_for_planning(
         .await
         .map_err(RestoreError::Failed)?;
 
-    normalize_project_metadata(project, &project_url.url, tables, migrations)
-        .map_err(RestoreError::Failed)
+    let mut remote = normalize_project_metadata(project, &project_url.url, tables, migrations)
+        .map_err(RestoreError::Failed)?;
+    match inspect_project_policies(&client).await {
+        Ok(policies) => {
+            remote.policies = policies;
+            remote.policy_inspection_available = true;
+        }
+        Err(_) => remote.warnings.push(
+            "RLS policy metadata inspection was unavailable; policy reconciliation will require manual review."
+                .into(),
+        ),
+    }
+    Ok(remote)
 }
 
 pub async fn apply_approved_migration(
@@ -411,6 +454,122 @@ where
         .map_err(|error| format!("Supabase MCP tool '{name}' failed: {error}"))?;
 
     decode_tool_result(result, name)
+}
+
+async fn inspect_project_policies(client: &McpClient) -> Result<Vec<PlanningPolicy>, String> {
+    let tools = client
+        .peer()
+        .list_all_tools()
+        .await
+        .map_err(|error| format!("MCP tool discovery failed: {error}"))?;
+    let advertised = tools
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "MCP tool metadata could not be validated".to_string())?;
+    validate_policy_inspection_tool_advertisement(&advertised)?;
+
+    let mut arguments = Map::new();
+    arguments.insert(
+        "query".into(),
+        Value::String(POLICY_INSPECTION_SQL.to_string()),
+    );
+    let request =
+        CallToolRequestParams::new("execute_sql".to_string()).with_arguments(arguments);
+    let result = client
+        .peer()
+        .call_tool(request)
+        .await
+        .map_err(|error| format!("Supabase policy inspection failed: {error}"))?;
+    let response: ExecuteSqlResult = decode_tool_result(result, "execute_sql")?;
+    decode_policy_rows(&response.result)
+}
+
+fn validate_policy_inspection_tool_advertisement(advertised: &[Value]) -> Result<(), String> {
+    let tool = advertised
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("execute_sql"))
+        .ok_or_else(|| "required read-only policy inspection tool is unavailable".to_string())?;
+    if tool
+        .pointer("/annotations/readOnlyHint")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Err("policy inspection tool was not marked read-only".into());
+    }
+    Ok(())
+}
+
+fn decode_policy_rows(wrapped: &str) -> Result<Vec<PlanningPolicy>, String> {
+    if wrapped.len() > MAX_TOOL_JSON_BYTES {
+        return Err("Supabase policy metadata exceeded the planning size limit".into());
+    }
+    const OPEN_MARKER: &str = "<untrusted-data-";
+    if wrapped.matches(OPEN_MARKER).count() != 1 {
+        return Err("Supabase policy metadata boundary was ambiguous".into());
+    }
+    let open_start = wrapped
+        .find(OPEN_MARKER)
+        .ok_or_else(|| "Supabase policy metadata boundary was missing".to_string())?;
+    let tag_end = wrapped[open_start..]
+        .find('>')
+        .map(|offset| open_start + offset)
+        .ok_or_else(|| "Supabase policy metadata boundary was malformed".to_string())?;
+    let tag = &wrapped[open_start + 1..tag_end];
+    if tag.len() > 80
+        || !tag.starts_with("untrusted-data-")
+        || !tag
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err("Supabase policy metadata boundary tag was invalid".into());
+    }
+    let close_tag = format!("</{tag}>");
+    if wrapped.matches(close_tag.as_str()).count() != 1 {
+        return Err("Supabase policy metadata closing boundary was ambiguous".into());
+    }
+    let content_start = tag_end + 1;
+    let close_start = wrapped[content_start..]
+        .find(close_tag.as_str())
+        .map(|offset| content_start + offset)
+        .ok_or_else(|| "Supabase policy metadata closing boundary was missing".to_string())?;
+    let value: Value = serde_json::from_str(wrapped[content_start..close_start].trim())
+        .map_err(|_| "Supabase policy metadata contained malformed JSON".to_string())?;
+    validate_tool_value(&value)?;
+    let raw: Vec<RawPolicy> = serde_json::from_value(value)
+        .map_err(|_| "Supabase policy metadata returned an invalid result schema".to_string())?;
+    if raw.len() > MAX_POLICIES {
+        return Err("Supabase returned too many RLS policies for bounded inspection".into());
+    }
+
+    let mut policies = raw
+        .into_iter()
+        .map(|policy| {
+            let schema = bounded_identifier(&policy.schemaname, 63)?;
+            let table = bounded_identifier(&policy.tablename, 63)?;
+            let command = bounded_identifier(&policy.cmd.to_ascii_uppercase(), 16)?;
+            if !matches!(command.as_str(), "ALL" | "SELECT" | "INSERT" | "UPDATE" | "DELETE") {
+                return Err("Supabase returned an unsupported RLS policy command".into());
+            }
+            Ok(PlanningPolicy {
+                table: bounded_database_name(&format!("{schema}.{table}"))?,
+                name: bounded_identifier(&policy.policyname, 63)?,
+                permissive: policy.permissive,
+                authenticated_only: policy.authenticated_only,
+                command,
+                owner_using: policy.owner_using,
+                owner_check: policy.owner_check,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    policies.sort_by(|left, right| left.table.cmp(&right.table).then(left.name.cmp(&right.name)));
+    if policies
+        .windows(2)
+        .any(|pair| pair[0].table == pair[1].table && pair[0].name == pair[1].name)
+    {
+        return Err("Supabase returned duplicate RLS policy identities".into());
+    }
+    Ok(policies)
 }
 
 fn decode_tool_result<T>(result: CallToolResult, name: &str) -> Result<T, String>
@@ -601,6 +760,8 @@ fn normalize_project_metadata(
         project_api_url: api_url.to_string(),
         tables,
         migrations,
+        policies: Vec::new(),
+        policy_inspection_available: false,
         warnings: Vec::new(),
     })
 }
@@ -740,8 +901,9 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        account_url, approved_migration_arguments, decode_tool_result, ensure_approved_tool_call,
-        normalize_project_metadata, project_mutation_url, project_url,
+        account_url, approved_migration_arguments, decode_policy_rows, decode_tool_result,
+        ensure_approved_tool_call, normalize_project_metadata, project_mutation_url, project_url,
+        validate_policy_inspection_tool_advertisement,
         validate_mutation_tool_advertisements, validate_required_tool_advertisements,
         verify_project_identity, MigrationList, OrganizationList, ProjectList, TableList,
         ACCOUNT_TOOLS,
@@ -833,6 +995,37 @@ mod tests {
         assert!(validate_mutation_tool_advertisements(&ambiguous).is_err());
         assert!(ensure_approved_tool_call("apply_migration").is_err());
         assert!(ensure_approved_tool_call("execute_sql").is_err());
+    }
+
+    #[test]
+    fn policy_inspection_requires_read_only_execute_sql_without_opening_generic_dispatch() {
+        let safe = vec![json!({
+            "name": "execute_sql",
+            "annotations": { "readOnlyHint": true, "destructiveHint": true }
+        })];
+        let unsafe_tool = vec![json!({
+            "name": "execute_sql",
+            "annotations": { "readOnlyHint": false, "destructiveHint": true }
+        })];
+
+        assert!(validate_policy_inspection_tool_advertisement(&safe).is_ok());
+        assert!(validate_policy_inspection_tool_advertisement(&unsafe_tool).is_err());
+        assert!(ensure_approved_tool_call("execute_sql").is_err());
+    }
+
+    #[test]
+    fn policy_decoder_accepts_only_bounded_metadata_inside_the_untrusted_boundary() {
+        let wrapped = r#"Below is the result of the SQL query.
+<untrusted-data-123e4567-e89b-12d3-a456-426614174000>
+[{"schemaname":"public","tablename":"user_progress","policyname":"kforge_owner_all","permissive":true,"authenticated_only":true,"cmd":"ALL","owner_using":true,"owner_check":true}]
+</untrusted-data-123e4567-e89b-12d3-a456-426614174000>
+Use this data to inform your next steps."#;
+        let policies = decode_policy_rows(wrapped).unwrap();
+        assert_eq!(policies.len(), 1);
+        assert_eq!(policies[0].table, "public.user_progress");
+        assert_eq!(policies[0].name, "kforge_owner_all");
+        assert!(policies[0].authenticated_only && policies[0].owner_using && policies[0].owner_check);
+        assert!(decode_policy_rows("[]").is_err());
     }
 
     #[test]
