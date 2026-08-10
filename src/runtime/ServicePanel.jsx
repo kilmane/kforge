@@ -315,7 +315,6 @@ export default function ServicePanel({
   const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
   const [showSupabaseMoreInfo, setShowSupabaseMoreInfo] = useState(false);
   const [showStripeMoreInfo, setShowStripeMoreInfo] = useState(false);
-  const [pendingWorkflowRequest, setPendingWorkflowRequest] = useState(null);
   const logEndRef = useRef(null);
   const activeProviderIdRef = useRef(
     persistedServicePanelState.activeProviderId || DEFAULT_PROVIDER_ID,
@@ -362,10 +361,10 @@ export default function ServicePanel({
     setActiveTaskId(nextTask.id);
     setActiveProviderId(providerId);
     setActiveServiceId(providerId);
-    setPendingWorkflowRequest(
-      shouldForwardWorkflowRequest ? workspaceRequest : null,
-    );
-    if (typeof onWorkspaceRequestHandled === "function") {
+    if (
+      !shouldForwardWorkflowRequest &&
+      typeof onWorkspaceRequestHandled === "function"
+    ) {
       onWorkspaceRequestHandled(requestId);
     }
   }, [workspaceRequest, onWorkspaceRequestHandled, providerMap]);
@@ -498,7 +497,6 @@ export default function ServicePanel({
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
       setShowStripeMoreInfo(false);
-      setPendingWorkflowRequest(null);
       lastProjectPathRef.current = "";
       return;
     }
@@ -522,7 +520,6 @@ export default function ServicePanel({
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
       setShowStripeMoreInfo(false);
-      setPendingWorkflowRequest(null);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
@@ -1260,12 +1257,22 @@ export default function ServicePanel({
             <>
               <SupabaseConnectionPanel
                 projectPath={projectPath}
-                workflowRequest={pendingWorkflowRequest?.workflow === "supabase_autopilot" ? pendingWorkflowRequest : null}
+                workflowRequest={
+                  workspaceRequest?.workspace === "services" &&
+                  workspaceRequest?.provider === "supabase" &&
+                  workspaceRequest?.workflow === "supabase_autopilot" &&
+                  workspaceRequest?.mode === "planning_read_only"
+                    ? workspaceRequest
+                    : null
+                }
                 onWorkflowRequestHandled={(requestId) => {
                   const normalizedRequestId = String(requestId || "").trim();
-                  setPendingWorkflowRequest((current) =>
-                    String(current?.id || "").trim() === normalizedRequestId ? null : current,
-                  );
+                  if (
+                    normalizedRequestId &&
+                    typeof onWorkspaceRequestHandled === "function"
+                  ) {
+                    onWorkspaceRequestHandled(normalizedRequestId);
+                  }
                 }}
                 onStartAppWiring={onStartAppWiring}
               />

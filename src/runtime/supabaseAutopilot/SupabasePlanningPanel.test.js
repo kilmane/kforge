@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React, { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 jest.mock("../serviceRunner", () => ({
@@ -147,6 +147,69 @@ describe("SupabasePlanningPanel", () => {
     expect(onWorkflowRequestHandled).toHaveBeenCalledTimes(1);
   });
 
+  test("survives a keyed verification remount when the real parent clears the handled workflow request", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+
+    function RealParentHarness() {
+      const [verifiedProject, setVerifiedProject] = useState(null);
+      const [workflowRequest, setWorkflowRequest] = useState({
+        id: "workspace-request-real-parent",
+        workflow: "supabase_autopilot",
+        mode: "planning_read_only",
+        objective: "Add sign-in and save each user's Hajj progress.",
+      });
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setVerifiedProject(project)}
+          >
+            Verify project
+          </button>
+          <SupabasePlanningPanel
+            key={`${verifiedProject?.reference || "unverified"}:D:\\hajj`}
+            verifiedProject={verifiedProject}
+            projectPath={"D:\\hajj"}
+            inspectPlanning={inspectPlanning}
+            workflowRequest={workflowRequest}
+            onWorkflowRequestHandled={(requestId) => {
+              setWorkflowRequest((current) =>
+                String(current?.id || "") === String(requestId || "")
+                  ? null
+                  : current,
+              );
+            }}
+          />
+        </>
+      );
+    }
+
+    act(() => {
+      root.render(<RealParentHarness />);
+    });
+
+    expect(inspectPlanning).not.toHaveBeenCalled();
+
+    await act(async () => {
+      findButton("Verify project").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(inspectPlanning).toHaveBeenCalledTimes(1);
+    expect(inspectPlanning).toHaveBeenCalledWith(
+      project.reference,
+      "D:\\hajj",
+    );
+    expect(
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeTruthy();
+  });
   test("shows loading, a validated plan, and keeps ineligible planning read-only", async () => {
     let resolveInspection;
     const inspectPlanning = jest.fn(

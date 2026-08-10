@@ -115,9 +115,27 @@ describe("read-only project inspection integration", () => {
     expect(appSource).toContain('workflow: "supabase_autopilot"');
     expect(panelSource).toContain('workspaceRequest?.workspace !== "services"');
     expect(panelSource).toContain('workspaceRequest={workspaceRequest}');
-    expect(servicePanelSource).toContain('pendingWorkflowRequest?.workflow === "supabase_autopilot"');
+    expect(servicePanelSource).toContain(
+      'workspaceRequest?.provider === "supabase"',
+    );
+    expect(servicePanelSource).toContain(
+      'workspaceRequest?.workflow === "supabase_autopilot"',
+    );
+    expect(servicePanelSource).toContain(
+      'workspaceRequest?.mode === "planning_read_only"',
+    );
+    expect(servicePanelSource).not.toContain("pendingWorkflowRequest");
+    expect(servicePanelSource).toContain(
+      '!shouldForwardWorkflowRequest &&',
+    );
+    expect(servicePanelSource).toContain(
+      'onWorkspaceRequestHandled(normalizedRequestId);',
+    );
     expect(supabasePlanningSource).toContain('workflowRequest?.workflow !== "supabase_autopilot"');
-    expect(supabasePlanningSource).toContain('void runReadOnlyPlan(requestedObjective);');
+    expect(supabasePlanningSource).toContain(
+      "const planRun = runReadOnlyPlan(requestedObjective);",
+    );
+    expect(supabasePlanningSource).toContain("void planRun;");
   });
 
   test("preserves Services workspace mutual exclusion", () => {

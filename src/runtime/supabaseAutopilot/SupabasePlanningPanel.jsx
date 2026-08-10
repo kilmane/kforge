@@ -55,6 +55,7 @@ export default function SupabasePlanningPanel({
   const handledWorkflowRequestIdRef = useRef("");
   const approvalInFlightRef = useRef(false);
   const applyInFlightRef = useRef(false);
+  const planningIdentityRef = useRef(null);
   const [state, dispatch] = useReducer(
     supabasePlanningReducer,
     initialSupabasePlanningState,
@@ -80,6 +81,17 @@ export default function SupabasePlanningPanel({
   const boundedProjectPath = String(projectPath || "").trim();
 
   useEffect(() => {
+    const nextPlanningIdentity =
+      `${verifiedProjectReference}\n${boundedProjectPath}`;
+
+    if (planningIdentityRef.current === null) {
+      planningIdentityRef.current = nextPlanningIdentity;
+      return;
+    }
+
+    if (planningIdentityRef.current === nextPlanningIdentity) return;
+
+    planningIdentityRef.current = nextPlanningIdentity;
     requestGenerationRef.current += 1;
     dispatch({ type: "reset" });
     mutationDispatch({ type: "reset" });
@@ -88,12 +100,10 @@ export default function SupabasePlanningPanel({
     applyInFlightRef.current = false;
   }, [verifiedProjectReference, boundedProjectPath]);
 
-  useEffect(
-    () => () => {
-      requestGenerationRef.current += 1;
-    },
-    [],
-  );
+  // Project/path changes and new plan runs already advance requestGenerationRef.
+  // Do not advance it from effect cleanup: React StrictMode intentionally
+  // performs a development cleanup/setup cycle that must not invalidate a
+  // legitimate in-flight read-only inspection.
 
   const runReadOnlyPlan = useCallback(async (requestedObjectiveInput) => {
     const requestedObjective = String(requestedObjectiveInput || "").trim().slice(0, 1200);
@@ -177,10 +187,11 @@ export default function SupabasePlanningPanel({
 
     handledWorkflowRequestIdRef.current = requestId;
     setObjective(requestedObjective);
+    const planRun = runReadOnlyPlan(requestedObjective);
     if (typeof onWorkflowRequestHandled === "function") {
       onWorkflowRequestHandled(requestId);
     }
-    void runReadOnlyPlan(requestedObjective);
+    void planRun;
   }, [
     workflowRequest,
     verifiedProjectReference,
