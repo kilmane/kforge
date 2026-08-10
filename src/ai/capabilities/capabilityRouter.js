@@ -143,6 +143,34 @@ function hasServiceActionShape(text) {
   );
 }
 
+function getExplicitNamedWorkflowDecision(text) {
+  const excludesSupabaseAutopilot =
+    /\b(do not|don't|dont|never|without)\b[^.?!;\n]*\b(use|open|start|run|launch)\b[^.?!;\n]*\bsupabase\s+autopilot\b/.test(
+      text,
+    ) ||
+    /\b(do not|don't|dont|never|without)\b[^.?!;\n]*\bsupabase\s+autopilot\b/.test(
+      text,
+    );
+
+  if (excludesSupabaseAutopilot) return null;
+
+  const asksSupabaseAutopilot =
+    /\b(use|open|start|run|launch)\s+(?:the\s+)?supabase\s+autopilot\b/.test(
+      text,
+    ) ||
+    /\bcontinue\s+(?:with|in)\s+(?:the\s+)?supabase\s+autopilot\b/.test(
+      text,
+    );
+
+  if (!asksSupabaseAutopilot) return null;
+
+  return {
+    kind: "supabase_autopilot",
+    confidence: "high",
+    source: "capability_router_explicit_named_supabase_autopilot",
+  };
+}
+
 function getExplicitProjectIntentDecision(text) {
   const hasInspectionAction =
     /\b(inspect|explain|report|review|analyse|analyze|audit|identify|locate|trace|summarize|summarise|describe)\b/.test(
@@ -572,6 +600,9 @@ export function getCapabilityRouteDecision(text = "", options = {}) {
   const emptyProjectFolder = Boolean(options.emptyProjectFolder);
 
   if (!projectOpen || emptyProjectFolder) return null;
+
+  const explicitNamedWorkflowDecision = getExplicitNamedWorkflowDecision(s);
+  if (explicitNamedWorkflowDecision) return explicitNamedWorkflowDecision;
 
   const explicitProjectIntentDecision = getExplicitProjectIntentDecision(s);
   if (explicitProjectIntentDecision) return explicitProjectIntentDecision;

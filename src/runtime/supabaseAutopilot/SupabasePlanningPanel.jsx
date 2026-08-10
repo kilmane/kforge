@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useState } from "react";
+import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   createSupabaseAutopilotReconciliation,
   validateSupabaseAutopilotReconciliation,
@@ -45,11 +45,14 @@ export default function SupabasePlanningPanel({
   reconcilePlan = createSupabaseAutopilotReconciliation,
   prepareMigrationApproval = supabaseAutopilotPrepareMigrationApproval,
   applyApprovedMigration = supabaseAutopilotApplyApprovedMigration,
+  workflowRequest = null,
+  onWorkflowRequestHandled = null,
   onStartAppWiring = null,
 }) {
   const [objective, setObjective] = useState("");
   const [developmentConfirmed, setDevelopmentConfirmed] = useState(false);
   const requestGenerationRef = useRef(0);
+  const handledWorkflowRequestIdRef = useRef("");
   const approvalInFlightRef = useRef(false);
   const applyInFlightRef = useRef(false);
   const [state, dispatch] = useReducer(
@@ -92,13 +95,17 @@ export default function SupabasePlanningPanel({
     [],
   );
 
-  async function createPlan(event) {
-    event.preventDefault();
-    if (!canCreatePlan) return;
+  const runReadOnlyPlan = useCallback(async (requestedObjectiveInput) => {
+    const requestedObjective = String(requestedObjectiveInput || "").trim().slice(0, 1200);
+    const canStartRequestedPlan = canStartSupabasePlanning({
+      verifiedProject,
+      projectPath: boundedProjectPath,
+      objective: requestedObjective,
+    });
+    if (!canStartRequestedPlan || state.phase === "loading" || mutationLocked) return false;
 
     const requestGeneration = requestGenerationRef.current + 1;
     requestGenerationRef.current = requestGeneration;
-    const requestedObjective = objective;
     const requestedProjectReference = verifiedProjectReference;
     const requestedProjectPath = boundedProjectPath;
     dispatch({ type: "begin" });
@@ -107,51 +114,82 @@ export default function SupabasePlanningPanel({
     approvalInFlightRef.current = false;
     applyInFlightRef.current = false;
     try {
-      const inspection = await inspectPlanning(
-        requestedProjectReference,
-        requestedProjectPath,
-      );
-      if (requestGeneration !== requestGenerationRef.current) return;
+      const inspection = await inspectPlanning(requestedProjectReference, requestedProjectPath);
+      if (requestGeneration !== requestGenerationRef.current) return false;
       const plan = createSupabaseAutopilotPlan({
         objective: requestedObjective,
         selectedProjectReference: requestedProjectReference,
         inspection,
       });
       const validation = validateSupabaseAutopilotPlan(plan);
-      if (!validation.valid) {
-        throw new Error(`Plan validation failed: ${validation.errors[0]}`);
-      }
+      if (!validation.valid) throw new Error(`Plan validation failed: ${validation.errors[0]}`);
       const reconciliation = reconcilePlan(plan);
-      const reconciliationValidation =
-        validateSupabaseAutopilotReconciliation(reconciliation);
+      const reconciliationValidation = validateSupabaseAutopilotReconciliation(reconciliation);
       if (!reconciliationValidation.valid) {
-        throw new Error(
-          `Reconciliation validation failed: ${reconciliationValidation.errors[0]}`,
-        );
+        throw new Error(`Reconciliation validation failed: ${reconciliationValidation.errors[0]}`);
       }
-      if (requestGeneration !== requestGenerationRef.current) return;
-      dispatch({
-        type: "success",
-        plan,
-        reconciliation,
-        presentation: presentSupabaseAutopilotPlan(plan),
-      });
-      const mutationEligibility = getSupabaseMutationEligibility({
-        reconciliation,
-        verifiedProject,
-      });
+      if (requestGeneration !== requestGenerationRef.current) return false;
+      dispatch({ type: "success", plan, reconciliation, presentation: presentSupabaseAutopilotPlan(plan) });
+      const mutationEligibility = getSupabaseMutationEligibility({ reconciliation, verifiedProject });
       mutationDispatch({
-        type: mutationEligibility.eligible
-          ? "reconciliation_available"
-          : "blocked",
+        type: mutationEligibility.eligible ? "reconciliation_available" : "blocked",
         error: mutationEligibility.reason,
       });
+      return true;
     } catch (error) {
-      if (requestGeneration === requestGenerationRef.current) {
-        dispatch({ type: "error", error });
-      }
+      if (requestGeneration === requestGenerationRef.current) dispatch({ type: "error", error });
+      return false;
     }
+  }, [
+    verifiedProject,
+    boundedProjectPath,
+    state.phase,
+    mutationLocked,
+    verifiedProjectReference,
+    inspectPlanning,
+    reconcilePlan,
+  ]);
+
+  async function createPlan(event) {
+    event.preventDefault();
+    if (!canCreatePlan) return;
+    await runReadOnlyPlan(objective);
   }
+
+  useEffect(() => {
+    const requestId = String(workflowRequest?.id || "").trim();
+    if (!requestId || handledWorkflowRequestIdRef.current === requestId ||
+        workflowRequest?.workflow !== "supabase_autopilot" ||
+        workflowRequest?.mode !== "planning_read_only") return;
+
+    const requestedObjective = String(workflowRequest?.objective || "")
+      .trim()
+      .slice(0, 1200);
+    if (
+      !requestedObjective ||
+      !verifiedProjectReference ||
+      !boundedProjectPath ||
+      state.phase === "loading" ||
+      mutationLocked
+    ) {
+      return;
+    }
+
+    handledWorkflowRequestIdRef.current = requestId;
+    setObjective(requestedObjective);
+    if (typeof onWorkflowRequestHandled === "function") {
+      onWorkflowRequestHandled(requestId);
+    }
+    void runReadOnlyPlan(requestedObjective);
+  }, [
+    workflowRequest,
+    verifiedProjectReference,
+    boundedProjectPath,
+    state.phase,
+    mutationLocked,
+    onWorkflowRequestHandled,
+    runReadOnlyPlan,
+  ]);
 
   const presentation = state.presentation;
   const reconciliation = state.reconciliation;

@@ -47,6 +47,10 @@ export function getDirectWorkflowHandoffRouteDecision({
     return { action: "stripe_service" };
   }
 
+  if (kind === "supabase_autopilot") {
+    return { action: "supabase_autopilot" };
+  }
+
   if (kind === "supabase_service") {
     return { action: "supabase_service" };
   }

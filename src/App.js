@@ -1692,6 +1692,14 @@ export default function App() {
   // For retry: remember last “send” details
   const [lastSend, setLastSend] = useState(null); // { prompt, providerId, model, system, temperature, maxTokens, endpoint, contextLimit, includeActiveFile, fileSnapshot }
   const [workflowContext, setWorkflowContext] = useState(null); // { taskKind, status, nextStep, lastEditedPath, editedPaths, updatedAt, source }
+  const [workspaceRequest, setWorkspaceRequest] = useState(null);
+  const handleWorkspaceRequestHandled = useCallback((requestId = "") => {
+    const normalizedRequestId = String(requestId || "").trim();
+    if (!normalizedRequestId) return;
+    setWorkspaceRequest((current) =>
+      String(current?.id || "").trim() === normalizedRequestId ? null : current,
+    );
+  }, []);
 
   // Key status map
   const [hasKey, setHasKey] = useState({}); // providerId -> boolean
@@ -7698,6 +7706,7 @@ setWorkflowContext({
           provider_setup: "provider_setup",
           openai_service: "openai",
           stripe_service: "stripe",
+          supabase_autopilot: "supabase_autopilot",
           supabase_service: "supabase",
           deploy_service: "deploy",
           ambiguous_service_trigger: "service_confirmation",
@@ -7714,6 +7723,7 @@ setWorkflowContext({
           provider_setup: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           openai: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           stripe: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
+          supabase_autopilot: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           service_confirmation: WORKFLOW_NEXT_STEP.CONNECT_SERVICE,
           open_project: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
           empty_folder: WORKFLOW_NEXT_STEP.OPEN_PROJECT,
@@ -7731,6 +7741,7 @@ setWorkflowContext({
           provider_setup: "connection_result_or_logs",
           openai: "connection_result_or_logs",
           stripe: "payment_result_or_logs",
+          supabase_autopilot: "read_only_plan_or_connection",
           service_confirmation: "service_route_choice",
           open_project: "project_opened_or_needs_help",
           empty_folder: "starter_generated_or_needs_help",
@@ -8119,6 +8130,34 @@ setWorkflowContext({
 
         if (directWorkflowHandoffRoute.action === "stripe_service") {
           appendMessage("assistant", buildStripeRoutingMessage(projectOpen, draft));
+          return;
+        }
+
+        if (directWorkflowHandoffRoute.action === "supabase_autopilot") {
+          const objectiveMatch = String(draft || "").match(
+            /(?:^|\n)\s*Objective:\s*([\s\S]*?)(?=\n\s*\n|$)/i,
+          );
+          const workflowObjective = String(objectiveMatch?.[1] || "")
+            .trim()
+            .slice(0, 1200);
+          const workspaceMode = workflowObjective
+            ? "planning_read_only"
+            : "open_only";
+
+          setWorkspaceRequest({
+            id: `workspace-request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            workspace: "services",
+            provider: "supabase",
+            workflow: "supabase_autopilot",
+            mode: workspaceMode,
+            objective: workflowObjective,
+          });
+          appendMessage(
+            "assistant",
+            workflowObjective
+              ? "Opening Services â†’ Backend â†’ Supabase Autopilot and starting the existing read-only planning flow for this objective. No files or database changes have been made."
+              : "Opening Services â†’ Backend â†’ Supabase Autopilot. Add a concrete objective in the Autopilot planner to begin read-only inspection. No files or database changes have been made.",
+          );
           return;
         }
 
@@ -9965,6 +10004,8 @@ setWorkflowContext({
   const aiPanelEl = (
     <AiPanel
       projectPath={projectPath}
+      workspaceRequest={workspaceRequest}
+      onWorkspaceRequestHandled={handleWorkspaceRequestHandled}
       aiPanelOpen={aiPanelOpen}
       focusLayout={true}
       aiPanelWidthClass="w-full"

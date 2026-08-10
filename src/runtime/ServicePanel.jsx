@@ -277,7 +277,13 @@ function formatLogTimestamp(value) {
 
   return `${hh}:${mm}:${ss}`;
 }
-export default function ServicePanel({ projectPath, onCopyTextChange, onStartAppWiring }) {
+export default function ServicePanel({
+  projectPath,
+  workspaceRequest = null,
+  onWorkspaceRequestHandled = null,
+  onCopyTextChange,
+  onStartAppWiring,
+}) {
   const [logsByService, setLogsByService] = useState(
     persistedServicePanelState.logsByService,
   );
@@ -309,6 +315,7 @@ export default function ServicePanel({ projectPath, onCopyTextChange, onStartApp
   const [detectedProjectTemplate, setDetectedProjectTemplate] = useState(null);
   const [showSupabaseMoreInfo, setShowSupabaseMoreInfo] = useState(false);
   const [showStripeMoreInfo, setShowStripeMoreInfo] = useState(false);
+  const [pendingWorkflowRequest, setPendingWorkflowRequest] = useState(null);
   const logEndRef = useRef(null);
   const activeProviderIdRef = useRef(
     persistedServicePanelState.activeProviderId || DEFAULT_PROVIDER_ID,
@@ -338,6 +345,30 @@ export default function ServicePanel({ projectPath, onCopyTextChange, onStartApp
       detectedProjectKind,
     );
   }, [detectedProjectKind, detectedProjectTemplate]);
+
+  useEffect(() => {
+    const requestId = String(workspaceRequest?.id || "").trim();
+    if (!requestId || workspaceRequest?.workspace !== "services") return;
+    const providerId = String(workspaceRequest?.provider || "").trim();
+    if (!providerId || !providerMap.has(providerId)) {
+      if (typeof onWorkspaceRequestHandled === "function") onWorkspaceRequestHandled(requestId);
+      return;
+    }
+    const nextTask = findTaskByProviderId(providerId);
+    const shouldForwardWorkflowRequest =
+      workspaceRequest?.workflow === "supabase_autopilot" &&
+      workspaceRequest?.mode === "planning_read_only";
+
+    setActiveTaskId(nextTask.id);
+    setActiveProviderId(providerId);
+    setActiveServiceId(providerId);
+    setPendingWorkflowRequest(
+      shouldForwardWorkflowRequest ? workspaceRequest : null,
+    );
+    if (typeof onWorkspaceRequestHandled === "function") {
+      onWorkspaceRequestHandled(requestId);
+    }
+  }, [workspaceRequest, onWorkspaceRequestHandled, providerMap]);
 
   useEffect(() => {
     persistedServicePanelState.logsByService = logsByService;
@@ -467,6 +498,7 @@ export default function ServicePanel({ projectPath, onCopyTextChange, onStartApp
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
       setShowStripeMoreInfo(false);
+      setPendingWorkflowRequest(null);
       lastProjectPathRef.current = "";
       return;
     }
@@ -490,6 +522,7 @@ export default function ServicePanel({ projectPath, onCopyTextChange, onStartApp
       setDetectedProjectTemplate(null);
       setShowSupabaseMoreInfo(false);
       setShowStripeMoreInfo(false);
+      setPendingWorkflowRequest(null);
     }
 
     lastProjectPathRef.current = normalizedProjectPath;
@@ -1227,6 +1260,13 @@ export default function ServicePanel({ projectPath, onCopyTextChange, onStartApp
             <>
               <SupabaseConnectionPanel
                 projectPath={projectPath}
+                workflowRequest={pendingWorkflowRequest?.workflow === "supabase_autopilot" ? pendingWorkflowRequest : null}
+                onWorkflowRequestHandled={(requestId) => {
+                  const normalizedRequestId = String(requestId || "").trim();
+                  setPendingWorkflowRequest((current) =>
+                    String(current?.id || "").trim() === normalizedRequestId ? null : current,
+                  );
+                }}
                 onStartAppWiring={onStartAppWiring}
               />
               <div

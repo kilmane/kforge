@@ -9,6 +9,14 @@ const panelSource = fs.readFileSync(
   path.join(__dirname, "panel", "AiPanel.jsx"),
   "utf8",
 );
+const servicePanelSource = fs.readFileSync(
+  path.join(__dirname, "..", "runtime", "ServicePanel.jsx"),
+  "utf8",
+);
+const supabasePlanningSource = fs.readFileSync(
+  path.join(__dirname, "..", "runtime", "supabaseAutopilot", "SupabasePlanningPanel.jsx"),
+  "utf8",
+);
 
 describe("read-only project inspection integration", () => {
   test("allows inspection tools without entering the edit route", () => {
@@ -99,6 +107,17 @@ describe("read-only project inspection integration", () => {
     expect(panelSource).toContain(
       "getProjectInspectionMaxSteps()",
     );
+  });
+
+  test("routes explicit Supabase Autopilot ownership through the real Services controller", () => {
+    expect(appSource).toContain('directWorkflowHandoffRoute.action === "supabase_autopilot"');
+    expect(appSource).toContain('workspace: "services"');
+    expect(appSource).toContain('workflow: "supabase_autopilot"');
+    expect(panelSource).toContain('workspaceRequest?.workspace !== "services"');
+    expect(panelSource).toContain('workspaceRequest={workspaceRequest}');
+    expect(servicePanelSource).toContain('pendingWorkflowRequest?.workflow === "supabase_autopilot"');
+    expect(supabasePlanningSource).toContain('workflowRequest?.workflow !== "supabase_autopilot"');
+    expect(supabasePlanningSource).toContain('void runReadOnlyPlan(requestedObjective);');
   });
 
   test("preserves Services workspace mutual exclusion", () => {

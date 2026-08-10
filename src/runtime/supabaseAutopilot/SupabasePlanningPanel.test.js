@@ -74,6 +74,79 @@ describe("SupabasePlanningPanel", () => {
     expect(inspectPlanning).not.toHaveBeenCalled();
   });
 
+  test("starts an external read-only planning request once after the project is verified", async () => {
+    const inspectPlanning = jest.fn().mockResolvedValue(inspection);
+    const onWorkflowRequestHandled = jest.fn();
+    const workflowRequest = {
+      id: "workspace-request-test-1",
+      workflow: "supabase_autopilot",
+      mode: "planning_read_only",
+      objective: "Add sign-in and save each user's Hajj progress.",
+    };
+
+    act(() => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={null}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          workflowRequest={workflowRequest}
+          onWorkflowRequestHandled={onWorkflowRequestHandled}
+        />,
+      );
+    });
+
+    expect(inspectPlanning).not.toHaveBeenCalled();
+    expect(onWorkflowRequestHandled).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          workflowRequest={workflowRequest}
+          onWorkflowRequestHandled={onWorkflowRequestHandled}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(inspectPlanning).toHaveBeenCalledTimes(1);
+    expect(inspectPlanning).toHaveBeenCalledWith(
+      project.reference,
+      "D:\\hajj",
+    );
+    expect(onWorkflowRequestHandled).toHaveBeenCalledTimes(1);
+    expect(onWorkflowRequestHandled).toHaveBeenCalledWith(
+      workflowRequest.id,
+    );
+    expect(
+      container.querySelector('[aria-label="Supabase feature objective"]').value,
+    ).toBe(workflowRequest.objective);
+    expect(
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeTruthy();
+
+    await act(async () => {
+      root.render(
+        <SupabasePlanningPanel
+          verifiedProject={project}
+          projectPath={"D:\\hajj"}
+          inspectPlanning={inspectPlanning}
+          workflowRequest={workflowRequest}
+          onWorkflowRequestHandled={onWorkflowRequestHandled}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(inspectPlanning).toHaveBeenCalledTimes(1);
+    expect(onWorkflowRequestHandled).toHaveBeenCalledTimes(1);
+  });
+
   test("shows loading, a validated plan, and keeps ineligible planning read-only", async () => {
     let resolveInspection;
     const inspectPlanning = jest.fn(

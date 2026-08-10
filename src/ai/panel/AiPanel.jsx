@@ -2218,6 +2218,8 @@ function WorkingModeControl({
 export default function AiPanel({
   // layout / open state
   projectPath,
+  workspaceRequest = null,
+  onWorkspaceRequestHandled = null,
   aiPanelOpen,
   aiPanelWidthClass,
   aiPanelWide,
@@ -2339,6 +2341,16 @@ export default function AiPanel({
   const [servicesCopyText, setServicesCopyText] = useState("");
   const servicesSectionRef = useRef(null);
   const servicesPanelScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (workspaceRequest?.workspace !== "services") return;
+    setPreviewOpen(false);
+    setTerminalOpen(false);
+    setServicesOpen(true);
+    if (isFocusLayout && typeof setFocusMode === "function") {
+      setFocusMode(true);
+    }
+  }, [workspaceRequest, isFocusLayout, setFocusMode]);
 
   useEffect(() => {
     if (!servicesOpen) return;
@@ -5627,6 +5639,8 @@ export default function AiPanel({
 
             <ServicePanel
               projectPath={projectPath}
+              workspaceRequest={workspaceRequest}
+              onWorkspaceRequestHandled={onWorkspaceRequestHandled}
               onCopyTextChange={setServicesCopyText}
               onStartAppWiring={handleStartSupabaseAppWiring}
             />

@@ -29,7 +29,12 @@ const secondaryActionStyle = {
   color: "#d4d4d8",
 };
 
-export default function SupabaseConnectionPanel({ projectPath, onStartAppWiring }) {
+export default function SupabaseConnectionPanel({
+  projectPath,
+  workflowRequest = null,
+  onWorkflowRequestHandled = null,
+  onStartAppWiring,
+}) {
   const [state, dispatch] = useReducer(
     supabaseConnectionReducer,
     initialSupabaseConnectionState,
@@ -277,6 +282,8 @@ export default function SupabaseConnectionPanel({ projectPath, onStartAppWiring 
           state.phase === "connected_read_only" ? project : null
         }
         projectPath={projectPath}
+        workflowRequest={workflowRequest}
+        onWorkflowRequestHandled={onWorkflowRequestHandled}
         onStartAppWiring={onStartAppWiring}
       />
     </section>

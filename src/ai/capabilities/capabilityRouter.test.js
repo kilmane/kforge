@@ -35,6 +35,52 @@ describe("capability routing priority", () => {
     ).toBeNull();
   });
 
+  test("gives explicit Supabase Autopilot ownership priority over mixed project wording", () => {
+    const decision = getCapabilityRouteDecision(
+      `Use Supabase Autopilot for this existing project.
+
+Objective:
+Add sign-in and save each user's Hajj progress.
+
+Planning and read-only inspection only for now.
+Inspect both the existing app and the connected Supabase project state.
+Do not edit files and do not apply any database changes.`,
+      OPEN_PROJECT,
+    );
+
+    expect(decision).toEqual({
+      kind: "supabase_autopilot",
+      confidence: "high",
+      source: "capability_router_explicit_named_supabase_autopilot",
+    });
+    expect(
+      getDirectWorkflowHandoffRouteDecision({ promptTask: decision }),
+    ).toEqual({ action: "supabase_autopilot" });
+  });
+
+  test("does not let negative Supabase Autopilot wording hijack project inspection", () => {
+    expect(
+      getCapabilityRouteDecision(
+        "Do not use Supabase Autopilot. Inspect this project without changing files.",
+        OPEN_PROJECT,
+      ),
+    ).toMatchObject({
+      kind: "project_inspection",
+      confidence: "high",
+    });
+  });
+
+  test("does not treat a mention of Supabase Autopilot as an instruction to run it", () => {
+    expect(
+      getCapabilityRouteDecision(
+        "Explain what Supabase Autopilot is.",
+        OPEN_PROJECT,
+      ),
+    ).not.toMatchObject({
+      kind: "supabase_autopilot",
+    });
+  });
+
   test.each([
     "Inspect the Supabase client implementation without changing files",
     "Explain our GitHub publishing code without editing anything",
