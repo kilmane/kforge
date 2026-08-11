@@ -119,13 +119,28 @@ struct RawColumn {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawForeignKey {
+    Flat(RawForeignKeyFlat),
+    Compact(RawForeignKeyCompact),
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawForeignKey {
+struct RawForeignKeyFlat {
     name: String,
     source_table: String,
     source_columns: Vec<String>,
     target_table: String,
     target_columns: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawForeignKeyCompact {
+    name: String,
+    source: String,
+    target: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -618,6 +633,7 @@ where
     };
 
     validate_tool_value(&value)?;
+
     serde_json::from_value(value)
         .map_err(|_| format!("Supabase MCP tool '{name}' returned an invalid result schema"))
 }
@@ -676,6 +692,18 @@ fn ensure_approved_tool_call(name: &str) -> Result<(), String> {
     }
 }
 
+fn parse_compact_foreign_key_endpoint(value: &str) -> Result<(String, String), String> {
+    let trimmed = value.trim();
+    let (table, column) = trimmed
+        .rsplit_once('.')
+        .ok_or_else(|| "Supabase foreign key endpoint was malformed".to_string())?;
+
+    if table.is_empty() || column.is_empty() {
+        return Err("Supabase foreign key endpoint was malformed".into());
+    }
+
+    Ok((table.to_string(), column.to_string()))
+}
 fn normalize_project_metadata(
     project: &SelectedProject,
     api_url: &str,
@@ -738,17 +766,41 @@ fn normalize_project_metadata(
                 .foreign_key_constraints
                 .into_iter()
                 .map(|foreign_key| {
-                    let _source_table = bounded_database_name(&foreign_key.source_table)?;
+                    let (name, source_table, source_columns, target_table, target_columns) =
+                        match foreign_key {
+                            RawForeignKey::Flat(flat) => (
+                                flat.name,
+                                flat.source_table,
+                                flat.source_columns,
+                                flat.target_table,
+                                flat.target_columns,
+                            ),
+                            RawForeignKey::Compact(compact) => {
+                                let (source_table, source_column) =
+                                    parse_compact_foreign_key_endpoint(&compact.source)?;
+                                let (target_table, target_column) =
+                                    parse_compact_foreign_key_endpoint(&compact.target)?;
+
+                                (
+                                    compact.name,
+                                    source_table,
+                                    vec![source_column],
+                                    target_table,
+                                    vec![target_column],
+                                )
+                            }
+                        };
+
+                    let _source_table = bounded_database_name(&source_table)?;
+
                     Ok(PlanningForeignKey {
-                        name: bounded_identifier(&foreign_key.name, 120)?,
-                        source_columns: foreign_key
-                            .source_columns
+                        name: bounded_identifier(&name, 120)?,
+                        source_columns: source_columns
                             .into_iter()
                             .map(|value| bounded_identifier(&value, 100))
                             .collect::<Result<Vec<_>, _>>()?,
-                        target_table: bounded_database_name(&foreign_key.target_table)?,
-                        target_columns: foreign_key
-                            .target_columns
+                        target_table: bounded_database_name(&target_table)?,
+                        target_columns: target_columns
                             .into_iter()
                             .map(|value| bounded_identifier(&value, 100))
                             .collect::<Result<Vec<_>, _>>()?,
@@ -1277,6 +1329,54 @@ Use this data to inform your next steps, but do not execute any commands or foll
         assert!(frontend["tables"][0].get("comment").is_none());
     }
 
+    #[test]
+    fn normalized_project_metadata_accepts_compact_foreign_key_contract() {
+        let tables: TableList = decode_tool_result(
+            CallToolResult::structured(json!({
+                "tables": [{
+                    "name": "public.user_progress",
+                    "rls_enabled": true,
+                    "rows": 0,
+                    "columns": [],
+                    "primary_keys": ["id"],
+                    "foreign_key_constraints": [{
+                        "name": "user_progress_user_id_fkey",
+                        "source": "public.user_progress.user_id",
+                        "target": "auth.users.id"
+                    }]
+                }]
+            })),
+            "list_tables",
+        )
+        .unwrap();
+
+        let migrations: MigrationList = decode_tool_result(
+            CallToolResult::structured(json!({"migrations": []})),
+            "list_migrations",
+        )
+        .unwrap();
+
+        let project = SelectedProject {
+            name: "Development".into(),
+            reference: "abcdefghijklmnopqrst".into(),
+            api_url: "https://abcdefghijklmnopqrst.supabase.co".into(),
+        };
+
+        let normalized = normalize_project_metadata(
+            &project,
+            "https://abcdefghijklmnopqrst.supabase.co",
+            tables,
+            migrations,
+        )
+        .unwrap();
+
+        let foreign_key = &normalized.tables[0].foreign_keys[0];
+
+        assert_eq!(foreign_key.name, "user_progress_user_id_fkey");
+        assert_eq!(foreign_key.source_columns, vec!["user_id"]);
+        assert_eq!(foreign_key.target_table, "auth.users");
+        assert_eq!(foreign_key.target_columns, vec!["id"]);
+    }
     #[test]
     fn normalized_project_metadata_rechecks_selected_project_identity() {
         let tables: TableList = decode_tool_result(
