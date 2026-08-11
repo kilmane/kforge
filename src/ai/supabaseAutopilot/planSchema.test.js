@@ -1,6 +1,7 @@
 import {
   SUPABASE_AUTOPILOT_PLAN_VERSION,
   classifyPlanningRisk,
+  buildSupabaseAppWiringDatabaseContract,
   createSupabaseAutopilotPlan,
   detectFramework,
   detectPackageManager,
@@ -76,7 +77,28 @@ describe("Supabase Autopilot plan schema", () => {
     });
   });
 
-  test("produces the same fingerprint for the same normalized input", () => {
+  test("derives a bounded database contract for controlled app wiring", () => {
+  const contract = buildSupabaseAppWiringDatabaseContract(createPlan());
+
+  expect(contract).toEqual([
+    {
+      table: "public.user_progress",
+      ownership: "authenticated-user-owned",
+      ownerColumn: "user_id",
+      columns: [
+        { name: "id", dataType: "uuid" },
+        { name: "user_id", dataType: "uuid" },
+        { name: "data", dataType: "jsonb" },
+      ],
+    },
+  ]);
+  expect(Object.isFrozen(contract)).toBe(true);
+  expect(Object.isFrozen(contract[0])).toBe(true);
+  expect(Object.isFrozen(contract[0].columns)).toBe(true);
+  expect(contract[0]).not.toHaveProperty("remoteSupabaseFindings");
+  expect(contract[0]).not.toHaveProperty("sqlDraft");
+});
+test("produces the same fingerprint for the same normalized input", () => {
     expect(createPlan().fingerprint).toBe(createPlan().fingerprint);
   });
 

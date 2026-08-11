@@ -123,6 +123,7 @@ export function createImplementationJob(seed = {}) {
       String(seed.status || "").trim() ||
       IMPLEMENTATION_JOB_STATUS.NEEDS_INSPECTION,
     originalGoal: String(seed.originalGoal || "").trim(),
+    continuationContext: String(seed.continuationContext || "").trim(),
     taskKind: String(seed.taskKind || "implementation").trim(),
     modelPolicyKind: String(seed.modelPolicyKind || "").trim(),
     createdAt,
@@ -437,10 +438,14 @@ export function buildImplementationJobFocusedPrompt(job, fallbackGoal = "") {
   const inspectedPaths = current.inspectedPaths.length
     ? current.inspectedPaths.join(", ")
     : "none yet";
+  const continuationContextSection = current.continuationContext
+    ? `Implementation constraints that remain authoritative:\n${current.continuationContext}\n\n`
+    : "";
 
   return (
     "Continue the active KForge implementation job.\n\n" +
     `Original request: ${originalGoal}\n\n` +
+    continuationContextSection +
     `Already inspected paths: ${inspectedPaths}\n\n` +
     "Do not repeat broad inspection. Request exactly one valid fenced ```tool``` block next.\n" +
     "If the inspected evidence is enough, request one write_file tool for the smallest safe change.\n" +

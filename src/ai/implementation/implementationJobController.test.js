@@ -519,6 +519,8 @@ test("buildImplementationJobBlockedWriteRecoveryPrompt uses normalized evidence"
 test("buildImplementationJobFocusedPrompt includes existing inspection evidence", () => {
   const prompt = buildImplementationJobFocusedPrompt({
     originalGoal: "Change the main heading",
+    continuationContext:
+      "Use only public.user_progress with columns id, user_id, and data.",
     inspectedPaths: ["src/App.jsx", "src/App.css"],
   });
 
@@ -526,6 +528,10 @@ test("buildImplementationJobFocusedPrompt includes existing inspection evidence"
     "Continue the active KForge implementation job.",
   );
   expect(prompt).toContain("Original request: Change the main heading");
+  expect(prompt).toContain("Implementation constraints that remain authoritative:");
+  expect(prompt).toContain(
+    "Use only public.user_progress with columns id, user_id, and data.",
+  );
   expect(prompt).toContain(
     "Already inspected paths: src/App.jsx, src/App.css",
   );

@@ -22,6 +22,7 @@ import {
   isProjectInspectionToolAllowed,
 } from "../capabilities/projectInspectionPolicy.js";
 
+import { buildSupabaseAppWiringDatabaseContract } from "../supabaseAutopilot/planSchema.js";
 import { runToolCall } from "../tools/toolRuntime.js";
 import {
   preflightToolHandler,
@@ -3146,6 +3147,9 @@ export default function AiPanel({
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : null;
+          const triggerToolContinuationContext = String(
+            triggerToolMessage?.meta?.modelToolContinuationContext || "",
+          ).trim();
           const triggerToolAppBuildBaselineSnapshots =
             normalizeAppBuildBaselineSnapshotList(
               triggerToolMessage?.meta?.modelToolAppBuildBaselineSnapshots,
@@ -4091,6 +4095,7 @@ export default function AiPanel({
                 taskKind: triggerToolTaskKind,
                 inspectedPaths: agentSuccessfulReadPaths,
                 allowedWritePaths: triggerToolAllowedWritePaths,
+                continuationContext: triggerToolContinuationContext,
               });
               const performanceDiagnosticReadKeys = new Set();
 
@@ -4723,6 +4728,8 @@ export default function AiPanel({
                                     inspectedPaths: agentSuccessfulReadPaths,
                                     modelToolInspectedPaths: agentSuccessfulReadPaths,
                                     contextFilePath: continuationContextPath,
+                                    modelToolContinuationContext: implementationJob.continuationContext,
+                                    modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                     modelToolOriginalGoal: originalGoal,
                                     lastUserGoal: originalGoal,
                                     forceModelCapabilityTestOverride: true,
@@ -4891,6 +4898,8 @@ export default function AiPanel({
                                   !isPerformanceToolExecution &&
                                   !isFixToolExecution,
                                 inspectedPaths: agentSuccessfulReadPaths,
+                                modelToolContinuationContext: implementationJob.continuationContext,
+                                modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
@@ -4999,6 +5008,8 @@ export default function AiPanel({
                               {
                                 silentUserAppend: true,
                                 inspectedPaths: agentSuccessfulReadPaths,
+                                modelToolContinuationContext: implementationJob.continuationContext,
+                                modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
@@ -5070,6 +5081,32 @@ export default function AiPanel({
       const requestedObjective = String(
         payload?.plan?.requestedObjective || "",
       ).trim();
+
+      let databaseContract;
+      try {
+        databaseContract =
+          buildSupabaseAppWiringDatabaseContract(payload?.plan);
+      } catch {
+        appendMessage(
+          "assistant",
+          "KForge blocked Supabase app wiring because the approved database contract could not be derived safely.\n\nNo files were changed.",
+        );
+        return;
+      }
+
+      const databaseContractLines = databaseContract.length
+        ? databaseContract
+            .map((databaseObject) => {
+              const columns = databaseObject.columns
+                .map((column) => `${column.name}:${column.dataType}`)
+                .join(", ");
+              const ownerColumn = databaseObject.ownerColumn || "none";
+
+              return `- table: ${databaseObject.table}; ownership: ${databaseObject.ownership}; owner column: ${ownerColumn}; columns: ${columns}`;
+            })
+            .join("\n")
+        : "- none";
+
       const payloadProjectPath = String(payload?.projectPath || "").trim();
       const currentProjectPath = String(projectPath || "").trim();
 
@@ -5104,6 +5141,10 @@ export default function AiPanel({
           "KForge will use the approved application plan and may write only its exact planned file paths. Normal inspect-before-write, project-boundary checks, pre-write snapshots, and per-write approval remain active.",
       );
 
+      const supabaseAppWiringContinuationContext =
+        `Approved database contract:\n${databaseContractLines}\n` +
+        "Use only the exact approved table and column names above. Do not invent, rename, or substitute database objects.\n" +
+        "Do not write undeclared fields. Store structured application state inside the approved jsonb payload column rather than spreading it into undeclared database columns.";
       if (typeof sendWithPrompt !== "function") {
         appendMessage(
           "assistant",
@@ -5118,6 +5159,9 @@ export default function AiPanel({
         "Implement the approved Supabase application wiring plan for this existing project.\n\n" +
           `Original objective: ${originalGoal}\n\n` +
           `Approved application file operations:\n${operationLines}\n\n` +
+          `Approved database contract:\n${databaseContractLines}\n\n` +
+          "The approved database contract above is authoritative for application wiring. Use those exact table and column names. Do not invent, rename, or substitute database objects.\n" +
+          "Do not write fields that are not listed as columns. When structured application state belongs in an approved jsonb payload column, store it inside that column rather than spreading it into undeclared database columns.\n\n" +
           "Safety rules:\n" +
           "- Stay strictly within the approved application file paths listed above.\n" +
           "- Inspect relevant existing target files before replacing them.\n" +
@@ -5132,6 +5176,7 @@ export default function AiPanel({
           skipDirectWorkflowHandoffRoute: true,
           forceProjectEdit: true,
           modelToolAllowedWritePaths: allowedWritePaths,
+          modelToolContinuationContext: supabaseAppWiringContinuationContext,
           modelToolOriginalGoal: originalGoal,
           lastUserGoal: originalGoal,
         },

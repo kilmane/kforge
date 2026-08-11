@@ -9740,6 +9740,9 @@ setWorkflowContext({
           )
             .map((item) => String(item || "").trim())
             .filter(Boolean);
+          const modelToolContinuationContext = String(
+            opts.modelToolContinuationContext || "",
+          ).trim();
 
           const modelToolAppBuildBaselineSnapshots = Array.isArray(
             opts.appBuildBaselineSnapshots,
@@ -9772,6 +9775,7 @@ setWorkflowContext({
                 modelToolOriginalGoal,
                 modelToolInspectedPaths,
                 modelToolAllowedWritePaths,
+                modelToolContinuationContext,
                 modelToolAppBuildBaselineSnapshots,
                 modelToolAppBuildEditedPaths,
               },

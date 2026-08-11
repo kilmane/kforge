@@ -11,6 +11,12 @@ const appSource = fs.readFileSync(
   "utf8",
 );
 
+const aiPanelSource = fs.readFileSync(
+  path.join(__dirname, "panel", "AiPanel.jsx"),
+  "utf8",
+);
+
+
 function getAppSourceSection(startToken, endToken) {
   const startIndex = appSource.indexOf(startToken);
   const endIndex = appSource.indexOf(endToken, startIndex);
@@ -236,5 +242,70 @@ describe("app-build provider recovery", () => {
     expect(initialGateSection).toMatch(
       /label:\s*"Back to chat"[\s\S]*?if \(hasPendingAppBuildStep\) \{[\s\S]*?setWorkflowContext\(\{[\s\S]*?\.\.\.blockedProjectEditContext,[\s\S]*?status:\s*WORKFLOW_STATUS\.WAITING_FOR_USER_RESULT,[\s\S]*?nextStep:\s*WORKFLOW_NEXT_STEP\.CONTINUE_IMPLEMENTATION/,
     );
+  });
+  test("controlled Supabase app wiring forwards the validated database contract", () => {
+    const startIndex = aiPanelSource.indexOf(
+      "const handleStartSupabaseAppWiring = useCallback",
+    );
+    const endIndex = aiPanelSource.indexOf(
+      "const handleRequestToolOk = useCallback",
+      startIndex,
+    );
+
+    expect(startIndex).toBeGreaterThanOrEqual(0);
+    expect(endIndex).toBeGreaterThan(startIndex);
+
+    const wiringSection = aiPanelSource.slice(startIndex, endIndex);
+
+    expect(wiringSection).toContain(
+      "buildSupabaseAppWiringDatabaseContract(payload?.plan)",
+    );
+    expect(wiringSection).toContain(
+      "Approved database contract:\\n${databaseContractLines}\\n\\n",
+    );
+    expect(wiringSection).toContain(
+      "The approved database contract above is authoritative for application wiring.",
+    );
+    expect(wiringSection).toContain(
+      "Do not invent, rename, or substitute database objects.",
+    );
+    expect(wiringSection).toContain(
+      "store it inside that column rather than spreading it into undeclared database columns.",
+    );
+    expect(wiringSection).toContain(
+      "modelToolAllowedWritePaths: allowedWritePaths",
+    );
+    expect(wiringSection).toContain(
+      "modelToolContinuationContext: supabaseAppWiringContinuationContext",
+    );
+  });
+
+  test("Supabase wiring contract survives tool metadata and focused continuations", () => {
+    expect(appSource).toContain(
+      'const modelToolContinuationContext = String(',
+    );
+    expect(appSource).toContain(
+      'opts.modelToolContinuationContext || ""',
+    );
+    expect(appSource).toContain("modelToolContinuationContext,");
+
+    expect(aiPanelSource).toContain(
+      'triggerToolMessage?.meta?.modelToolContinuationContext || ""',
+    );
+    expect(aiPanelSource).toContain(
+      "continuationContext: triggerToolContinuationContext",
+    );
+
+    const continuationContextMatches =
+      aiPanelSource.match(
+        /modelToolContinuationContext:\s*implementationJob\.continuationContext/g,
+      ) || [];
+    const continuationPathMatches =
+      aiPanelSource.match(
+        /modelToolAllowedWritePaths:\s*implementationJob\.allowedWritePaths/g,
+      ) || [];
+
+    expect(continuationContextMatches).toHaveLength(3);
+    expect(continuationPathMatches).toHaveLength(3);
   });
 });

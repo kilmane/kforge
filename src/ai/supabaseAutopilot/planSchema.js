@@ -341,6 +341,39 @@ export function validateSupabaseAutopilotPlan(plan) {
   return { valid: errors.length === 0, errors: uniqueStrings(errors) };
 }
 
+export function buildSupabaseAppWiringDatabaseContract(plan) {
+  const validation = validateSupabaseAutopilotPlan(plan);
+  if (!validation.valid) {
+    throw new Error(
+      `Cannot build the app-wiring database contract from an invalid plan: ${validation.errors[0]}`,
+    );
+  }
+
+  const ownerColumnsByTable = new Map(
+    (plan.proposedRlsPolicyIntent || []).map((intent) => [
+      intent.table,
+      intent.ownerColumn,
+    ]),
+  );
+
+  return Object.freeze(
+    (plan.proposedDatabaseObjects || []).map((databaseObject) =>
+      Object.freeze({
+        table: databaseObject.name,
+        ownership: databaseObject.ownership,
+        ownerColumn: ownerColumnsByTable.get(databaseObject.name) || "",
+        columns: Object.freeze(
+          databaseObject.columns.map((column) =>
+            Object.freeze({
+              name: column.name,
+              dataType: column.dataType,
+            }),
+          ),
+        ),
+      }),
+    ),
+  );
+}
 export function isBoundedApplicationPath(value) {
   const path = String(value || "").trim().replace(/\\/g, "/");
   if (
