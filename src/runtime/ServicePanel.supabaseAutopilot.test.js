@@ -1,7 +1,31 @@
 import React, { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("../serviceRunner", () => ({
+jest.mock("./previewRunner", () => ({
+  previewDetectTemplates: jest.fn(),
+}));
+
+jest.mock("./serviceRunner", () => ({
+  detectGithubRepo: jest.fn(),
+  githubOpenRepo: jest.fn(),
+  githubPull: jest.fn(),
+  githubPush: jest.fn(),
+  openExternalUrl: jest.fn(),
+  runServiceSetup: jest.fn(),
+  stripeCreateEnvFile: jest.fn(),
+  openaiCreateEnvFile: jest.fn(),
+  openaiInstallSdk: jest.fn(),
+  openaiCreateClientFile: jest.fn(),
+  subscribeServiceLogs: jest.fn(),
+  subscribeServiceStatus: jest.fn(),
+  supabaseCreateClientFile: jest.fn(),
+  supabaseCreateEnvFile: jest.fn(),
+  supabaseCreateInsertExample: jest.fn(),
+  supabaseCreateQueryHelper: jest.fn(),
+  supabaseCreateReadExample: jest.fn(),
+  supabaseInstallClient: jest.fn(),
+  supabaseQuickConnect: jest.fn(),
+  openaiCreateExample: jest.fn(),
   supabaseAutopilotStatus: jest.fn(),
   supabaseAutopilotConnect: jest.fn(),
   supabaseAutopilotDisconnect: jest.fn(),
@@ -11,12 +35,15 @@ jest.mock("../serviceRunner", () => ({
   supabaseAutopilotApplyApprovedMigration: jest.fn(),
 }));
 
+import { previewDetectTemplates } from "./previewRunner";
 import {
+  detectGithubRepo,
+  subscribeServiceLogs,
+  subscribeServiceStatus,
   supabaseAutopilotPlanInspection,
-  supabaseAutopilotSelectProject,
   supabaseAutopilotStatus,
-} from "../serviceRunner";
-import SupabaseConnectionPanel from "./SupabaseConnectionPanel.jsx";
+} from "./serviceRunner";
+import ServicePanel from "./ServicePanel.jsx";
 
 const project = {
   name: "Hajj Development",
@@ -47,7 +74,10 @@ const inspection = {
   },
 };
 
-describe("SupabaseConnectionPanel workflow continuation", () => {
+beforeAll(() => {
+  HTMLElement.prototype.scrollIntoView = jest.fn();
+});
+describe("ServicePanel Supabase Autopilot workflow handoff", () => {
   let container;
   let root;
 
@@ -57,19 +87,20 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    supabaseAutopilotStatus.mockResolvedValue({
-      status: "choose_project",
-      message: "",
-      organizations: [],
-      projects: [project],
-      project: null,
+    previewDetectTemplates.mockResolvedValue(null);
+    detectGithubRepo.mockResolvedValue({
+      isRepo: false,
+      hasRemote: false,
+      remoteUrl: "",
     });
+    subscribeServiceLogs.mockResolvedValue(() => {});
+    subscribeServiceStatus.mockResolvedValue(() => {});
 
-    supabaseAutopilotSelectProject.mockResolvedValue({
+    supabaseAutopilotStatus.mockResolvedValue({
       status: "connected_read_only",
       message: "",
       organizations: [],
-      projects: [project],
+      projects: [],
       project,
     });
 
@@ -83,10 +114,10 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
     jest.clearAllMocks();
   });
 
-  test("auto-starts the queued read-only plan after Use this project verifies the connection", async () => {
+  test("switches from the default provider and auto-starts a restored Supabase workflow request", async () => {
     function RealWorkspaceParent() {
-      const [workflowRequest, setWorkflowRequest] = useState({
-        id: "workspace-request-connection-integration",
+      const [workspaceRequest, setWorkspaceRequest] = useState({
+        id: "workspace-request-service-panel-integration",
         workspace: "services",
         provider: "supabase",
         workflow: "supabase_autopilot",
@@ -95,11 +126,11 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
       });
 
       return (
-        <SupabaseConnectionPanel
+        <ServicePanel
           projectPath={"D:\\hajj"}
-          workflowRequest={workflowRequest}
-          onWorkflowRequestHandled={(requestId) => {
-            setWorkflowRequest((current) =>
+          workspaceRequest={workspaceRequest}
+          onWorkspaceRequestHandled={(requestId) => {
+            setWorkspaceRequest((current) =>
               String(current?.id || "") === String(requestId || "")
                 ? null
                 : current,
@@ -115,56 +146,83 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
           <RealWorkspaceParent />
         </React.StrictMode>,
       );
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(container.textContent).toMatch(/Connected to Supabase/i);
-    expect(findButton("Use this project")).toBeTruthy();
-    expect(supabaseAutopilotPlanInspection).not.toHaveBeenCalled();
+    expect(container.textContent).toMatch(/Connected read-only/i);
+
+    expect(supabaseAutopilotPlanInspection).toHaveBeenCalledTimes(1);
+    expect(supabaseAutopilotPlanInspection).toHaveBeenCalledWith(
+      project.reference,
+      "D:\\hajj",
+    );
+
+    expect(
+      container.querySelector('[aria-label="Supabase feature objective"]').value,
+    ).toBe("Add sign-in and save each user's Hajj progress.");
+
+    expect(
+      container.querySelector('[aria-label="Supabase implementation plan"]'),
+    ).toBeTruthy();
+  });
+
+  test("auto-starts after Services is unmounted and remounted with persisted Supabase state", async () => {
+    await act(async () => {
+      root.render(
+        <React.StrictMode>
+          <ServicePanel
+            projectPath={"D:\\hajj"}
+            workspaceRequest={null}
+          />
+        </React.StrictMode>,
+      );
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const supabaseButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Supabase"),
+    );
+
+    expect(supabaseButton).toBeTruthy();
 
     await act(async () => {
-      findButton("Use this project").dispatchEvent(
+      supabaseButton.dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true }),
       );
-      await Promise.resolve();
+
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(supabaseAutopilotSelectProject).toHaveBeenCalledTimes(1);
-    expect(supabaseAutopilotSelectProject).toHaveBeenCalledWith(
-      project.reference,
-    );
     expect(container.textContent).toMatch(/Connected read-only/i);
-    expect(supabaseAutopilotPlanInspection).toHaveBeenCalledTimes(1);
-    expect(supabaseAutopilotPlanInspection).toHaveBeenCalledWith(
-      project.reference,
-      "D:\\hajj",
-    );
-    expect(
-      container.querySelector('[aria-label="Supabase feature objective"]').value,
-    ).toBe("Add sign-in and save each user's Hajj progress.");
-    expect(
-      container.querySelector('[aria-label="Supabase implementation plan"]'),
-    ).toBeTruthy();
-  });
 
-  test("auto-starts the queued read-only plan when status restores an already-connected project", async () => {
-    supabaseAutopilotStatus.mockResolvedValue({
-      status: "connected_read_only",
-      message: "",
-      organizations: [],
-      projects: [],
-      project,
+    await act(async () => {
+      root.unmount();
     });
 
-    function RealWorkspaceParent() {
-      const [workflowRequest, setWorkflowRequest] = useState({
-        id: "workspace-request-restored-connection",
+    container.remove();
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    function RemountedWorkspaceParent() {
+      const [workspaceRequest, setWorkspaceRequest] = useState({
+        id: "workspace-request-remounted-services",
         workspace: "services",
         provider: "supabase",
         workflow: "supabase_autopilot",
@@ -173,11 +231,11 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
       });
 
       return (
-        <SupabaseConnectionPanel
+        <ServicePanel
           projectPath={"D:\\hajj"}
-          workflowRequest={workflowRequest}
-          onWorkflowRequestHandled={(requestId) => {
-            setWorkflowRequest((current) =>
+          workspaceRequest={workspaceRequest}
+          onWorkspaceRequestHandled={(requestId) => {
+            setWorkspaceRequest((current) =>
               String(current?.id || "") === String(requestId || "")
                 ? null
                 : current,
@@ -190,9 +248,12 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
     await act(async () => {
       root.render(
         <React.StrictMode>
-          <RealWorkspaceParent />
+          <RemountedWorkspaceParent />
         </React.StrictMode>,
       );
+
+      await Promise.resolve();
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -202,7 +263,6 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
     });
 
     expect(container.textContent).toMatch(/Connected read-only/i);
-    expect(supabaseAutopilotSelectProject).not.toHaveBeenCalled();
 
     expect(supabaseAutopilotPlanInspection).toHaveBeenCalledTimes(1);
     expect(supabaseAutopilotPlanInspection).toHaveBeenCalledWith(
@@ -218,9 +278,4 @@ describe("SupabaseConnectionPanel workflow continuation", () => {
       container.querySelector('[aria-label="Supabase implementation plan"]'),
     ).toBeTruthy();
   });
-  function findButton(text) {
-    return Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === text,
-    );
-  }
 });
