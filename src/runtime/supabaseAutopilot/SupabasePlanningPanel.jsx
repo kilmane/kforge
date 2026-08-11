@@ -175,8 +175,10 @@ export default function SupabasePlanningPanel({
     const requestedObjective = String(workflowRequest?.objective || "")
       .trim()
       .slice(0, 1200);
+    if (!requestedObjective) return;
+    setObjective(requestedObjective);
+
     if (
-      !requestedObjective ||
       !verifiedProjectReference ||
       !boundedProjectPath ||
       state.phase === "loading" ||
@@ -186,7 +188,6 @@ export default function SupabasePlanningPanel({
     }
 
     handledWorkflowRequestIdRef.current = requestId;
-    setObjective(requestedObjective);
     const planRun = runReadOnlyPlan(requestedObjective);
     if (typeof onWorkflowRequestHandled === "function") {
       onWorkflowRequestHandled(requestId);

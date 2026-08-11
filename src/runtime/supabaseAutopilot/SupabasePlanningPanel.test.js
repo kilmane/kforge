@@ -98,6 +98,11 @@ describe("SupabasePlanningPanel", () => {
 
     expect(inspectPlanning).not.toHaveBeenCalled();
     expect(onWorkflowRequestHandled).not.toHaveBeenCalled();
+    expect(
+      container.querySelector(
+        '[aria-label="Supabase feature objective"]',
+      ).value,
+    ).toBe(workflowRequest.objective);
 
     await act(async () => {
       root.render(
