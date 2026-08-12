@@ -296,6 +296,49 @@ describe("app-build provider recovery", () => {
       "continuationContext: triggerToolContinuationContext",
     );
 
+    expect(aiPanelSource).toContain(
+      'String(item?.toolName || "").trim() === "read_file"',
+    );
+
+    const blockedWriteTargetStart = aiPanelSource.indexOf(
+      "const blockedWriteRecoveryTargetPath =",
+    );
+    const blockedWriteTargetEnd = aiPanelSource.indexOf(
+      "const blockedWriteRecoveryReasonLine =",
+      blockedWriteTargetStart,
+    );
+    expect(blockedWriteTargetStart).toBeGreaterThanOrEqual(0);
+    expect(blockedWriteTargetEnd).toBeGreaterThan(blockedWriteTargetStart);
+
+    const blockedWriteTargetSection = aiPanelSource.slice(
+      blockedWriteTargetStart,
+      blockedWriteTargetEnd,
+    );
+
+    expect(blockedWriteTargetSection).toContain("isBlockedWriteRecoveryContinuation");
+    expect(blockedWriteTargetSection).toContain("triggerToolBlockedWriteTargetPath");
+    expect(blockedWriteTargetSection).toContain("lastSuccessfulFileReadPath");
+    expect(blockedWriteTargetSection).not.toContain("agentSuccessfulReadPaths[");
+
+    const continuationSelectionStart = aiPanelSource.indexOf(
+      "const continuationContextPath = String(",
+    );
+    expect(continuationSelectionStart).toBeGreaterThanOrEqual(0);
+
+    const continuationSelectionEnd = aiPanelSource.indexOf(
+      ").trim();",
+      continuationSelectionStart,
+    );
+    expect(continuationSelectionEnd).toBeGreaterThan(continuationSelectionStart);
+
+    const continuationSelection = aiPanelSource.slice(
+      continuationSelectionStart,
+      continuationSelectionEnd + ").trim();".length,
+    );
+
+    expect(continuationSelection).toContain("lastSuccessfulFileReadPath");
+    expect(continuationSelection).not.toContain("agentSuccessfulReadPaths[");
+
     const continuationContextMatches =
       aiPanelSource.match(
         /modelToolContinuationContext:\s*implementationJob\.continuationContext/g,

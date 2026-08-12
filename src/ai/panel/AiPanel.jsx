@@ -4103,6 +4103,18 @@ export default function AiPanel({
                     )
                     .filter(Boolean)
                 : [];
+              let lastSuccessfulFileReadPath = "";
+              for (let i = executedBatchResults.length - 1; i >= 0; i -= 1) {
+                const item = executedBatchResults[i];
+                if (
+                  item?.ok &&
+                  String(item?.toolName || "").trim() === "read_file"
+                ) {
+                  lastSuccessfulFileReadPath = String(item?.args?.path || "").trim();
+                  if (lastSuccessfulFileReadPath) break;
+                }
+              }
+
               const agentSuccessfulReadPaths = Array.from(
                 new Set([
                   ...triggerToolInspectedPaths,
@@ -4331,6 +4343,10 @@ export default function AiPanel({
                   if (result?.ok && INSPECTION_TOOL_NAMES.has(toolName)) {
                     const path = String(args?.path || args?.dirPath || "").trim();
                     if (path) agentSuccessfulReadPaths.push(path);
+
+                    if (toolName === "read_file" && path) {
+                      lastSuccessfulFileReadPath = path;
+                    }
                   }
 
                   if (
@@ -4507,9 +4523,11 @@ export default function AiPanel({
                   const isAppBuildBlockedWriteRecoveryContinuation =
                     isBlockedWriteRecoveryContinuation && isAppBuildToolExecution;
                   const blockedWriteRecoveryTargetPath =
-                    triggerToolBlockedWriteTargetPath ||
-                    agentSuccessfulReadPaths[agentSuccessfulReadPaths.length - 1] ||
-                    "";
+                    isBlockedWriteRecoveryContinuation
+                      ? triggerToolBlockedWriteTargetPath ||
+                        lastSuccessfulFileReadPath ||
+                        ""
+                      : "";
                   const blockedWriteRecoveryReasonLine =
                     triggerToolBlockedWriteReason
                       ? `Blocked write reason:\n${triggerToolBlockedWriteReason}\n\n`
@@ -4719,9 +4737,7 @@ export default function AiPanel({
                               const originalGoal = inspectionOnlyOriginalGoal;
                               const continuationContextPath = String(
                                 blockedWriteRecoveryTargetPath ||
-                                  agentSuccessfulReadPaths[
-                                    agentSuccessfulReadPaths.length - 1
-                                  ] ||
+                                  lastSuccessfulFileReadPath ||
                                   "",
                               ).trim();
 
