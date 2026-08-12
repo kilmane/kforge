@@ -348,7 +348,54 @@ describe("app-build provider recovery", () => {
         /modelToolAllowedWritePaths:\s*implementationJob\.allowedWritePaths/g,
       ) || [];
 
-    expect(continuationContextMatches).toHaveLength(3);
-    expect(continuationPathMatches).toHaveLength(3);
+    expect(continuationContextMatches).toHaveLength(4);
+    expect(continuationPathMatches).toHaveLength(4);
+  });
+
+  test("controlled Supabase wiring only completes after every planned write succeeds", () => {
+    expect(aiPanelSource).toContain(
+      "hasCompletedPlannedImplementationWrites,"
+    );
+    expect(aiPanelSource).toContain(
+      "const isControlledSupabaseAppWiring ="
+    );
+    expect(aiPanelSource).toContain(
+      "Array.isArray(implementationJob.supabaseAppWiringContract)"
+    );
+    expect(aiPanelSource).toContain(
+      "hasCompletedPlannedImplementationWrites(implementationJob)"
+    );
+    expect(aiPanelSource).toContain(
+      "!isControlledSupabaseAppWiring ||"
+    );
+    expect(aiPanelSource).toContain(
+      "hasCompletedControlledSupabaseWrites"
+    );
+  });
+
+  test("planned write progress survives tool metadata and focused continuations", () => {
+    expect(appSource).toContain(
+      "const modelToolSuccessfulWritePaths = (",
+    );
+    expect(appSource).toContain(
+      "opts.modelToolSuccessfulWritePaths",
+    );
+    expect(appSource).toContain(
+      "modelToolSuccessfulWritePaths,",
+    );
+
+    expect(aiPanelSource).toContain(
+      "triggerToolMessage?.meta?.modelToolSuccessfulWritePaths",
+    );
+    expect(aiPanelSource).toContain(
+      "successfulWrites: triggerToolSuccessfulWritePaths",
+    );
+
+    const continuationSuccessfulWriteMatches =
+      aiPanelSource.match(
+        /modelToolSuccessfulWritePaths:\s*implementationJob\.successfulWrites/g,
+      ) || [];
+
+    expect(continuationSuccessfulWriteMatches).toHaveLength(4);
   });
 });

@@ -9,6 +9,7 @@ import {
   evaluateAndRememberImplementationToolRequest,
   evaluateImplementationToolRequest,
   getImplementationJobAllowedNextActions,
+  hasCompletedPlannedImplementationWrites,
   rememberImplementationInspection,
   rememberImplementationToolFailure,
   rememberImplementationToolResult,
@@ -288,6 +289,24 @@ test("rememberImplementationWriteAttempt records a successful write", () => {
     IMPLEMENTATION_JOB_ACTION.RESTORE_LAST_SNAPSHOT,
     IMPLEMENTATION_JOB_ACTION.STOP,
   ]);
+});
+
+test("planned implementation writes remain incomplete while approved paths are still pending", () => {
+  const job = createImplementationJob({
+    allowedWritePaths: ["src/lib/supabase.js", "src/App.jsx"],
+    successfulWrites: ["src/lib/supabase.js"],
+  });
+
+  expect(hasCompletedPlannedImplementationWrites(job)).toBe(false);
+});
+
+test("planned implementation writes complete when every approved path succeeded", () => {
+  const job = createImplementationJob({
+    allowedWritePaths: ["src/lib/supabase.js", "src/App.jsx"],
+    successfulWrites: ["src\\lib\\supabase.js", "./src/App.jsx"],
+  });
+
+  expect(hasCompletedPlannedImplementationWrites(job)).toBe(true);
 });
 
 test("rememberImplementationWriteAttempt records a blocked write", () => {

@@ -1,8 +1,11 @@
 import {
+  ASSISTANT_ACTION_RESULT,
   WORKFLOW_NEXT_STEP,
   WORKFLOW_STATUS,
   WORKFLOW_TASK_KIND,
+  createCompletedImplementationWorkflowContext,
   createImplementationInProgressWorkflowContext,
+  createPartialImplementationWorkflowContext,
   mergeWorkflowPathLists,
   resolveWorkflowLikelyAppInspectPath,
 } from "./workflowState";
@@ -92,4 +95,46 @@ test("createImplementationInProgressWorkflowContext keeps unrelated workflow fie
     modelToolInspectedPaths: [],
   });
   expect(typeof context.updatedAt).toBe("number");
+});
+
+test("partial implementation keeps the objective in progress", () => {
+  const context = createPartialImplementationWorkflowContext({
+    lastUserGoal: "Add authentication and persistence",
+    editedPaths: ["src/lib/service.js"],
+    source: "unit_test_partial",
+  });
+
+  expect(context).toMatchObject({
+    taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+    status: WORKFLOW_STATUS.IN_PROGRESS,
+    nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+    lastUserGoal: "Add authentication and persistence",
+    editedPaths: ["src/lib/service.js"],
+    source: "unit_test_partial",
+  });
+
+  expect(context.assistantResult.actionResult).toBe(
+    ASSISTANT_ACTION_RESULT.PARTIAL,
+  );
+});
+
+test("completed implementation marks the objective complete and moves to preview", () => {
+  const context = createCompletedImplementationWorkflowContext({
+    lastUserGoal: "Update one file",
+    editedPaths: ["src/App.jsx"],
+    source: "unit_test_completed",
+  });
+
+  expect(context).toMatchObject({
+    taskKind: WORKFLOW_TASK_KIND.IMPLEMENTATION,
+    status: WORKFLOW_STATUS.COMPLETED,
+    nextStep: WORKFLOW_NEXT_STEP.PREVIEW,
+    lastUserGoal: "Update one file",
+    editedPaths: ["src/App.jsx"],
+    source: "unit_test_completed",
+  });
+
+  expect(context.assistantResult.actionResult).toBe(
+    ASSISTANT_ACTION_RESULT.SUCCESS,
+  );
 });

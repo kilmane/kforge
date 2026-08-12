@@ -38,6 +38,7 @@ import {
   createImplementationJob,
   evaluateAndRememberImplementationToolRequest,
   getImplementationJobAllowedNextActions,
+  hasCompletedPlannedImplementationWrites,
   IMPLEMENTATION_JOB_ACTION,
   rememberImplementationToolResult,
 } from "../implementation/implementationJobController.js";
@@ -3148,6 +3149,13 @@ export default function AiPanel({
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : null;
+          const triggerToolSuccessfulWritePaths = Array.isArray(
+            triggerToolMessage?.meta?.modelToolSuccessfulWritePaths,
+          )
+            ? triggerToolMessage.meta.modelToolSuccessfulWritePaths
+                .map((item) => String(item || "").trim())
+                .filter(Boolean)
+            : [];
           const triggerToolContinuationContext = String(
             triggerToolMessage?.meta?.modelToolContinuationContext || "",
           ).trim();
@@ -4132,6 +4140,7 @@ export default function AiPanel({
                 taskKind: triggerToolTaskKind,
                 inspectedPaths: agentSuccessfulReadPaths,
                 allowedWritePaths: triggerToolAllowedWritePaths,
+                successfulWrites: triggerToolSuccessfulWritePaths,
                 continuationContext: triggerToolContinuationContext,
                 supabaseAppWiringContract: triggerToolSupabaseAppWiringContract,
               });
@@ -4387,24 +4396,59 @@ export default function AiPanel({
 
               const agentMadeProjectChanges =
                 agentSuccessfulWritePaths.length > 0;
-              const completedWorkflowContext = agentMadeProjectChanges
-                ? createCompletedImplementationWorkflowContext({
-                    lastEditedPath: latestAgentWrittenPath || "",
-                    editedPaths: agentSuccessfulWritePaths,
-                    inspectedPaths: agentSuccessfulReadPaths,
-                    preWriteSnapshots: getSnapshotsForPaths(
-                      preWriteSnapshotsRef.current,
-                      agentSuccessfulWritePaths,
-                    ),
-                    source: "agent_continuation",
-                  })
-                : null;
+              const isControlledSupabaseAppWiring =
+                Array.isArray(implementationJob.supabaseAppWiringContract) &&
+                implementationJob.supabaseAppWiringContract.length > 0 &&
+                Array.isArray(implementationJob.allowedWritePaths) &&
+                implementationJob.allowedWritePaths.length > 0;
+              const hasCompletedControlledSupabaseWrites =
+                !isControlledSupabaseAppWiring ||
+                hasCompletedPlannedImplementationWrites(implementationJob);
+
+              const completedWorkflowContext =
+                agentMadeProjectChanges && hasCompletedControlledSupabaseWrites
+                  ? createCompletedImplementationWorkflowContext({
+                      lastUserGoal:
+                        triggerToolOriginalGoal || latestUserText,
+                      lastEditedPath: latestAgentWrittenPath || "",
+                      editedPaths: isControlledSupabaseAppWiring
+                        ? implementationJob.successfulWrites
+                        : agentSuccessfulWritePaths,
+                      inspectedPaths: agentSuccessfulReadPaths,
+                      preWriteSnapshots: getSnapshotsForPaths(
+                        preWriteSnapshotsRef.current,
+                        isControlledSupabaseAppWiring
+                          ? implementationJob.successfulWrites
+                          : agentSuccessfulWritePaths,
+                      ),
+                      source: "agent_continuation",
+                    })
+                  : null;
+
+              const partialSupabaseWorkflowContext =
+                agentMadeProjectChanges &&
+                isControlledSupabaseAppWiring &&
+                !hasCompletedControlledSupabaseWrites
+                  ? createPartialImplementationWorkflowContext({
+                      lastUserGoal:
+                        triggerToolOriginalGoal || latestUserText,
+                      lastEditedPath: latestAgentWrittenPath || "",
+                      editedPaths: implementationJob.successfulWrites,
+                      inspectedPaths: agentSuccessfulReadPaths,
+                      partialSummary:
+                        "Controlled Supabase app wiring is partially complete. Approved planned write paths are still pending.",
+                      nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
+                      source: "supabase_app_wiring_continuation",
+                    })
+                  : null;
 
               if (
                 typeof setWorkflowContext === "function" &&
-                completedWorkflowContext
+                (completedWorkflowContext || partialSupabaseWorkflowContext)
               ) {
-                setWorkflowContext(completedWorkflowContext);
+                setWorkflowContext(
+                  completedWorkflowContext || partialSupabaseWorkflowContext,
+                );
               }
 
               const finalText = String(agentResult?.text || "").trim();
@@ -4798,6 +4842,7 @@ export default function AiPanel({
                                     modelToolContinuationContext: implementationJob.continuationContext,
                                     modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                     modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
+                                    modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
                                     modelToolOriginalGoal: originalGoal,
                                     lastUserGoal: originalGoal,
                                     forceModelCapabilityTestOverride: true,
@@ -4823,6 +4868,79 @@ export default function AiPanel({
                     },
                   );
                 }
+              } else if (
+                finalText &&
+                agentMadeProjectChanges &&
+                partialSupabaseWorkflowContext
+              ) {
+                const supabaseContinuationGoal = String(
+                  implementationJob.originalGoal ||
+                    triggerToolOriginalGoal ||
+                    latestUserText ||
+                    "",
+                ).trim();
+                const completedSupabaseWriteCount =
+                  implementationJob.successfulWrites.length;
+                const plannedSupabaseWriteCount =
+                  implementationJob.allowedWritePaths.length;
+
+                appendMessage(
+                  "assistant",
+                  "Supabase app wiring is partially complete.\n\n" +
+                    `${completedSupabaseWriteCount} of ${plannedSupabaseWriteCount} approved planned file writes have completed.\n\n` +
+                    "The original implementation objective is still active. KForge will not mark it complete until every approved planned write path succeeds.",
+                  {
+                    actions: [
+                      {
+                        label: "Continue Supabase wiring",
+                        onClick: () => {
+                          appendMessage(
+                            "user",
+                            "Choice: Continue Supabase wiring",
+                          );
+
+                          if (typeof sendWithPrompt === "function") {
+                            sendWithPrompt(
+                              buildImplementationJobFocusedPrompt(
+                                implementationJob,
+                                supabaseContinuationGoal,
+                              ),
+                              {
+                                silentUserAppend: true,
+                                skipCompletedWorkflowRoute: true,
+                                skipDirectWorkflowHandoffRoute: true,
+                                forceProjectEdit: true,
+                                inspectedPaths: agentSuccessfulReadPaths,
+                                modelToolInspectedPaths: agentSuccessfulReadPaths,
+                                modelToolContinuationContext:
+                                  implementationJob.continuationContext,
+                                modelToolSupabaseAppWiringContract:
+                                  implementationJob.supabaseAppWiringContract,
+                                modelToolAllowedWritePaths:
+                                  implementationJob.allowedWritePaths,
+                                modelToolSuccessfulWritePaths:
+                                  implementationJob.successfulWrites,
+                                modelToolOriginalGoal: supabaseContinuationGoal,
+                                lastUserGoal: supabaseContinuationGoal,
+                                forceModelCapabilityTestOverride: true,
+                              },
+                            );
+                          }
+                        },
+                      },
+                      {
+                        label: SUGGESTED_ACTION_LABEL.STOP,
+                        onClick: () => {
+                          appendMessage("user", "Choice: Stop");
+                          appendMessage(
+                            "assistant",
+                            "Stopped during partial Supabase app wiring. No further files were changed.",
+                          );
+                        },
+                      },
+                    ],
+                  },
+                );
               } else if (finalText && agentMadeProjectChanges) {
                 const fileCountLabel =
                   agentSuccessfulWritePaths.length === 1
@@ -4969,6 +5087,7 @@ export default function AiPanel({
                                 modelToolContinuationContext: implementationJob.continuationContext,
                                 modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
+                                modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
@@ -5080,6 +5199,7 @@ export default function AiPanel({
                                 modelToolContinuationContext: implementationJob.continuationContext,
                                 modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
+                                modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },

@@ -82,6 +82,21 @@ export function hasImplementationPath(paths = [], path = "") {
   );
 }
 
+export function hasCompletedPlannedImplementationWrites(job = {}) {
+  const current = createImplementationJob(job);
+
+  if (
+    !Array.isArray(current.allowedWritePaths) ||
+    current.allowedWritePaths.length === 0
+  ) {
+    return false;
+  }
+
+  return current.allowedWritePaths.every((path) =>
+    hasImplementationPath(current.successfulWrites, path),
+  );
+}
+
 function createImplementationJobId() {
   return `implementation-${Date.now()}-${Math.random()
     .toString(36)

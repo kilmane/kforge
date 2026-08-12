@@ -9740,6 +9740,13 @@ setWorkflowContext({
           )
             .map((item) => String(item || "").trim())
             .filter(Boolean);
+          const modelToolSuccessfulWritePaths = (
+            Array.isArray(opts.modelToolSuccessfulWritePaths)
+              ? opts.modelToolSuccessfulWritePaths
+              : []
+          )
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
           const modelToolContinuationContext = String(
             opts.modelToolContinuationContext || "",
           ).trim();
@@ -9780,6 +9787,7 @@ setWorkflowContext({
                 modelToolOriginalGoal,
                 modelToolInspectedPaths,
                 modelToolAllowedWritePaths,
+                modelToolSuccessfulWritePaths,
                 modelToolContinuationContext,
                 modelToolSupabaseAppWiringContract,
                 modelToolAppBuildBaselineSnapshots,
