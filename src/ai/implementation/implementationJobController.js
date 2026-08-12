@@ -124,6 +124,9 @@ export function createImplementationJob(seed = {}) {
       IMPLEMENTATION_JOB_STATUS.NEEDS_INSPECTION,
     originalGoal: String(seed.originalGoal || "").trim(),
     continuationContext: String(seed.continuationContext || "").trim(),
+    supabaseAppWiringContract: Array.isArray(seed.supabaseAppWiringContract)
+      ? seed.supabaseAppWiringContract
+      : null,
     taskKind: String(seed.taskKind || "implementation").trim(),
     modelPolicyKind: String(seed.modelPolicyKind || "").trim(),
     createdAt,

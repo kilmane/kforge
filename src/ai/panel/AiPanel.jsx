@@ -23,6 +23,7 @@ import {
 } from "../capabilities/projectInspectionPolicy.js";
 
 import { buildSupabaseAppWiringDatabaseContract } from "../supabaseAutopilot/planSchema.js";
+import { evaluateSupabaseAppWiringWrite } from "../supabaseAutopilot/appWiringWriteGuard.js";
 import { runToolCall } from "../tools/toolRuntime.js";
 import {
   preflightToolHandler,
@@ -3150,6 +3151,11 @@ export default function AiPanel({
           const triggerToolContinuationContext = String(
             triggerToolMessage?.meta?.modelToolContinuationContext || "",
           ).trim();
+          const triggerToolSupabaseAppWiringContract = Array.isArray(
+            triggerToolMessage?.meta?.modelToolSupabaseAppWiringContract,
+          )
+            ? triggerToolMessage.meta.modelToolSupabaseAppWiringContract
+            : null;
           const triggerToolAppBuildBaselineSnapshots =
             normalizeAppBuildBaselineSnapshotList(
               triggerToolMessage?.meta?.modelToolAppBuildBaselineSnapshots,
@@ -3340,6 +3346,25 @@ export default function AiPanel({
                 });
                 continue;
               }
+            }
+
+            const supabaseBatchWriteDecision =
+              evaluateSupabaseAppWiringWrite({
+                contract: triggerToolSupabaseAppWiringContract,
+                toolName: call.toolName,
+                args: call.args,
+              });
+
+            if (!supabaseBatchWriteDecision.ok) {
+              executedBatchResults.push({
+                toolName: String(call.toolName || ""),
+                args: call.args || {},
+                ok: false,
+                cancelled: false,
+                error: supabaseBatchWriteDecision.error,
+                result: "",
+              });
+              continue;
             }
 
             const result = await runTool({
@@ -4096,6 +4121,7 @@ export default function AiPanel({
                 inspectedPaths: agentSuccessfulReadPaths,
                 allowedWritePaths: triggerToolAllowedWritePaths,
                 continuationContext: triggerToolContinuationContext,
+                supabaseAppWiringContract: triggerToolSupabaseAppWiringContract,
               });
               const performanceDiagnosticReadKeys = new Set();
 
@@ -4265,6 +4291,31 @@ export default function AiPanel({
                         error: implementationPreflight.decision.error,
                       };
                     }
+                  }
+
+                  const supabaseWriteDecision =
+                    evaluateSupabaseAppWiringWrite({
+                      contract: implementationJob?.supabaseAppWiringContract,
+                      toolName,
+                      args,
+                    });
+
+                  if (!supabaseWriteDecision.ok) {
+                    if (shouldUseImplementationJobController) {
+                      implementationJob = rememberImplementationToolResult(
+                        implementationJob,
+                        { name: toolName, args },
+                        {
+                          ok: false,
+                          error: supabaseWriteDecision.error,
+                        },
+                      );
+                    }
+
+                    return {
+                      ok: false,
+                      error: supabaseWriteDecision.error,
+                    };
                   }
 
                   const result = await runTool({ toolName, args });
@@ -4729,6 +4780,7 @@ export default function AiPanel({
                                     modelToolInspectedPaths: agentSuccessfulReadPaths,
                                     contextFilePath: continuationContextPath,
                                     modelToolContinuationContext: implementationJob.continuationContext,
+                                    modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                     modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                     modelToolOriginalGoal: originalGoal,
                                     lastUserGoal: originalGoal,
@@ -4899,6 +4951,7 @@ export default function AiPanel({
                                   !isFixToolExecution,
                                 inspectedPaths: agentSuccessfulReadPaths,
                                 modelToolContinuationContext: implementationJob.continuationContext,
+                                modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
@@ -5009,6 +5062,7 @@ export default function AiPanel({
                                 silentUserAppend: true,
                                 inspectedPaths: agentSuccessfulReadPaths,
                                 modelToolContinuationContext: implementationJob.continuationContext,
+                                modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
@@ -5098,11 +5152,17 @@ export default function AiPanel({
         ? databaseContract
             .map((databaseObject) => {
               const columns = databaseObject.columns
-                .map((column) => `${column.name}:${column.dataType}`)
+                .map(
+                  (column) =>
+                    `${column.name}:${column.dataType}:${column.nullable ? "nullable" : "not-null"}:${column.unique ? "unique" : "not-unique"}`,
+                )
                 .join(", ");
               const ownerColumn = databaseObject.ownerColumn || "none";
+              const primaryKeys = databaseObject.primaryKeys.length
+                ? databaseObject.primaryKeys.join(", ")
+                : "none";
 
-              return `- table: ${databaseObject.table}; ownership: ${databaseObject.ownership}; owner column: ${ownerColumn}; columns: ${columns}`;
+              return `- table: ${databaseObject.table}; ownership: ${databaseObject.ownership}; owner column: ${ownerColumn}; primary keys: ${primaryKeys}; columns: ${columns}`;
             })
             .join("\n")
         : "- none";
@@ -5177,6 +5237,7 @@ export default function AiPanel({
           forceProjectEdit: true,
           modelToolAllowedWritePaths: allowedWritePaths,
           modelToolContinuationContext: supabaseAppWiringContinuationContext,
+          modelToolSupabaseAppWiringContract: databaseContract,
           modelToolOriginalGoal: originalGoal,
           lastUserGoal: originalGoal,
         },

@@ -85,10 +85,11 @@ describe("Supabase Autopilot plan schema", () => {
       table: "public.user_progress",
       ownership: "authenticated-user-owned",
       ownerColumn: "user_id",
+      primaryKeys: ["id"],
       columns: [
-        { name: "id", dataType: "uuid" },
-        { name: "user_id", dataType: "uuid" },
-        { name: "data", dataType: "jsonb" },
+        { name: "id", dataType: "uuid", nullable: false, unique: false },
+        { name: "user_id", dataType: "uuid", nullable: false, unique: false },
+        { name: "data", dataType: "jsonb", nullable: false, unique: false },
       ],
     },
   ]);

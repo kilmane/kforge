@@ -9743,6 +9743,11 @@ setWorkflowContext({
           const modelToolContinuationContext = String(
             opts.modelToolContinuationContext || "",
           ).trim();
+          const modelToolSupabaseAppWiringContract = Array.isArray(
+            opts.modelToolSupabaseAppWiringContract,
+          )
+            ? opts.modelToolSupabaseAppWiringContract
+            : null;
 
           const modelToolAppBuildBaselineSnapshots = Array.isArray(
             opts.appBuildBaselineSnapshots,
@@ -9776,6 +9781,7 @@ setWorkflowContext({
                 modelToolInspectedPaths,
                 modelToolAllowedWritePaths,
                 modelToolContinuationContext,
+                modelToolSupabaseAppWiringContract,
                 modelToolAppBuildBaselineSnapshots,
                 modelToolAppBuildEditedPaths,
               },

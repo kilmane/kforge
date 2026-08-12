@@ -362,11 +362,14 @@ export function buildSupabaseAppWiringDatabaseContract(plan) {
         table: databaseObject.name,
         ownership: databaseObject.ownership,
         ownerColumn: ownerColumnsByTable.get(databaseObject.name) || "",
+        primaryKeys: Object.freeze([...databaseObject.primaryKeys]),
         columns: Object.freeze(
           databaseObject.columns.map((column) =>
             Object.freeze({
               name: column.name,
               dataType: column.dataType,
+              nullable: column.nullable,
+              unique: column.unique,
             }),
           ),
         ),
