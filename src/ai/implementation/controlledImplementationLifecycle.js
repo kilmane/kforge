@@ -36,7 +36,8 @@ export const CONTROLLED_IMPLEMENTATION_EVENT = Object.freeze({
   TERMINAL: "terminal",
 });
 
-const DEFAULT_MAX_TRANSITIONS = 12;
+const MIN_CONTROLLED_TRANSITIONS = 12;
+const MAX_CONTROLLED_TRANSITIONS = 64;
 const MAX_RECORDED_EVENTS = 80;
 const FINAL_CONTROLLED_RESPONSE_STEPS = 1;
 
@@ -48,6 +49,99 @@ function normalizeFailureStage(value) {
 function normalizePositiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizePathKey(value = "") {
+  return normalizeImplementationPath(value).toLowerCase();
+}
+
+function getLatestPathSequence(records = [], path = "") {
+  const pathKey = normalizePathKey(path);
+  return (Array.isArray(records) ? records : []).reduce(
+    (latest, record) =>
+      normalizePathKey(record?.path) === pathKey &&
+      Number.isInteger(record?.sequence)
+        ? Math.max(latest, record.sequence)
+        : latest,
+    0,
+  );
+}
+
+function getPendingOperationTransitionState(job = {}) {
+  const current = createImplementationJob(job);
+  return getPendingImplementationOperations(current).map((operation) => {
+    const latestMutationSequence = getLatestPathSequence(
+      current.successfulMutations,
+      operation.path,
+    );
+    const latestInspectionSequence = getLatestPathSequence(
+      current.inspectionHistory,
+      operation.path,
+    );
+    return {
+      operation,
+      latestMutationSequence,
+      latestInspectionSequence,
+      needsInitialMutation: latestMutationSequence === 0,
+      needsPostMutationInspection:
+        latestMutationSequence > 0 &&
+        latestInspectionSequence <= latestMutationSequence,
+    };
+  });
+}
+
+export function getControlledImplementationTransitionLimit(job = {}) {
+  const current = createImplementationJob(job);
+  const pendingOperations = getPendingImplementationOperations(current);
+  const targetPathKeys = new Set(
+    pendingOperations.map((operation) => normalizePathKey(operation.path)),
+  );
+  const reusableEvidencePathKeys = new Set(
+    (Array.isArray(current.reusableCapabilities)
+      ? current.reusableCapabilities
+      : [])
+      .map((evidence) => normalizePathKey(evidence?.path))
+      .filter((pathKey) => pathKey && !targetPathKeys.has(pathKey)),
+  );
+  const responsibilityCount = pendingOperations.reduce(
+    (total, operation) =>
+      total +
+      Math.max(
+        1,
+        Array.isArray(operation?.responsibilityIds)
+          ? operation.responsibilityIds.length
+          : 0,
+      ),
+    0,
+  );
+
+  // Each responsibility may require one mutation plus its mandatory fresh
+  // inspection. Initial evidence is bounded by the larger of the structured
+  // responsibility count or the declared target/helper evidence paths. Each
+  // target may also use its one bounded refresh, and each operation receives
+  // one completion transition plus one bounded recovery turn.
+  const initialEvidenceAllowance = Math.max(
+    responsibilityCount,
+    targetPathKeys.size + reusableEvidencePathKeys.size,
+  );
+  const structuredLimit =
+    responsibilityCount * 2 +
+    pendingOperations.length * 2 +
+    initialEvidenceAllowance +
+    targetPathKeys.size;
+
+  return Math.min(
+    MAX_CONTROLLED_TRANSITIONS,
+    Math.max(MIN_CONTROLLED_TRANSITIONS, structuredLimit),
+  );
+}
+
+export function getControlledImplementationRequiredTransitionReserve(job = {}) {
+  return getPendingOperationTransitionState(job).reduce((total, state) => {
+    if (state.needsInitialMutation) return total + 3;
+    if (state.needsPostMutationInspection) return total + 2;
+    return total + 1;
+  }, 0);
 }
 
 function normalizeEvent(event = {}) {
@@ -217,6 +311,7 @@ export function getControlledRecoveryDirective(lifecycle, result = {}) {
 export function createControlledImplementationLifecycle(seed = {}) {
   const jobSeed = seed?.job || seed;
   const job = createImplementationJob(jobSeed);
+  const derivedTransitionLimit = getControlledImplementationTransitionLimit(job);
   const completed = hasCompletedPlannedImplementationOperations(job);
   const status = completed
     ? CONTROLLED_IMPLEMENTATION_STATUS.COMPLETED
@@ -234,9 +329,9 @@ export function createControlledImplementationLifecycle(seed = {}) {
     transitionCount: Number.isInteger(seed?.transitionCount)
       ? Math.max(0, seed.transitionCount)
       : 0,
-    maxTransitions: normalizePositiveInteger(
-      seed?.maxTransitions,
-      DEFAULT_MAX_TRANSITIONS,
+    maxTransitions: Math.min(
+      MAX_CONTROLLED_TRANSITIONS,
+      normalizePositiveInteger(seed?.maxTransitions, derivedTransitionLimit),
     ),
     terminalReason: String(seed?.terminalReason || "").trim(),
     requiredFreshInspectionPath: normalizeImplementationPath(
@@ -276,6 +371,34 @@ function hasTransitionBudget(lifecycle) {
   return lifecycle.transitionCount < lifecycle.maxTransitions;
 }
 
+function getRequiredCapacityForToolRequest(lifecycle, toolName, path) {
+  const pendingStates = getPendingOperationTransitionState(lifecycle.job);
+  const reserve = getControlledImplementationRequiredTransitionReserve(
+    lifecycle.job,
+  );
+  const pathKey = normalizePathKey(path);
+  const matchingStates = pendingStates.filter(
+    (state) => normalizePathKey(state.operation.path) === pathKey,
+  );
+
+  if (isImplementationOperationCompletionTool(toolName)) return reserve;
+
+  if (
+    toolName === "read_file" &&
+    matchingStates.some((state) => state.needsPostMutationInspection)
+  ) {
+    return reserve;
+  }
+
+  if (isImplementationWriteTool(toolName) && matchingStates.length > 0) {
+    return matchingStates.some((state) => state.needsInitialMutation)
+      ? reserve
+      : reserve + 2;
+  }
+
+  return reserve + 1;
+}
+
 export function beginControlledToolRequest(lifecycle, toolCall = {}) {
   let current = createControlledImplementationLifecycle(lifecycle);
   const toolName = String(toolCall?.name || toolCall?.toolName || "").trim();
@@ -295,10 +418,19 @@ export function beginControlledToolRequest(lifecycle, toolCall = {}) {
     };
   }
 
-  if (!hasTransitionBudget(current)) {
+  const remainingTransitions = Math.max(
+    0,
+    current.maxTransitions - current.transitionCount,
+  );
+  const requiredCapacity = getRequiredCapacityForToolRequest(
+    current,
+    toolName,
+    requestedPath,
+  );
+  if (!hasTransitionBudget(current) || remainingTransitions < requiredCapacity) {
     current = withBoundedFailure(
       current,
-      "Controlled implementation reached its safe transition limit before completing approved operations.",
+      "Controlled implementation reached its safe transition boundary while preserving mandatory mutation, post-mutation inspection, and operation-completion capacity.",
     );
     return {
       lifecycle: current,
@@ -736,10 +868,16 @@ export function continueControlledImplementationAfterProse(
     return { lifecycle: current, shouldContinue: false };
   }
 
-  if (!hasTransitionBudget(current)) {
+  const remainingTransitions = Math.max(
+    0,
+    current.maxTransitions - current.transitionCount,
+  );
+  const requiredReserve =
+    getControlledImplementationRequiredTransitionReserve(current.job);
+  if (!hasTransitionBudget(current) || remainingTransitions <= requiredReserve) {
     current = withBoundedFailure(
       current,
-      "Controlled implementation reached its safe transition limit after repeated non-actionable model responses.",
+      "Controlled implementation reached its safe transition boundary after repeated non-actionable model responses while preserving mandatory verification and completion capacity.",
     );
     return { lifecycle: current, shouldContinue: false };
   }

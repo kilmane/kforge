@@ -8,6 +8,8 @@ import {
   createControlledImplementationLifecycle,
   executeControlledImplementationTurn,
   getControlledImplementationAgentStepBudget,
+  getControlledImplementationRequiredTransitionReserve,
+  getControlledImplementationTransitionLimit,
   getPendingControlledWritePaths,
   isPendingControlledImplementation,
   isCanonicalControlledImplementationLifecycle,
@@ -313,27 +315,38 @@ test("a blocked write preserves completed planned writes and the pending boundar
   );
 });
 
-test("plain prose while work is pending exits through a bounded controlled failure", () => {
+test("plain prose consumes only discretionary capacity before bounded failure", () => {
   let lifecycle = createControlledImplementationLifecycle({
     ...createLifecycle(),
-    maxTransitions: 2,
+    maxTransitions: 4,
   });
+  const requiredReserve =
+    getControlledImplementationRequiredTransitionReserve(lifecycle.job);
+
+  expect(lifecycle.transitionCount).toBe(0);
+  expect(requiredReserve).toBe(3);
+  expect(
+    lifecycle.maxTransitions - lifecycle.transitionCount - requiredReserve,
+  ).toBe(1);
 
   const first = continueControlledImplementationAfterProse(lifecycle);
   expect(first.shouldContinue).toBe(true);
   lifecycle = first.lifecycle;
-
-  const second = continueControlledImplementationAfterProse(lifecycle);
-  expect(second.shouldContinue).toBe(true);
-  lifecycle = second.lifecycle;
+  expect(lifecycle.transitionCount).toBe(1);
+  expect(lifecycle.maxTransitions - lifecycle.transitionCount).toBe(
+    requiredReserve,
+  );
 
   const exhausted = continueControlledImplementationAfterProse(lifecycle);
   expect(exhausted.shouldContinue).toBe(false);
   expect(exhausted.lifecycle.status).toBe(
     CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE,
   );
+  expect(exhausted.lifecycle.transitionCount).toBe(1);
   expect(exhausted.lifecycle.status).not.toBe("generic_inspection_only");
-  expect(exhausted.lifecycle.terminalReason).toContain("safe transition limit");
+  expect(exhausted.lifecycle.terminalReason).toContain(
+    "safe transition boundary",
+  );
 });
 
 test("a mismatched result path fails closed with its original call identity", () => {
@@ -740,7 +753,187 @@ test("controlled agent allowance is remaining lifecycle transitions plus one fin
   expect(getControlledImplementationAgentStepBudget(lifecycle)).toBe(9);
 });
 
-test("repeated pre-approval policy blocks exhaust the transition bound", async () => {
+test("derived controlled budget completes three targeted edits with mandatory post-mutation inspections", async () => {
+  const operation = {
+    id: "application-operation-dashboard",
+    path: "src/Dashboard.jsx",
+    role: "react-integration",
+    purpose: "Complete the approved dashboard integration.",
+    responsibilityIds: [
+      "session-ui",
+      "data-hydration",
+      "data-persistence",
+      "interaction-feedback",
+    ],
+    responsibilities: [
+      { id: "session-ui", purpose: "Integrate the approved session UI." },
+      { id: "data-hydration", purpose: "Hydrate approved application data." },
+      { id: "data-persistence", purpose: "Persist approved application data." },
+      {
+        id: "interaction-feedback",
+        purpose: "Preserve approved interaction feedback.",
+      },
+    ],
+    status: "proposed",
+  };
+  let lifecycle = createControlledImplementationLifecycle({
+    job: {
+      jobId: "generic-dashboard-integration",
+      originalGoal: "Complete the approved dashboard integration.",
+      allowedWritePaths: [operation.path],
+      plannedOperations: [operation],
+      reusableCapabilities: [
+        { path: "src/lib/client.js", capabilities: ["service-client"] },
+        { path: "src/lib/queries.js", capabilities: ["data-queries"] },
+        { path: "src/examples/clientExample.js", capabilities: ["usage-example"] },
+      ],
+      supabaseAppWiringContract: supabaseContract,
+    },
+  });
+  const derivedTransitionLimit =
+    getControlledImplementationTransitionLimit(lifecycle.job);
+  const startingAgentBudget =
+    getControlledImplementationAgentStepBudget(lifecycle);
+  const fingerprints = [
+    "fnv1a64-1000000000000001",
+    "fnv1a64-2000000000000002",
+    "fnv1a64-3000000000000003",
+    "fnv1a64-4000000000000004",
+  ];
+  let modelTurns = 0;
+
+  const execute = async (toolCall, result) => {
+    modelTurns += 1;
+    const turn = await executeControlledImplementationTurn({
+      lifecycle,
+      toolCall,
+      executeTool: async (request) => ({
+        toolName: request.toolName,
+        args: request.args,
+        ...result,
+      }),
+    });
+    lifecycle = turn.lifecycle;
+    expect(turn.result?.ok).toBe(true);
+  };
+
+  await execute(
+    { name: "read_file", args: { path: operation.path } },
+    { ok: true, result: `File fingerprint: ${fingerprints[0]}\n\nsource zero` },
+  );
+  for (const path of [
+    "src/lib/client.js",
+    "src/lib/queries.js",
+    "src/examples/clientExample.js",
+  ]) {
+    await execute(
+      { name: "read_file", args: { path } },
+      {
+        ok: true,
+        result: `File fingerprint: fnv1a64-aaaaaaaaaaaaaaaa\n\nexport const evidence = true`,
+      },
+    );
+  }
+  for (let recoveryTurn = 0; recoveryTurn < 2; recoveryTurn += 1) {
+    const continuation = continueControlledImplementationAfterProse(lifecycle);
+    expect(continuation.shouldContinue).toBe(true);
+    lifecycle = continuation.lifecycle;
+    modelTurns += 1;
+  }
+  await execute(
+    { name: "read_file", args: { path: operation.path } },
+    { ok: true, result: `File fingerprint: ${fingerprints[0]}\n\nsource zero` },
+  );
+
+  for (let editIndex = 0; editIndex < 3; editIndex += 1) {
+    await execute(
+      {
+        name: "replace_text",
+        args: {
+          path: operation.path,
+          expectedFileFingerprint: fingerprints[editIndex],
+          oldText: `source ${editIndex}`,
+          newText: `source ${editIndex + 1}`,
+        },
+      },
+      { ok: true, result: `targeted edit ${editIndex + 1}` },
+    );
+    await execute(
+      { name: "read_file", args: { path: operation.path } },
+      {
+        ok: true,
+        result: `File fingerprint: ${fingerprints[editIndex + 1]}\n\nsource ${editIndex + 1}`,
+      },
+    );
+  }
+
+  await execute({
+    name: "complete_operation",
+    args: {
+      operationId: operation.id,
+      satisfiedResponsibilityIds: operation.responsibilityIds,
+    },
+  });
+  modelTurns += 1;
+
+  expect(derivedTransitionLimit).toBe(15);
+  expect(startingAgentBudget).toBe(16);
+  expect(lifecycle.maxTransitions).toBe(derivedTransitionLimit);
+  expect(lifecycle.transitionCount).toBe(14);
+  expect(lifecycle.status).toBe(CONTROLLED_IMPLEMENTATION_STATUS.COMPLETED);
+  expect(lifecycle.job.successfulMutations).toHaveLength(3);
+  expect(lifecycle.job.completedOperationIds).toEqual([operation.id]);
+  expect(modelTurns).toBeLessThanOrEqual(startingAgentBudget);
+});
+
+test("derived controlled budget keeps a finite stop for non-actionable model turns", () => {
+  let lifecycle = createControlledImplementationLifecycle({
+    job: {
+      jobId: "generic-bounded-integration",
+      originalGoal: "Complete one approved integration.",
+      allowedWritePaths: ["src/View.jsx"],
+      plannedOperations: [
+        {
+          id: "application-operation-view",
+          path: "src/View.jsx",
+          role: "react-integration",
+          purpose: "Complete one approved view integration.",
+          responsibilityIds: ["view-integration"],
+          responsibilities: [
+            {
+              id: "view-integration",
+              purpose: "Complete the approved view integration.",
+            },
+          ],
+          status: "proposed",
+        },
+      ],
+      supabaseAppWiringContract: supabaseContract,
+    },
+  });
+  const agentBudget = getControlledImplementationAgentStepBudget(lifecycle);
+  let modelTurns = 0;
+
+  while (
+    lifecycle.status === CONTROLLED_IMPLEMENTATION_STATUS.ACTIVE &&
+    modelTurns <= agentBudget
+  ) {
+    const continuation = continueControlledImplementationAfterProse(lifecycle);
+    lifecycle = continuation.lifecycle;
+    modelTurns += 1;
+  }
+
+  expect(lifecycle.status).toBe(
+    CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE,
+  );
+  expect(modelTurns).toBeLessThanOrEqual(agentBudget);
+  expect(lifecycle.transitionCount).toBe(
+    lifecycle.maxTransitions -
+      getControlledImplementationRequiredTransitionReserve(lifecycle.job),
+  );
+});
+
+test("repeated pre-approval policy blocks exhaust only non-reserved transition capacity", async () => {
   const fingerprint = "fnv1a64-0123456789abcdef";
   const executeTool = jest.fn(async ({ toolName, args }) => ({
     ok: false,
@@ -756,7 +949,7 @@ test("repeated pre-approval policy blocks exhaust the transition bound", async (
         { path: "src/App.jsx", fingerprint },
       ],
     }),
-    maxTransitions: 2,
+    maxTransitions: 5,
   });
   const proposal = {
     name: "replace_text",
@@ -769,15 +962,15 @@ test("repeated pre-approval policy blocks exhaust the transition bound", async (
   };
   const result = await processControlledToolQueue(
     lifecycle,
-    [proposal, proposal, proposal],
+    [proposal, proposal, proposal, proposal],
     { executeTool },
   );
 
-  expect(executeTool).toHaveBeenCalledTimes(2);
+  expect(executeTool).toHaveBeenCalledTimes(3);
   expect(result.lifecycle.status).toBe(
     CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE,
   );
-  expect(result.lifecycle.terminalReason).toMatch(/safe transition limit/i);
+  expect(result.lifecycle.terminalReason).toMatch(/safe transition boundary/i);
   expect(result.lifecycle.job.successfulMutations).toEqual([]);
   expect(result.lifecycle.job.completedOperationIds).toEqual([]);
   const resultCallIds = result.lifecycle.events
