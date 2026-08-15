@@ -302,6 +302,7 @@ function validateMutationFields(table, methodName, keys) {
   return "";
 }
 
+const AUTH_UI_SESSION_RESPONSIBILITY_ID = "auth-ui-session";
 const REUSABLE_HELPER_RESPONSIBILITY_ID = "reusable-helper-integration";
 const REUSABLE_AUTH_DATA_CAPABILITIES = new Set([
   "auth-session",
@@ -380,6 +381,45 @@ function operationResponsibilityIds(operation) {
       ? operation.responsibilities.map((item) => item?.id)
       : []),
   ].map((item) => String(item || "").trim()).filter(Boolean));
+}
+
+function pendingTargetHasResponsibility(
+  implementationContext,
+  targetPath,
+  responsibilityId,
+) {
+  const targetKey = normalizeProjectPathKey(targetPath);
+  const requiredResponsibilityId = String(responsibilityId || "").trim();
+
+  if (
+    !targetKey ||
+    !requiredResponsibilityId ||
+    !implementationContext ||
+    typeof implementationContext !== "object"
+  ) {
+    return false;
+  }
+
+  const completedOperationIds = new Set(
+    (Array.isArray(implementationContext.completedOperationIds)
+      ? implementationContext.completedOperationIds
+      : []).map((item) => String(item || "").trim()),
+  );
+
+  return (
+    Array.isArray(implementationContext.plannedOperations)
+      ? implementationContext.plannedOperations
+      : []
+  ).some(
+    (operation) =>
+      normalizeProjectPathKey(operation?.path) === targetKey &&
+      !completedOperationIds.has(String(operation?.id || "").trim()) &&
+      operationResponsibilityIds(operation).has(requiredResponsibilityId),
+  );
+}
+
+function escapeIdentifierForRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function reusableEvidencePathsForPendingTarget(
@@ -517,6 +557,103 @@ function validateReusableHelperBoundary({
   return "";
 }
 
+function validateAuthSessionWiring({
+  implementationContext,
+  targetPath,
+  content,
+}) {
+  if (
+    !pendingTargetHasResponsibility(
+      implementationContext,
+      targetPath,
+      AUTH_UI_SESSION_RESPONSIBILITY_ID,
+    )
+  ) {
+    return "";
+  }
+
+  const source = String(content || "");
+
+  if (
+    !/\bsignUpWithEmail\s*\(/.test(source) ||
+    !/\bsetUser\s*\(/.test(source)
+  ) {
+    return "";
+  }
+
+  const signUpResultPattern =
+    /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:(?!\b(?:const|let)\b)[\s\S]){0,700}?\bsignUpWithEmail\s*\(/g;
+
+  for (const resultMatch of source.matchAll(signUpResultPattern)) {
+    const resultName = resultMatch[1];
+    const escapedResultName = escapeIdentifierForRegExp(resultName);
+
+    const flow = source.slice(
+      resultMatch.index,
+      Math.min(source.length, resultMatch.index + 2000),
+    );
+
+    const derivedUserPattern = new RegExp(
+      "\\b(?:const|let)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*(?:" +
+        escapedResultName +
+        "\\?\\.user|" +
+        escapedResultName +
+        "\\?\\.data\\?\\.user|" +
+        escapedResultName +
+        "\\.user|" +
+        escapedResultName +
+        "\\.data\\.user)",
+    );
+
+    const derivedUserMatch = derivedUserPattern.exec(flow);
+    if (!derivedUserMatch) continue;
+
+    const userName = derivedUserMatch[1];
+    const escapedUserName = escapeIdentifierForRegExp(userName);
+
+    const afterDerivedUser = flow.slice(derivedUserMatch.index);
+    const setUserPattern = new RegExp(
+      "\\bsetUser\\s*\\(\\s*" + escapedUserName + "\\s*\\)",
+    );
+
+    const setUserMatch = setUserPattern.exec(afterDerivedUser);
+    if (!setUserMatch) continue;
+
+    const pathToSetUser = flow.slice(
+      0,
+      derivedUserMatch.index +
+        setUserMatch.index +
+        setUserMatch[0].length,
+    );
+
+    const activeSessionPattern = new RegExp(
+      "\\b" +
+        escapedResultName +
+        "(?:\\?\\.|\\.)(?:session|data(?:\\?\\.|\\.)session)\\b",
+    );
+
+    const explicitSignInGatePattern = new RegExp(
+      "if\\s*\\([^)]*\\bauthMode\\s*={2,3}\\s*['\"]sign-in['\"][^)]*\\)" +
+        "\\s*\\{?[\\s\\S]{0,300}\\bsetUser\\s*\\(\\s*" +
+        escapedUserName +
+        "\\s*\\)",
+    );
+
+    if (
+      !activeSessionPattern.test(pathToSetUser) &&
+      !explicitSignInGatePattern.test(pathToSetUser)
+    ) {
+      return (
+        "KForge blocked this application edit before approval because its pending " +
+        "auth-ui-session responsibility treats a Supabase sign-up user as an authenticated " +
+        "session without proving that an active session exists."
+      );
+    }
+  }
+
+  return "";
+}
+
 export function evaluateSupabaseAppWiringWrite({
   contract,
   toolName,
@@ -535,8 +672,15 @@ export function evaluateSupabaseAppWiringWrite({
     implementationContext,
     targetPath,
   );
+  const requiresAuthSessionValidation = pendingTargetHasResponsibility(
+    implementationContext,
+    targetPath,
+    AUTH_UI_SESSION_RESPONSIBILITY_ID,
+  );
   const requiresTrustedContent =
-    hasContract || reusableEvidencePaths.length > 0;
+    hasContract ||
+    reusableEvidencePaths.length > 0 ||
+    requiresAuthSessionValidation;
 
   if (
     normalizedToolName === "replace_text" &&
@@ -554,6 +698,14 @@ export function evaluateSupabaseAppWiringWrite({
     normalizedToolName === "replace_text"
       ? materializedContent
       : String(args?.content || "");
+  const authSessionError = validateAuthSessionWiring({
+    implementationContext,
+    targetPath,
+    content,
+  });
+  if (authSessionError) {
+    return { ok: false, error: authSessionError };
+  }
   const reusableHelperError = validateReusableHelperBoundary({
     implementationContext,
     targetPath,

@@ -146,6 +146,46 @@ test("allows helper imports from the same reusable evidence module", () => {
   expect(result).toEqual({ ok: true, error: "" });
 });
 
+test("blocks a sign-up user from being treated as an authenticated session", () => {
+  const result = evaluateSupabaseAppWiringWrite({
+    contract,
+    toolName: "write_file",
+    args: {
+      path: "src/App.jsx",
+      content: `
+        import {
+          signInWithEmail,
+          signUpWithEmail,
+          loadUserProgress,
+        } from './lib/supabase'
+
+        const handleAuthChange = () => null
+
+        async function handleAuthentication() {
+          const result = authMode === 'sign-in'
+            ? await signInWithEmail(email, password)
+            : await signUpWithEmail(email, password)
+
+          const authenticatedUser = result?.user ?? result?.data?.user
+
+          if (authenticatedUser?.id) {
+            setUser(authenticatedUser)
+          }
+        }
+
+        useEffect(() => {
+          if (!user) return
+          loadUserProgress(user.id)
+        }, [user])
+      `,
+    },
+    implementationContext: reusableHelperContext,
+  });
+
+  expect(result.ok).toBe(false);
+  expect(result.error).toMatch(/sign.?up|signup/i);
+  expect(result.error).toMatch(/session/i);
+});
 test("allows aliased named helper imports from reusable evidence", () => {
   const result = evaluateSupabaseAppWiringWrite({
     contract,
