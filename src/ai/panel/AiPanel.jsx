@@ -24,24 +24,44 @@ import {
 
 import { buildSupabaseAppWiringDatabaseContract } from "../supabaseAutopilot/planSchema.js";
 import { evaluateSupabaseAppWiringWrite } from "../supabaseAutopilot/appWiringWriteGuard.js";
-import { runToolCall } from "../tools/toolRuntime.js";
+import {
+  runToolCall,
+  TOOL_FAILURE_STAGE,
+} from "../tools/toolRuntime.js";
 import {
   preflightToolHandler,
   runToolHandler,
 } from "../tools/handlers/index.js";
+import { getControlledImplementationToolSchemas } from "../tools/toolSchema.js";
 import { openFile } from "../../lib/fs.js";
 import { runAgent } from "../agent/agentRunner.js";
 import {
   buildImplementationJobBlockedWriteRecoveryPrompt,
   buildImplementationJobFocusedPrompt,
   buildImplementationJobInspectionPrompt,
+  buildImplementationJobReadProgressionPrompt,
   createImplementationJob,
   evaluateAndRememberImplementationToolRequest,
+  getImplementationFileFingerprint,
   getImplementationJobAllowedNextActions,
-  hasCompletedPlannedImplementationWrites,
+  hasCompletedPlannedImplementationOperations,
+  IMPLEMENTATION_OPERATION_COMPLETION_TOOL,
   IMPLEMENTATION_JOB_ACTION,
   rememberImplementationToolResult,
 } from "../implementation/implementationJobController.js";
+import {
+  CONTROLLED_IMPLEMENTATION_EVENT,
+  CONTROLLED_RECOVERY_DIRECTIVE,
+  CONTROLLED_IMPLEMENTATION_STATUS,
+  continueControlledImplementationAfterProse,
+  createControlledImplementationLifecycle,
+  executeControlledImplementationTurn,
+  getControlledImplementationAgentStepBudget,
+  getPendingControlledWritePaths,
+  isCanonicalControlledImplementationLifecycle,
+  isPendingControlledImplementation,
+  markControlledImplementationBoundedFailure,
+} from "../implementation/controlledImplementationLifecycle.js";
 import {
   SMALL_CONTROL_EDIT_LABEL,
   buildSmallControlEdit,
@@ -208,6 +228,87 @@ function formatToolLine({ tool, status, id, detail }) {
   return parts.join(" ");
 }
 
+function formatControlledImplementationEvent(event, resultText = "") {
+  const callId = String(event?.callId || "controlled-call").trim();
+  const toolName = String(event?.toolName || "tool").trim();
+  const requestedPath = String(event?.requestedPath || "").trim();
+  const executedPath = String(event?.executedPath || "").trim();
+  const operationId = String(event?.operationId || "").trim();
+  const reason = String(event?.reason || "").trim();
+  const failureStage = String(event?.failureStage || "").trim();
+  const requiresFreshInspection = event?.requiresFreshInspection === true;
+
+  if (event?.type === CONTROLLED_IMPLEMENTATION_EVENT.REQUEST) {
+    return (
+      `[controlled] Tool request ${callId}: ${toolName}` +
+      (requestedPath ? `\nRequested path: ${requestedPath}` : "")
+    );
+  }
+
+  const status = event?.cancelled
+    ? "cancelled"
+    : event?.skipped
+      ? "skipped"
+      : event?.ok
+        ? "succeeded"
+        : "failed";
+  const lines = [
+    `[controlled] Tool result ${callId}: ${toolName} ${status}`,
+  ];
+  if (requestedPath) lines.push(`Requested path: ${requestedPath}`);
+  if (executedPath) lines.push(`Executed path: ${executedPath}`);
+  if (operationId) lines.push(`Operation: ${operationId}`);
+  if (failureStage) lines.push(`Failure stage: ${failureStage}`);
+  if (requiresFreshInspection) lines.push("Fresh inspection required: yes");
+  if (reason) lines.push(`Reason: ${reason}`);
+  if (resultText && event?.ok) lines.push("", resultText);
+  return lines.join("\n");
+}
+
+function buildControlledRecoveryContinuationPrompt({
+  recovery,
+  job,
+  originalGoal,
+  toolCall,
+  toolResult,
+} = {}) {
+  const directive = String(recovery?.type || "").trim();
+  if (directive === CONTROLLED_RECOVERY_DIRECTIVE.COMPLETED) {
+    return "KForge controller state: every approved implementation operation has completed after its required post-mutation inspection. Do not request another tool. Return a concise completion result for the original objective.";
+  }
+  if (
+    directive === CONTROLLED_RECOVERY_DIRECTIVE.AWAIT_USER ||
+    directive === CONTROLLED_RECOVERY_DIRECTIVE.TERMINAL_UNCERTAIN
+  ) {
+    return "";
+  }
+  if (directive === CONTROLLED_RECOVERY_DIRECTIVE.REFRESH_EXACT_TARGET) {
+    return (
+      "KForge controller recovery requires one fresh bounded inspection of the exact active target before another proposal.\n" +
+      `Target: ${String(recovery?.targetPath || toolCall?.args?.path || "").trim()}\n` +
+      `Blocked reason: ${String(recovery?.reason || toolResult?.error || "").slice(0, 2_000)}\n\n` +
+      buildImplementationJobInspectionPrompt(job, originalGoal)
+    );
+  }
+  if (
+    toolResult?.ok &&
+    INSPECTION_TOOL_NAMES.has(String(toolCall?.name || "").trim())
+  ) {
+    return buildImplementationJobReadProgressionPrompt(job, originalGoal);
+  }
+  if (toolResult?.ok) {
+    return buildImplementationJobFocusedPrompt(job, originalGoal);
+  }
+  return buildImplementationJobBlockedWriteRecoveryPrompt(job, originalGoal, {
+    targetPath: recovery?.targetPath || toolCall?.args?.path,
+    blockedReason: String(
+      recovery?.reason ||
+        toolResult?.error ||
+        "KForge blocked this proposal before approval.",
+    ).slice(0, 2_000),
+  });
+}
+
 function dirnameOfPath(p) {
   const raw = String(p || "");
   if (!raw.trim()) return "";
@@ -245,6 +346,8 @@ const ALLOWED_MODEL_TOOLS = new Set([
   "list_dir",
   "search_in_file",
   "write_file",
+  "replace_text",
+  IMPLEMENTATION_OPERATION_COMPLETION_TOOL,
   "mkdir",
 ]);
 
@@ -527,6 +630,11 @@ const INSPECTION_TOOL_NAMES = new Set([
   "list_dir",
   "search_in_file",
 ]);
+const FILE_MUTATION_TOOL_NAMES = new Set(["write_file", "replace_text"]);
+const CONTROLLED_IMPLEMENTATION_ONLY_TOOL_NAMES = new Set([
+  "replace_text",
+  IMPLEMENTATION_OPERATION_COMPLETION_TOOL,
+]);
 
 const BLIND_WRITE_INSPECTION_EVIDENCE_KEYS = new Set();
 
@@ -723,6 +831,32 @@ function collectFailedToolBatchDetails(results, toolName) {
     });
 }
 
+function collectSuccessfulFileMutationPaths(results) {
+  return Array.from(
+    new Set(
+      [...FILE_MUTATION_TOOL_NAMES].flatMap((toolName) =>
+        collectSuccessfulToolBatchPaths(results, toolName),
+      ),
+    ),
+  );
+}
+
+function collectFailedFileMutationPaths(results) {
+  return Array.from(
+    new Set(
+      [...FILE_MUTATION_TOOL_NAMES].flatMap((toolName) =>
+        collectFailedToolBatchPaths(results, toolName),
+      ),
+    ),
+  );
+}
+
+function collectFailedFileMutationDetails(results) {
+  return [...FILE_MUTATION_TOOL_NAMES].flatMap((toolName) =>
+    collectFailedToolBatchDetails(results, toolName),
+  );
+}
+
 function formatFailedToolBatchLine(detail) {
   const path = String(detail?.path || "(unknown path)").trim();
   const error = String(detail?.error || "").trim();
@@ -734,11 +868,11 @@ function formatFailedToolBatchLine(detail) {
   return `- ${path} — ${error}`;
 }
 
-function buildToolBatchDoneMessage(results) {
-  const successfulWritePaths = collectSuccessfulToolBatchPaths(
-    results,
-    "write_file",
-  );
+function buildToolBatchDoneMessage(
+  results,
+  { implementationComplete = true } = {},
+) {
+  const successfulWritePaths = collectSuccessfulFileMutationPaths(results);
   const successfulDirPaths = collectSuccessfulToolBatchPaths(results, "mkdir");
   const successfulPaths = [
     ...successfulDirPaths,
@@ -751,15 +885,18 @@ function buildToolBatchDoneMessage(results) {
       lines.push(`- ...and ${successfulPaths.length - 6} more`);
     }
 
-    const intro =
-      successfulPaths.length === 1
+    const intro = implementationComplete
+      ? successfulPaths.length === 1
         ? "Done> wrote the following path:"
-        : "Done> wrote the following paths:";
+        : "Done> wrote the following paths:"
+      : successfulPaths.length === 1
+        ? "Applied one approved mutation; implementation remains active for this path:"
+        : "Applied approved mutations; implementation remains active for these paths:";
 
     return `${intro}\n${lines.join("\n")}`;
   }
 
-  const failedWriteDetails = collectFailedToolBatchDetails(results, "write_file");
+  const failedWriteDetails = collectFailedFileMutationDetails(results);
   const failedDirDetails = collectFailedToolBatchDetails(results, "mkdir");
   const failedDetails = [...failedDirDetails, ...failedWriteDetails];
 
@@ -2442,7 +2579,7 @@ export default function AiPanel({
   }, [messages]);
 
   const requestConsent = useCallback(
-    async ({ toolName, args }) => {
+    async ({ toolName, args, prompt }) => {
       if (pendingConsentRef.current?.resolve) {
         try {
           pendingConsentRef.current.resolve("cancelled");
@@ -2471,9 +2608,11 @@ export default function AiPanel({
             ? `List directory (Path: ${String(args?.path || "").trim()})`
             : tool === "search_in_file"
               ? `Search in file (Path: ${String(args?.path || "").trim()} | Query: ${String(args?.query || "").trim()})`
-              : tool === "write_file"
-                ? `Write file (Path: ${String(args?.path || "").trim()})`
-                : tool === "mkdir"
+               : tool === "write_file"
+                 ? `Write file (Path: ${String(args?.path || "").trim()})`
+                 : tool === "replace_text"
+                   ? `Targeted edit (Path: ${String(args?.path || "").trim()})`
+                 : tool === "mkdir"
                   ? `Create directory (Path: ${String(args?.path || "").trim()})`
                   : "Awaiting approval…";
 
@@ -2484,7 +2623,10 @@ export default function AiPanel({
           status: "request",
           id,
           detail: detail || "Awaiting approval…",
-        }),
+        }) +
+          (tool === "replace_text" && String(prompt || "").trim()
+            ? `\n\n${String(prompt).trim()}`
+            : ""),
         {
           actions: [
             {
@@ -2606,8 +2748,8 @@ export default function AiPanel({
     [appendMessage],
   );
 
-  const invokeTool = useCallback(async (toolName, args) => {
-    return await runToolHandler(toolName, args);
+  const invokeTool = useCallback(async (toolName, args, options = {}) => {
+    return await runToolHandler(toolName, args, options);
   }, []);
 
   const capturePreWriteSnapshot = useCallback(async (path) => {
@@ -2643,25 +2785,39 @@ export default function AiPanel({
   }, []);
 
   const runTool = useCallback(
-    async ({ toolName, args }) => {
-      if (toolName === "write_file") {
-        const preflight = await preflightToolHandler(toolName, args);
+    async ({
+      toolName,
+      args,
+      suppressTranscript = false,
+      validatePreparedWrite = null,
+      controlledMutation = false,
+      controlledWriteFingerprint = "",
+    }) => {
+      let writePreflight = null;
+
+      if (FILE_MUTATION_TOOL_NAMES.has(toolName)) {
+        const preflight = await preflightToolHandler(toolName, args, {
+          requireExistingFileFingerprint: controlledMutation,
+          requiredExistingFileFingerprint: controlledWriteFingerprint,
+        });
 
         if (!preflight?.ok) {
           const error = String(
             preflight?.error || "KForge blocked this file write before approval.",
           );
 
-          appendTranscript({
-            role: "system",
-            content:
-              "KForge blocked this file write before approval.\n\n" + error,
-            meta: {
-              kind: "tool_status",
-              toolName,
-              phase: "error",
-            },
-          });
+          if (!suppressTranscript) {
+            appendTranscript({
+              role: "system",
+              content:
+                "KForge blocked this file write before approval.\n\n" + error,
+              meta: {
+                kind: "tool_status",
+                toolName,
+                phase: "error",
+              },
+            });
+          }
 
           return {
             ok: false,
@@ -2669,32 +2825,76 @@ export default function AiPanel({
             args,
             cancelled: false,
             error,
+            failureStage: TOOL_FAILURE_STAGE.PRE_APPROVAL,
+            requiresFreshInspection:
+              preflight?.requiresFreshInspection === true,
           };
+        }
+
+        writePreflight = preflight;
+
+        if (typeof validatePreparedWrite === "function") {
+          const validation = await validatePreparedWrite(preflight);
+          if (!validation?.ok) {
+            const error = String(
+              validation?.error ||
+                "KForge blocked this file mutation before approval.",
+            );
+
+            if (!suppressTranscript) {
+              appendTranscript({
+                role: "system",
+                content:
+                  "KForge blocked this file mutation before approval.\n\n" +
+                  error,
+                meta: {
+                  kind: "tool_status",
+                  toolName,
+                  phase: "error",
+                },
+              });
+            }
+
+            return {
+              ok: false,
+              toolName,
+              args,
+              cancelled: false,
+              error,
+              failureStage: TOOL_FAILURE_STAGE.PRE_APPROVAL,
+              requiresFreshInspection: false,
+            };
+          }
         }
       }
 
       const res = await runToolCall({
         toolCall: { name: toolName, args },
-        appendTranscript,
+        appendTranscript: suppressTranscript ? () => {} : appendTranscript,
         requestConsent,
         invokeTool: async (toolName2, args2) => {
           try {
-            if (toolName2 === "write_file") {
+            if (FILE_MUTATION_TOOL_NAMES.has(toolName2)) {
               await capturePreWriteSnapshot(args2?.path);
             }
 
-            return await invokeTool(toolName2, args2);
+            return await invokeTool(toolName2, args2, {
+              requireExistingFileFingerprint: controlledMutation,
+              requiredExistingFileFingerprint: controlledWriteFingerprint,
+            });
           } catch (err) {
             const msg = formatTauriError ? formatTauriError(err) : String(err);
             throw new Error(msg);
           }
         },
         isConsentRequired: (toolName2) => !SAFE_AUTOMATIC_TOOLS.has(toolName2),
+        consentPrompt:
+          toolName === "replace_text" ? writePreflight?.approvalPrompt : "",
       });
 
       if (
         res?.ok &&
-        (toolName === "write_file" || toolName === "mkdir") &&
+        (FILE_MUTATION_TOOL_NAMES.has(toolName) || toolName === "mkdir") &&
         typeof onWorkspaceTreeRefresh === "function"
       ) {
         try {
@@ -2844,7 +3044,12 @@ export default function AiPanel({
 
         GLOBAL_SEEN_TOOL_KEYS.add(key);
         processedKeysRef.current.add(key);
-        batchCalls.push({ toolName, args });
+        batchCalls.push({
+          toolName,
+          args,
+          sourceIndex: Number.isInteger(sourceIndex) ? sourceIndex : -1,
+          sourceOrder: batchCalls.length,
+        });
       };
 
       try {
@@ -2958,30 +3163,109 @@ export default function AiPanel({
                     const isAppBuildParseFailure =
                       String(msg?.meta?.modelToolExecutionSource || "") ===
                       "app_build_implementation";
+                    const parseFailureAllowedWritePaths = Array.isArray(
+                      msg?.meta?.modelToolAllowedWritePaths,
+                    )
+                      ? msg.meta.modelToolAllowedWritePaths
+                      : null;
+                    const parseFailureContract = Array.isArray(
+                      msg?.meta?.modelToolSupabaseAppWiringContract,
+                    )
+                      ? msg.meta.modelToolSupabaseAppWiringContract
+                      : null;
+                    const rawParseFailureLifecycle =
+                      msg?.meta?.modelToolControlledLifecycle;
+                    const parseFailureLifecycle =
+                      isCanonicalControlledImplementationLifecycle(
+                        rawParseFailureLifecycle,
+                      )
+                        ? createControlledImplementationLifecycle(
+                            rawParseFailureLifecycle,
+                          )
+                        : null;
+                    const hasControlledParseFailureClassification = Boolean(
+                      rawParseFailureLifecycle ||
+                        (Array.isArray(parseFailureAllowedWritePaths) &&
+                          parseFailureAllowedWritePaths.length > 0 &&
+                          Array.isArray(parseFailureContract) &&
+                          parseFailureContract.length > 0),
+                    );
+                    const parseFailureJob = parseFailureLifecycle
+                      ? parseFailureLifecycle.job
+                      : hasControlledParseFailureClassification
+                        ? null
+                        : createImplementationJob({
+                          originalGoal: retryGoal,
+                          taskKind: msg?.meta?.modelToolExecutionKind,
+                          inspectedPaths: retryInspectedPaths,
+                          allowedWritePaths: parseFailureAllowedWritePaths,
+                          successfulWrites:
+                            msg?.meta?.modelToolSuccessfulWritePaths,
+                          continuationContext:
+                            msg?.meta?.modelToolContinuationContext,
+                          supabaseAppWiringContract: parseFailureContract,
+                          reusableCapabilities:
+                            msg?.meta?.modelToolReusableCapabilities,
+                          blockedWrites: msg?.meta?.modelToolBlockedWritePaths,
+                        });
+                    const isControlledSupabaseParseFailure = Boolean(
+                      hasControlledParseFailureClassification &&
+                        parseFailureLifecycle,
+                    );
                     const actions = [];
 
-                    if (isAppBuildParseFailure && typeof sendWithPrompt === "function") {
+                    if (
+                      ((isAppBuildParseFailure &&
+                        !hasControlledParseFailureClassification) ||
+                        isControlledSupabaseParseFailure) &&
+                      typeof sendWithPrompt === "function"
+                    ) {
                       actions.push({
-                        label: "Retry controlled app-build implementation",
+                        label: isAppBuildParseFailure
+                          ? "Retry controlled app-build implementation"
+                          : "Retry controlled Supabase wiring",
                         onClick: () => {
                           appendMessage(
                             "user",
-                            "Choice: Retry controlled app-build implementation",
+                            isAppBuildParseFailure
+                              ? "Choice: Retry controlled app-build implementation"
+                              : "Choice: Retry controlled Supabase wiring",
                           );
                           sendWithPrompt(
-                            "Retry the controlled app-build implementation after an unreadable tool request.\n\n" +
-                              `Original app request: ${retryGoal}\n\n` +
-                              "The previous model response produced a fenced tool block that KForge could not parse as valid JSON, so no approval prompt was shown and no files were changed.\n\n" +
-                              "Use the already inspected evidence. Request exactly one valid fenced ```tool``` block containing JSON with shape { \"name\": \"write_file\", \"args\": { \"path\": \"...\", \"content\": \"...\" } }. " +
-                              "For write_file, content must be the complete full file text. Do not use XML tool tags, bare JSON, ```json fences, natural-language shorthand, or function-like syntax. Do not claim Preview, build, tests, deployment, or service setup.",
+                            isAppBuildParseFailure
+                              ? "Retry the controlled app-build implementation after an unreadable tool request.\n\n" +
+                                `Original app request: ${retryGoal}\n\n` +
+                                "The previous model response produced a fenced tool block that KForge could not parse as valid JSON, so no approval prompt was shown and no files were changed.\n\n" +
+                                "Use the already inspected evidence. Request exactly one valid fenced ```tool``` block containing JSON with shape { \"name\": \"write_file\", \"args\": { \"path\": \"...\", \"content\": \"...\" } }. " +
+                                "For write_file, content must be the complete full file text. Do not use XML tool tags, bare JSON, ```json fences, natural-language shorthand, or function-like syntax. Do not claim Preview, build, tests, deployment, or service setup."
+                              : "Retry the controlled Supabase implementation after an unreadable tool request. No file was changed and the complete approved job remains active. Return exactly one valid fenced ```tool``` JSON block.\n\n" +
+                                buildImplementationJobFocusedPrompt(
+                                  parseFailureJob,
+                                  retryGoal,
+                                ),
                             {
                               silentUserAppend: true,
                               skipCompletedWorkflowRoute: true,
                               skipDirectWorkflowHandoffRoute: true,
                               forceProjectEdit: true,
-                              forceAppBuildImplementation: true,
+                              forceAppBuildImplementation:
+                                isAppBuildParseFailure,
                               inspectedPaths: retryInspectedPaths,
                               modelToolInspectedPaths: retryInspectedPaths,
+                              modelToolAllowedWritePaths:
+                                parseFailureJob.allowedWritePaths,
+                              modelToolSuccessfulWritePaths:
+                                parseFailureJob.successfulWrites,
+                              modelToolContinuationContext:
+                                parseFailureJob.continuationContext,
+                              modelToolSupabaseAppWiringContract:
+                                parseFailureJob.supabaseAppWiringContract,
+                              modelToolReusableCapabilities:
+                                parseFailureJob.reusableCapabilities,
+                              modelToolBlockedWritePaths:
+                                parseFailureJob.blockedWrites,
+                              modelToolControlledLifecycle:
+                                parseFailureLifecycle,
                               modelToolOriginalGoal: retryGoal,
                               lastUserGoal: retryGoal,
                               forceModelCapabilityTestOverride: true,
@@ -3116,7 +3400,7 @@ export default function AiPanel({
             triggerToolMessage?.meta?.controlledReadOnlyToolExecution === true;
           const isProjectInspectionToolExecution =
             isProjectInspectionTaskKind(triggerToolTaskKind);
-          const triggerToolOriginalGoal = String(
+          let triggerToolOriginalGoal = String(
             triggerToolMessage?.meta?.modelToolOriginalGoal || latestUserText || "",
           ).trim();
           const triggerToolAppBuildRestoreOriginalGoal =
@@ -3138,32 +3422,72 @@ export default function AiPanel({
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : [];
-          const triggerToolInspectedPaths =
+          let triggerToolInspectedPaths =
             metaToolInspectedPaths.length > 0
               ? metaToolInspectedPaths
               : recoveredProjectEditInspectedPaths;
-          const triggerToolAllowedWritePaths = Array.isArray(
+          let triggerToolAllowedWritePaths = Array.isArray(
             triggerToolMessage?.meta?.modelToolAllowedWritePaths,
           )
             ? triggerToolMessage.meta.modelToolAllowedWritePaths
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : null;
-          const triggerToolSuccessfulWritePaths = Array.isArray(
+          let triggerToolSuccessfulWritePaths = Array.isArray(
             triggerToolMessage?.meta?.modelToolSuccessfulWritePaths,
           )
             ? triggerToolMessage.meta.modelToolSuccessfulWritePaths
                 .map((item) => String(item || "").trim())
                 .filter(Boolean)
             : [];
-          const triggerToolContinuationContext = String(
+          let triggerToolContinuationContext = String(
             triggerToolMessage?.meta?.modelToolContinuationContext || "",
           ).trim();
-          const triggerToolSupabaseAppWiringContract = Array.isArray(
+          let triggerToolSupabaseAppWiringContract = Array.isArray(
             triggerToolMessage?.meta?.modelToolSupabaseAppWiringContract,
           )
             ? triggerToolMessage.meta.modelToolSupabaseAppWiringContract
             : null;
+          let triggerToolReusableCapabilities = Array.isArray(
+            triggerToolMessage?.meta?.modelToolReusableCapabilities,
+          )
+            ? triggerToolMessage.meta.modelToolReusableCapabilities
+            : [];
+          let triggerToolBlockedWritePaths = Array.isArray(
+            triggerToolMessage?.meta?.modelToolBlockedWritePaths,
+          )
+            ? triggerToolMessage.meta.modelToolBlockedWritePaths
+            : [];
+          const rawTriggerToolControlledLifecycle =
+            triggerToolMessage?.meta?.modelToolControlledLifecycle;
+          const triggerToolControlledLifecycle =
+            isCanonicalControlledImplementationLifecycle(
+              rawTriggerToolControlledLifecycle,
+            )
+              ? createControlledImplementationLifecycle(
+                  rawTriggerToolControlledLifecycle,
+                )
+              : null;
+          const hasControlledSupabaseClassification = Boolean(
+            rawTriggerToolControlledLifecycle ||
+              (Array.isArray(triggerToolAllowedWritePaths) &&
+                triggerToolAllowedWritePaths.length > 0 &&
+                Array.isArray(triggerToolSupabaseAppWiringContract) &&
+                triggerToolSupabaseAppWiringContract.length > 0),
+          );
+          if (triggerToolControlledLifecycle) {
+            const authoritativeJob = triggerToolControlledLifecycle.job;
+            triggerToolOriginalGoal = authoritativeJob.originalGoal;
+            triggerToolInspectedPaths = authoritativeJob.inspectedPaths;
+            triggerToolAllowedWritePaths = authoritativeJob.allowedWritePaths;
+            triggerToolSuccessfulWritePaths = authoritativeJob.successfulWrites;
+            triggerToolContinuationContext = authoritativeJob.continuationContext;
+            triggerToolSupabaseAppWiringContract =
+              authoritativeJob.supabaseAppWiringContract;
+            triggerToolReusableCapabilities =
+              authoritativeJob.reusableCapabilities;
+            triggerToolBlockedWritePaths = authoritativeJob.blockedWrites;
+          }
           const triggerToolAppBuildBaselineSnapshots =
             normalizeAppBuildBaselineSnapshotList(
               triggerToolMessage?.meta?.modelToolAppBuildBaselineSnapshots,
@@ -3179,6 +3503,17 @@ export default function AiPanel({
           const triggerToolBlockedWriteReason = String(
             triggerToolMessage?.meta?.modelToolBlockedWriteReason || "",
           ).trim();
+
+          if (
+            hasControlledSupabaseClassification &&
+            !triggerToolControlledLifecycle
+          ) {
+            appendMessage(
+              "assistant",
+              "KForge blocked controlled implementation because its canonical lifecycle state was missing or malformed. No tool was executed and no file was changed. Start a fresh controlled job before continuing.",
+            );
+            return;
+          }
 
 
           if (isProjectInspectionToolExecution) {
@@ -3281,14 +3616,53 @@ export default function AiPanel({
                       );
 
                       if (typeof sendWithPrompt === "function") {
+                        const inspectionJob = triggerToolControlledLifecycle
+                          ? triggerToolControlledLifecycle.job
+                          : createImplementationJob({
+                              originalGoal,
+                              taskKind: triggerToolTaskKind,
+                              inspectedPaths: triggerToolInspectedPaths,
+                              allowedWritePaths: triggerToolAllowedWritePaths,
+                              successfulWrites:
+                                triggerToolSuccessfulWritePaths,
+                              continuationContext:
+                                triggerToolContinuationContext,
+                              supabaseAppWiringContract:
+                                triggerToolSupabaseAppWiringContract,
+                              reusableCapabilities:
+                                triggerToolReusableCapabilities,
+                              blockedWrites: triggerToolBlockedWritePaths,
+                            });
                         sendWithPrompt(
                           buildImplementationJobInspectionPrompt(
-                            { originalGoal },
+                            inspectionJob,
                             originalGoal,
                             { isFix: isFixToolExecution },
                           ),
                           {
                             silentUserAppend: true,
+                            skipCompletedWorkflowRoute: true,
+                            skipDirectWorkflowHandoffRoute: true,
+                            forceProjectEdit: !isFixToolExecution,
+                            inspectedPaths: inspectionJob.inspectedPaths,
+                            modelToolInspectedPaths:
+                              inspectionJob.inspectedPaths,
+                            modelToolAllowedWritePaths:
+                              inspectionJob.allowedWritePaths,
+                            modelToolSuccessfulWritePaths:
+                              inspectionJob.successfulWrites,
+                            modelToolContinuationContext:
+                              inspectionJob.continuationContext,
+                            modelToolSupabaseAppWiringContract:
+                              inspectionJob.supabaseAppWiringContract,
+                            modelToolReusableCapabilities:
+                              inspectionJob.reusableCapabilities,
+                            modelToolBlockedWritePaths:
+                              inspectionJob.blockedWrites,
+                            modelToolControlledLifecycle:
+                              triggerToolControlledLifecycle,
+                            modelToolOriginalGoal: originalGoal,
+                            lastUserGoal: originalGoal,
                             forceModelCapabilityTestOverride: true,
                           },
                         );
@@ -3313,10 +3687,117 @@ export default function AiPanel({
           appendMessage("assistant", buildToolBatchWorkingMessage(batchCalls));
 
           const executedBatchResults = [];
+          let controlledLifecycle = triggerToolControlledLifecycle;
 
-          for (const call of batchCalls) {
+          const callsToExecute = controlledLifecycle
+            ? [...batchCalls].sort(
+                (left, right) =>
+                  left.sourceIndex - right.sourceIndex ||
+                  left.sourceOrder - right.sourceOrder,
+              )
+            : batchCalls;
+
+          for (const call of callsToExecute) {
             const callToolName = String(call?.toolName || "").trim();
             const callPath = String(call?.args?.path || "").trim();
+            let batchImplementationJob = null;
+
+            const recordBatchResult = (rawResult = {}) => {
+              const normalizedResult = {
+                toolName: callToolName,
+                args: call.args || {},
+                ok: !!rawResult?.ok,
+                cancelled: !!rawResult?.cancelled,
+                error: rawResult?.error ? String(rawResult.error) : "",
+                failureStage: String(rawResult?.failureStage || "").trim(),
+                requiresFreshInspection:
+                  rawResult?.requiresFreshInspection === true,
+                result:
+                  typeof rawResult?.result === "string"
+                    ? rawResult.result
+                    : JSON.stringify(rawResult?.result ?? {}, null, 2),
+              };
+
+              executedBatchResults.push(normalizedResult);
+            };
+
+            if (
+              CONTROLLED_IMPLEMENTATION_ONLY_TOOL_NAMES.has(callToolName) &&
+              !controlledLifecycle
+            ) {
+              recordBatchResult({
+                ok: false,
+                cancelled: false,
+                error:
+                  "KForge blocked this controlled-only tool because no active controlled implementation lifecycle was available.",
+                result: "",
+              });
+              continue;
+            }
+
+            if (controlledLifecycle) {
+              const turn = await executeControlledImplementationTurn({
+                lifecycle: controlledLifecycle,
+                toolCall: { name: callToolName, args: call.args || {} },
+                executeTool: async () =>
+                  runTool({
+                    toolName: callToolName,
+                    args: call.args || {},
+                    suppressTranscript: true,
+                    controlledMutation: true,
+                    controlledWriteFingerprint:
+                      getImplementationFileFingerprint(
+                        controlledLifecycle.job,
+                        call.args?.path,
+                      ),
+                    validatePreparedWrite: (preflight) =>
+                      evaluateSupabaseAppWiringWrite({
+                        contract:
+                          controlledLifecycle.job.supabaseAppWiringContract,
+                        toolName: callToolName,
+                        args: call.args || {},
+                        materializedContent: preflight?.materializedContent,
+                        implementationContext: controlledLifecycle.job,
+                      }),
+                  }),
+              });
+              controlledLifecycle = turn.lifecycle;
+              if (turn.requestEvent) {
+                appendMessage(
+                  "system",
+                  formatControlledImplementationEvent(turn.requestEvent),
+                );
+              }
+              if (turn.result) {
+                appendMessage(
+                  "system",
+                  formatControlledImplementationEvent(
+                    turn.result,
+                    typeof turn.toolResult?.result === "string"
+                      ? turn.toolResult.result
+                      : "",
+                  ),
+                );
+              }
+              executedBatchResults.push({
+                ...turn.toolResult,
+                controlledRecovery: turn.recovery,
+                result:
+                  typeof turn.toolResult?.result === "string"
+                    ? turn.toolResult.result
+                    : JSON.stringify(turn.toolResult?.result ?? {}, null, 2),
+              });
+              if (
+                turn.recovery?.type ===
+                  CONTROLLED_RECOVERY_DIRECTIVE.TERMINAL_UNCERTAIN ||
+                turn.recovery?.type ===
+                  CONTROLLED_RECOVERY_DIRECTIVE.AWAIT_USER ||
+                turn.recovery?.type === CONTROLLED_RECOVERY_DIRECTIVE.COMPLETED
+              ) {
+                break;
+              }
+              continue;
+            }
 
             if (
               isAppBuildToolExecution &&
@@ -3325,9 +3806,7 @@ export default function AiPanel({
               normalizeBlindWriteGuardPath(callPath) !==
                 normalizeBlindWriteGuardPath(triggerToolBlockedWriteTargetPath)
             ) {
-              executedBatchResults.push({
-                toolName: callToolName,
-                args: call.args || {},
+              recordBatchResult({
                 ok: false,
                 cancelled: false,
                 error:
@@ -3344,9 +3823,7 @@ export default function AiPanel({
               });
 
               if (!qualityDecision.ok) {
-                executedBatchResults.push({
-                  toolName: String(call.toolName || ""),
-                  args: call.args || {},
+                recordBatchResult({
                   ok: false,
                   cancelled: false,
                   error: qualityDecision.reason,
@@ -3356,41 +3833,68 @@ export default function AiPanel({
               }
             }
 
-            const supabaseBatchWriteDecision =
-              evaluateSupabaseAppWiringWrite({
-                contract: triggerToolSupabaseAppWiringContract,
-                toolName: call.toolName,
-                args: call.args,
+            if (
+              !controlledLifecycle &&
+              Array.isArray(triggerToolAllowedWritePaths)
+            ) {
+              batchImplementationJob = createImplementationJob({
+                originalGoal: triggerToolOriginalGoal || latestUserText,
+                taskKind: triggerToolTaskKind,
+                inspectedPaths: triggerToolInspectedPaths,
+                allowedWritePaths: triggerToolAllowedWritePaths,
+                successfulWrites: triggerToolSuccessfulWritePaths,
+                continuationContext: triggerToolContinuationContext,
+                supabaseAppWiringContract:
+                  triggerToolSupabaseAppWiringContract,
+                reusableCapabilities: triggerToolReusableCapabilities,
+                blockedWrites: triggerToolBlockedWritePaths,
               });
 
-            if (!supabaseBatchWriteDecision.ok) {
-              executedBatchResults.push({
-                toolName: String(call.toolName || ""),
-                args: call.args || {},
-                ok: false,
-                cancelled: false,
-                error: supabaseBatchWriteDecision.error,
-                result: "",
-              });
-              continue;
+              const batchImplementationPreflight =
+                evaluateAndRememberImplementationToolRequest(
+                  batchImplementationJob,
+                  {
+                    name: call.toolName,
+                    args: call.args,
+                  },
+                  {
+                    blockRepeatedReads: true,
+                    requireInspectionBeforeWrite: true,
+                  },
+                );
+              batchImplementationJob = batchImplementationPreflight.job;
+
+              if (!batchImplementationPreflight.decision.ok) {
+                executedBatchResults.push({
+                  toolName: String(call.toolName || ""),
+                  args: call.args || {},
+                  ok: false,
+                  cancelled: false,
+                  error: batchImplementationPreflight.decision.error,
+                  result: "",
+                });
+                continue;
+              }
             }
-
+            const authoritativeWriteJob =
+              controlledLifecycle?.job || batchImplementationJob;
             const result = await runTool({
               toolName: call.toolName,
               args: call.args,
+              suppressTranscript: false,
+              validatePreparedWrite: (preflight) =>
+                evaluateSupabaseAppWiringWrite({
+                  contract:
+                    authoritativeWriteJob?.supabaseAppWiringContract ||
+                    triggerToolSupabaseAppWiringContract,
+                  toolName: call.toolName,
+                  args: call.args,
+                  materializedContent: preflight?.materializedContent,
+                  implementationContext: authoritativeWriteJob,
+                }),
             });
 
-            executedBatchResults.push({
-              toolName: String(call.toolName || ""),
-              args: call.args || {},
-              ok: !!result?.ok,
-              cancelled: !!result?.cancelled,
-              error: result?.error ? String(result.error) : "",
-              result:
-                typeof result?.result === "string"
-                  ? result.result
-                  : JSON.stringify(result?.result ?? {}, null, 2),
-            });
+            recordBatchResult(result);
           }
 
           rememberSuccessfulInspectionForTask({
@@ -3409,6 +3913,25 @@ export default function AiPanel({
             appendMessage(
               "assistant",
               `Cancelled — stopped ${cancelledList}. I did not continue after the denied tool request.`,
+            );
+            return;
+          }
+
+          const latestControlledTurnResult = controlledLifecycle
+            ? [...executedBatchResults]
+                .reverse()
+                .find((item) => item?.controlledRecovery)
+            : null;
+          if (
+            latestControlledTurnResult?.controlledRecovery?.type ===
+            CONTROLLED_RECOVERY_DIRECTIVE.TERMINAL_UNCERTAIN
+          ) {
+            appendMessage(
+              "assistant",
+              `${String(
+                latestControlledTurnResult.controlledRecovery.reason ||
+                  "Controlled implementation stopped after an uncertain mutation outcome.",
+              )}\n\nNo mutation will be retried automatically. Fresh inspection and a new controlled proposal with new approval are required before continuing.`,
             );
             return;
           }
@@ -3543,23 +4066,27 @@ export default function AiPanel({
             return;
           }
 
-          const doneMessage = buildToolBatchDoneMessage(executedBatchResults);
+          const controlledOperationsComplete =
+            !controlledLifecycle ||
+            hasCompletedPlannedImplementationOperations(
+              controlledLifecycle.job,
+            );
+          const doneMessage = buildToolBatchDoneMessage(
+            executedBatchResults,
+            { implementationComplete: controlledOperationsComplete },
+          );
           if (doneMessage) {
             appendMessage("assistant", doneMessage);
           }
 
-          const successfulWritePaths = collectSuccessfulToolBatchPaths(
-            executedBatchResults,
-            "write_file",
-          );
+          const successfulWritePaths =
+            collectSuccessfulFileMutationPaths(executedBatchResults);
           const successfulDirPaths = collectSuccessfulToolBatchPaths(
             executedBatchResults,
             "mkdir",
           );
-          const failedWritePaths = collectFailedToolBatchPaths(
-            executedBatchResults,
-            "write_file",
-          );
+          const failedWritePaths =
+            collectFailedFileMutationPaths(executedBatchResults);
           const failedDirPaths = collectFailedToolBatchPaths(
             executedBatchResults,
             "mkdir",
@@ -3594,7 +4121,7 @@ export default function AiPanel({
             successfulWritePaths.length === 0 &&
             successfulDirPaths.length === 0;
 
-          if (allWritesFailed) {
+          if (allWritesFailed && !controlledLifecycle) {
             const failedWriteTargetPath = failedWritePaths[0] || "";
             const blockedWriteReason =
               doneMessage ||
@@ -3666,6 +4193,16 @@ export default function AiPanel({
                       ].filter(Boolean),
                     ),
                   );
+                  const retryBlockedWritePaths = Array.from(
+                    new Set(
+                      [
+                        ...(Array.isArray(triggerToolBlockedWritePaths)
+                          ? triggerToolBlockedWritePaths
+                          : []),
+                        failedWriteTargetPath,
+                      ].filter(Boolean),
+                    ),
+                  );
 
                   appendMessage(
                     "assistant",
@@ -3699,6 +4236,19 @@ export default function AiPanel({
                         controlledReadOnlyToolExecution: false,
                         modelToolOriginalGoal: retryGoal,
                         modelToolInspectedPaths: retryInspectedPaths,
+                        modelToolContinuationContext:
+                          triggerToolContinuationContext,
+                        modelToolSupabaseAppWiringContract:
+                          triggerToolSupabaseAppWiringContract,
+                        modelToolAllowedWritePaths:
+                          triggerToolAllowedWritePaths,
+                        modelToolSuccessfulWritePaths:
+                          triggerToolSuccessfulWritePaths,
+                        modelToolReusableCapabilities:
+                          triggerToolReusableCapabilities,
+                        modelToolBlockedWritePaths:
+                          retryBlockedWritePaths,
+                        modelToolControlledLifecycle: controlledLifecycle,
                         modelToolBlockedWriteRecovery: true,
                         modelToolBlockedWriteTargetPath: failedWriteTargetPath,
                         modelToolBlockedWriteReason: blockedWriteReason,
@@ -4013,7 +4563,10 @@ export default function AiPanel({
                 },
               );
             }
-          } else if (successfulWritePaths.length > 0) {
+          } else if (
+            successfulWritePaths.length > 0 &&
+            controlledOperationsComplete
+          ) {
             const completedEditedPaths = isAppBuildToolExecution
               ? normalizeAppBuildEditedPathList([
                   ...triggerToolAppBuildEditedPaths,
@@ -4093,9 +4646,21 @@ export default function AiPanel({
                     "Create a directory when a new folder is required.",
                 },
               ];
+              const controlledImplementationTools =
+                getControlledImplementationToolSchemas().map((tool) => ({
+                  name: tool.name,
+                  description: `${tool.description} Required args: ${(
+                    tool.parameters?.required || []
+                  ).join(", ")}.`,
+                }));
               const continuationTools = isProjectInspectionToolExecution
                 ? readOnlyContinuationTools
-                : normalContinuationTools;
+                : controlledLifecycle
+                  ? [
+                      ...normalContinuationTools,
+                      ...controlledImplementationTools,
+                    ]
+                  : normalContinuationTools;
 
               const agentSuccessfulWritePaths = [];
               const agentSuccessfulDirPaths = [];
@@ -4135,15 +4700,20 @@ export default function AiPanel({
                 !isPerformanceContinuation &&
                 !isFixToolExecution &&
                 !isProjectInspectionToolExecution;
-              let implementationJob = createImplementationJob({
-                originalGoal: triggerToolOriginalGoal || latestUserText,
-                taskKind: triggerToolTaskKind,
-                inspectedPaths: agentSuccessfulReadPaths,
-                allowedWritePaths: triggerToolAllowedWritePaths,
-                successfulWrites: triggerToolSuccessfulWritePaths,
-                continuationContext: triggerToolContinuationContext,
-                supabaseAppWiringContract: triggerToolSupabaseAppWiringContract,
-              });
+              let implementationJob = controlledLifecycle
+                ? controlledLifecycle.job
+                : createImplementationJob({
+                    originalGoal: triggerToolOriginalGoal || latestUserText,
+                    taskKind: triggerToolTaskKind,
+                    inspectedPaths: agentSuccessfulReadPaths,
+                    allowedWritePaths: triggerToolAllowedWritePaths,
+                    successfulWrites: triggerToolSuccessfulWritePaths,
+                    continuationContext: triggerToolContinuationContext,
+                    supabaseAppWiringContract:
+                      triggerToolSupabaseAppWiringContract,
+                    reusableCapabilities: triggerToolReusableCapabilities,
+                    blockedWrites: triggerToolBlockedWritePaths,
+                  });
               const performanceDiagnosticReadKeys = new Set();
 
               const rememberPerformanceDiagnosticPath = (path) => {
@@ -4176,8 +4746,40 @@ export default function AiPanel({
                 }
               }
 
+              const isPendingControlledSupabaseJob = () =>
+                controlledLifecycle
+                  ? isPendingControlledImplementation(controlledLifecycle)
+                  : Array.isArray(
+                        implementationJob.supabaseAppWiringContract,
+                      ) &&
+                    implementationJob.supabaseAppWiringContract.length > 0 &&
+                    Array.isArray(implementationJob.allowedWritePaths) &&
+                    implementationJob.allowedWritePaths.length > 0 &&
+                    !hasCompletedPlannedImplementationOperations(implementationJob);
+              const initialControlledRecoveryPrompt =
+                controlledLifecycle && latestControlledTurnResult
+                  ? buildControlledRecoveryContinuationPrompt({
+                      recovery:
+                        latestControlledTurnResult.controlledRecovery,
+                      job: controlledLifecycle.job,
+                      originalGoal:
+                        controlledLifecycle.job.originalGoal || latestUserText,
+                      toolCall: {
+                        name: latestControlledTurnResult.toolName,
+                        args: latestControlledTurnResult.args,
+                      },
+                      toolResult: latestControlledTurnResult,
+                    })
+                  : "";
+
               const agentResult = await runAgent({
-                prompt: "",
+                prompt: shouldUseImplementationJobController
+                  ? initialControlledRecoveryPrompt ||
+                    buildImplementationJobFocusedPrompt(
+                      implementationJob,
+                      triggerToolOriginalGoal || latestUserText,
+                    )
+                  : "",
                 messages: [
                   ...(Array.isArray(messages) ? messages : []).map((m) => ({
                     role: String(m?.role || "system"),
@@ -4185,11 +4787,17 @@ export default function AiPanel({
                   })),
                   ...executedBatchResults.map((item) => ({
                     role: "system",
-                    content: item.cancelled
+                    content:
+                      (item.callId
+                        ? `Controlled call: ${item.callId}\nTool: ${item.toolName}\nRequested path: ${String(
+                            item?.args?.path || item?.args?.dirPath || "",
+                          ).trim()}\n`
+                        : "") +
+                    (item.cancelled
                       ? `Tool result:\n${item.toolName} was cancelled by the user.`
                       : item.ok
                         ? `Tool result:\n${item.result}`
-                        : `Tool result:\n${item.toolName} failed.\n${item.error || "Unknown error"}`,
+                        : `Tool result:\n${item.toolName} failed.\n${item.error || "Unknown error"}`),
                   })),
                 ],
                 tools: continuationTools,
@@ -4199,6 +4807,7 @@ export default function AiPanel({
                     name: item.toolName,
                     args: item.args,
                   })),
+                delegateDuplicateToolCalls: Boolean(controlledLifecycle),
                 callModel: async ({ messages: workingMessages }) => {
                   const input = buildAgentConversationInput(
                     workingMessages,
@@ -4293,6 +4902,87 @@ export default function AiPanel({
                     };
                   }
 
+                  if (
+                    CONTROLLED_IMPLEMENTATION_ONLY_TOOL_NAMES.has(toolName) &&
+                    !controlledLifecycle
+                  ) {
+                    return {
+                      ok: false,
+                      toolName,
+                      args,
+                      error:
+                        "KForge blocked this controlled-only tool because no active controlled implementation lifecycle was available.",
+                    };
+                  }
+
+                  if (controlledLifecycle) {
+                    const turn = await executeControlledImplementationTurn({
+                      lifecycle: controlledLifecycle,
+                      toolCall: { name: toolName, args },
+                      executeTool: async () =>
+                        runTool({
+                          toolName,
+                          args,
+                          suppressTranscript: true,
+                          controlledMutation: true,
+                          controlledWriteFingerprint:
+                            getImplementationFileFingerprint(
+                              controlledLifecycle.job,
+                              args?.path,
+                            ),
+                          validatePreparedWrite: (preflight) =>
+                            evaluateSupabaseAppWiringWrite({
+                              contract:
+                                controlledLifecycle.job
+                                  .supabaseAppWiringContract,
+                              toolName,
+                              args,
+                              materializedContent:
+                                preflight?.materializedContent,
+                              implementationContext: controlledLifecycle.job,
+                            }),
+                        }),
+                    });
+                    controlledLifecycle = turn.lifecycle;
+                    implementationJob = controlledLifecycle.job;
+                    if (turn.requestEvent) {
+                      appendMessage(
+                        "system",
+                        formatControlledImplementationEvent(turn.requestEvent),
+                      );
+                    }
+                    if (turn.result) {
+                      appendMessage(
+                        "system",
+                        formatControlledImplementationEvent(
+                          turn.result,
+                          typeof turn.toolResult?.result === "string"
+                            ? turn.toolResult.result
+                            : "",
+                        ),
+                      );
+                    }
+                    if (
+                      turn.toolResult?.ok &&
+                      INSPECTION_TOOL_NAMES.has(toolName)
+                    ) {
+                      if (requestedPath) {
+                        agentSuccessfulReadPaths.push(requestedPath);
+                      }
+                      if (toolName === "read_file") {
+                        lastSuccessfulFileReadPath = requestedPath;
+                      }
+                    }
+                    if (
+                      turn.toolResult?.ok &&
+                      FILE_MUTATION_TOOL_NAMES.has(toolName) &&
+                      requestedPath
+                    ) {
+                      agentSuccessfulWritePaths.push(requestedPath);
+                    }
+                    return turn.toolResult;
+                  }
+
                   if (shouldUseImplementationJobController) {
                     const implementationPreflight =
                       evaluateAndRememberImplementationToolRequest(
@@ -4314,34 +5004,25 @@ export default function AiPanel({
                     }
                   }
 
-                  const supabaseWriteDecision =
-                    evaluateSupabaseAppWiringWrite({
-                      contract: implementationJob?.supabaseAppWiringContract,
-                      toolName,
-                      args,
-                    });
-
-                  if (!supabaseWriteDecision.ok) {
-                    if (shouldUseImplementationJobController) {
-                      implementationJob = rememberImplementationToolResult(
-                        implementationJob,
-                        { name: toolName, args },
-                        {
-                          ok: false,
-                          error: supabaseWriteDecision.error,
-                        },
-                      );
-                    }
-
-                    return {
-                      ok: false,
-                      error: supabaseWriteDecision.error,
-                    };
-                  }
-
-                  const result = await runTool({ toolName, args });
-
-                  if (shouldUseImplementationJobController) {
+                  const authoritativeWriteJob = implementationJob;
+                  const result = await runTool({
+                    toolName,
+                    args,
+                    suppressTranscript: false,
+                    validatePreparedWrite: (preflight) =>
+                      evaluateSupabaseAppWiringWrite({
+                        contract:
+                          authoritativeWriteJob?.supabaseAppWiringContract,
+                        toolName,
+                        args,
+                        materializedContent: preflight?.materializedContent,
+                        implementationContext: authoritativeWriteJob,
+                      }),
+                  });
+                  if (
+                    shouldUseImplementationJobController &&
+                    !controlledLifecycle
+                  ) {
                     implementationJob = rememberImplementationToolResult(
                       implementationJob,
                       { name: toolName, args },
@@ -4370,7 +5051,10 @@ export default function AiPanel({
                     }
                   }
 
-                  if (result?.ok && toolName === "write_file") {
+                  if (
+                    result?.ok &&
+                    FILE_MUTATION_TOOL_NAMES.has(toolName)
+                  ) {
                     const path = String(args?.path || "").trim();
                     if (path) agentSuccessfulWritePaths.push(path);
                   }
@@ -4384,42 +5068,121 @@ export default function AiPanel({
                 },
                 appendTranscript: () => {},
                 appendToolResult: () => {},
+                buildToolResultContinuationPrompt: ({
+                  toolCall,
+                  toolResult,
+                }) => {
+                  if (
+                    !shouldUseImplementationJobController ||
+                    toolResult?.cancelled
+                  ) {
+                    return "";
+                  }
+
+                  if (controlledLifecycle && toolResult?.controlledRecovery) {
+                    return buildControlledRecoveryContinuationPrompt({
+                      recovery: toolResult.controlledRecovery,
+                      job: implementationJob,
+                      originalGoal:
+                        implementationJob.originalGoal || latestUserText,
+                      toolCall,
+                      toolResult,
+                    });
+                  }
+
+                  if (!isPendingControlledSupabaseJob()) {
+                    return hasCompletedPlannedImplementationOperations(
+                      implementationJob,
+                    )
+                      ? "KForge controller state: every approved implementation operation has completed after its required post-mutation inspection. Do not request another tool. Return a concise completion result for the original objective."
+                      : "";
+                  }
+
+                  return toolResult?.ok &&
+                    INSPECTION_TOOL_NAMES.has(
+                      String(toolCall?.name || "").trim(),
+                    )
+                    ? buildImplementationJobReadProgressionPrompt(
+                        implementationJob,
+                        triggerToolOriginalGoal || latestUserText,
+                      )
+                    : buildImplementationJobFocusedPrompt(
+                        implementationJob,
+                        triggerToolOriginalGoal || latestUserText,
+                      );
+                },
+                continueAfterFinalText: () => {
+                  if (
+                    shouldUseImplementationJobController &&
+                    controlledLifecycle &&
+                    isPendingControlledImplementation(controlledLifecycle)
+                  ) {
+                    const continuation =
+                      continueControlledImplementationAfterProse(
+                        controlledLifecycle,
+                      );
+                    controlledLifecycle = continuation.lifecycle;
+                    implementationJob = controlledLifecycle.job;
+
+                    return continuation.shouldContinue
+                      ? buildImplementationJobFocusedPrompt(
+                          implementationJob,
+                          triggerToolOriginalGoal || latestUserText,
+                        )
+                      : "";
+                  }
+
+                  if (
+                    !shouldUseImplementationJobController ||
+                    !isPendingControlledSupabaseJob()
+                  ) {
+                    return "";
+                  }
+
+                  return buildImplementationJobReadProgressionPrompt(
+                    implementationJob,
+                    triggerToolOriginalGoal || latestUserText,
+                  );
+                },
                 maxSteps: isProjectInspectionToolExecution
                   ? getProjectInspectionMaxSteps()
-                  : 6,
+                  : controlledLifecycle && isPendingControlledSupabaseJob()
+                    ? getControlledImplementationAgentStepBudget(
+                        controlledLifecycle,
+                      )
+                    : 6,
               });
 
-              const latestAgentWrittenPath =
-                agentSuccessfulWritePaths.length > 0
-                  ? agentSuccessfulWritePaths[agentSuccessfulWritePaths.length - 1]
-                  : "";
-
-              const agentMadeProjectChanges =
-                agentSuccessfulWritePaths.length > 0;
               const isControlledSupabaseAppWiring =
                 Array.isArray(implementationJob.supabaseAppWiringContract) &&
                 implementationJob.supabaseAppWiringContract.length > 0 &&
                 Array.isArray(implementationJob.allowedWritePaths) &&
                 implementationJob.allowedWritePaths.length > 0;
-              const hasCompletedControlledSupabaseWrites =
+              const completedAgentWritePaths = isControlledSupabaseAppWiring
+                ? implementationJob.successfulWrites
+                : agentSuccessfulWritePaths;
+              const latestAgentWrittenPath =
+                completedAgentWritePaths.length > 0
+                  ? completedAgentWritePaths[completedAgentWritePaths.length - 1]
+                  : "";
+              const agentMadeProjectChanges = isControlledSupabaseAppWiring
+                ? implementationJob.successfulMutations.length > 0
+                : agentSuccessfulWritePaths.length > 0;
+              const hasCompletedControlledSupabaseOperations =
                 !isControlledSupabaseAppWiring ||
-                hasCompletedPlannedImplementationWrites(implementationJob);
+                hasCompletedPlannedImplementationOperations(implementationJob);
 
               const completedWorkflowContext =
-                agentMadeProjectChanges && hasCompletedControlledSupabaseWrites
+                agentMadeProjectChanges && hasCompletedControlledSupabaseOperations
                   ? createCompletedImplementationWorkflowContext({
                       lastUserGoal:
                         triggerToolOriginalGoal || latestUserText,
                       lastEditedPath: latestAgentWrittenPath || "",
-                      editedPaths: isControlledSupabaseAppWiring
-                        ? implementationJob.successfulWrites
-                        : agentSuccessfulWritePaths,
+                      editedPaths: completedAgentWritePaths,
                       inspectedPaths: agentSuccessfulReadPaths,
                       preWriteSnapshots: getSnapshotsForPaths(
                         preWriteSnapshotsRef.current,
-                        isControlledSupabaseAppWiring
-                          ? implementationJob.successfulWrites
-                          : agentSuccessfulWritePaths,
+                        completedAgentWritePaths,
                       ),
                       source: "agent_continuation",
                     })
@@ -4428,15 +5191,15 @@ export default function AiPanel({
               const partialSupabaseWorkflowContext =
                 agentMadeProjectChanges &&
                 isControlledSupabaseAppWiring &&
-                !hasCompletedControlledSupabaseWrites
+                !hasCompletedControlledSupabaseOperations
                   ? createPartialImplementationWorkflowContext({
                       lastUserGoal:
                         triggerToolOriginalGoal || latestUserText,
                       lastEditedPath: latestAgentWrittenPath || "",
-                      editedPaths: implementationJob.successfulWrites,
+                      editedPaths: completedAgentWritePaths,
                       inspectedPaths: agentSuccessfulReadPaths,
                       partialSummary:
-                        "Controlled Supabase app wiring is partially complete. Approved planned write paths are still pending.",
+                        "Controlled Supabase app wiring is partially implemented. Structured implementation operations are still pending.",
                       nextStep: WORKFLOW_NEXT_STEP.CONTINUE_IMPLEMENTATION,
                       source: "supabase_app_wiring_continuation",
                     })
@@ -4463,9 +5226,40 @@ export default function AiPanel({
               const isPreviewErrorEvidenceGate =
                 isFixToolExecution &&
                 triggerToolMessage?.meta?.previewErrorEvidenceGate === true;
+              const hasPendingControlledWrites =
+                Boolean(controlledLifecycle) &&
+                getPendingControlledWritePaths(controlledLifecycle).length > 0;
 
               if (finalText && !agentMadeProjectChanges) {
-                if (isPreviewErrorEvidenceGate) {
+                if (hasPendingControlledWrites) {
+                  if (
+                    controlledLifecycle.status !==
+                      CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE &&
+                    controlledLifecycle.status !==
+                      CONTROLLED_IMPLEMENTATION_STATUS.CORRELATION_FAILURE &&
+                    controlledLifecycle.status !==
+                      CONTROLLED_IMPLEMENTATION_STATUS.TERMINAL_UNCERTAIN
+                  ) {
+                    controlledLifecycle =
+                      markControlledImplementationBoundedFailure(
+                        controlledLifecycle,
+                        "The controlled model loop ended before producing a safe approved write proposal.",
+                      );
+                    implementationJob = controlledLifecycle.job;
+                  }
+
+                  appendMessage(
+                    "assistant",
+                    "Controlled Supabase app wiring stopped at its safe lifecycle boundary.\n\n" +
+                      `${controlledLifecycle.terminalReason}\n\n` +
+                      `Pending approved write paths:\n${getPendingControlledWritePaths(
+                        controlledLifecycle,
+                      )
+                        .map((path) => `- ${path}`)
+                        .join("\n")}\n\n` +
+                      "No additional tool call or write will run automatically. The approved contract and inspected evidence remain preserved for diagnosis.",
+                  );
+                } else if (isPreviewErrorEvidenceGate) {
                   appendMessage(
                     "assistant",
                     "Preview-error triage stopped after inspection.\n\n" +
@@ -4615,6 +5409,8 @@ export default function AiPanel({
                     getImplementationJobAllowedNextActions(implementationJob);
                   const shouldOfferImplementationContinuation =
                     isFixToolExecution ||
+                    (isControlledSupabaseAppWiring &&
+                      !hasCompletedControlledSupabaseOperations) ||
                     implementationAllowedNextActions.includes(
                       IMPLEMENTATION_JOB_ACTION.REQUEST_WRITE_PROPOSAL,
                     );
@@ -4774,9 +5570,14 @@ export default function AiPanel({
                       : shouldOfferImplementationContinuation
                         ? [
                           {
-                            label: isFixToolExecution
-                              ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
-                              : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                            ...(isControlledSupabaseAppWiring &&
+                            !hasCompletedControlledSupabaseOperations
+                              ? { label: "Continue Supabase wiring" }
+                              : {
+                                  label: isFixToolExecution
+                                    ? SUGGESTED_ACTION_LABEL.CONTINUE_FIXING
+                                    : SUGGESTED_ACTION_LABEL.CONTINUE_EDITING,
+                                }),
                             onClick: () => {
                               const originalGoal = inspectionOnlyOriginalGoal;
                               const continuationContextPath = String(
@@ -4843,6 +5644,10 @@ export default function AiPanel({
                                     modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                     modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                     modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
+                                    modelToolReusableCapabilities: implementationJob.reusableCapabilities,
+                                    modelToolBlockedWritePaths: implementationJob.blockedWrites,
+                                    modelToolControlledLifecycle:
+                                      controlledLifecycle,
                                     modelToolOriginalGoal: originalGoal,
                                     lastUserGoal: originalGoal,
                                     forceModelCapabilityTestOverride: true,
@@ -4871,6 +5676,38 @@ export default function AiPanel({
               } else if (
                 finalText &&
                 agentMadeProjectChanges &&
+                hasPendingControlledWrites
+              ) {
+                if (
+                  controlledLifecycle.status !==
+                    CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE &&
+                  controlledLifecycle.status !==
+                    CONTROLLED_IMPLEMENTATION_STATUS.CORRELATION_FAILURE &&
+                  controlledLifecycle.status !==
+                    CONTROLLED_IMPLEMENTATION_STATUS.TERMINAL_UNCERTAIN
+                ) {
+                  controlledLifecycle =
+                    markControlledImplementationBoundedFailure(
+                      controlledLifecycle,
+                      "The controlled model loop ended with structured implementation operations still pending.",
+                    );
+                  implementationJob = controlledLifecycle.job;
+                }
+                appendMessage(
+                  "assistant",
+                  "Controlled Supabase app wiring is partially implemented and stopped at its safe lifecycle boundary.\n\n" +
+                    `${controlledLifecycle.terminalReason}\n\n` +
+                    `Successfully mutated paths: ${
+                      implementationJob.successfulWrites.join(", ") || "none"
+                    }\n` +
+                    `Pending operation paths: ${getPendingControlledWritePaths(
+                      controlledLifecycle,
+                    ).join(", ")}\n\n` +
+                    "No automatic retry or additional write was attempted.",
+                );
+              } else if (
+                finalText &&
+                agentMadeProjectChanges &&
                 partialSupabaseWorkflowContext
               ) {
                 const supabaseContinuationGoal = String(
@@ -4879,16 +5716,16 @@ export default function AiPanel({
                     latestUserText ||
                     "",
                 ).trim();
-                const completedSupabaseWriteCount =
-                  implementationJob.successfulWrites.length;
-                const plannedSupabaseWriteCount =
-                  implementationJob.allowedWritePaths.length;
+                const completedSupabaseOperationCount =
+                  implementationJob.completedOperationIds.length;
+                const plannedSupabaseOperationCount =
+                  implementationJob.plannedOperations.length;
 
                 appendMessage(
                   "assistant",
                   "Supabase app wiring is partially complete.\n\n" +
-                    `${completedSupabaseWriteCount} of ${plannedSupabaseWriteCount} approved planned file writes have completed.\n\n` +
-                    "The original implementation objective is still active. KForge will not mark it complete until every approved planned write path succeeds.",
+                    `${completedSupabaseOperationCount} of ${plannedSupabaseOperationCount} approved implementation operations have completed.\n\n` +
+                    "Successful file mutations are recorded as progress only. The original implementation objective remains active until every structured operation is completed after post-mutation inspection.",
                   {
                     actions: [
                       {
@@ -4920,6 +5757,12 @@ export default function AiPanel({
                                   implementationJob.allowedWritePaths,
                                 modelToolSuccessfulWritePaths:
                                   implementationJob.successfulWrites,
+                                modelToolReusableCapabilities:
+                                  implementationJob.reusableCapabilities,
+                                modelToolBlockedWritePaths:
+                                  implementationJob.blockedWrites,
+                                modelToolControlledLifecycle:
+                                  controlledLifecycle,
                                 modelToolOriginalGoal: supabaseContinuationGoal,
                                 lastUserGoal: supabaseContinuationGoal,
                                 forceModelCapabilityTestOverride: true,
@@ -4943,9 +5786,9 @@ export default function AiPanel({
                 );
               } else if (finalText && agentMadeProjectChanges) {
                 const fileCountLabel =
-                  agentSuccessfulWritePaths.length === 1
+                  completedAgentWritePaths.length === 1
                     ? "1 file"
-                    : `${agentSuccessfulWritePaths.length} files`;
+                    : `${completedAgentWritePaths.length} files`;
 
                 appendMessage(
                   "assistant",
@@ -4976,12 +5819,13 @@ export default function AiPanel({
                 );
               } else if (
                 agentResult?.stopReason === "max_steps_reached" &&
-                agentSuccessfulWritePaths.length > 0
+                agentMadeProjectChanges &&
+                !hasPendingControlledWrites
               ) {
                 const fileCountLabel =
-                  agentSuccessfulWritePaths.length === 1
+                  completedAgentWritePaths.length === 1
                     ? "1 file"
-                    : `${agentSuccessfulWritePaths.length} files`;
+                    : `${completedAgentWritePaths.length} files`;
                 const agentWriteCompletionMessage =
                   `Done — updated ${fileCountLabel}.\n\n` +
                   `${buildPostEditChangeSummary(
@@ -4998,6 +5842,26 @@ export default function AiPanel({
                         originalGoal: workflowContext?.lastUserGoal || latestUserText,
                   }),
                 });
+              } else if (
+                agentResult?.stopReason === "max_steps_reached" &&
+                hasPendingControlledWrites
+              ) {
+                controlledLifecycle = markControlledImplementationBoundedFailure(
+                  controlledLifecycle,
+                  "Controlled Supabase app wiring reached its safe agent-step limit before every structured operation completed.",
+                );
+                implementationJob = controlledLifecycle.job;
+                appendMessage(
+                  "assistant",
+                  "Controlled Supabase app wiring reached its safe bounded limit.\n\n" +
+                    `${controlledLifecycle.terminalReason}\n\n` +
+                    `Pending approved write paths:\n${getPendingControlledWritePaths(
+                      controlledLifecycle,
+                    )
+                      .map((path) => `- ${path}`)
+                      .join("\n")}\n\n` +
+                    "No automatic retry or additional write was attempted.",
+                );
               } else if (agentResult?.stopReason === "max_steps_reached") {
                 const originalGoal = String(
                   triggerToolOriginalGoal ||
@@ -5088,6 +5952,10 @@ export default function AiPanel({
                                 modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
+                                modelToolReusableCapabilities: implementationJob.reusableCapabilities,
+                                modelToolBlockedWritePaths: implementationJob.blockedWrites,
+                                modelToolControlledLifecycle:
+                                  controlledLifecycle,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
@@ -5114,6 +5982,21 @@ export default function AiPanel({
                 appendMessage(
                   "assistant",
                   `Cancelled — stopped ${cancelledToolName}. I did not continue after the denied tool request.`,
+                );
+              } else if (
+                agentResult?.stopReason === "empty_response" &&
+                hasPendingControlledWrites
+              ) {
+                controlledLifecycle = markControlledImplementationBoundedFailure(
+                  controlledLifecycle,
+                  "The controlled model returned an empty response while approved writes remained pending.",
+                );
+                implementationJob = controlledLifecycle.job;
+                appendMessage(
+                  "assistant",
+                  "Controlled Supabase app wiring stopped safely because the model returned no actionable request.\n\n" +
+                    `${controlledLifecycle.terminalReason}\n\n` +
+                    "No automatic retry or write was attempted.",
                 );
               } else if (agentResult?.stopReason === "empty_response") {
                 const originalGoal = String(
@@ -5200,6 +6083,10 @@ export default function AiPanel({
                                 modelToolSupabaseAppWiringContract: implementationJob.supabaseAppWiringContract,
                                 modelToolAllowedWritePaths: implementationJob.allowedWritePaths,
                                 modelToolSuccessfulWritePaths: implementationJob.successfulWrites,
+                                modelToolReusableCapabilities: implementationJob.reusableCapabilities,
+                                modelToolBlockedWritePaths: implementationJob.blockedWrites,
+                                modelToolControlledLifecycle:
+                                  controlledLifecycle,
                                 lastUserGoal: originalGoal,
                                 forceModelCapabilityTestOverride: true,
                               },
@@ -5271,6 +6158,11 @@ export default function AiPanel({
       const requestedObjective = String(
         payload?.plan?.requestedObjective || "",
       ).trim();
+      const reusableCapabilities = Array.isArray(
+        payload?.plan?.reusableApplicationCapabilities,
+      )
+        ? payload.plan.reusableApplicationCapabilities
+        : [];
 
       let databaseContract;
       try {
@@ -5324,9 +6216,29 @@ export default function AiPanel({
         .map((operation) => {
           const role = String(operation?.role || "application").trim();
           const path = String(operation?.path || "").trim();
-          return `- ${role}: ${path}`;
+          const purpose = String(operation?.purpose || "").trim();
+          const operationId = String(operation?.id || "").trim();
+          const responsibilityIds = Array.isArray(
+            operation?.responsibilityIds,
+          )
+            ? operation.responsibilityIds.join(", ")
+            : "";
+          return (
+            `- ${operationId} | ${role}: ${path}${purpose ? ` — ${purpose}` : ""}` +
+            (responsibilityIds
+              ? `\n  Responsibilities: ${responsibilityIds}`
+              : "")
+          );
         })
         .join("\n");
+      const reusableCapabilityLines = reusableCapabilities.length
+        ? reusableCapabilities
+            .map(
+              (evidence) =>
+                `- ${String(evidence?.path || "").trim()}: ${(Array.isArray(evidence?.capabilities) ? evidence.capabilities : []).join(", ")}`,
+            )
+            .join("\n")
+        : "- none";
       const originalGoal =
         requestedObjective || "Wire the approved Supabase plan into the application.";
 
@@ -5341,6 +6253,22 @@ export default function AiPanel({
         `Approved database contract:\n${databaseContractLines}\n` +
         "Use only the exact approved table and column names above. Do not invent, rename, or substitute database objects.\n" +
         "Do not write undeclared fields. Store structured application state inside the approved jsonb payload column rather than spreading it into undeclared database columns.";
+      const controlledLifecycle = createControlledImplementationLifecycle({
+        job: {
+          originalGoal,
+          taskKind: "project_edit",
+          inspectedPaths: [],
+          allowedWritePaths,
+          plannedOperations,
+          successfulWrites: [],
+          successfulMutations: [],
+          completedOperationIds: [],
+          continuationContext: supabaseAppWiringContinuationContext,
+          supabaseAppWiringContract: databaseContract,
+          reusableCapabilities,
+          blockedWrites: [],
+        },
+      });
       if (typeof sendWithPrompt !== "function") {
         appendMessage(
           "assistant",
@@ -5355,17 +6283,22 @@ export default function AiPanel({
         "Implement the approved Supabase application wiring plan for this existing project.\n\n" +
           `Original objective: ${originalGoal}\n\n` +
           `Approved application file operations:\n${operationLines}\n\n` +
+          `Existing reusable Supabase capability evidence:\n${reusableCapabilityLines}\n\n` +
           `Approved database contract:\n${databaseContractLines}\n\n` +
           "The approved database contract above is authoritative for application wiring. Use those exact table and column names. Do not invent, rename, or substitute database objects.\n" +
           "Do not write fields that are not listed as columns. When structured application state belongs in an approved jsonb payload column, store it inside that column rather than spreading it into undeclared database columns.\n\n" +
           "Safety rules:\n" +
           "- Stay strictly within the approved application file paths listed above.\n" +
           "- Inspect relevant existing target files before replacing them.\n" +
+          "- Inspect identified reusable helper evidence and reuse its existing boundaries rather than duplicating Supabase client, auth, or persistence logic.\n" +
           "- Preserve unrelated application behavior and existing project structure.\n" +
           "- Do not modify Supabase database schema, migrations, RLS, project identity, or credentials in this application-wiring pass.\n" +
           "- Do not run package managers or installation commands.\n" +
           "- Never expose environment-variable values or secrets.\n" +
-          "- Request exactly one concrete tool call next. If more evidence is required, request one read_file call. If evidence is sufficient, request one smallest safe write_file call for an approved path.",
+          "- A successful mutation is progress only and does not complete an operation.\n" +
+          "- After each mutation, re-read the changed target before another targeted edit or completion claim.\n" +
+          "- Request complete_operation only for the exact planned operation ID, only after post-mutation inspection, and only with every listed responsibility ID.\n" +
+          "- Request exactly one concrete tool call next. If more evidence is required, request one read_file call. If evidence is sufficient, request one smallest safe replace_text or write_file call for an approved path.",
         {
           silentUserAppend: true,
           skipCompletedWorkflowRoute: true,
@@ -5374,6 +6307,8 @@ export default function AiPanel({
           modelToolAllowedWritePaths: allowedWritePaths,
           modelToolContinuationContext: supabaseAppWiringContinuationContext,
           modelToolSupabaseAppWiringContract: databaseContract,
+          modelToolReusableCapabilities: reusableCapabilities,
+          modelToolControlledLifecycle: controlledLifecycle,
           modelToolOriginalGoal: originalGoal,
           lastUserGoal: originalGoal,
         },

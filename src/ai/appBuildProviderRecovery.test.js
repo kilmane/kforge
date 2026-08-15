@@ -278,6 +278,12 @@ describe("app-build provider recovery", () => {
     expect(wiringSection).toContain(
       "modelToolContinuationContext: supabaseAppWiringContinuationContext",
     );
+    expect(wiringSection).toContain(
+      "modelToolReusableCapabilities: reusableCapabilities",
+    );
+    expect(wiringSection).toContain(
+      "modelToolControlledLifecycle: controlledLifecycle",
+    );
   });
 
   test("Supabase wiring contract survives tool metadata and focused continuations", () => {
@@ -352,9 +358,197 @@ describe("app-build provider recovery", () => {
     expect(continuationPathMatches).toHaveLength(4);
   });
 
-  test("controlled Supabase wiring only completes after every planned write succeeds", () => {
+  test("legacy blocked-write recovery is bypassed for canonical controlled implementation", () => {
     expect(aiPanelSource).toContain(
-      "hasCompletedPlannedImplementationWrites,"
+      "if (allWritesFailed && !controlledLifecycle)",
+    );
+    expect(aiPanelSource).toContain("toolResult?.controlledRecovery");
+    expect(aiPanelSource).toContain(
+      "buildControlledRecoveryContinuationPrompt({",
+    );
+  });
+  test("controlled Supabase batch writes enforce approved application paths before approval", () => {
+    const batchStart = aiPanelSource.indexOf(
+      "for (const call of callsToExecute)",
+    );
+    const batchEnd = aiPanelSource.indexOf(
+      "rememberSuccessfulInspectionForTask({",
+      batchStart,
+    );
+
+    expect(batchStart).toBeGreaterThanOrEqual(0);
+    expect(batchEnd).toBeGreaterThan(batchStart);
+
+    const batchExecutionSection = aiPanelSource.slice(batchStart, batchEnd);
+    const controlledPreflightIndex = batchExecutionSection.search(
+      /await\s+executeControlledImplementationTurn\s*\(\s*\{/,
+    );
+    const runToolIndex = batchExecutionSection.search(
+      /runTool\s*\(\s*\{/,
+    );
+
+    expect(controlledPreflightIndex).toBeGreaterThanOrEqual(0);
+    expect(runToolIndex).toBeGreaterThan(controlledPreflightIndex);
+    expect(batchExecutionSection).toContain("controlledMutation: true");
+    expect(batchExecutionSection).toMatch(
+      /CONTROLLED_IMPLEMENTATION_ONLY_TOOL_NAMES\.has\(callToolName\)\s*&&\s*!controlledLifecycle/,
+    );
+    expect(aiPanelSource).toMatch(
+      /const CONTROLLED_IMPLEMENTATION_ONLY_TOOL_NAMES = new Set\(\[\s*"replace_text",\s*IMPLEMENTATION_OPERATION_COMPLETION_TOOL,\s*\]\)/,
+    );
+
+    const controlledRunSection = batchExecutionSection.slice(runToolIndex);
+    expect(controlledRunSection).toMatch(
+      /validatePreparedWrite:\s*\(preflight\)\s*=>\s*evaluateSupabaseAppWiringWrite\s*\(\s*\{[\s\S]*?materializedContent:\s*preflight\?\.materializedContent/,
+    );
+    expect(controlledRunSection).toMatch(
+      /implementationContext:\s*authoritativeWriteJob/,
+    );
+    expect(batchExecutionSection).toMatch(
+      /const authoritativeWriteJob =\s*controlledLifecycle\?\.job \|\| batchImplementationJob/,
+    );
+  });
+  test("both Supabase write routes forward authoritative reusable-helper context", () => {
+    const sharedControlledTurns =
+      aiPanelSource.match(
+        /await executeControlledImplementationTurn\s*\(/g,
+      ) || [];
+    const authoritativeFingerprints =
+      aiPanelSource.match(
+        /controlledWriteFingerprint:\s*getImplementationFileFingerprint\(\s*controlledLifecycle\.job,/g,
+      ) || [];
+    const authoritativeContracts =
+      aiPanelSource.match(
+        /contract:\s*controlledLifecycle\.job\s*\.supabaseAppWiringContract/g,
+      ) || [];
+    const authoritativeContexts =
+      aiPanelSource.match(
+        /implementationContext:\s*controlledLifecycle\.job/g,
+      ) || [];
+
+    expect(sharedControlledTurns).toHaveLength(2);
+    expect(authoritativeFingerprints).toHaveLength(2);
+    expect(authoritativeContracts).toHaveLength(2);
+    expect(authoritativeContexts).toHaveLength(2);
+  });
+  test("prepared-write policy blocks carry recoverable lifecycle feedback", () => {
+    const preApprovalClassifications =
+      aiPanelSource.match(
+        /failureStage:\s*TOOL_FAILURE_STAGE\.PRE_APPROVAL/g,
+      ) || [];
+
+    expect(preApprovalClassifications).toHaveLength(2);
+    expect(aiPanelSource).toMatch(
+      /toolResult\?\.controlledRecovery[\s\S]*?buildControlledRecoveryContinuationPrompt\(\{[\s\S]*?recovery:\s*toolResult\.controlledRecovery/,
+    );
+    expect(aiPanelSource).toMatch(
+      /return buildImplementationJobBlockedWriteRecoveryPrompt\([\s\S]*?blockedReason:\s*String\([\s\S]*?recovery\?\.reason\s*\|\|[\s\S]*?toolResult\?\.error/,
+    );
+    expect(aiPanelSource).toMatch(
+      /preflight\?\.requiresFreshInspection\s*===\s*true/,
+    );
+    expect(aiPanelSource).toMatch(
+      /requiresFreshInspection:\s*false/,
+    );
+  });
+  test("controlled Supabase safe reads advance inside the bounded agent loop", () => {
+    const agentStart = aiPanelSource.indexOf(
+      "const agentResult = await runAgent({",
+    );
+    const agentEnd = aiPanelSource.indexOf(
+      "const latestAgentWrittenPath =",
+      agentStart,
+    );
+
+    expect(agentStart).toBeGreaterThanOrEqual(0);
+    expect(agentEnd).toBeGreaterThan(agentStart);
+
+    const agentSection = aiPanelSource.slice(agentStart, agentEnd);
+
+    expect(agentSection).toContain("buildImplementationJobFocusedPrompt(");
+    expect(agentSection).toContain("continueAfterFinalText:");
+    expect(agentSection).toContain("isPendingControlledSupabaseJob()");
+    expect(agentSection).toContain(
+      "buildImplementationJobReadProgressionPrompt(",
+    );
+    expect(agentSection).toContain(
+      "getControlledImplementationAgentStepBudget(",
+    );
+    expect(agentSection).not.toContain("? 8");
+  });
+
+  test("controlled Supabase metadata survives no-tool recovery", () => {
+    expect(appSource).toContain("isControlledSupabaseNoToolRecovery");
+    expect(appSource).toContain("controlledSupabaseNoToolRetryPrompt");
+    expect(appSource).toMatch(
+      /modelToolReusableCapabilities:\s*opts\.modelToolReusableCapabilities/,
+    );
+    expect(appSource).toMatch(
+      /modelToolBlockedWritePaths:\s*opts\.modelToolBlockedWritePaths/,
+    );
+    expect(appSource).toMatch(
+      /modelToolControlledLifecycle:\s*opts\.modelToolControlledLifecycle/,
+    );
+  });
+  test("inspect-first recovery preserves the complete controlled implementation job", () => {
+    const guardStart = aiPanelSource.indexOf("shouldBlockBlindWrite({");
+    const guardEnd = aiPanelSource.indexOf(
+      'appendMessage("assistant", buildToolBatchWorkingMessage',
+      guardStart,
+    );
+
+    expect(guardStart).toBeGreaterThanOrEqual(0);
+    expect(guardEnd).toBeGreaterThan(guardStart);
+
+    const guardSection = aiPanelSource.slice(guardStart, guardEnd);
+
+    expect(guardSection).toMatch(
+      /supabaseAppWiringContract:\s*triggerToolSupabaseAppWiringContract/,
+    );
+    expect(guardSection).toMatch(
+      /reusableCapabilities:\s*triggerToolReusableCapabilities/,
+    );
+    expect(guardSection).toContain(
+      "modelToolAllowedWritePaths:",
+    );
+    expect(guardSection).toContain(
+      "modelToolSupabaseAppWiringContract:",
+    );
+    expect(guardSection).toContain(
+      "modelToolReusableCapabilities:",
+    );
+  });
+  test("unreadable controlled Supabase tool requests retain a bounded retry", () => {
+    const parseStart = aiPanelSource.indexOf(
+      "const isControlledSupabaseParseFailure =",
+    );
+    const parseEnd = aiPanelSource.indexOf(
+      "actions.push({",
+      aiPanelSource.indexOf("SUGGESTED_ACTION_LABEL.STOP", parseStart),
+    );
+
+    expect(parseStart).toBeGreaterThanOrEqual(0);
+    expect(parseEnd).toBeGreaterThan(parseStart);
+
+    const parseSection = aiPanelSource.slice(parseStart, parseEnd);
+
+    expect(parseSection).toContain("Retry controlled Supabase wiring");
+    expect(parseSection).toContain(
+      "buildImplementationJobFocusedPrompt(",
+    );
+    expect(parseSection).toContain(
+      "modelToolSupabaseAppWiringContract:",
+    );
+    expect(parseSection).toContain(
+      "modelToolReusableCapabilities:",
+    );
+    expect(parseSection).toMatch(
+      /forceAppBuildImplementation:\s*isAppBuildParseFailure/,
+    );
+  });
+  test("controlled implementation completion is operation-based in both UI routes", () => {
+    expect(aiPanelSource).toContain(
+      "hasCompletedPlannedImplementationOperations,"
     );
     expect(aiPanelSource).toContain(
       "const isControlledSupabaseAppWiring ="
@@ -363,13 +557,34 @@ describe("app-build provider recovery", () => {
       "Array.isArray(implementationJob.supabaseAppWiringContract)"
     );
     expect(aiPanelSource).toContain(
-      "hasCompletedPlannedImplementationWrites(implementationJob)"
+      "hasCompletedPlannedImplementationOperations(implementationJob)"
     );
     expect(aiPanelSource).toContain(
       "!isControlledSupabaseAppWiring ||"
     );
     expect(aiPanelSource).toContain(
-      "hasCompletedControlledSupabaseWrites"
+      "hasCompletedControlledSupabaseOperations"
+    );
+    expect(aiPanelSource).toMatch(
+      /const controlledOperationsComplete\s*=\s*!controlledLifecycle\s*\|\|\s*hasCompletedPlannedImplementationOperations\(\s*controlledLifecycle\.job,?\s*\)/,
+    );
+    expect(aiPanelSource).toMatch(
+      /buildToolBatchDoneMessage\(\s*executedBatchResults,\s*\{ implementationComplete: controlledOperationsComplete \},\s*\)/,
+    );
+    expect(aiPanelSource).toMatch(
+      /successfulWritePaths\.length > 0\s*&&\s*controlledOperationsComplete/,
+    );
+    expect(aiPanelSource).toMatch(
+      /const completedWorkflowContext\s*=\s*agentMadeProjectChanges\s*&&\s*hasCompletedControlledSupabaseOperations/,
+    );
+    expect(aiPanelSource).toMatch(
+      /const partialSupabaseWorkflowContext\s*=\s*agentMadeProjectChanges\s*&&\s*isControlledSupabaseAppWiring\s*&&\s*!hasCompletedControlledSupabaseOperations/,
+    );
+    expect(aiPanelSource).toMatch(
+      /const agentMadeProjectChanges = isControlledSupabaseAppWiring\s*\? implementationJob\.successfulMutations\.length > 0\s*:\s*agentSuccessfulWritePaths\.length > 0/,
+    );
+    expect(aiPanelSource).toContain(
+      "A successful mutation is progress only and does not complete an operation."
     );
   });
 

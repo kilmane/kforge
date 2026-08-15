@@ -15,10 +15,16 @@ import {
 } from "../../../lib/fs";
 import { search_in_file } from "./search_in_file.js";
 import { shouldBlockInteractiveCapabilityLoss } from "./writePreservationGuard.js";
+import {
+  buildReplaceTextApprovalPrompt,
+  fingerprintFileContent,
+  materializeExactTextReplacement,
+} from "./replace_text.js";
 
 const ABSOLUTE_PATH_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
 
 const READ_FILE_FULL_TEXT_MAX_BYTES = 200_000;
+const CONTROLLED_REPLACE_TEXT_MAX_BYTES = 200 * 1024;
 
 function summarizeText(text, maxChars = 700) {
   const s = String(text ?? "");
@@ -311,12 +317,12 @@ export async function read_file(args = {}) {
   const text = String(content ?? "");
   const byteLen = new TextEncoder().encode(text).length;
   if (isSourceLikeFile(filePath) && byteLen <= READ_FILE_FULL_TEXT_MAX_BYTES) {
-    return `Read ${byteLen} bytes (Path: ${filePath})\n\n--- File contents ---\n${text}`;
+    return `Read ${byteLen} bytes (Path: ${filePath})\nFile fingerprint: ${fingerprintFileContent(text)}\n\n--- File contents ---\n${text}`;
   }
 
   const preview = summarizeText(text, 700);
 
-  return `Read ${byteLen} bytes (Path: ${filePath})\n\n--- File preview ---\n${preview}`;
+  return `Read ${byteLen} bytes (Path: ${filePath})\nFile fingerprint: ${fingerprintFileContent(text)}\n\n--- File preview ---\n${preview}`;
 }
 
 /**
@@ -350,7 +356,13 @@ export async function list_dir(args = {}) {
  * write_file
  * args: { path, content }
  */
-async function prepareWriteFile(args = {}) {
+async function prepareWriteFile(
+  args = {},
+  {
+    requireExistingFileFingerprint = false,
+    requiredExistingFileFingerprint = "",
+  } = {},
+) {
   const rawPath = ensurePathCanResolve(args?.path, "write_file");
   const content = args?.content ?? "";
 
@@ -363,6 +375,26 @@ async function prepareWriteFile(args = {}) {
     existingContent = null;
   }
 
+  const existingFileFingerprint =
+    existingContent === null ? "" : fingerprintFileContent(existingContent);
+  const expectedFileFingerprint = String(
+    args?.expectedFileFingerprint || "",
+  )
+    .trim()
+    .toLowerCase();
+  const authoritativeFileFingerprint = String(
+    requiredExistingFileFingerprint || "",
+  )
+    .trim()
+    .toLowerCase();
+  const fingerprintMismatch = Boolean(
+    existingContent !== null &&
+      requireExistingFileFingerprint &&
+      (!authoritativeFileFingerprint ||
+        expectedFileFingerprint !== authoritativeFileFingerprint ||
+        existingFileFingerprint !== authoritativeFileFingerprint),
+  );
+
   const allowKForgeBaselineRestoreWrite = shouldAllowKForgeBaselineRestoreWrite({
     args,
     rawPath,
@@ -370,30 +402,105 @@ async function prepareWriteFile(args = {}) {
     content,
   });
 
-  const blockedReason = allowKForgeBaselineRestoreWrite
-    ? ""
-    : shouldBlockSuspiciousWrite({
-        path: filePath,
-        existingContent,
-        nextContent: content,
-      });
+  const blockedReason = fingerprintMismatch
+    ? "write_file blocked this controlled overwrite because the existing target fingerprint is missing or no longer matches its inspected version."
+    : allowKForgeBaselineRestoreWrite
+      ? ""
+      : shouldBlockSuspiciousWrite({
+          path: filePath,
+          existingContent,
+          nextContent: content,
+        });
 
   return {
     content,
     filePath,
     blockedReason,
+    requiresFreshInspection: fingerprintMismatch,
+    currentFingerprint: existingFileFingerprint,
+    materializedContent: String(content),
   };
 }
 
-export async function preflightToolHandler(toolName, args = {}) {
+async function prepareReplaceText(args = {}) {
+  const rawPath = ensurePathCanResolve(args?.path, "replace_text");
+  const filePath = resolvePathWithinProject(rawPath);
+  const currentContent = String((await openFile(filePath)) ?? "");
+  const currentBytes = new TextEncoder().encode(currentContent).length;
+  if (currentBytes > CONTROLLED_REPLACE_TEXT_MAX_BYTES) {
+    return {
+      filePath,
+      blockedReason:
+        "replace_text blocked this edit because the target exceeds the controlled snapshot size limit.",
+      requiresFreshInspection: false,
+      currentFingerprint: fingerprintFileContent(currentContent),
+      materializedContent: "",
+      approvalPrompt: "",
+    };
+  }
+  const materialized = materializeExactTextReplacement({
+    currentContent,
+    expectedFileFingerprint: args?.expectedFileFingerprint,
+    oldText: args?.oldText,
+    newText: args?.newText,
+  });
+
+  if (!materialized.ok) {
+    return {
+      filePath,
+      blockedReason: materialized.error,
+      requiresFreshInspection:
+        materialized.requiresFreshInspection === true,
+      currentFingerprint: materialized.currentFingerprint || "",
+      materializedContent: "",
+      approvalPrompt: "",
+    };
+  }
+
+  const blockedReason = shouldBlockSuspiciousWrite({
+    path: filePath,
+    existingContent: currentContent,
+    nextContent: materialized.materializedContent,
+  });
+  const materializedBytes = new TextEncoder().encode(
+    materialized.materializedContent,
+  ).length;
+  const boundedReason =
+    materializedBytes > CONTROLLED_REPLACE_TEXT_MAX_BYTES
+      ? "replace_text blocked this edit because the materialized file exceeds the controlled snapshot size limit."
+      : blockedReason;
+  const approvalPrompt = boundedReason
+    ? ""
+    : buildReplaceTextApprovalPrompt({
+        path: rawPath,
+        currentFingerprint: materialized.currentFingerprint,
+        oldText: args?.oldText,
+        newText: args?.newText,
+        materializedContent: materialized.materializedContent,
+      });
+
+  return {
+    filePath,
+    blockedReason: boundedReason,
+    requiresFreshInspection: false,
+    currentFingerprint: materialized.currentFingerprint,
+    materializedContent: materialized.materializedContent,
+    approvalPrompt,
+  };
+}
+
+export async function preflightToolHandler(toolName, args = {}, options = {}) {
   const t = String(toolName || "").trim();
 
-  if (t !== "write_file") {
+  if (t !== "write_file" && t !== "replace_text") {
     return { ok: true, toolName: t, args };
   }
 
   try {
-    const prepared = await prepareWriteFile(args);
+    const prepared =
+      t === "replace_text"
+        ? await prepareReplaceText(args)
+        : await prepareWriteFile(args, options);
 
     if (prepared.blockedReason) {
       return {
@@ -401,10 +508,26 @@ export async function preflightToolHandler(toolName, args = {}) {
         toolName: t,
         args,
         error: prepared.blockedReason,
+        requiresFreshInspection:
+          prepared.requiresFreshInspection === true,
       };
     }
 
-    return { ok: true, toolName: t, args };
+    return {
+      ok: true,
+      toolName: t,
+      args,
+      ...(t === "replace_text"
+        ? {
+            approvalPrompt: prepared.approvalPrompt,
+            currentFingerprint: prepared.currentFingerprint,
+            materializedContent: prepared.materializedContent,
+          }
+        : {
+            currentFingerprint: prepared.currentFingerprint,
+            materializedContent: prepared.materializedContent,
+          }),
+    };
   } catch (err) {
     return {
       ok: false,
@@ -415,8 +538,11 @@ export async function preflightToolHandler(toolName, args = {}) {
   }
 }
 
-export async function write_file(args = {}) {
-  const { content, filePath, blockedReason } = await prepareWriteFile(args);
+export async function write_file(args = {}, options = {}) {
+  const { content, filePath, blockedReason } = await prepareWriteFile(
+    args,
+    options,
+  );
 
   if (blockedReason) {
     throw new Error(blockedReason);
@@ -426,6 +552,23 @@ export async function write_file(args = {}) {
 
   const byteLen = new TextEncoder().encode(String(content)).length;
   return `Wrote ${byteLen} bytes (Path: ${filePath})`;
+}
+
+export async function replace_text(args = {}) {
+  const {
+    filePath,
+    blockedReason,
+    materializedContent,
+  } = await prepareReplaceText(args);
+
+  if (blockedReason) {
+    throw new Error(blockedReason);
+  }
+
+  await saveFile(filePath, materializedContent);
+
+  const byteLen = new TextEncoder().encode(materializedContent).length;
+  return `Replaced text and wrote ${byteLen} bytes (Path: ${filePath})`;
 }
 
 /**
@@ -447,6 +590,7 @@ export const toolHandlers = {
   list_dir,
   search_in_file,
   write_file,
+  replace_text,
   mkdir,
 };
 
@@ -455,9 +599,9 @@ export function hasTool(toolName) {
   return Boolean(toolHandlers[t]);
 }
 
-export async function runToolHandler(toolName, args) {
+export async function runToolHandler(toolName, args, options = {}) {
   const t = String(toolName || "").trim();
   const fn = toolHandlers[t];
   if (!fn) throw new Error(`Unknown tool: ${t}`);
-  return await fn(args);
+  return await fn(args, options);
 }

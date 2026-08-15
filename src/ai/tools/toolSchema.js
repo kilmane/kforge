@@ -74,6 +74,11 @@ export function getToolSchemas() {
             type: "string",
             description: "Full file contents",
           },
+          expectedFileFingerprint: {
+            type: "string",
+            description:
+              "For a controlled overwrite of an existing file, the exact fingerprint reported by its latest successful inspection",
+          },
         },
         required: ["path", "content"],
       },
@@ -93,5 +98,76 @@ export function getToolSchemas() {
         required: ["path"],
       },
     },
+  ];
+}
+
+const CONTROLLED_REPLACE_TEXT_SCHEMA = Object.freeze({
+  name: "replace_text",
+  description:
+    "Replace one unique exact text anchor in an inspected approved file. Controlled implementation only.",
+  parameters: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Approved inspected project-relative file path",
+      },
+      expectedFileFingerprint: {
+        type: "string",
+        description:
+          "Exact file fingerprint reported by the successful target-file inspection",
+      },
+      oldText: {
+        type: "string",
+        description: "Non-empty exact text that must occur exactly once",
+      },
+      newText: {
+        type: "string",
+        description: "Exact replacement text; no regex or patch syntax",
+      },
+    },
+    required: [
+      "path",
+      "expectedFileFingerprint",
+      "oldText",
+      "newText",
+    ],
+  },
+});
+
+const CONTROLLED_COMPLETE_OPERATION_SCHEMA = Object.freeze({
+  name: "complete_operation",
+  description:
+    "Record completion of one exact planned implementation operation after post-mutation inspection. Controlled implementation only.",
+  parameters: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      operationId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_.-]{1,120}$",
+        description: "Exact deterministic planned operation ID",
+      },
+      satisfiedResponsibilityIds: {
+        type: "array",
+        minItems: 1,
+        maxItems: 12,
+        uniqueItems: true,
+        items: {
+          type: "string",
+          pattern: "^[A-Za-z0-9_.-]{1,80}$",
+        },
+        description:
+          "Exact complete set of structured responsibility IDs satisfied by the operation",
+      },
+    },
+    required: ["operationId", "satisfiedResponsibilityIds"],
+  },
+});
+
+export function getControlledImplementationToolSchemas() {
+  return [
+    CONTROLLED_REPLACE_TEXT_SCHEMA,
+    CONTROLLED_COMPLETE_OPERATION_SCHEMA,
   ];
 }

@@ -614,6 +614,13 @@ describe("Supabase Autopilot migration reconciliation", () => {
     const withUnsafePath = refingerprint(plan, (copy) => {
       copy.proposedApplicationFileOperations[0].path = "../outside.jsx";
     });
+    const withFlattenedResponsibilities = refingerprint(plan, (copy) => {
+      delete copy.proposedApplicationFileOperations[0].responsibilities;
+    });
+    const withChangedOperationIdentity = refingerprint(plan, (copy) => {
+      copy.proposedApplicationFileOperations[0].id =
+        "application-operation-deadbeefdeadbeef";
+    });
 
     expect(() =>
       createSupabaseAutopilotReconciliation(withSecret),
@@ -626,6 +633,12 @@ describe("Supabase Autopilot migration reconciliation", () => {
     ).toThrow(/malformed or unbounded/i);
     expect(() =>
       createSupabaseAutopilotReconciliation(withUnsafePath),
+    ).toThrow(/malformed or unbounded/i);
+    expect(() =>
+      createSupabaseAutopilotReconciliation(withFlattenedResponsibilities),
+    ).toThrow(/malformed or unbounded/i);
+    expect(() =>
+      createSupabaseAutopilotReconciliation(withChangedOperationIdentity),
     ).toThrow(/malformed or unbounded/i);
   });
 

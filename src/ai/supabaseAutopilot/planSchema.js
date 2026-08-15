@@ -1,5 +1,5 @@
 export const SUPABASE_AUTOPILOT_PLAN_VERSION =
-  "supabase-autopilot-plan/v1";
+  "supabase-autopilot-plan/v2";
 
 export const SUPPORTED_FRAMEWORK = "vite-react";
 export const SUPPORTED_PACKAGE_MANAGERS = Object.freeze([
@@ -25,6 +25,16 @@ const SECRET_KEY_PATTERN =
 const ROW_CONTENT_KEY_PATTERN =
   /^(?:row|rows|rowData|rowContents|records|recordContents)$/i;
 const PROPOSED_STATUSES = new Set(["proposed", "planning-only"]);
+const APPLICATION_RESPONSIBILITY_IDS = new Set([
+  "auth-ui-session",
+  "data-access-boundary",
+  "feature-data-access",
+  "progress-load-hydration",
+  "progress-save-persistence",
+  "react-lifecycle-integration",
+  "reusable-helper-integration",
+  "supabase-client-boundary",
+]);
 const PROPOSED_DATABASE_TYPES = new Set([
   "bigint",
   "boolean",
@@ -167,6 +177,9 @@ export function createSupabaseAutopilotPlan({
   const proposedApplicationFileOperations = canProposeImplementation
     ? buildFileOperations(local, userOwnedData)
     : [];
+  const reusableApplicationCapabilities = canProposeImplementation
+    ? buildReusableApplicationCapabilities(local)
+    : [];
   const proposedPackageOperations = canProposeImplementation
     ? buildPackageOperations(local)
     : [];
@@ -207,6 +220,7 @@ export function createSupabaseAutopilotPlan({
     proposedDatabaseObjects,
     proposedRlsPolicyIntent,
     proposedApplicationFileOperations,
+    reusableApplicationCapabilities,
     proposedPackageOperations,
     proposedVerificationSteps: verificationSteps,
     warnings,
@@ -284,12 +298,67 @@ export function validateSupabaseAutopilotPlan(plan) {
     ) {
       errors.push("Application wiring role is missing or unsupported.");
     }
+    const responsibilities = Array.isArray(operation.responsibilities)
+      ? operation.responsibilities
+      : [];
+    const responsibilityIds = responsibilities.map((item) => item?.id);
+    if (
+      responsibilities.length === 0 ||
+      responsibilities.length > 12 ||
+      responsibilities.some(
+        (responsibility) =>
+          !responsibility ||
+          !APPLICATION_RESPONSIBILITY_IDS.has(responsibility.id) ||
+          !isBoundedNormalizedText(responsibility.purpose, 300),
+      ) ||
+      new Set(responsibilityIds).size !== responsibilityIds.length
+    ) {
+      errors.push("Application responsibilities are missing, duplicated, or malformed.");
+    }
+    if (
+      !Array.isArray(operation.responsibilityIds) ||
+      operation.responsibilityIds.length !== responsibilityIds.length ||
+      operation.responsibilityIds.some(
+        (id, index) => id !== responsibilityIds[index],
+      )
+    ) {
+      errors.push("Application responsibility identity does not match its structured responsibilities.");
+    }
+    if (
+      operation.id !==
+      buildApplicationOperationId({
+        path: operation.path,
+        responsibilityIds,
+      })
+    ) {
+      errors.push("Application operation identity is missing or does not match its deterministic contract.");
+    }
   }
   const applicationPaths = (plan.proposedApplicationFileOperations || []).map(
     (operation) => operation.path,
   );
   if (new Set(applicationPaths).size !== applicationPaths.length) {
     errors.push("Application operations must not target the same path more than once.");
+  }
+  if (!Array.isArray(plan.reusableApplicationCapabilities)) {
+    errors.push("Reusable application capability evidence is missing.");
+  } else {
+    for (const evidence of plan.reusableApplicationCapabilities) {
+      if (
+        !evidence ||
+        !isBoundedApplicationPath(evidence.path) ||
+        !Array.isArray(evidence.capabilities) ||
+        evidence.capabilities.length === 0 ||
+        evidence.capabilities.some(
+          (capability) =>
+            !["supabase-client", "auth-session", "data-access"].includes(
+              capability,
+            ),
+        )
+      ) {
+        errors.push("Reusable application capability evidence is malformed.");
+      }
+    }
   }
   for (const operation of plan.proposedPackageOperations || []) {
     if (!PROPOSED_STATUSES.has(operation.status)) {
@@ -399,6 +468,27 @@ export function fingerprintPlan(plan) {
     input,
     0x9e3779b9,
   )}`;
+}
+
+export function buildApplicationOperationId({
+  path = "",
+  responsibilityIds = [],
+} = {}) {
+  const normalizedPath = String(path || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .toLowerCase();
+  const normalizedResponsibilityIds = uniqueStrings(
+    responsibilityIds
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter(Boolean),
+  ).sort();
+  const fingerprint = fingerprintPlan({
+    path: normalizedPath,
+    responsibilityIds: normalizedResponsibilityIds,
+  });
+
+  return `application-operation-${fingerprint.slice("fnv1a64-".length)}`;
 }
 
 function normalizeLocalInspection(value = {}) {
@@ -605,7 +695,6 @@ function proposedColumn(name, dataType, nullable) {
 
 function buildFileOperations(local, userOwnedData) {
   const operations = [];
-  const usedPaths = new Set();
 
   const pathRank = (path) => {
     const normalized = String(path || "")
@@ -629,11 +718,7 @@ function buildFileOperations(local, userOwnedData) {
 
   const preferredPath = (paths, fallback) => {
     const candidates = [...new Set(paths || [])]
-      .filter(
-        (path) =>
-          isBoundedApplicationPath(path) &&
-          !usedPaths.has(path),
-      )
+      .filter((path) => isBoundedApplicationPath(path))
       .sort((left, right) => {
         const rankDifference = pathRank(left) - pathRank(right);
         if (rankDifference !== 0) return rankDifference;
@@ -646,21 +731,108 @@ function buildFileOperations(local, userOwnedData) {
   const preferredEvidencePath = (specificPaths, broadPaths, fallback) =>
     preferredPath(specificPaths, "") || preferredPath(broadPaths, fallback);
 
+  const satisfiedHelperPaths = new Set(
+    local.existingSupabaseClientFiles.filter(
+      (path) =>
+        local.wiringFindings.supabaseCallFiles.includes(path) &&
+        (!userOwnedData ||
+          local.wiringFindings.authSessionFiles.includes(path)),
+    ),
+  );
+
+  const normalizeResponsibilities = (responsibilities = []) => {
+    const byId = new Map(
+      responsibilities
+        .filter(
+          (responsibility) =>
+            responsibility &&
+            APPLICATION_RESPONSIBILITY_IDS.has(responsibility.id),
+        )
+        .map((responsibility) => [
+          responsibility.id,
+          {
+            id: responsibility.id,
+            purpose: boundedText(responsibility.purpose, 300),
+          },
+        ]),
+    );
+
+    return [...byId.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  };
+
+  const finalizeOperation = (operation) => {
+    const responsibilities = normalizeResponsibilities(
+      operation.responsibilities,
+    );
+    const responsibilityIds = responsibilities.map((item) => item.id);
+    return {
+      ...operation,
+      id: buildApplicationOperationId({
+        path: operation.path,
+        responsibilityIds,
+      }),
+      responsibilityIds,
+      responsibilities,
+    };
+  };
+
+  const addOperation = ({
+    operation,
+    path,
+    role,
+    purpose,
+    responsibilities,
+  }) => {
+    const existingOperation = operations.find(
+      (candidate) => candidate.path === path,
+    );
+
+    if (existingOperation) {
+      existingOperation.purpose = boundedText(
+        `${existingOperation.purpose} ${purpose}`,
+        500,
+      );
+      existingOperation.responsibilities = normalizeResponsibilities([
+        ...existingOperation.responsibilities,
+        ...responsibilities,
+      ]);
+      return;
+    }
+
+    operations.push({
+      operation,
+      path,
+      role,
+      purpose,
+      responsibilities: normalizeResponsibilities(responsibilities),
+      status: "proposed",
+    });
+  };
+
   const clientPath = preferredPath(
     local.existingSupabaseClientFiles,
     "src/lib/supabaseClient.js",
   );
-  usedPaths.add(clientPath);
-  operations.push({
-    operation: local.existingSupabaseClientFiles.includes(clientPath)
-      ? "review-and-update"
-      : "create",
-    path: clientPath,
-    role: "supabase-client",
-    purpose:
-      "Configure the browser-safe Supabase client using environment-variable names only.",
-    status: "proposed",
-  });
+  if (!satisfiedHelperPaths.has(clientPath)) {
+    addOperation({
+      operation: local.existingSupabaseClientFiles.includes(clientPath)
+        ? "review-and-update"
+        : "create",
+      path: clientPath,
+      role: "supabase-client",
+      purpose:
+        "Configure the browser-safe Supabase client using environment-variable names only.",
+      responsibilities: [
+        {
+          id: "supabase-client-boundary",
+          purpose:
+            "Provide the approved browser-safe Supabase client boundary without exposing credentials.",
+        },
+      ],
+    });
+  }
 
   if (userOwnedData) {
     const authenticationPath = preferredEvidencePath(
@@ -668,14 +840,21 @@ function buildFileOperations(local, userOwnedData) {
       local.authenticationFiles,
       "src/features/auth/AuthProvider.jsx",
     );
-    usedPaths.add(authenticationPath);
-    operations.push({
-      operation: "create-or-update",
-      path: authenticationPath,
-      role: "auth-session",
-      purpose: "Provide sign-in state and session-aware UI behavior.",
-      status: "proposed",
-    });
+    if (!satisfiedHelperPaths.has(authenticationPath)) {
+      addOperation({
+        operation: "create-or-update",
+        path: authenticationPath,
+        role: "auth-session",
+        purpose: "Provide sign-in state and session-aware UI behavior.",
+        responsibilities: [
+          {
+            id: "auth-ui-session",
+            purpose:
+              "Provide sign-in controls and session-aware application behavior.",
+          },
+        ],
+      });
+    }
   }
 
   const persistencePath = preferredEvidencePath(
@@ -683,15 +862,40 @@ function buildFileOperations(local, userOwnedData) {
     local.persistenceFiles,
     "src/features/supabase/FeatureData.jsx",
   );
-  usedPaths.add(persistencePath);
-  operations.push({
-    operation: "create-or-update",
-    path: persistencePath,
-    role: "data-access",
-    purpose:
-      "Connect the requested feature to the proposed Supabase data model.",
-    status: "proposed",
-  });
+  if (!satisfiedHelperPaths.has(persistencePath)) {
+    addOperation({
+      operation: "create-or-update",
+      path: persistencePath,
+      role: "data-access",
+      purpose:
+        "Connect the requested feature to the proposed Supabase data model.",
+      responsibilities: userOwnedData
+        ? [
+            {
+              id: "data-access-boundary",
+              purpose:
+                "Use the approved user-owned data-access boundary and database contract.",
+            },
+            {
+              id: "progress-load-hydration",
+              purpose:
+                "Load the signed-in user's persisted state and hydrate application state safely.",
+            },
+            {
+              id: "progress-save-persistence",
+              purpose:
+                "Persist application state for the signed-in user through the approved boundary.",
+            },
+          ]
+        : [
+            {
+              id: "feature-data-access",
+              purpose:
+                "Connect the requested feature to the approved data-access boundary.",
+            },
+          ],
+    });
+  }
 
   const reactIntegrationPath = preferredEvidencePath(
     local.wiringFindings.effectFiles,
@@ -701,8 +905,7 @@ function buildFileOperations(local, userOwnedData) {
     ],
     "src/App.jsx",
   );
-  usedPaths.add(reactIntegrationPath);
-  operations.push({
+  addOperation({
     operation: local.sourceFiles.includes(reactIntegrationPath)
       ? "review-and-update"
       : "create",
@@ -710,10 +913,81 @@ function buildFileOperations(local, userOwnedData) {
     role: "react-integration",
     purpose:
       "Connect the React application lifecycle and state to the planned Supabase auth and data-access boundaries.",
-    status: "proposed",
+    responsibilities: [
+      {
+        id: "react-lifecycle-integration",
+        purpose:
+          "Connect the existing React lifecycle and state without removing unrelated behavior.",
+      },
+      ...(userOwnedData
+        ? [
+            {
+              id: "auth-ui-session",
+              purpose:
+                "Integrate sign-in controls and session-aware behavior into the existing application.",
+            },
+            {
+              id: "progress-load-hydration",
+              purpose:
+                "Load the signed-in user's persisted state and hydrate the existing application state.",
+            },
+            {
+              id: "progress-save-persistence",
+              purpose:
+                "Save the existing application state for the signed-in user through the approved data boundary.",
+            },
+          ]
+        : []),
+      ...(satisfiedHelperPaths.size > 0
+        ? [
+            {
+              id: "reusable-helper-integration",
+              purpose:
+                "Reuse the inspected existing Supabase auth and data helpers instead of duplicating direct client logic.",
+            },
+          ]
+        : []),
+    ],
   });
 
-  return operations;
+  return operations.map(finalizeOperation);
+}
+
+function buildReusableApplicationCapabilities(local) {
+  const evidenceByPath = new Map();
+
+  const remember = (paths, capability) => {
+    for (const path of Array.isArray(paths) ? paths : []) {
+      if (!isBoundedApplicationPath(path)) continue;
+
+      const capabilities = evidenceByPath.get(path) || new Set();
+      capabilities.add(capability);
+      evidenceByPath.set(path, capabilities);
+    }
+  };
+
+  remember(local.existingSupabaseClientFiles, "supabase-client");
+  remember(
+    [
+      ...local.authenticationFiles,
+      ...local.wiringFindings.authSessionFiles,
+    ],
+    "auth-session",
+  );
+  remember(
+    [
+      ...local.persistenceFiles,
+      ...local.wiringFindings.supabaseCallFiles,
+    ],
+    "data-access",
+  );
+
+  return [...evidenceByPath.entries()]
+    .map(([path, capabilities]) => ({
+      path,
+      capabilities: [...capabilities].sort(),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function buildPackageOperations(local) {

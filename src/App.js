@@ -82,6 +82,7 @@ import { previewDetectTemplates } from "./runtime/previewRunner";
 import { buildKforgeCapabilitySummary } from "./ai/capabilities/kforgeCapabilities";
 import { getCapabilityRouteDecision } from "./ai/capabilities/capabilityRouter";
 import { getDirectWorkflowHandoffRouteDecision } from "./ai/capabilities/directWorkflowHandoff";
+import { isCanonicalControlledImplementationLifecycle } from "./ai/implementation/controlledImplementationLifecycle";
 import {
   buildProjectInspectionRecoveryToolCall,
   isProjectInspectionTaskKind,
@@ -9220,9 +9221,30 @@ setWorkflowContext({
             "If no style target is known from inspected evidence, request exactly one read_file or list_dir tool to locate it. " +
             "The write_file content must be complete full file text. Do not claim Preview, build, tests, deployment, or service setup.";
 
+          const hasControlledSupabaseNoToolClassification =
+            Boolean(opts.modelToolControlledLifecycle) ||
+            (Array.isArray(opts.modelToolAllowedWritePaths) &&
+              opts.modelToolAllowedWritePaths.length > 0 &&
+              Array.isArray(opts.modelToolSupabaseAppWiringContract) &&
+              opts.modelToolSupabaseAppWiringContract.length > 0);
+          const isControlledSupabaseNoToolRecovery = Boolean(
+            hasControlledSupabaseNoToolClassification &&
+              isCanonicalControlledImplementationLifecycle(
+                opts.modelToolControlledLifecycle,
+              ),
+          );
+          const controlledSupabaseLifecycleMissing = Boolean(
+            hasControlledSupabaseNoToolClassification &&
+              !isControlledSupabaseNoToolRecovery,
+          );
+          const controlledSupabaseNoToolRetryPrompt =
+            "Retry the active controlled Supabase implementation step. The previous response returned prose instead of a usable tool request; no file was changed. The complete approved job context below remains authoritative.\n\n" +
+            draft;
           const focusedNoToolPrompt = isAppBuildImplementationNoToolRecovery
             ? appBuildNoToolRetryPrompt
-            : genericFocusedNoToolPrompt;
+            : isControlledSupabaseNoToolRecovery
+              ? controlledSupabaseNoToolRetryPrompt
+              : genericFocusedNoToolPrompt;
 
           const noToolRecoveryGoal = originalNoToolRequest;
 
@@ -9387,6 +9409,7 @@ setWorkflowContext({
 
           const shouldOfferFocusedNoToolRetry =
             !isAppBuildImplementationNoToolRecovery &&
+            !controlledSupabaseLifecycleMissing &&
             !hasDeterministicNoToolInspectionAvailable &&
             !(
               isPlainProjectEditNoToolRecovery &&
@@ -9417,6 +9440,19 @@ setWorkflowContext({
                   inspectedPaths: noToolCarryoverInspectedPaths,
                   modelToolInspectedPaths: noToolCarryoverInspectedPaths,
                   contextFilePath: noToolContinuationContextPath,
+                  modelToolAllowedWritePaths: opts.modelToolAllowedWritePaths,
+                  modelToolSuccessfulWritePaths:
+                    opts.modelToolSuccessfulWritePaths,
+                  modelToolContinuationContext:
+                    opts.modelToolContinuationContext,
+                  modelToolSupabaseAppWiringContract:
+                    opts.modelToolSupabaseAppWiringContract,
+                  modelToolReusableCapabilities:
+                    opts.modelToolReusableCapabilities,
+                  modelToolBlockedWritePaths:
+                    opts.modelToolBlockedWritePaths,
+                  modelToolControlledLifecycle:
+                    opts.modelToolControlledLifecycle,
                   modelToolOriginalGoal: originalNoToolRequest,
                   lastUserGoal: originalNoToolRequest,
                 });
@@ -9755,6 +9791,21 @@ setWorkflowContext({
           )
             ? opts.modelToolSupabaseAppWiringContract
             : null;
+          const modelToolReusableCapabilities = Array.isArray(
+            opts.modelToolReusableCapabilities,
+          )
+            ? opts.modelToolReusableCapabilities
+            : [];
+          const modelToolBlockedWritePaths = Array.isArray(
+            opts.modelToolBlockedWritePaths,
+          )
+            ? opts.modelToolBlockedWritePaths
+            : [];
+          const modelToolControlledLifecycle =
+            opts.modelToolControlledLifecycle &&
+            typeof opts.modelToolControlledLifecycle === "object"
+              ? opts.modelToolControlledLifecycle
+              : null;
 
           const modelToolAppBuildBaselineSnapshots = Array.isArray(
             opts.appBuildBaselineSnapshots,
@@ -9790,6 +9841,9 @@ setWorkflowContext({
                 modelToolSuccessfulWritePaths,
                 modelToolContinuationContext,
                 modelToolSupabaseAppWiringContract,
+                modelToolReusableCapabilities,
+                modelToolBlockedWritePaths,
+                modelToolControlledLifecycle,
                 modelToolAppBuildBaselineSnapshots,
                 modelToolAppBuildEditedPaths,
               },

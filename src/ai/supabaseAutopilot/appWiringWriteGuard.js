@@ -302,29 +302,293 @@ function validateMutationFields(table, methodName, keys) {
   return "";
 }
 
+const REUSABLE_HELPER_RESPONSIBILITY_ID = "reusable-helper-integration";
+const REUSABLE_AUTH_DATA_CAPABILITIES = new Set([
+  "auth-session",
+  "data-access",
+]);
+const MODULE_FILE_EXTENSIONS = [
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".mjs",
+  ".cjs",
+];
+
+function normalizeProjectPath(value) {
+  const parts = [];
+
+  const segments = String(value || "")
+    .trim()
+    .replaceAll("\\", "/")
+    .split("/");
+  for (const segment of segments) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      if (parts.length === 0) return "";
+      parts.pop();
+      continue;
+    }
+    parts.push(segment);
+  }
+
+  return parts.join("/");
+}
+
+function normalizeProjectPathKey(value) {
+  return normalizeProjectPath(value).toLowerCase();
+}
+
+function stripModuleExtension(value) {
+  const path = normalizeProjectPathKey(value);
+  const extension = MODULE_FILE_EXTENSIONS.find((candidate) =>
+    path.endsWith(candidate),
+  );
+  return extension ? path.slice(0, -extension.length) : path;
+}
+
+function resolveRelativeModulePath(targetPath, importSource) {
+  const source = String(importSource || "").trim().replaceAll("\\", "/");
+  if (!source.startsWith("./") && !source.startsWith("../")) return "";
+
+  const normalizedTarget = normalizeProjectPath(targetPath);
+  if (!normalizedTarget) return "";
+  const targetParts = normalizedTarget.split("/");
+  targetParts.pop();
+  return normalizeProjectPath([...targetParts, source].join("/"));
+}
+
+function modulePathMatchesEvidence(resolvedImportPath, evidencePath) {
+  const resolved = stripModuleExtension(resolvedImportPath);
+  const evidence = stripModuleExtension(evidencePath);
+  if (!resolved || !evidence) return false;
+
+  return (
+    resolved === evidence ||
+    `${resolved}/index` === evidence ||
+    resolved === `${evidence}/index`
+  );
+}
+
+function operationResponsibilityIds(operation) {
+  return new Set([
+    ...(Array.isArray(operation?.responsibilityIds)
+      ? operation.responsibilityIds
+      : []),
+    ...(Array.isArray(operation?.responsibilities)
+      ? operation.responsibilities.map((item) => item?.id)
+      : []),
+  ].map((item) => String(item || "").trim()).filter(Boolean));
+}
+
+function reusableEvidencePathsForPendingTarget(
+  implementationContext,
+  targetPath,
+) {
+  const targetKey = normalizeProjectPathKey(targetPath);
+  if (!targetKey || !implementationContext || typeof implementationContext !== "object") {
+    return [];
+  }
+
+  const completedOperationIds = new Set(
+    (Array.isArray(implementationContext.completedOperationIds)
+      ? implementationContext.completedOperationIds
+      : []).map((item) => String(item || "").trim()),
+  );
+  const requiresReusableHelpers = (
+    Array.isArray(implementationContext.plannedOperations)
+      ? implementationContext.plannedOperations
+      : []
+  ).some(
+    (operation) =>
+      normalizeProjectPathKey(operation?.path) === targetKey &&
+      !completedOperationIds.has(String(operation?.id || "").trim()) &&
+      operationResponsibilityIds(operation).has(
+        REUSABLE_HELPER_RESPONSIBILITY_ID,
+      ),
+  );
+  if (!requiresReusableHelpers) return [];
+
+  return (
+    Array.isArray(implementationContext.reusableCapabilities)
+      ? implementationContext.reusableCapabilities
+      : []
+  )
+    .filter((evidence) =>
+      (Array.isArray(evidence?.capabilities) ? evidence.capabilities : []).some(
+        (capability) =>
+          REUSABLE_AUTH_DATA_CAPABILITIES.has(
+            String(capability || "").trim().toLowerCase(),
+          ),
+      ),
+    )
+    .map((evidence) => normalizeProjectPath(evidence?.path))
+    .filter(Boolean);
+}
+
+function findStaticReusableBoundaryBypasses(content) {
+  const bypasses = [];
+  const namedImportPattern =
+    /^[ \t]*import\s+(?!type\b)(?:[A-Za-z_$][A-Za-z0-9_$]*\s*,\s*)?\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2/gm;
+
+  for (const match of String(content || "").matchAll(namedImportPattern)) {
+    const importedNames = match[1]
+      .split(",")
+      .map((item) => item.trim())
+      .map(
+        (item) =>
+          item.match(
+            /^([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+[A-Za-z_$][A-Za-z0-9_$]*)?$/,
+          )?.[1] || "",
+      )
+      .filter(Boolean);
+    const source = match[3];
+
+    if (importedNames.includes("supabase")) {
+      bypasses.push({ kind: "raw_client", source });
+    }
+    if (
+      source === "@supabase/supabase-js" &&
+      importedNames.includes("createClient")
+    ) {
+      bypasses.push({ kind: "client_factory", source });
+    }
+  }
+
+  const namespaceImportPattern =
+    /^[ \t]*import\s+\*\s+as\s+[A-Za-z_$][A-Za-z0-9_$]*\s+from\s*(['"])([^'"]+)\1/gm;
+  for (const match of String(content || "").matchAll(namespaceImportPattern)) {
+    bypasses.push({
+      kind:
+        match[2] === "@supabase/supabase-js"
+          ? "client_factory_namespace"
+          : "namespace",
+      source: match[2],
+    });
+  }
+
+  return bypasses;
+}
+
+function validateReusableHelperBoundary({
+  implementationContext,
+  targetPath,
+  content,
+}) {
+  const evidencePaths = reusableEvidencePathsForPendingTarget(
+    implementationContext,
+    targetPath,
+  );
+  if (evidencePaths.length === 0) return "";
+
+  for (const bypass of findStaticReusableBoundaryBypasses(content)) {
+    if (
+      bypass.kind === "client_factory" ||
+      bypass.kind === "client_factory_namespace"
+    ) {
+      return (
+        "KForge blocked this application edit before approval because its pending " +
+        "reusable-helper-integration responsibility requires the existing inspected " +
+        "auth/data helper boundary, but the edit imports Supabase client creation " +
+        "access directly from @supabase/supabase-js."
+      );
+    }
+
+    const resolvedImportPath = resolveRelativeModulePath(
+      targetPath,
+      bypass.source,
+    );
+    if (
+      evidencePaths.some((evidencePath) =>
+        modulePathMatchesEvidence(resolvedImportPath, evidencePath),
+      )
+    ) {
+      return (
+        "KForge blocked this application edit before approval because its pending " +
+        "reusable-helper-integration responsibility requires the existing auth/data " +
+        (bypass.kind === "namespace"
+          ? "helper boundary, but the edit imports that entire module namespace and indirectly exposes its raw client."
+          : "helper boundary, but the edit imports the raw exported Supabase client from that boundary.")
+      );
+    }
+  }
+
+  return "";
+}
+
 export function evaluateSupabaseAppWiringWrite({
   contract,
   toolName,
   args,
+  materializedContent,
+  implementationContext,
 } = {}) {
-  if (
-    String(toolName || "").trim() !== "write_file" ||
-    !Array.isArray(contract) ||
-    contract.length === 0
-  ) {
+  const normalizedToolName = String(toolName || "").trim();
+  if (!["write_file", "replace_text"].includes(normalizedToolName)) {
     return { ok: true, error: "" };
   }
 
-  const content = String(args?.content || "");
+  const hasContract = Array.isArray(contract) && contract.length > 0;
+  const targetPath = String(args?.path || "").trim();
+  const reusableEvidencePaths = reusableEvidencePathsForPendingTarget(
+    implementationContext,
+    targetPath,
+  );
+  const requiresTrustedContent =
+    hasContract || reusableEvidencePaths.length > 0;
+
+  if (
+    normalizedToolName === "replace_text" &&
+    requiresTrustedContent &&
+    typeof materializedContent !== "string"
+  ) {
+    return {
+      ok: false,
+      error:
+        "KForge blocked replace_text before approval because no trusted materialized result was available for Supabase application validation.",
+    };
+  }
+
+  const content =
+    normalizedToolName === "replace_text"
+      ? materializedContent
+      : String(args?.content || "");
+  const reusableHelperError = validateReusableHelperBoundary({
+    implementationContext,
+    targetPath,
+    content,
+  });
+  if (reusableHelperError) {
+    return { ok: false, error: reusableHelperError };
+  }
+
+  if (!hasContract) return { ok: true, error: "" };
+
   const fromPattern =
-    /\.from\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g;
+    /\b([A-Za-z_$][\w$]*)\s*\.from\s*\(\s*(['"`])([^'"`]+)\2\s*\)/g;
   const matches = [...content.matchAll(fromPattern)];
+  const nonSupabaseStaticReceivers = new Set([
+    "Array",
+    "Object",
+    "String",
+    "Number",
+    "Reflect",
+  ]);
 
   for (let index = 0; index < matches.length; index += 1) {
     const match = matches[index];
-    const table = findContractTable(contract, match[2]);
+    if (nonSupabaseStaticReceivers.has(match[1])) continue;
+    const table = findContractTable(contract, match[3]);
 
-    if (!table) continue;
+    if (!table) {
+      return {
+        ok: false,
+        error:
+          "KForge blocked this Supabase application write before approval because " +
+          `table '${match[3]}' is not present in the approved database contract.`,
+      };
+    }
 
     const start = match.index;
     const end =

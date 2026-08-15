@@ -48,13 +48,22 @@ function buildToolResultMessage(result) {
   }
 
   const toolName = result.toolName || "unknown_tool";
+  const callId = String(result.callId || "").trim();
+  const requestedPath = String(
+    result?.args?.path || result?.args?.dirPath || "",
+  ).trim();
+  const correlationHeader = callId
+    ? `Controlled call: ${callId}\nTool: ${toolName}${
+        requestedPath ? `\nRequested path: ${requestedPath}` : ""
+      }\n`
+    : "";
 
   if (result.cancelled) {
-    return `Tool result:\n${toolName} was cancelled by the user.`;
+    return `Tool result:\n${correlationHeader}${toolName} was cancelled by the user.`;
   }
 
   if (result.ok === false) {
-    return `Tool result:\n${toolName} failed.\n${result.error || "Unknown error"}`;
+    return `Tool result:\n${correlationHeader}${toolName} failed.\n${result.error || "Unknown error"}`;
   }
 
   const rendered =
@@ -62,7 +71,7 @@ function buildToolResultMessage(result) {
       ? result.result
       : JSON.stringify(result.result ?? {}, null, 2);
 
-  return `Tool result:\n${rendered}`;
+  return `Tool result:\n${correlationHeader}${rendered}`;
 }
 function buildToolCallKey(toolCall) {
   if (!toolCall || typeof toolCall !== "object") return "";
@@ -82,6 +91,9 @@ function buildToolCallKey(toolCall) {
  * @param {(toolCall: any) => Promise<{ ok: boolean, toolName: string, args: any, result?: any, error?: string, cancelled?: boolean }>} params.executeTool
  * @param {(entry: {role: string, content: string, meta?: any}) => void} [params.appendTranscript]
  * @param {(result: any) => void} [params.appendToolResult]
+ * @param {(payload: {toolCall: object, toolResult: object, step: number, messages: Array<object>}) => (string|Promise<string>)} [params.buildToolResultContinuationPrompt]
+ * @param {(payload: {text: string, step: number, messages: Array<object>}) => (string|Promise<string>)} [params.continueAfterFinalText]
+ * @param {boolean} [params.delegateDuplicateToolCalls]
  * @param {number} [params.maxSteps]
  *
  * @returns {Promise<{ ok: boolean, text: string, steps: number, messages: Array<object>, stopReason?: string }>}
@@ -94,8 +106,11 @@ export async function runAgent({
   executeTool,
   appendTranscript = defaultAppendTranscript,
   appendToolResult = defaultAppendToolResult,
+  buildToolResultContinuationPrompt = null,
+  continueAfterFinalText = null,
   maxSteps = 8,
   initialSeenToolCalls = [],
+  delegateDuplicateToolCalls = false,
 }) {
   if (typeof callModel !== "function") {
     throw new Error("runAgent: callModel is required");
@@ -131,7 +146,11 @@ export async function runAgent({
     if (normalizedToolCall) {
       const callKey = buildToolCallKey(normalizedToolCall);
 
-      if (callKey && seenToolCalls.has(callKey)) {
+      if (
+        callKey &&
+        seenToolCalls.has(callKey) &&
+        !delegateDuplicateToolCalls
+      ) {
         // Skip duplicate tool calls and let the model continue reasoning
         workingMessages.push({
           role: "system",
@@ -196,6 +215,38 @@ export async function runAgent({
         };
       }
 
+      if (toolResult?.stopAgent === true) {
+        return {
+          ok: false,
+          text: "",
+          steps: step,
+          messages: workingMessages,
+          stopReason: "controller_terminal",
+        };
+      }
+
+      if (typeof buildToolResultContinuationPrompt === "function") {
+        const controllerPrompt = String(
+          (await buildToolResultContinuationPrompt({
+            toolCall: normalizedToolCall,
+            toolResult,
+            step,
+            messages: [...workingMessages],
+          })) || "",
+        ).trim();
+
+        if (controllerPrompt) {
+          workingMessages.push({
+            role: "system",
+            content: controllerPrompt,
+            meta: {
+              kind: "controller_tool_result_continuation",
+              step,
+            },
+          });
+        }
+      }
+
       continue;
     }
 
@@ -210,6 +261,31 @@ export async function runAgent({
           step,
         },
       });
+
+      if (
+        typeof continueAfterFinalText === "function" &&
+        step < maxSteps
+      ) {
+        const continuationPrompt = String(
+          (await continueAfterFinalText({
+            text,
+            step,
+            messages: [...workingMessages],
+          })) || "",
+        ).trim();
+
+        if (continuationPrompt) {
+          workingMessages.push({
+            role: "system",
+            content: continuationPrompt,
+            meta: {
+              kind: "controller_continuation",
+              step,
+            },
+          });
+          continue;
+        }
+      }
 
       return {
         ok: true,

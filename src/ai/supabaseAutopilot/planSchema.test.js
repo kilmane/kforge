@@ -1,5 +1,6 @@
 import {
   SUPABASE_AUTOPILOT_PLAN_VERSION,
+  buildApplicationOperationId,
   classifyPlanningRisk,
   buildSupabaseAppWiringDatabaseContract,
   createSupabaseAutopilotPlan,
@@ -99,8 +100,31 @@ describe("Supabase Autopilot plan schema", () => {
   expect(contract[0]).not.toHaveProperty("remoteSupabaseFindings");
   expect(contract[0]).not.toHaveProperty("sqlDraft");
 });
-test("produces the same fingerprint for the same normalized input", () => {
+  test("produces the same fingerprint for the same normalized input", () => {
     expect(createPlan().fingerprint).toBe(createPlan().fingerprint);
+  });
+
+  test("produces stable deterministic application operation IDs", () => {
+    const first = createPlan();
+    const second = createPlan();
+
+    expect(
+      first.proposedApplicationFileOperations.map((operation) => operation.id),
+    ).toEqual(
+      second.proposedApplicationFileOperations.map((operation) => operation.id),
+    );
+    for (const operation of first.proposedApplicationFileOperations) {
+      expect(operation.id).toBe(
+        buildApplicationOperationId({
+          path: operation.path,
+          responsibilityIds: operation.responsibilityIds,
+        }),
+      );
+      expect(operation.id).toMatch(/^application-operation-[a-f0-9]{16}$/);
+    }
+    expect(
+      JSON.parse(JSON.stringify(first)).proposedApplicationFileOperations,
+    ).toEqual(first.proposedApplicationFileOperations);
   });
 
   test("detects only an unambiguous Vite and React application", () => {
@@ -267,31 +291,137 @@ test("produces the same fingerprint for the same normalized input", () => {
       errors: [],
     });
   });
-  test("fails closed when distinct wiring roles collapse onto the same application path", () => {
-    expect(() =>
-      createPlan({
-        objective: "Add sign-in and save each user's dashboard settings.",
-        inspection: {
-          ...inspection,
-          local: {
-            ...inspection.local,
-            applicationName: "Compact Dashboard",
-            applicationRootName: "compact-dashboard",
-            sourceFiles: ["src/App.jsx", "src/lib/supabase.js"],
-            existingSupabaseClientFiles: ["src/lib/supabase.js"],
-            authenticationFiles: ["src/App.jsx"],
-            persistenceFiles: ["src/App.jsx"],
-            wiringFindings: {
-              entryFiles: [],
-              reactStateFiles: ["src/App.jsx"],
-              effectFiles: ["src/App.jsx"],
-              supabaseCallFiles: ["src/App.jsx"],
-              authSessionFiles: ["src/App.jsx"],
-            },
+  test("does not invent duplicate Supabase helper work when existing files already contain auth and data access", () => {
+    const plan = createPlan({
+      objective: "Add sign-in and save each user's Hajj progress.",
+      inspection: {
+        ...inspection,
+        local: {
+          ...inspection.local,
+          applicationName: "Hajj Companion",
+          applicationRootName: "hajj-companion",
+          sourceFiles: [
+            "src/main.jsx",
+            "src/App.jsx",
+            "src/lib/supabase.js",
+            "src/lib/supabaseQueries.js",
+          ],
+          existingSupabaseClientFiles: [
+            "src/lib/supabase.js",
+            "src/lib/supabaseQueries.js",
+          ],
+          authenticationFiles: ["src/lib/supabase.js"],
+          persistenceFiles: [
+            "src/lib/supabase.js",
+            "src/lib/supabaseQueries.js",
+          ],
+          wiringFindings: {
+            entryFiles: ["src/main.jsx"],
+            reactStateFiles: ["src/App.jsx"],
+            effectFiles: [],
+            supabaseCallFiles: [
+              "src/lib/supabase.js",
+              "src/lib/supabaseQueries.js",
+            ],
+            authSessionFiles: ["src/lib/supabase.js"],
           },
         },
+      },
+    });
+
+    const paths = plan.proposedApplicationFileOperations.map(
+      (operation) => operation.path,
+    );
+
+    expect(paths).toEqual(["src/App.jsx"]);
+    expect(plan.proposedApplicationFileOperations[0].responsibilityIds).toEqual([
+      "auth-ui-session",
+      "progress-load-hydration",
+      "progress-save-persistence",
+      "react-lifecycle-integration",
+      "reusable-helper-integration",
+    ]);
+    expect(plan.reusableApplicationCapabilities).toEqual([
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["auth-session", "data-access", "supabase-client"],
+      },
+      {
+        path: "src/lib/supabaseQueries.js",
+        capabilities: ["data-access", "supabase-client"],
+      },
+    ]);
+  });
+  test("preserves shared-path wiring responsibilities on one application operation", () => {
+    const plan = createPlan({
+      objective: "Add sign-in and save each user's dashboard settings.",
+      inspection: {
+        ...inspection,
+        local: {
+          ...inspection.local,
+          applicationName: "Compact Dashboard",
+          applicationRootName: "compact-dashboard",
+          sourceFiles: ["src/App.jsx", "src/lib/supabase.js"],
+          existingSupabaseClientFiles: ["src/lib/supabase.js"],
+          authenticationFiles: ["src/App.jsx"],
+          persistenceFiles: ["src/App.jsx"],
+          wiringFindings: {
+            entryFiles: [],
+            reactStateFiles: ["src/App.jsx"],
+            effectFiles: ["src/App.jsx"],
+            supabaseCallFiles: ["src/App.jsx"],
+            authSessionFiles: ["src/App.jsx"],
+          },
+        },
+      },
+    });
+
+    const paths = plan.proposedApplicationFileOperations.map(
+      (operation) => operation.path,
+    );
+    const appOperation = plan.proposedApplicationFileOperations.find(
+      (operation) => operation.path === "src/App.jsx",
+    );
+
+    expect(paths).toEqual(["src/lib/supabase.js", "src/App.jsx"]);
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(appOperation.purpose).toMatch(/sign-in state and session-aware/i);
+    expect(appOperation.purpose).toMatch(/proposed Supabase data model/i);
+    expect(appOperation.purpose).toMatch(
+      /React application lifecycle and state/i,
+    );
+    expect(appOperation.responsibilityIds).toEqual([
+      "auth-ui-session",
+      "data-access-boundary",
+      "progress-load-hydration",
+      "progress-save-persistence",
+      "react-lifecycle-integration",
+    ]);
+    expect(appOperation.responsibilities.map((item) => item.id)).toEqual(
+      appOperation.responsibilityIds,
+    );
+    expect(appOperation.id).toBe(
+      buildApplicationOperationId({
+        path: appOperation.path,
+        responsibilityIds: appOperation.responsibilityIds,
       }),
-    ).toThrow(/must not target the same path more than once/i);
+    );
+  });
+
+  test("rejects a changed operation identity or flattened responsibility contract", () => {
+    const plan = createPlan();
+    const tamperedIdentity = JSON.parse(JSON.stringify(plan));
+    tamperedIdentity.proposedApplicationFileOperations[0].id =
+      "application-operation-deadbeefdeadbeef";
+    const flattened = JSON.parse(JSON.stringify(plan));
+    delete flattened.proposedApplicationFileOperations[0].responsibilities;
+
+    expect(validateSupabaseAutopilotPlan(tamperedIdentity).errors).toContain(
+      "Application operation identity is missing or does not match its deterministic contract.",
+    );
+    expect(validateSupabaseAutopilotPlan(flattened).errors).toContain(
+      "Application responsibilities are missing, duplicated, or malformed.",
+    );
   });
   test("flags unsupported frameworks without proposing implementation files", () => {
     const plan = createPlan({

@@ -14,6 +14,7 @@ describe("project inspection policy", () => {
     expect(isProjectInspectionToolAllowed("read_file")).toBe(true);
     expect(isProjectInspectionToolAllowed("search_in_file")).toBe(true);
     expect(isProjectInspectionToolAllowed("write_file")).toBe(false);
+    expect(isProjectInspectionToolAllowed("replace_text")).toBe(false);
     expect(isProjectInspectionToolAllowed("mkdir")).toBe(false);
   });
 

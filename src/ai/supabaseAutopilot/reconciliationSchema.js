@@ -1,6 +1,7 @@
 import {
   SUPPORTED_FRAMEWORK,
   SUPPORTED_PACKAGE_MANAGERS,
+  buildApplicationOperationId,
   fingerprintPlan,
   isBoundedApplicationPath,
   validateSupabaseAutopilotPlan,
@@ -300,6 +301,25 @@ function validateReconciliationPlanInput(plan) {
         !isBoundedApplicationPath(operation.path) ||
         !boundedIdentifier(operation.operation, 80) ||
         !isBoundedTextExact(operation.purpose, 500) ||
+        !Array.isArray(operation.responsibilities) ||
+        operation.responsibilities.length === 0 ||
+        operation.responsibilities.length > 12 ||
+        operation.responsibilities.some(
+          (responsibility) =>
+            !responsibility ||
+            !boundedIdentifier(responsibility.id, 80) ||
+            !isBoundedTextExact(responsibility.purpose, 300),
+        ) ||
+        !Array.isArray(operation.responsibilityIds) ||
+        operation.responsibilityIds.join("\u0000") !==
+          operation.responsibilities
+            .map((responsibility) => responsibility.id)
+            .join("\u0000") ||
+        operation.id !==
+          buildApplicationOperationId({
+            path: operation.path,
+            responsibilityIds: operation.responsibilityIds,
+          }) ||
         ![
           "supabase-client",
           "auth-session",

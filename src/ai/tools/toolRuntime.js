@@ -8,6 +8,12 @@
 //
 // NOTE: This module is designed to be extracted from AiPanel.jsx without behavior change.
 
+export const TOOL_FAILURE_STAGE = Object.freeze({
+  PRE_APPROVAL: "pre_approval",
+  APPROVAL: "approval",
+  EXECUTION: "execution",
+});
+
 function safeJsonParse(str) {
   try {
     return JSON.parse(str);
@@ -91,7 +97,7 @@ export function buildConsentPrompt({ toolName, args }) {
  * @param {(toolName: string, args: any) => Promise<any>} params.invokeTool
  * @param {(toolName: string, args: any) => boolean} [params.isConsentRequired] - default true
  *
- * @returns {Promise<{ ok: boolean, toolName: string, args: any, result?: any, error?: string, cancelled?: boolean }>}
+ * @returns {Promise<{ ok: boolean, toolName: string, args: any, result?: any, error?: string, cancelled?: boolean, failureStage?: string }>}
  */
 export async function runToolCall({
   toolCall,
@@ -99,10 +105,17 @@ export async function runToolCall({
   requestConsent,
   invokeTool,
   isConsentRequired = () => true,
+  consentPrompt = "",
 }) {
   const normalized = normalizeToolCall(toolCall);
   if (!normalized) {
-    return { ok: false, toolName: "unknown", args: {}, error: "Invalid tool call shape" };
+    return {
+      ok: false,
+      toolName: "unknown",
+      args: {},
+      error: "Invalid tool call shape",
+      failureStage: TOOL_FAILURE_STAGE.PRE_APPROVAL,
+    };
   }
 
   const { name: toolName, args } = normalized;
@@ -116,7 +129,9 @@ export async function runToolCall({
 
   // 2) consent gate (always on for now unless you decide otherwise)
   if (isConsentRequired(toolName, args)) {
-    const prompt = buildConsentPrompt({ toolName, args });
+    const prompt =
+      String(consentPrompt || "").trim() ||
+      buildConsentPrompt({ toolName, args });
 
     const decision = await requestConsent({ toolName, args, prompt });
     if (decision !== "approved") {
@@ -125,7 +140,13 @@ export async function runToolCall({
         content: formatToolStatus({ phase: "cancelled", toolName }),
         meta: { kind: "tool_status", toolName, phase: "cancelled" },
       });
-      return { ok: false, toolName, args, cancelled: true };
+      return {
+        ok: false,
+        toolName,
+        args,
+        cancelled: true,
+        failureStage: TOOL_FAILURE_STAGE.APPROVAL,
+      };
     }
   }
 
@@ -159,6 +180,12 @@ export async function runToolCall({
       meta: { kind: "tool_status", toolName, phase: "error", ok: false },
     });
 
-    return { ok: false, toolName, args, error: msg };
+    return {
+      ok: false,
+      toolName,
+      args,
+      error: msg,
+      failureStage: TOOL_FAILURE_STAGE.EXECUTION,
+    };
   }
 }
