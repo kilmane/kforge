@@ -21,6 +21,7 @@ import {
   materializeExactTextReplacement,
 } from "../tools/handlers/replace_text.js";
 import { TOOL_FAILURE_STAGE } from "../tools/toolRuntime.js";
+import { runAgent } from "../agent/agentRunner.js";
 
 const supabaseContract = [
   {
@@ -572,15 +573,44 @@ test("semantic recovery retains helper exports and permits a corrected proposal 
   const fingerprint = "fnv1a64-0123456789abcdef";
   const blockedReason =
     "The prepared edit imported a raw client instead of the reusable helper boundary.";
-  const helperSource = [
-    "export async function signInWithEmail() {}",
-    "export async function signUpWithEmail() {}",
-    "export async function signOut() {}",
-    "export async function getCurrentUser() {}",
-    "export async function loadUserProgress() {}",
-    "export async function saveUserProgress() {}",
-    'export const API_SECRET = "service-role-secret-value";',
-  ].join("\n");
+  const helperSource = `
+    export async function signInWithEmail(email, password) {
+      return supabase.auth.signInWithPassword({ email, password });
+    }
+
+    export async function signUpWithEmail(email, password) {
+      return supabase.auth.signUp({ email, password });
+    }
+
+    export async function signOut() {}
+
+    export async function getCurrentUser() {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        throw error;
+      }
+      return data.user;
+    }
+
+    export async function loadUserProgress(userId) {
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("id, user_id, data")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    }
+
+    export async function saveUserProgress() {}
+
+    export const API_SECRET = "service-role-secret-value";
+  `;
   let lifecycle = createLifecycle();
 
   const helperRead = beginControlledToolRequest(lifecycle, {
@@ -655,6 +685,40 @@ test("semantic recovery retains helper exports and permits a corrected proposal 
         "signOut",
         "signUpWithEmail",
       ],
+      helperContracts: [
+        {
+          exportName: "getCurrentUser",
+          role: "current-user",
+          resultKind: "user",
+          errorMode: "throws",
+        },
+        {
+          exportName: "loadUserProgress",
+          role: "progress-load",
+          resultKind: "database-row",
+          errorMode: "throws",
+          payloadPath: "data",
+          nullable: true,
+        },
+        {
+          exportName: "signInWithEmail",
+          role: "sign-in",
+          resultKind: "auth-response",
+          errorMode: "response-envelope",
+          userPath: "data.user",
+          sessionPath: "data.session",
+          authenticatedStateRequiresSession: false,
+        },
+        {
+          exportName: "signUpWithEmail",
+          role: "sign-up",
+          resultKind: "auth-response",
+          errorMode: "response-envelope",
+          userPath: "data.user",
+          sessionPath: "data.session",
+          authenticatedStateRequiresSession: true,
+        },
+      ],
     },
   ]);
   expect(JSON.stringify(lifecycle)).not.toContain("service-role-secret-value");
@@ -669,6 +733,13 @@ test("semantic recovery retains helper exports and permits a corrected proposal 
   expect(recoveryPrompt).toContain("src/lib/supabase.js");
   expect(recoveryPrompt).toContain(
     "Available inspected helper exports: getCurrentUser, loadUserProgress, saveUserProgress, signInWithEmail, signOut, signUpWithEmail",
+  );
+  expect(recoveryPrompt).toContain("Authoritative inspected helper contracts:");
+  expect(recoveryPrompt).toContain(
+    "loadUserProgress returns a nullable database-row; application payload path: data; errors: throws",
+  );
+  expect(recoveryPrompt).toContain(
+    "signUpWithEmail returns an auth-response; user path: data.user; session path: data.session; authenticated state requires an active session",
   );
   expect(recoveryPrompt).toMatch(/correct.*blocked reason/i);
   expect(recoveryPrompt).toMatch(/replace_text tool call/i);
@@ -751,6 +822,35 @@ test("controlled agent allowance is remaining lifecycle transitions plus one fin
   });
 
   expect(getControlledImplementationAgentStepBudget(lifecycle)).toBe(9);
+});
+
+test("derived controlled agent allowance remains capped for oversized approved workload", () => {
+  const responsibilities = Array.from({ length: 40 }, (_, index) => ({
+    id: `responsibility-${index + 1}`,
+    purpose: `Complete responsibility ${index + 1}.`,
+  }));
+  const lifecycle = createControlledImplementationLifecycle({
+    job: {
+      jobId: "generic-capped-workload",
+      originalGoal: "Complete the approved bounded workload.",
+      allowedWritePaths: ["src/LargeIntegration.jsx"],
+      plannedOperations: [
+        {
+          id: "application-operation-large-integration",
+          path: "src/LargeIntegration.jsx",
+          role: "react-integration",
+          purpose: "Complete the approved bounded workload.",
+          responsibilityIds: responsibilities.map(({ id }) => id),
+          responsibilities,
+          status: "proposed",
+        },
+      ],
+    },
+  });
+
+  expect(getControlledImplementationTransitionLimit(lifecycle.job)).toBe(64);
+  expect(lifecycle.maxTransitions).toBe(64);
+  expect(getControlledImplementationAgentStepBudget(lifecycle)).toBe(65);
 });
 
 test("derived controlled budget completes three targeted edits with mandatory post-mutation inspections", async () => {
@@ -876,14 +976,213 @@ test("derived controlled budget completes three targeted edits with mandatory po
   });
   modelTurns += 1;
 
-  expect(derivedTransitionLimit).toBe(15);
-  expect(startingAgentBudget).toBe(16);
+  expect(derivedTransitionLimit).toBe(18);
+  expect(startingAgentBudget).toBe(19);
   expect(lifecycle.maxTransitions).toBe(derivedTransitionLimit);
   expect(lifecycle.transitionCount).toBe(14);
   expect(lifecycle.status).toBe(CONTROLLED_IMPLEMENTATION_STATUS.COMPLETED);
   expect(lifecycle.job.successfulMutations).toHaveLength(3);
   expect(lifecycle.job.completedOperationIds).toEqual([operation.id]);
   expect(modelTurns).toBeLessThanOrEqual(startingAgentBudget);
+});
+
+test("derived agent budget completes a guarded multi-edit operation after corrective rereads", async () => {
+  const targetPath = "src/ApplicationShell.jsx";
+  const operation = {
+    id: "application-operation-shell",
+    path: targetPath,
+    role: "react-integration",
+    purpose: "Complete the approved application integration.",
+    responsibilityIds: [
+      "service-imports",
+      "session-state",
+      "event-handlers",
+      "account-interface",
+    ],
+    responsibilities: [
+      "service-imports",
+      "session-state",
+      "event-handlers",
+      "account-interface",
+    ].map((id) => ({ id, purpose: `Complete ${id}.` })),
+    status: "proposed",
+  };
+  let lifecycle = createControlledImplementationLifecycle({
+    job: {
+      jobId: "generic-guarded-multi-edit",
+      originalGoal: "Complete the approved account-data integration.",
+      allowedWritePaths: [targetPath],
+      plannedOperations: [operation],
+      reusableCapabilities: [
+        { path: "src/services/accountClient.js", capabilities: ["account-client"] },
+        { path: "src/services/accountData.js", capabilities: ["account-data"] },
+      ],
+      supabaseAppWiringContract: [
+        {
+          table: "account_records",
+          ownership: "user-owned",
+          ownerColumn: "account_id",
+          primaryKeys: ["account_id"],
+          columns: [
+            { name: "account_id", dataType: "uuid", nullable: false },
+            { name: "payload", dataType: "jsonb", nullable: false },
+          ],
+        },
+      ],
+    },
+  });
+  const fingerprints = [
+    "fnv1a64-1000000000000001",
+    "fnv1a64-2000000000000002",
+    "fnv1a64-3000000000000003",
+    "fnv1a64-4000000000000004",
+    "fnv1a64-5000000000000005",
+  ];
+  const toolCalls = [
+    { name: "read_file", args: { path: targetPath } },
+    { name: "read_file", args: { path: "src/services/accountClient.js" } },
+    { name: "read_file", args: { path: "src/services/accountData.js" } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[0],
+        oldText: "source zero",
+        newText: "source one",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[1],
+        oldText: "unsafe session proposal",
+        newText: "blocked session proposal",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[1],
+        oldText: "source one",
+        newText: "source two",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[2],
+        oldText: "source two",
+        newText: "source three",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[3],
+        oldText: "unsafe interface proposal",
+        newText: "blocked interface proposal",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "replace_text",
+      args: {
+        path: targetPath,
+        expectedFileFingerprint: fingerprints[3],
+        oldText: "source three",
+        newText: "source four",
+      },
+    },
+    { name: "read_file", args: { path: targetPath } },
+    {
+      name: "complete_operation",
+      args: {
+        operationId: operation.id,
+        satisfiedResponsibilityIds: operation.responsibilityIds,
+      },
+    },
+  ];
+  let targetReadCount = 0;
+  const agentBudget = getControlledImplementationAgentStepBudget(lifecycle);
+
+  const result = await runAgent({
+    prompt: "Complete the approved structured operation.",
+    callModel: async ({ step }) =>
+      step <= toolCalls.length
+        ? { toolCall: toolCalls[step - 1] }
+        : { text: "Completed the approved structured operation." },
+    executeTool: async (toolCall) => {
+      const turn = await executeControlledImplementationTurn({
+        lifecycle,
+        toolCall,
+        executeTool: async ({ toolName, args }) => {
+          if (toolName === "read_file") {
+            if (args.path === targetPath) {
+              const fingerprint = [
+                fingerprints[0],
+                fingerprints[1],
+                fingerprints[1],
+                fingerprints[2],
+                fingerprints[3],
+                fingerprints[3],
+                fingerprints[4],
+              ][targetReadCount];
+              targetReadCount += 1;
+              return {
+                ok: true,
+                toolName,
+                args,
+                result: `File fingerprint: ${fingerprint}\n\ncurrent source`,
+              };
+            }
+            return {
+              ok: true,
+              toolName,
+              args,
+              result:
+                "File fingerprint: fnv1a64-aaaaaaaaaaaaaaaa\n\nexport const capability = true;",
+            };
+          }
+          if (String(args.oldText || "").startsWith("unsafe ")) {
+            return {
+              ok: false,
+              toolName,
+              args,
+              error: "Prepared write policy rejected this proposal.",
+              failureStage: TOOL_FAILURE_STAGE.PRE_APPROVAL,
+              requiresFreshInspection: true,
+            };
+          }
+          return { ok: true, toolName, args, result: "Applied targeted edit." };
+        },
+      });
+      lifecycle = turn.lifecycle;
+      return turn.toolResult;
+    },
+    continueAfterFinalText: () =>
+      isPendingControlledImplementation(lifecycle)
+        ? continueControlledImplementationAfterProse(lifecycle).shouldContinue
+          ? "Continue the pending structured operation."
+          : ""
+        : "",
+    delegateDuplicateToolCalls: true,
+    maxSteps: agentBudget,
+  });
+
+  expect(agentBudget).toBeGreaterThan(toolCalls.length);
+  expect(result.stopReason).toBe("final_text");
+  expect(result.steps).toBe(toolCalls.length + 1);
+  expect(lifecycle.status).toBe(CONTROLLED_IMPLEMENTATION_STATUS.COMPLETED);
+  expect(lifecycle.job.successfulMutations).toHaveLength(4);
+  expect(lifecycle.job.completedOperationIds).toEqual([operation.id]);
 });
 
 test("derived controlled budget keeps a finite stop for non-actionable model turns", () => {
@@ -931,6 +1230,72 @@ test("derived controlled budget keeps a finite stop for non-actionable model tur
     lifecycle.maxTransitions -
       getControlledImplementationRequiredTransitionReserve(lifecycle.job),
   );
+  expect(agentBudget).toBeLessThanOrEqual(65);
+});
+
+test("pathological controlled tool calling still stops at the derived agent bound", async () => {
+  let lifecycle = createControlledImplementationLifecycle({
+    job: {
+      jobId: "generic-endless-tool-calling",
+      originalGoal: "Complete one approved bounded integration.",
+      allowedWritePaths: ["src/BoundedView.jsx"],
+      supabaseAppWiringContract: supabaseContract,
+      plannedOperations: [
+        {
+          id: "application-operation-bounded-view",
+          path: "src/BoundedView.jsx",
+          role: "react-integration",
+          purpose: "Complete the approved bounded integration.",
+          responsibilityIds: ["bounded-integration"],
+          responsibilities: [
+            {
+              id: "bounded-integration",
+              purpose: "Complete the approved bounded integration.",
+            },
+          ],
+          status: "proposed",
+        },
+      ],
+    },
+  });
+  const agentBudget = getControlledImplementationAgentStepBudget(lifecycle);
+
+  const result = await runAgent({
+    prompt: "Keep requesting evidence forever.",
+    callModel: async ({ step }) => ({
+      toolCall: {
+        name: "read_file",
+        args: { path: `src/evidence-${step}.js` },
+      },
+    }),
+    executeTool: async (toolCall) => {
+      const turn = await executeControlledImplementationTurn({
+        lifecycle,
+        toolCall,
+        executeTool: async ({ toolName, args }) => ({
+          ok: true,
+          toolName,
+          args,
+          result:
+            "File fingerprint: fnv1a64-aaaaaaaaaaaaaaaa\n\nexport const evidence = true;",
+        }),
+      });
+      lifecycle = turn.lifecycle;
+      return turn.toolResult;
+    },
+    delegateDuplicateToolCalls: true,
+    maxSteps: agentBudget,
+  });
+
+  expect(agentBudget).toBeLessThanOrEqual(65);
+  expect(result.stopReason).toBe("max_steps_reached");
+  expect(result.steps).toBe(agentBudget);
+  expect(lifecycle.status).toBe(
+    CONTROLLED_IMPLEMENTATION_STATUS.BOUNDED_FAILURE,
+  );
+  expect(getPendingControlledWritePaths(lifecycle)).toEqual([
+    "src/BoundedView.jsx",
+  ]);
 });
 
 test("repeated pre-approval policy blocks exhaust only non-reserved transition capacity", async () => {

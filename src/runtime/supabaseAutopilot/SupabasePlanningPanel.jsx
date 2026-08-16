@@ -388,7 +388,7 @@ export default function SupabasePlanningPanel({
               applyInFlightRef.current = false;
             }}
             disabled={state.phase === "loading" || mutationLocked}
-            placeholder="For example: Add sign-in and save each user’s Hajj progress."
+            placeholder="For example: Add sign-in and save each user’s progress."
             rows={3}
             style={{
               resize: "vertical",

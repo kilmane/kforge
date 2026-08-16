@@ -331,6 +331,61 @@ function normalizeToolRecord(record = {}) {
   };
 }
 
+function normalizeReusableHelperContract(contract = {}) {
+  const exportName = String(contract?.exportName || "").trim();
+  if (
+    !exportName ||
+    exportName.length > MAX_REUSABLE_EXPORTED_SYMBOL_LENGTH ||
+    !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(exportName)
+  ) {
+    return null;
+  }
+
+  const role = String(contract?.role || "").trim();
+  const resultKind = String(contract?.resultKind || "").trim();
+  const errorMode = String(contract?.errorMode || "").trim();
+  const payloadPath = String(contract?.payloadPath || "").trim();
+  const userPath = String(contract?.userPath || "").trim();
+  const sessionPath = String(contract?.sessionPath || "").trim();
+
+  const normalized = { exportName };
+
+  if (
+    ["progress-load", "progress-save", "current-user", "sign-in", "sign-up"].includes(
+      role,
+    )
+  ) {
+    normalized.role = role;
+  }
+
+  if (["database-row", "user", "auth-response"].includes(resultKind)) {
+    normalized.resultKind = resultKind;
+  }
+
+  if (["throws", "response-envelope"].includes(errorMode)) {
+    normalized.errorMode = errorMode;
+  }
+
+  const isStaticPropertyPath = (value) =>
+    value.length <= 80 &&
+    /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(value);
+
+  if (isStaticPropertyPath(payloadPath)) normalized.payloadPath = payloadPath;
+  if (isStaticPropertyPath(userPath)) normalized.userPath = userPath;
+  if (isStaticPropertyPath(sessionPath)) normalized.sessionPath = sessionPath;
+
+  if (typeof contract?.nullable === "boolean") {
+    normalized.nullable = contract.nullable;
+  }
+
+  if (typeof contract?.authenticatedStateRequiresSession === "boolean") {
+    normalized.authenticatedStateRequiresSession =
+      contract.authenticatedStateRequiresSession;
+  }
+
+  return Object.keys(normalized).length > 1 ? normalized : null;
+}
+
 function normalizeReusableCapabilityEvidence(evidence = []) {
   const byPath = new Map();
 
@@ -343,6 +398,7 @@ function normalizeReusableCapabilityEvidence(evidence = []) {
       path,
       capabilities: new Set(),
       exportedSymbols: new Set(),
+      helperContracts: new Map(),
     };
 
     for (const capability of Array.isArray(item?.capabilities)
@@ -364,6 +420,15 @@ function normalizeReusableCapabilityEvidence(evidence = []) {
       }
     }
 
+    for (const contract of Array.isArray(item?.helperContracts)
+      ? item.helperContracts
+      : []) {
+      const normalized = normalizeReusableHelperContract(contract);
+      if (normalized) {
+        current.helperContracts.set(normalized.exportName, normalized);
+      }
+    }
+
     byPath.set(pathKey, current);
   }
 
@@ -373,14 +438,18 @@ function normalizeReusableCapabilityEvidence(evidence = []) {
       const exportedSymbols = [...item.exportedSymbols]
         .sort()
         .slice(0, MAX_REUSABLE_EXPORTED_SYMBOLS);
+      const helperContracts = [...item.helperContracts.values()]
+        .sort((left, right) => left.exportName.localeCompare(right.exportName))
+        .slice(0, 40);
+
       return {
         path: item.path,
         capabilities: [...item.capabilities].sort(),
         ...(exportedSymbols.length ? { exportedSymbols } : {}),
+        ...(helperContracts.length ? { helperContracts } : {}),
       };
     });
 }
-
 function extractFullFileSourceFromToolResult(result = {}) {
   const text =
     typeof result?.result === "string"
@@ -429,6 +498,167 @@ function extractStaticExportedApiSymbols(source = "") {
   return [...symbols].sort();
 }
 
+function findMatchingImplementationBrace(text, startIndex) {
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+
+  for (let index = startIndex; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === quote) {
+        quote = "";
+      }
+
+      continue;
+    }
+
+    if (char === "'" || char === '"' || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{") depth += 1;
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  return -1;
+}
+
+function extractProvableReusableHelperContracts(source = "") {
+  const text = String(source || "");
+  const contracts = [];
+
+  const functionPattern =
+    /^[ \t]*export\s+(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/gm;
+
+  for (const match of text.matchAll(functionPattern)) {
+    const exportName = match[1];
+    const openBrace =
+      match.index + match[0].lastIndexOf("{");
+    const closeBrace = findMatchingImplementationBrace(text, openBrace);
+
+    if (closeBrace < 0) continue;
+
+    const body = text.slice(openBrace + 1, closeBrace);
+
+    const tableMatch = body.match(
+      /\.from\s*\(\s*(['"`])([^'"`]+)\1\s*\)/,
+    );
+    const selectMatch = body.match(
+      /\.select\s*\(\s*(['"`])([^'"`]+)\1\s*\)/,
+    );
+
+    const tableName = String(tableMatch?.[2] || "").trim();
+    const selectedColumns = String(selectMatch?.[2] || "")
+      .split(",")
+      .map((column) => column.trim())
+      .filter(Boolean);
+
+    const returnsData = /\breturn\s+data\s*;?/.test(body);
+    const returnsDataUser = /\breturn\s+data(?:\?\.|\.)user\s*;?/.test(body);
+    const throwsError =
+      /\bif\s*\(\s*error\s*\)\s*\{[\s\S]*?\bthrow\s+error\b/.test(body);
+    const usesMaybeSingle = /\.maybeSingle\s*\(/.test(body);
+    const usesSingle = /\.single\s*\(/.test(body);
+    const usesProgressMutation =
+      /\.(?:insert|update|upsert)\s*\(/.test(body);
+
+    const delegatesToSignIn =
+      /\breturn\s+supabase\.auth\.signInWithPassword\s*\(/.test(body);
+    const delegatesToSignUp =
+      /\breturn\s+supabase\.auth\.signUp\s*\(/.test(body);
+    const readsCurrentAuthUser =
+      /\bsupabase\.auth\.getUser\s*\(/.test(body) && returnsDataUser;
+
+    if (delegatesToSignIn) {
+      contracts.push({
+        exportName,
+        role: "sign-in",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: false,
+        errorMode: "response-envelope",
+      });
+    }
+
+    if (delegatesToSignUp) {
+      contracts.push({
+        exportName,
+        role: "sign-up",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: true,
+        errorMode: "response-envelope",
+      });
+    }
+
+    if (readsCurrentAuthUser) {
+      contracts.push({
+        exportName,
+        role: "current-user",
+        resultKind: "user",
+        ...(throwsError ? { errorMode: "throws" } : {}),
+      });
+    }
+
+    const isProgressRead =
+      (/progress/i.test(exportName) || /progress/i.test(tableName)) &&
+      Boolean(tableName) &&
+      selectedColumns.includes("data") &&
+      usesMaybeSingle &&
+      returnsData;
+
+    if (isProgressRead) {
+      contracts.push({
+        exportName,
+        role: "progress-load",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: true,
+        ...(throwsError ? { errorMode: "throws" } : {}),
+      });
+    }
+
+    const isProgressSave =
+      (/progress/i.test(exportName) || /progress/i.test(tableName)) &&
+      Boolean(tableName) &&
+      selectedColumns.includes("data") &&
+      usesProgressMutation &&
+      usesSingle &&
+      returnsData;
+
+    if (isProgressSave) {
+      contracts.push({
+        exportName,
+        role: "progress-save",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: false,
+        ...(throwsError ? { errorMode: "throws" } : {}),
+      });
+    }
+  }
+
+  return contracts;
+}
 function rememberReusableCapabilityExports(job, path, result) {
   const pathKey = normalizeImplementationPathKey(path);
   if (
@@ -440,10 +670,11 @@ function rememberReusableCapabilityExports(job, path, result) {
     return job;
   }
 
-  const exportedSymbols = extractStaticExportedApiSymbols(
-    extractFullFileSourceFromToolResult(result),
-  );
-  if (exportedSymbols.length === 0) return job;
+  const source = extractFullFileSourceFromToolResult(result);
+  const exportedSymbols = extractStaticExportedApiSymbols(source);
+  const helperContracts = extractProvableReusableHelperContracts(source);
+
+  if (exportedSymbols.length === 0 && helperContracts.length === 0) return job;
 
   return {
     ...job,
@@ -456,13 +687,16 @@ function rememberReusableCapabilityExports(job, path, result) {
                 ...(item.exportedSymbols || []),
                 ...exportedSymbols,
               ],
+              helperContracts: [
+                ...(item.helperContracts || []),
+                ...helperContracts,
+              ],
             }
           : item,
       ),
     ),
   };
 }
-
 const FILE_FINGERPRINT_RE = /^fnv1a64-[a-f0-9]{16}$/;
 
 function normalizeFileFingerprint(value = "") {
@@ -1253,27 +1487,92 @@ function buildSupabaseContractPromptSection(contract = []) {
 function buildReusableCapabilityPromptSection(evidence = []) {
   if (!Array.isArray(evidence) || evidence.length === 0) return "";
 
+  const capabilityLines = evidence.map((item) => {
+    const exports = Array.isArray(item.exportedSymbols)
+      ? item.exportedSymbols
+      : [];
+
+    return (
+      `- ${item.path}: ${item.capabilities.join(", ")}` +
+      (exports.length
+        ? `\n  Available inspected helper exports: ${exports.join(", ")}`
+        : "")
+    );
+  });
+
+  const helperContractLines = evidence.flatMap((item) =>
+    (Array.isArray(item.helperContracts) ? item.helperContracts : []).map(
+      (contract) => {
+        const resultDescription =
+          contract.nullable === true
+            ? `a nullable ${contract.resultKind}`
+            : contract.resultKind === "auth-response"
+              ? `an ${contract.resultKind}`
+              : `a ${contract.resultKind}`;
+
+        let line =
+          `- ${contract.exportName} returns ${resultDescription}`;
+
+        if (contract.payloadPath) {
+          line += `; application payload path: ${contract.payloadPath}`;
+        }
+
+        if (contract.userPath) {
+          line += `; user path: ${contract.userPath}`;
+        }
+
+        if (contract.sessionPath) {
+          line += `; session path: ${contract.sessionPath}`;
+        }
+
+        if (contract.authenticatedStateRequiresSession === true) {
+          line += "; authenticated state requires an active session";
+        }
+
+        if (contract.errorMode) {
+          line += `; errors: ${contract.errorMode}`;
+        }
+
+        return line;
+      },
+    ),
+  );
+
+  const helperContractSection = helperContractLines.length
+    ? "\nAuthoritative inspected helper contracts:\n" +
+      helperContractLines.join("\n") +
+      "\n"
+    : "";
+
+  const allHelperContracts = evidence.flatMap((item) =>
+    Array.isArray(item.helperContracts) ? item.helperContracts : [],
+  );
+
+  const hasThrowingProgressLoad = allHelperContracts.some(
+    (contract) =>
+      contract.role === "progress-load" &&
+      contract.errorMode === "throws",
+  );
+
+  const hasProgressSave = allHelperContracts.some(
+    (contract) => contract.role === "progress-save",
+  );
+
+  const progressHydrationInvariantSection =
+    hasThrowingProgressLoad && hasProgressSave
+      ? "\nProgress hydration and persistence invariant:\n" +
+        "- A failed progress load must not enable persistence or autosave readiness.\n" +
+        "- A successfully resolved nullable no-row result may initialize defaults before persistence becomes ready.\n"
+      : "";
+
   return (
     "Existing reusable Supabase capability evidence:\n" +
-    evidence
-      .map(
-        (item) => {
-          const exports = Array.isArray(item.exportedSymbols)
-            ? item.exportedSymbols
-            : [];
-          return (
-            `- ${item.path}: ${item.capabilities.join(", ")}` +
-            (exports.length
-              ? `\n  Available inspected helper exports: ${exports.join(", ")}`
-              : "")
-          );
-        },
-      )
-      .join("\n") +
+    capabilityLines.join("\n") +
+    helperContractSection +
+    progressHydrationInvariantSection +
     "\nInspect any still-unread evidence path above before implementing the matching responsibility. Reuse its existing exported helpers and boundaries; do not duplicate them with direct Supabase calls or new helper modules unless inspected evidence proves they cannot satisfy the approved operation.\n\n"
   );
 }
-
 export function buildImplementationJobBlockedWriteRecoveryPrompt(
   job,
   fallbackGoal = "",

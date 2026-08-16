@@ -620,12 +620,336 @@ test("successful reusable-boundary inspection records bounded static export name
       ],
     },
   ]);
+  expect(nextJob.reusableCapabilities[0].helperContracts).toBeUndefined();
   const durableEvidence = JSON.stringify(nextJob.reusableCapabilities);
   expect(durableEvidence).not.toContain("service-role-secret-value");
   expect(durableEvidence).not.toContain("privateRows");
   expect(durableEvidence).not.toContain("function signInWithEmail");
 });
 
+test("reusable helper inspection records a provable progress-load contract", () => {
+  const source = `
+    export async function loadUserProgress(userId) {
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("id, user_id, data")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    }
+  `;
+
+  const job = createImplementationJob({
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["data-access"],
+      },
+    ],
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    { name: "read_file", args: { path: "src/lib/supabase.js" } },
+    {
+      ok: true,
+      result:
+        `Read file\nFile fingerprint: ${appFingerprint}\n\n` +
+        `--- File contents ---\n${source}`,
+    },
+  );
+
+  expect(nextJob.reusableCapabilities[0].helperContracts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        exportName: "loadUserProgress",
+        role: "progress-load",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: true,
+        errorMode: "throws",
+      }),
+    ]),
+  );
+});
+test("reusable helper inspection records a provable progress-save contract", () => {
+  const source = `
+    export async function saveUserProgress(userId, progress) {
+      const { data, error } = await supabase
+        .from("user_progress")
+        .update({ data: progress })
+        .eq("user_id", userId)
+        .select("id, user_id, data")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    }
+  `;
+
+  const job = createImplementationJob({
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["data-access"],
+      },
+    ],
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    { name: "read_file", args: { path: "src/lib/supabase.js" } },
+    {
+      ok: true,
+      result:
+        `Read file\nFile fingerprint: ${appFingerprint}\n\n` +
+        `--- File contents ---\n${source}`,
+    },
+  );
+
+  expect(nextJob.reusableCapabilities[0].helperContracts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        exportName: "saveUserProgress",
+        role: "progress-save",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: false,
+        errorMode: "throws",
+      }),
+    ]),
+  );
+});
+test("reusable helper inspection records provable auth helper contracts", () => {
+  const source = `
+    export async function signInWithEmail(email, password) {
+      return supabase.auth.signInWithPassword({ email, password });
+    }
+
+    export async function signUpWithEmail(email, password) {
+      return supabase.auth.signUp({ email, password });
+    }
+
+    export async function getCurrentUser() {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error) {
+        throw error;
+      }
+
+      return data.user;
+    }
+  `;
+
+  const job = createImplementationJob({
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["auth-session"],
+      },
+    ],
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    { name: "read_file", args: { path: "src/lib/supabase.js" } },
+    {
+      ok: true,
+      result:
+        `Read file\nFile fingerprint: ${appFingerprint}\n\n` +
+        `--- File contents ---\n${source}`,
+    },
+  );
+
+  expect(nextJob.reusableCapabilities[0].helperContracts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        exportName: "getCurrentUser",
+        role: "current-user",
+        resultKind: "user",
+        errorMode: "throws",
+      }),
+      expect.objectContaining({
+        exportName: "signInWithEmail",
+        role: "sign-in",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: false,
+        errorMode: "response-envelope",
+      }),
+      expect.objectContaining({
+        exportName: "signUpWithEmail",
+        role: "sign-up",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: true,
+        errorMode: "response-envelope",
+      }),
+    ]),
+  );
+});
+test("reusable helper inspection records a complete Supabase helper contract set", () => {
+  const source = `
+    const privateMarker = "service-role-secret-value";
+
+    export async function signInWithEmail(email, password) {
+      return supabase.auth.signInWithPassword({ email, password });
+    }
+
+    export async function signUpWithEmail(email, password) {
+      return supabase.auth.signUp({ email, password });
+    }
+
+    export async function signOut() {
+      return supabase.auth.signOut();
+    }
+
+    export async function getCurrentUser() {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error) {
+        throw error;
+      }
+
+      return data.user;
+    }
+
+    export async function loadUserProgress(userId) {
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("id, user_id, data")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    }
+
+    export async function saveUserProgress(userId, progress) {
+      const existingProgress = await loadUserProgress(userId);
+
+      if (existingProgress) {
+        const { data, error } = await supabase
+          .from("user_progress")
+          .update({ data: progress })
+          .eq("id", existingProgress.id)
+          .eq("user_id", userId)
+          .select("id, user_id, data")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        return data;
+      }
+
+      const { data, error } = await supabase
+        .from("user_progress")
+        .insert({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          data: progress,
+        })
+        .select("id, user_id, data")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    }
+  `;
+
+  const job = createImplementationJob({
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["auth-session", "data-access", "supabase-client"],
+      },
+    ],
+  });
+
+  const nextJob = rememberImplementationToolResult(
+    job,
+    { name: "read_file", args: { path: "src/lib/supabase.js" } },
+    {
+      ok: true,
+      result:
+        `Read file\nFile fingerprint: ${appFingerprint}\n\n` +
+        `--- File contents ---\n${source}`,
+    },
+  );
+
+  const contracts = nextJob.reusableCapabilities[0].helperContracts;
+
+  expect(contracts).toHaveLength(5);
+  expect(contracts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        exportName: "getCurrentUser",
+        role: "current-user",
+        resultKind: "user",
+        errorMode: "throws",
+      }),
+      expect.objectContaining({
+        exportName: "signInWithEmail",
+        role: "sign-in",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: false,
+        errorMode: "response-envelope",
+      }),
+      expect.objectContaining({
+        exportName: "signUpWithEmail",
+        role: "sign-up",
+        resultKind: "auth-response",
+        userPath: "data.user",
+        sessionPath: "data.session",
+        authenticatedStateRequiresSession: true,
+        errorMode: "response-envelope",
+      }),
+      expect.objectContaining({
+        exportName: "loadUserProgress",
+        role: "progress-load",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: true,
+        errorMode: "throws",
+      }),
+      expect.objectContaining({
+        exportName: "saveUserProgress",
+        role: "progress-save",
+        resultKind: "database-row",
+        payloadPath: "data",
+        nullable: false,
+        errorMode: "throws",
+      }),
+    ]),
+  );
+
+  const durableEvidence = JSON.stringify(nextJob.reusableCapabilities);
+  expect(durableEvidence).not.toContain("service-role-secret-value");
+  expect(durableEvidence).not.toContain("crypto.randomUUID");
+  expect(durableEvidence).not.toContain("function saveUserProgress");
+});
 test("reusable exported-symbol evidence is identifier-only and bounded", () => {
   const exportedSymbols = Array.from(
     { length: 50 },
@@ -908,6 +1232,116 @@ test("buildImplementationJobFocusedPrompt exposes reusable helpers and exact mut
   );
   expect(prompt).toContain("User ownership field: user_id.");
   expect(prompt).toContain("Structured JSON payload field(s): data.");
+});
+
+test("buildImplementationJobFocusedPrompt exposes reusable helper contracts", () => {
+  const prompt = buildImplementationJobFocusedPrompt({
+    originalGoal: "Add sign-in and save progress",
+    inspectedPaths: ["src/App.jsx", "src/lib/supabase.js"],
+    allowedWritePaths: ["src/App.jsx"],
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["auth-session", "data-access"],
+        exportedSymbols: [
+          "getCurrentUser",
+          "loadUserProgress",
+          "signInWithEmail",
+          "signUpWithEmail",
+        ],
+        helperContracts: [
+          {
+            exportName: "getCurrentUser",
+            role: "current-user",
+            resultKind: "user",
+            errorMode: "throws",
+          },
+          {
+            exportName: "signInWithEmail",
+            role: "sign-in",
+            resultKind: "auth-response",
+            userPath: "data.user",
+            sessionPath: "data.session",
+            authenticatedStateRequiresSession: false,
+            errorMode: "response-envelope",
+          },
+          {
+            exportName: "signUpWithEmail",
+            role: "sign-up",
+            resultKind: "auth-response",
+            userPath: "data.user",
+            sessionPath: "data.session",
+            authenticatedStateRequiresSession: true,
+            errorMode: "response-envelope",
+          },
+          {
+            exportName: "loadUserProgress",
+            role: "progress-load",
+            resultKind: "database-row",
+            payloadPath: "data",
+            nullable: true,
+            errorMode: "throws",
+          },
+        ],
+      },
+    ],
+  });
+
+  expect(prompt).toContain("Authoritative inspected helper contracts:");
+  expect(prompt).toContain(
+    "loadUserProgress returns a nullable database-row; application payload path: data; errors: throws",
+  );
+  expect(prompt).toContain(
+    "signInWithEmail returns an auth-response; user path: data.user; session path: data.session",
+  );
+  expect(prompt).toContain(
+    "signUpWithEmail returns an auth-response; user path: data.user; session path: data.session; authenticated state requires an active session",
+  );
+  expect(prompt).toContain(
+    "getCurrentUser returns a user; errors: throws",
+  );
+});
+test("buildImplementationJobFocusedPrompt states the progress hydration autosave invariant", () => {
+  const prompt = buildImplementationJobFocusedPrompt({
+    originalGoal: "Add sign-in and save progress",
+    inspectedPaths: ["src/App.jsx", "src/lib/supabase.js"],
+    allowedWritePaths: ["src/App.jsx"],
+    reusableCapabilities: [
+      {
+        path: "src/lib/supabase.js",
+        capabilities: ["auth-session", "data-access"],
+        exportedSymbols: [
+          "loadUserProgress",
+          "saveUserProgress",
+        ],
+        helperContracts: [
+          {
+            exportName: "loadUserProgress",
+            role: "progress-load",
+            resultKind: "database-row",
+            payloadPath: "data",
+            nullable: true,
+            errorMode: "throws",
+          },
+          {
+            exportName: "saveUserProgress",
+            role: "progress-save",
+            resultKind: "database-row",
+            payloadPath: "data",
+            nullable: false,
+            errorMode: "throws",
+          },
+        ],
+      },
+    ],
+  });
+
+  expect(prompt).toContain(
+    "A failed progress load must not enable persistence or autosave readiness.",
+  );
+  expect(prompt).toContain(
+    "A successfully resolved nullable no-row result may initialize defaults before persistence becomes ready.",
+  );
 });
 
 test("buildImplementationJobReadProgressionPrompt keeps pending controlled work active after a safe read", () => {

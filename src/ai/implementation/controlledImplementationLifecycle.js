@@ -40,6 +40,8 @@ const MIN_CONTROLLED_TRANSITIONS = 12;
 const MAX_CONTROLLED_TRANSITIONS = 64;
 const MAX_RECORDED_EVENTS = 80;
 const FINAL_CONTROLLED_RESPONSE_STEPS = 1;
+const MAX_GUARD_RECOVERY_CYCLES_PER_OPERATION = 2;
+const TRANSITIONS_PER_GUARD_RECOVERY_CYCLE = 2;
 
 function normalizeFailureStage(value) {
   const stage = String(value || "").trim();
@@ -114,19 +116,40 @@ export function getControlledImplementationTransitionLimit(job = {}) {
       ),
     0,
   );
+  const guardedRecoveryAllowance = pendingOperations.reduce(
+    (total, operation) => {
+      const operationResponsibilityCount = Math.max(
+        1,
+        Array.isArray(operation?.responsibilityIds)
+          ? operation.responsibilityIds.length
+          : 0,
+      );
+      return (
+        total +
+        Math.min(
+          MAX_GUARD_RECOVERY_CYCLES_PER_OPERATION,
+          operationResponsibilityCount,
+        ) *
+          TRANSITIONS_PER_GUARD_RECOVERY_CYCLE
+      );
+    },
+    0,
+  );
 
   // Each responsibility may require one mutation plus its mandatory fresh
   // inspection. Initial evidence is bounded by the larger of the structured
   // responsibility count or the declared target/helper evidence paths. Each
-  // target may also use its one bounded refresh, and each operation receives
-  // one completion transition plus one bounded recovery turn.
+  // target may also use its one bounded refresh. Each pending operation receives
+  // one completion transition plus at most two guard-rejection recovery cycles;
+  // each cycle permits the rejected proposal and its required corrective read.
   const initialEvidenceAllowance = Math.max(
     responsibilityCount,
     targetPathKeys.size + reusableEvidencePathKeys.size,
   );
   const structuredLimit =
     responsibilityCount * 2 +
-    pendingOperations.length * 2 +
+    pendingOperations.length +
+    guardedRecoveryAllowance +
     initialEvidenceAllowance +
     targetPathKeys.size;
 

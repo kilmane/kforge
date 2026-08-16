@@ -467,6 +467,349 @@ function reusableEvidencePathsForPendingTarget(
     .filter(Boolean);
 }
 
+function reusableHelperContractsForPendingTarget(
+  implementationContext,
+  targetPath,
+) {
+  const evidencePaths = reusableEvidencePathsForPendingTarget(
+    implementationContext,
+    targetPath,
+  );
+
+  if (evidencePaths.length === 0) return [];
+
+  const evidencePathKeys = new Set(
+    evidencePaths.map((path) => normalizeProjectPathKey(path)),
+  );
+
+  return (
+    Array.isArray(implementationContext?.reusableCapabilities)
+      ? implementationContext.reusableCapabilities
+      : []
+  ).flatMap((evidence) => {
+    const evidencePath = normalizeProjectPath(evidence?.path);
+    if (
+      !evidencePath ||
+      !evidencePathKeys.has(normalizeProjectPathKey(evidencePath))
+    ) {
+      return [];
+    }
+
+    return (Array.isArray(evidence?.helperContracts)
+      ? evidence.helperContracts
+      : []
+    )
+      .filter(
+        (contract) =>
+          contract &&
+          typeof contract === "object" &&
+          String(contract.exportName || "").trim(),
+      )
+      .map((contract) => ({
+        ...contract,
+        evidencePath,
+        exportName: String(contract.exportName || "").trim(),
+      }));
+  });
+}
+
+function reusableImportedHelperLocalNames({
+  content,
+  targetPath,
+  evidencePath,
+  exportName,
+}) {
+  const localNames = [];
+  const namedImportPattern =
+    /^[ \t]*import\s+(?!type\b)(?:[A-Za-z_$][A-Za-z0-9_$]*\s*,\s*)?\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2/gm;
+
+  for (const match of String(content || "").matchAll(namedImportPattern)) {
+    const resolvedImportPath = resolveRelativeModulePath(
+      targetPath,
+      match[3],
+    );
+
+    if (!modulePathMatchesEvidence(resolvedImportPath, evidencePath)) {
+      continue;
+    }
+
+    for (const entry of match[1].split(",")) {
+      const parsed = entry
+        .trim()
+        .match(
+          /^([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?$/,
+        );
+
+      if (!parsed || parsed[1] !== exportName) continue;
+      localNames.push(parsed[2] || parsed[1]);
+    }
+  }
+
+  return localNames;
+}
+
+function escapeReusableContractRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findNamedImplementationFunctionBodies(content) {
+  const source = String(content || "");
+  const functions = [];
+
+  const patterns = [
+    /\b(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g,
+    /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/g,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const openBrace = match.index + match[0].lastIndexOf("{");
+      const closeBrace = findMatchingBrace(source, openBrace);
+
+      if (closeBrace < 0) continue;
+
+      functions.push({
+        name: match[1],
+        body: source.slice(openBrace + 1, closeBrace),
+      });
+    }
+  }
+
+  return functions;
+}
+function validateReusableHelperContracts({
+  implementationContext,
+  targetPath,
+  content,
+}) {
+  const contracts = reusableHelperContractsForPendingTarget(
+    implementationContext,
+    targetPath,
+  );
+
+  if (contracts.length === 0) return "";
+
+  const source = String(content || "");
+
+  for (const contract of contracts) {
+    if (
+      contract.role !== "progress-load" ||
+      contract.resultKind !== "database-row" ||
+      !contract.payloadPath
+    ) {
+      continue;
+    }
+
+    const localHelperNames = reusableImportedHelperLocalNames({
+      content: source,
+      targetPath,
+      evidencePath: contract.evidencePath,
+      exportName: contract.exportName,
+    });
+
+    for (const localHelperName of localHelperNames) {
+      const escapedHelperName =
+        escapeReusableContractRegex(localHelperName);
+
+      const assignmentPattern = new RegExp(
+        "\\b(?:const|let)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*" +
+          "await\\s+" +
+          escapedHelperName +
+          "\\s*\\([^)]*\\)",
+        "g",
+      );
+
+      for (const assignment of source.matchAll(assignmentPattern)) {
+        const rowVariable = assignment[1];
+        const escapedRowVariable =
+          escapeReusableContractRegex(rowVariable);
+
+        const rawProgressConsumerPattern = new RegExp(
+          "\\b[A-Za-z_$][A-Za-z0-9_$]*progress[A-Za-z0-9_$]*" +
+            "\\s*\\(\\s*" +
+            escapedRowVariable +
+            "\\s*\\)",
+          "i",
+        );
+
+        if (!rawProgressConsumerPattern.test(source)) continue;
+
+        return (
+          "KForge blocked this application edit before approval because " +
+          `${contract.exportName} has an authoritative inspected helper contract ` +
+          `that returns a ${contract.resultKind}, while the application passes that ` +
+          "database row directly into progress state. " +
+          `Use the declared application payload path '${contract.payloadPath}' ` +
+          "before applying the loaded progress."
+        );
+      }
+    }
+  }
+
+  const progressLoadContracts = contracts.filter(
+    (contract) =>
+      contract.role === "progress-load" &&
+      contract.errorMode === "throws",
+  );
+
+  const progressSaveContracts = contracts.filter(
+    (contract) => contract.role === "progress-save",
+  );
+
+  if (
+    progressLoadContracts.length > 0 &&
+    progressSaveContracts.length > 0
+  ) {
+    const loadHelperNames = progressLoadContracts.flatMap((contract) =>
+      reusableImportedHelperLocalNames({
+        content: source,
+        targetPath,
+        evidencePath: contract.evidencePath,
+        exportName: contract.exportName,
+      }),
+    );
+
+    const saveHelperNames = progressSaveContracts.flatMap((contract) =>
+      reusableImportedHelperLocalNames({
+        content: source,
+        targetPath,
+        evidencePath: contract.evidencePath,
+        exportName: contract.exportName,
+      }),
+    );
+
+    const hasProgressSaveCall = saveHelperNames.some((helperName) =>
+      new RegExp(
+        "\\b" +
+          escapeReusableContractRegex(helperName) +
+          "\\s*\\(",
+      ).test(source),
+    );
+
+    if (loadHelperNames.length > 0 && hasProgressSaveCall) {
+      const namedFunctions = findNamedImplementationFunctionBodies(source);
+
+      const loadFunctionNames = new Set(
+        namedFunctions
+          .filter((entry) =>
+            loadHelperNames.some((helperName) =>
+              new RegExp(
+                "\\bawait\\s+" +
+                  escapeReusableContractRegex(helperName) +
+                  "\\s*\\(",
+              ).test(entry.body),
+            ),
+          )
+          .map((entry) => entry.name),
+      );
+
+      const hydrationStatePattern =
+        /\bconst\s*\[\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\]\s*=\s*useState\s*\(\s*false\s*\)/g;
+
+      for (const hydrationMatch of source.matchAll(hydrationStatePattern)) {
+        const hydrationState = hydrationMatch[1];
+        const hydrationSetter = hydrationMatch[2];
+
+        const autosaveGatePattern = new RegExp(
+          "\\bif\\s*\\([^)]*!\\s*" +
+            escapeReusableContractRegex(hydrationState) +
+            "\\b[^)]*\\)\\s*return\\b",
+        );
+
+        if (!autosaveGatePattern.test(source)) continue;
+
+        for (const tryMatch of source.matchAll(/\btry\s*\{/g)) {
+          const tryOpenBrace = source.indexOf("{", tryMatch.index);
+          const tryCloseBrace = findMatchingBrace(source, tryOpenBrace);
+
+          if (tryCloseBrace < 0) continue;
+
+          const afterTry = source.slice(tryCloseBrace + 1);
+          const catchMatch = afterTry.match(
+            /^\s*catch\s*(?:\(\s*[A-Za-z_$][A-Za-z0-9_$]*\s*\))?\s*\{/,
+          );
+
+          if (!catchMatch) continue;
+
+          const catchOpenBrace =
+            tryCloseBrace + 1 + catchMatch[0].lastIndexOf("{");
+          const catchCloseBrace = findMatchingBrace(
+            source,
+            catchOpenBrace,
+          );
+
+          if (catchCloseBrace < 0) continue;
+
+          const tryBody = source.slice(tryOpenBrace + 1, tryCloseBrace);
+          const catchBody = source.slice(
+            catchOpenBrace + 1,
+            catchCloseBrace,
+          );
+
+          let finallyBody = "";
+          const afterCatch = source.slice(catchCloseBrace + 1);
+          const finallyMatch = afterCatch.match(/^\s*finally\s*\{/);
+
+          if (finallyMatch) {
+            const finallyOpenBrace =
+              catchCloseBrace + 1 + finallyMatch[0].lastIndexOf("{");
+            const finallyCloseBrace = findMatchingBrace(
+              source,
+              finallyOpenBrace,
+            );
+
+            if (finallyCloseBrace >= 0) {
+              finallyBody = source.slice(
+                finallyOpenBrace + 1,
+                finallyCloseBrace,
+              );
+            }
+          }
+
+          const hydrationSuccessPattern = new RegExp(
+            "\\b" +
+              escapeReusableContractRegex(hydrationSetter) +
+              "\\s*\\(\\s*true\\s*\\)",
+          );
+
+          const marksHydrationSuccessful =
+            hydrationSuccessPattern.test(catchBody) ||
+            hydrationSuccessPattern.test(finallyBody);
+
+          if (!marksHydrationSuccessful) continue;
+
+          const directlyLoadsProgress = loadHelperNames.some((helperName) =>
+            new RegExp(
+              "\\bawait\\s+" +
+                escapeReusableContractRegex(helperName) +
+                "\\s*\\(",
+            ).test(tryBody),
+          );
+
+          const invokesProgressLoader = [...loadFunctionNames].some(
+            (functionName) =>
+              new RegExp(
+                "\\b" +
+                  escapeReusableContractRegex(functionName) +
+                  "\\s*\\(",
+              ).test(tryBody),
+          );
+
+          if (!directlyLoadsProgress && !invokesProgressLoader) continue;
+
+          return (
+            "KForge blocked this application edit before approval because a " +
+            "throwing progress load can reach an error path that marks hydration " +
+            "successful while authenticated progress autosave is gated by that " +
+            "same hydration state. A failed load must not enable autosave of " +
+            "reset or unhydrated defaults."
+          );
+        }
+      }
+    }
+  }
+  return "";
+}
 function findStaticReusableBoundaryBypasses(content) {
   const bypasses = [];
   const namedImportPattern =
@@ -574,6 +917,87 @@ function validateAuthSessionWiring({
 
   const source = String(content || "");
 
+  const currentUserCallPattern =
+    /\bawait\s+getCurrentUser\s*\([^)]*\)/g;
+  const guardedCurrentUserRanges = [];
+
+  const tryPattern = /\btry\s*\{/g;
+
+  for (const tryMatch of source.matchAll(tryPattern)) {
+    const tryOpenBrace = source.indexOf("{", tryMatch.index);
+    const tryCloseBrace = findMatchingBrace(source, tryOpenBrace);
+
+    if (tryCloseBrace < 0) continue;
+
+    const afterTry = source.slice(tryCloseBrace + 1);
+    const catchMatch = afterTry.match(
+      /^\s*catch\s*(?:\(\s*[A-Za-z_$][A-Za-z0-9_$]*\s*\))?\s*\{/,
+    );
+
+    if (!catchMatch) continue;
+
+    const catchOpenBrace =
+      tryCloseBrace + 1 + catchMatch[0].lastIndexOf("{");
+    const catchCloseBrace = findMatchingBrace(source, catchOpenBrace);
+
+    if (catchCloseBrace < 0) continue;
+
+    const tryBody = source.slice(tryOpenBrace + 1, tryCloseBrace);
+    if (!/\bawait\s+getCurrentUser\s*\([^)]*\)/.test(tryBody)) continue;
+
+    const catchBody = source.slice(catchOpenBrace + 1, catchCloseBrace);
+
+    if (/\bthrow\b/.test(catchBody)) continue;
+
+    guardedCurrentUserRanges.push({
+      start: tryOpenBrace + 1,
+      end: tryCloseBrace,
+    });
+  }
+
+  for (const currentUserMatch of source.matchAll(currentUserCallPattern)) {
+    const isGuarded = guardedCurrentUserRanges.some(
+      (range) =>
+        currentUserMatch.index >= range.start &&
+        currentUserMatch.index < range.end,
+    );
+
+    if (!isGuarded) {
+      return (
+        "KForge blocked this application edit before approval because its pending " +
+        "auth-ui-session responsibility awaits getCurrentUser without handling a rejected " +
+        "session lookup. Treat an unavailable auth session as a signed-out state before " +
+        "continuing progress hydration."
+      );
+    }
+  }
+  const directAuthResponseSetUserPattern =
+    /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*((?:(?!\b(?:const|let)\b)[\s\S]){0,1200}?)\bsetUser\s*\(\s*\1\s*\)/g;
+
+  for (const responseMatch of source.matchAll(directAuthResponseSetUserPattern)) {
+    const assignmentFlow = responseMatch[2];
+    const hasSignInResult =
+      /\bawait\s+signInWithEmail\s*\(/.test(assignmentFlow);
+    const hasSignUpResult =
+      /\bawait\s+signUpWithEmail\s*\(/.test(assignmentFlow);
+
+    if (!hasSignInResult && !hasSignUpResult) continue;
+
+    const hasSessionUserProjection =
+      /\bdata(?:\?\.|\.)session(?:\?\.|\.)user\b/.test(assignmentFlow);
+    const hasSignInUserProjection =
+      !hasSignUpResult &&
+      /\bdata(?:\?\.|\.)user\b/.test(assignmentFlow);
+
+    if (hasSessionUserProjection || hasSignInUserProjection) continue;
+
+    return (
+      "KForge blocked this application edit before approval because its pending " +
+      "auth-ui-session responsibility stores a Supabase auth response object directly " +
+      "as the authenticated user. Extract a proven authenticated user from the auth " +
+      "response before updating user state."
+    );
+  }
   if (
     !/\bsignUpWithEmail\s*\(/.test(source) ||
     !/\bsetUser\s*\(/.test(source)
@@ -594,17 +1018,10 @@ function validateAuthSessionWiring({
     );
 
     const derivedUserPattern = new RegExp(
-      "\\b(?:const|let)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*(?:" +
+      "\\b(?:const|let)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*" +
         escapedResultName +
-        "\\?\\.user|" +
-        escapedResultName +
-        "\\?\\.data\\?\\.user|" +
-        escapedResultName +
-        "\\.user|" +
-        escapedResultName +
-        "\\.data\\.user)",
+        "(?:(?:\\?\\.|\\.)user|(?:\\?\\.|\\.)data(?:\\?\\.|\\.)user)",
     );
-
     const derivedUserMatch = derivedUserPattern.exec(flow);
     if (!derivedUserMatch) continue;
 
@@ -626,12 +1043,14 @@ function validateAuthSessionWiring({
         setUserMatch[0].length,
     );
 
-    const activeSessionPattern = new RegExp(
-      "\\b" +
+    const activeSessionGatePattern = new RegExp(
+      "if\\s*\\([^)]*\\b" +
         escapedResultName +
-        "(?:\\?\\.|\\.)(?:session|data(?:\\?\\.|\\.)session)\\b",
+        "(?:\\?\\.|\\.)(?:session|data(?:\\?\\.|\\.)session)\\b[^)]*\\)" +
+        "\\s*\\{?[\\s\\S]{0,300}\\bsetUser\\s*\\(\\s*" +
+        escapedUserName +
+        "\\s*\\)",
     );
-
     const explicitSignInGatePattern = new RegExp(
       "if\\s*\\([^)]*\\bauthMode\\s*={2,3}\\s*['\"]sign-in['\"][^)]*\\)" +
         "\\s*\\{?[\\s\\S]{0,300}\\bsetUser\\s*\\(\\s*" +
@@ -640,7 +1059,7 @@ function validateAuthSessionWiring({
     );
 
     if (
-      !activeSessionPattern.test(pathToSetUser) &&
+      !activeSessionGatePattern.test(pathToSetUser) &&
       !explicitSignInGatePattern.test(pathToSetUser)
     ) {
       return (
@@ -698,6 +1117,14 @@ export function evaluateSupabaseAppWiringWrite({
     normalizedToolName === "replace_text"
       ? materializedContent
       : String(args?.content || "");
+  const reusableContractError = validateReusableHelperContracts({
+    implementationContext,
+    targetPath,
+    content,
+  });
+  if (reusableContractError) {
+    return { ok: false, error: reusableContractError };
+  }
   const authSessionError = validateAuthSessionWiring({
     implementationContext,
     targetPath,

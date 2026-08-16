@@ -471,7 +471,26 @@ export function validateSupabaseAutopilotReconciliation(result) {
   if (typeof result.sqlDraft !== "string") {
     errors.push("The review-only SQL draft must be text.");
   }
-  if (sqlDraft.length > 30_000 || FORBIDDEN_SQL_PATTERN.test(sqlDraft)) {
+  let sqlDraftForForbiddenCheck = sqlDraft;
+
+  if (!collectionsAreMalformed) {
+    for (const change of result.proposedAdditiveChanges) {
+      if (change.operation !== "grant-authenticated-crud") continue;
+
+      const managedGrant =
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quoteDatabaseName(
+          change.table,
+        )} TO authenticated;`;
+
+      sqlDraftForForbiddenCheck =
+        sqlDraftForForbiddenCheck.replace(managedGrant, "");
+    }
+  }
+
+  if (
+    sqlDraft.length > 30_000 ||
+    FORBIDDEN_SQL_PATTERN.test(sqlDraftForForbiddenCheck)
+  ) {
     errors.push("The review-only SQL draft contains prohibited content.");
   }
   if (
@@ -607,6 +626,20 @@ function reconcileDatabaseObject({
   manualReview,
   conflicts,
 }) {
+  if (proposal.ownership === "authenticated-user-owned") {
+    const grantFinding = finding(
+      "additive-proposal",
+      "table-grant",
+      proposal.name,
+      "Authenticated application access requires bounded CRUD privileges in addition to row-level security.",
+    );
+    findings.push(grantFinding);
+    proposedAdditiveChanges.push({
+      operation: "grant-authenticated-crud",
+      table: proposal.name,
+    });
+  }
+
   if (!remoteTable) {
     const tableFinding = finding(
       "additive-proposal",
@@ -883,6 +916,12 @@ function buildReviewOnlySql(changes, policyIntents) {
     } else if (change.operation === "enable-rls") {
       statements.push(
         `ALTER TABLE ${quoteDatabaseName(change.table)} ENABLE ROW LEVEL SECURITY;`,
+      );
+    } else if (change.operation === "grant-authenticated-crud") {
+      statements.push(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quoteDatabaseName(
+          change.table,
+        )} TO authenticated;`,
       );
     } else if (change.operation === "create-policy") {
       statements.push(
@@ -1285,15 +1324,20 @@ function validAdditiveChange(value) {
   if (
     !value ||
     typeof value !== "object" ||
-    !["create-table", "add-column", "enable-rls", "create-policy"].includes(
-      value.operation,
-    )
+    ![
+      "create-table",
+      "add-column",
+      "enable-rls",
+      "grant-authenticated-crud",
+      "create-policy",
+    ].includes(value.operation)
   ) {
     return false;
   }
   try {
     quoteDatabaseName(value.table);
     if (value.operation === "enable-rls") return true;
+    if (value.operation === "grant-authenticated-crud") return true;
     if (value.operation === "create-policy") {
       return Boolean(
         value.name === MANAGED_OWNER_POLICY_NAME &&

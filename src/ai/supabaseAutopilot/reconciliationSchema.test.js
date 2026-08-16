@@ -322,6 +322,17 @@ describe("Supabase Autopilot migration reconciliation", () => {
         }),
       ]),
     );
+    expect(result.proposedAdditiveChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: "grant-authenticated-crud",
+          table: "public.user_progress",
+        }),
+      ]),
+    );
+    expect(result.sqlDraft).toContain(
+      'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."user_progress" TO authenticated;',
+    );
     expect(result.sqlDraft).toContain(
       'CREATE POLICY "kforge_owner_all" ON "public"."user_progress" FOR ALL TO authenticated',
     );
@@ -587,15 +598,22 @@ describe("Supabase Autopilot migration reconciliation", () => {
     expect(first.fingerprint).not.toBe(second.fingerprint);
   });
 
-  test("destructive operations never appear in SQL", () => {
+  test("destructive and uncontrolled privilege operations never appear in SQL", () => {
     const blocked = createSupabaseAutopilotReconciliation(
       createPlan({ objective: "Drop every table and rebuild the schema." }),
     );
-    const additive = createSupabaseAutopilotReconciliation(createPlan());
+    const additive = createSupabaseAutopilotReconciliation(
+      createPlan({
+        objective: "Add sign-in and save each user's Hajj progress.",
+      }),
+    );
+    const managedGrant =
+      'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."user_progress" TO authenticated;';
 
     expect(blocked.status).toBe("blocked");
     expect(blocked.sqlDraft).toBe("");
-    expect(additive.sqlDraft).not.toMatch(
+    expect(additive.sqlDraft).toContain(managedGrant);
+    expect(additive.sqlDraft.replace(managedGrant, "")).not.toMatch(
       /\b(?:DROP|TRUNCATE|DELETE|GRANT|REVOKE)\b/i,
     );
   });
@@ -665,6 +683,10 @@ describe("Supabase Autopilot migration reconciliation", () => {
     const malformed = refingerprint(result, (copy) => {
       copy.canApply = true;
     });
+    const arbitraryGrant = refingerprint(result, (copy) => {
+      copy.sqlDraft +=
+        '\n\nGRANT ALL ON TABLE "public"."user_progress" TO authenticated;';
+    });
 
     expect(result.canApply).toBe(false);
     expect(result.nothingAppliedStatement).toMatch(/nothing was applied/i);
@@ -675,5 +697,8 @@ describe("Supabase Autopilot migration reconciliation", () => {
     expect(
       validateSupabaseAutopilotReconciliation(malformed).errors,
     ).toContain("A reconciliation result can never be applied.");
+    expect(
+      validateSupabaseAutopilotReconciliation(arbitraryGrant).errors,
+    ).toContain("The review-only SQL draft contains prohibited content.");
   });
 });
