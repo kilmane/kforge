@@ -132,6 +132,10 @@ export function createSupabaseAutopilotReconciliation(plan) {
     reconcileDatabaseObject({
       proposal,
       remoteTable: remoteTables.get(proposal.name),
+      authenticatedCrudTables:
+        plan.remoteSupabaseFindings.authenticatedCrudTables,
+      privilegeInspectionAvailable:
+        plan.remoteSupabaseFindings.privilegeInspectionAvailable,
       findings,
       proposedAdditiveChanges,
       manualReview,
@@ -364,6 +368,17 @@ function validateReconciliationPlanInput(plan) {
     !Array.isArray(remote.policies) ||
     remote.policies.length > 240 ||
     typeof remote.policyInspectionAvailable !== "boolean" ||
+    !Array.isArray(remote.authenticatedCrudTables) ||
+    remote.authenticatedCrudTables.length > 120 ||
+    typeof remote.privilegeInspectionAvailable !== "boolean" ||
+    remote.authenticatedCrudTables.some(
+      (table) =>
+        typeof table !== "string" ||
+        table.length > 180 ||
+        !/^[A-Za-z_][A-Za-z0-9_$.-]*$/.test(table),
+    ) ||
+    new Set(remote.authenticatedCrudTables).size !==
+      remote.authenticatedCrudTables.length ||
     remote.tables.some((table) => !validRemoteTable(table)) ||
     new Set(remote.tables.map((table) => table.name)).size !==
       remote.tables.length ||
@@ -621,6 +636,8 @@ function reconcileRlsPolicyIntent({
 function reconcileDatabaseObject({
   proposal,
   remoteTable,
+  authenticatedCrudTables,
+  privilegeInspectionAvailable,
   findings,
   proposedAdditiveChanges,
   manualReview,
@@ -628,6 +645,22 @@ function reconcileDatabaseObject({
 }) {
   const proposeAuthenticatedCrudGrant = () => {
     if (proposal.ownership !== "authenticated-user-owned") return;
+
+    if (
+      remoteTable &&
+      privilegeInspectionAvailable === true &&
+      authenticatedCrudTables.includes(proposal.name)
+    ) {
+      findings.push(
+        finding(
+          "already-satisfied",
+          "table-grant",
+          proposal.name,
+          "Authenticated CRUD privileges are already present in the bounded remote inspection.",
+        ),
+      );
+      return;
+    }
 
     const grantFinding = finding(
       "additive-proposal",

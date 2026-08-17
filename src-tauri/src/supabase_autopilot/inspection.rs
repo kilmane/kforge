@@ -56,6 +56,8 @@ pub struct PlanningRemoteInspection {
     pub migrations: Vec<PlanningMigration>,
     pub policies: Vec<PlanningPolicy>,
     pub policy_inspection_available: bool,
+    pub authenticated_crud_tables: Vec<String>,
+    pub privilege_inspection_available: bool,
     pub warnings: Vec<String>,
 }
 

@@ -58,6 +58,10 @@ function plan({
   projectReference = project.reference,
   tables = [],
   migrations = [],
+  policies = [],
+  policyInspectionAvailable = false,
+  authenticatedCrudTables = [],
+  privilegeInspectionAvailable = false,
   objective = "Add a notes table.",
 } = {}) {
   return createSupabaseAutopilotPlan({
@@ -71,6 +75,10 @@ function plan({
         projectApiUrl: `https://${projectReference}.supabase.co`,
         tables,
         migrations,
+        policies,
+        policyInspectionAvailable,
+        authenticatedCrudTables,
+        privilegeInspectionAvailable,
         warnings: [],
       },
     },
@@ -430,6 +438,74 @@ describe("Supabase approved mutation state contract", () => {
     });
   });
 
+  test("recorded authenticated-user migration verifies when bounded schema and policy are satisfied", () => {
+    const objective = "Add sign-in and save each user's Hajj progress.";
+    const initialReconciliation = createSupabaseAutopilotReconciliation(
+      plan({
+        objective,
+        policyInspectionAvailable: true,
+      }),
+    );
+    const expectedMigrationName =
+      initialReconciliation.proposedMigration.name;
+
+    const freshPlan = plan({
+      objective,
+      tables: [
+        {
+          name: "public.user_progress",
+          rlsEnabled: true,
+          columns: [
+            { name: "id", dataType: "uuid", nullable: false, unique: false },
+            { name: "user_id", dataType: "uuid", nullable: false, unique: false },
+            { name: "data", dataType: "jsonb", nullable: false, unique: false },
+          ],
+          primaryKeys: ["id"],
+          foreignKeys: [
+            {
+              name: "user_progress_user_id_fkey",
+              sourceColumns: ["user_id"],
+              targetTable: "auth.users",
+              targetColumns: ["id"],
+            },
+          ],
+        },
+      ],
+      policies: [
+        {
+          table: "public.user_progress",
+          name: "kforge_owner_all",
+          permissive: true,
+          authenticatedOnly: true,
+          command: "ALL",
+          ownerUsing: true,
+          ownerCheck: true,
+        },
+      ],
+      policyInspectionAvailable: true,
+      authenticatedCrudTables: ["public.user_progress"],
+      privilegeInspectionAvailable: true,
+      migrations: [
+        {
+          version: "20991231235959",
+          name: expectedMigrationName,
+        },
+      ],
+    });
+
+    const result = verifySupabaseMutationResult({
+      plan: freshPlan,
+      reconciliation: createSupabaseAutopilotReconciliation(freshPlan),
+      expectedProjectReference: project.reference,
+      expectedMigrationName,
+    });
+
+    expect(result).toEqual({
+      eligible: true,
+      reason: "",
+      providerVersion: "20991231235959",
+    });
+  });
   test("duplicate managed-name metadata and incompatible structure fail closed", () => {
     const reconciliation = additiveReconciliation();
     const expectedMigrationName = reconciliation.proposedMigration.name;

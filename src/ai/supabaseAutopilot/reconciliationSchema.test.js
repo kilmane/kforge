@@ -678,6 +678,20 @@ describe("Supabase Autopilot migration reconciliation", () => {
     ).toThrow(/malformed or unbounded/i);
   });
 
+  test("rejects malformed authenticated privilege metadata before reconciliation", () => {
+    const plan = createPlan();
+    const unsafe = refingerprint(plan, (copy) => {
+      copy.remoteSupabaseFindings.authenticatedCrudTables = [
+        "public.user_progress",
+        "public.user_progress",
+      ];
+      copy.remoteSupabaseFindings.privilegeInspectionAvailable = true;
+    });
+
+    expect(() => createSupabaseAutopilotReconciliation(unsafe)).toThrow(
+      /Remote Supabase metadata is malformed or unbounded/i,
+    );
+  });
   test("production, unsupported, and ineligible plans remain blocked", () => {
     const production = createSupabaseAutopilotReconciliation(
       createPlan({ projectName: "Hajj Production" }),

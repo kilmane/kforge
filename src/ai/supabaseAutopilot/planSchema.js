@@ -215,6 +215,8 @@ export function createSupabaseAutopilotPlan({
       migrations: remote.migrations,
       policies: remote.policies,
       policyInspectionAvailable: remote.policyInspectionAvailable,
+      authenticatedCrudTables: remote.authenticatedCrudTables,
+      privilegeInspectionAvailable: remote.privilegeInspectionAvailable,
     },
     requestedObjective,
     proposedDatabaseObjects,
@@ -262,6 +264,21 @@ export function validateSupabaseAutopilotPlan(plan) {
     plan.selectedProjectReference
   ) {
     errors.push("Selected and inspected Supabase project references differ.");
+  }
+  const remoteFindings = plan.remoteSupabaseFindings;
+  if (
+    !remoteFindings ||
+    typeof remoteFindings !== "object" ||
+    !Array.isArray(remoteFindings.authenticatedCrudTables) ||
+    remoteFindings.authenticatedCrudTables.length > 120 ||
+    typeof remoteFindings.privilegeInspectionAvailable !== "boolean" ||
+    remoteFindings.authenticatedCrudTables.some(
+      (table) => !boundedDatabaseName(table),
+    ) ||
+    new Set(remoteFindings.authenticatedCrudTables).size !==
+      remoteFindings.authenticatedCrudTables.length
+  ) {
+    errors.push("Remote Supabase metadata is malformed or unbounded.");
   }
   if (
     ![
@@ -563,6 +580,23 @@ function normalizeRemoteInspection(value = {}) {
     remote.policyInspectionAvailable === true &&
     rawPolicies.length <= 240 &&
     new Set(policyIdentities).size === policyIdentities.length;
+
+  const rawAuthenticatedCrudTables = Array.isArray(
+    remote.authenticatedCrudTables,
+  )
+    ? remote.authenticatedCrudTables
+    : [];
+  const normalizedAuthenticatedCrudTables = rawAuthenticatedCrudTables
+    .slice(0, 120)
+    .map((table) => boundedDatabaseName(table))
+    .filter(Boolean);
+  const privilegeInspectionAvailable =
+    remote.privilegeInspectionAvailable === true &&
+    rawAuthenticatedCrudTables.length <= 120 &&
+    normalizedAuthenticatedCrudTables.length ===
+      rawAuthenticatedCrudTables.length &&
+    new Set(normalizedAuthenticatedCrudTables).size ===
+      normalizedAuthenticatedCrudTables.length;
   return {
     projectName: boundedText(remote.projectName, 160) || "Supabase project",
     projectReference: boundedIdentifier(remote.projectReference, 80),
@@ -612,6 +646,10 @@ function normalizeRemoteInspection(value = {}) {
       .filter((migration) => migration.version),
     policies: policyInspectionAvailable ? normalizedPolicies : [],
     policyInspectionAvailable,
+    authenticatedCrudTables: privilegeInspectionAvailable
+      ? normalizedAuthenticatedCrudTables
+      : [],
+    privilegeInspectionAvailable,
     warnings: boundedStrings(remote.warnings, 30, 400),
   };
 }

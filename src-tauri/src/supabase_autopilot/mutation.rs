@@ -985,6 +985,8 @@ mod tests {
             migrations: Vec::new(),
             policies: Vec::new(),
             policy_inspection_available: true,
+            authenticated_crud_tables: Vec::new(),
+            privilege_inspection_available: false,
             warnings: Vec::new(),
         };
         assert!(verify_additive_targets(&changes, &remote).is_ok());

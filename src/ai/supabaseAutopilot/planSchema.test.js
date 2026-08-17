@@ -493,6 +493,21 @@ describe("Supabase Autopilot plan schema", () => {
     );
   });
 
+  test("rejects malformed or duplicate authenticated privilege metadata", () => {
+    const plan = createPlan();
+    const unsafe = JSON.parse(JSON.stringify(plan));
+    unsafe.remoteSupabaseFindings.authenticatedCrudTables = [
+      "public.user_progress",
+      "public.user_progress",
+    ];
+    unsafe.remoteSupabaseFindings.privilegeInspectionAvailable = true;
+    delete unsafe.fingerprint;
+    unsafe.fingerprint = fingerprintPlan(unsafe);
+
+    expect(validateSupabaseAutopilotPlan(unsafe).errors).toContain(
+      "Remote Supabase metadata is malformed or unbounded.",
+    );
+  });
   test("normalizes remote metadata without database row content", () => {
     const plan = createPlan({
       inspection: {
