@@ -72,6 +72,9 @@ enum AdditiveChange {
     EnableRls {
         table: String,
     },
+    GrantAuthenticatedCrud {
+        table: String,
+    },
     CreatePolicy {
         table: String,
         name: String,
@@ -455,6 +458,13 @@ fn verify_additive_targets(
                     return Err(format!("Approved table '{table}' is no longer present"));
                 }
             }
+            AdditiveChange::GrantAuthenticatedCrud { table } => {
+                if !remote.tables.iter().any(|item| &item.name == table)
+                    && !created_tables.contains(table.as_str())
+                {
+                    return Err(format!("Approved grant table '{table}' is no longer present"));
+                }
+            }
             AdditiveChange::CreatePolicy { table, name, .. } => {
                 if !remote.policy_inspection_available {
                     return Err("Fresh read-only policy inspection is required before creating an RLS policy".into());
@@ -530,6 +540,9 @@ fn validate_changes(changes: &[AdditiveChange]) -> Result<(), String> {
                 }
             }
             AdditiveChange::EnableRls { table } => {
+                quote_database_name(table)?;
+            }
+            AdditiveChange::GrantAuthenticatedCrud { table } => {
                 quote_database_name(table)?;
             }
             AdditiveChange::CreatePolicy {
@@ -621,6 +634,10 @@ fn render_review_sql(changes: &[AdditiveChange]) -> Result<String, String> {
             ),
             AdditiveChange::EnableRls { table } => format!(
                 "ALTER TABLE {} ENABLE ROW LEVEL SECURITY;",
+                quote_database_name(table)?
+            ),
+            AdditiveChange::GrantAuthenticatedCrud { table } => format!(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {} TO authenticated;",
                 quote_database_name(table)?
             ),
             AdditiveChange::CreatePolicy {
@@ -941,6 +958,7 @@ mod tests {
                 "primaryKeys": ["user_id"],
                 "foreignKeys": []
             },
+            { "operation": "grant-authenticated-crud", "table": "public.user_progress" },
             { "operation": "enable-rls", "table": "public.user_progress" },
             {
                 "operation": "create-policy",
@@ -952,6 +970,9 @@ mod tests {
         .unwrap();
         assert!(validate_changes(&changes).is_ok());
         let sql = render_review_sql(&changes).unwrap();
+        assert!(sql.contains(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE \"public\".\"user_progress\" TO authenticated;"
+        ));
         assert!(sql.contains(
             "CREATE POLICY \"kforge_owner_all\" ON \"public\".\"user_progress\" FOR ALL TO authenticated USING (\"user_id\" = auth.uid()) WITH CHECK (\"user_id\" = auth.uid());"
         ));
