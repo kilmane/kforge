@@ -336,6 +336,24 @@ describe("Supabase Autopilot migration reconciliation", () => {
     expect(result.sqlDraft).toContain(
       'CREATE POLICY "kforge_owner_all" ON "public"."user_progress" FOR ALL TO authenticated',
     );
+
+    const createTableIndex = result.sqlDraft.indexOf(
+      'CREATE TABLE "public"."user_progress"',
+    );
+    const grantIndex = result.sqlDraft.indexOf(
+      'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."user_progress" TO authenticated;',
+    );
+    const enableRlsIndex = result.sqlDraft.indexOf(
+      'ALTER TABLE "public"."user_progress" ENABLE ROW LEVEL SECURITY;',
+    );
+    const createPolicyIndex = result.sqlDraft.indexOf(
+      'CREATE POLICY "kforge_owner_all" ON "public"."user_progress"',
+    );
+
+    expect(createTableIndex).toBeGreaterThan(-1);
+    expect(grantIndex).toBeGreaterThan(createTableIndex);
+    expect(enableRlsIndex).toBeGreaterThan(grantIndex);
+    expect(createPolicyIndex).toBeGreaterThan(enableRlsIndex);
   });
 
   test("the exact managed owner policy reconciles as already satisfied", () => {

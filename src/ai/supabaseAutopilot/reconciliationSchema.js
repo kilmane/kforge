@@ -626,7 +626,9 @@ function reconcileDatabaseObject({
   manualReview,
   conflicts,
 }) {
-  if (proposal.ownership === "authenticated-user-owned") {
+  const proposeAuthenticatedCrudGrant = () => {
+    if (proposal.ownership !== "authenticated-user-owned") return;
+
     const grantFinding = finding(
       "additive-proposal",
       "table-grant",
@@ -638,7 +640,7 @@ function reconcileDatabaseObject({
       operation: "grant-authenticated-crud",
       table: proposal.name,
     });
-  }
+  };
 
   if (!remoteTable) {
     const tableFinding = finding(
@@ -655,6 +657,9 @@ function reconcileDatabaseObject({
       primaryKeys: proposal.primaryKeys,
       foreignKeys: proposal.foreignKeys,
     });
+
+    proposeAuthenticatedCrudGrant();
+
     if (proposal.rlsRequired) {
       const rlsFinding = finding(
         "additive-proposal",
@@ -670,6 +675,8 @@ function reconcileDatabaseObject({
     }
     return;
   }
+
+  proposeAuthenticatedCrudGrant();
 
   const remoteColumns = new Map(
     remoteTable.columns.map((column) => [column.name, column]),
