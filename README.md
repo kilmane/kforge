@@ -95,7 +95,15 @@ Install the following before building KForge:
 git clone https://github.com/kilmane/kforge.git
 Set-Location -LiteralPath '.\kforge'
 pnpm install
-pnpm tauri dev
+pnpm dev
+```
+
+`pnpm dev` is the normal KForge development command. It disables Tauri's Rust file watcher because that watcher can cause very slow startup on some Windows development setups. It also disables Create React App's development-time ESLint webpack plugin, which can significantly delay frontend startup on the same setups. React development watching and hot reload remain available, and normal test/build commands are unchanged.
+
+When actively changing files under `src-tauri` and automatic Rust-side restarts are useful, run:
+
+```powershell
+pnpm dev:rust-watch
 ```
 
 ### Create a production build
